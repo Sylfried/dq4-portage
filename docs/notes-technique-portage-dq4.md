@@ -30,6 +30,14 @@
 - **Charger une sauvegarde : `profile::SaveLoad::loadbank(bank)`** (statique ; `bank` 0 = `data1.dat`, 15 360 octets ; le moteur ouvre `<chemin_sauvegarde>data1.dat`, sans « / » intermédiaire avec `/dq/save`). À appeler après quelques `GameUpdate`. Il restaure le groupe et relance la ville (`restartChurch` → `startTown`) ; la sauvegarde n°1 de l'utilisateur se trouve dans une église (carte `mak1f1`).
 - `GameManager::resetParty` plante tant qu'aucune ville n'a été initialisée (`GameManager::initialize` est appelé par `TownSystem::initialize`).
 
+## Carte du monde (FieldPart, 30/10/2026)
+- Partie `0xe` (`Global+0xee`) ; la ville = `0xc`. On y entre en marchant hors du village (`maout`, porte) ou par `Global::startField()` ; le retour se fait par la porte (paquets `12(slot,-1)` x N + `27(0)` -> partie `0xc`, carte `maout`). À l'arrivée en ville, le héros est posé sur la case de la porte : Haut reste en ville, Gauche/Droite/Bas ressortent aussitôt (comportement du moteur).
+- Monde 256x256 cellules de 16 px (CWorldMap : table de 6 octets à FieldData+0x180, largeur +0x198, hauteur +0x19c, tour du monde modulo). Atlas = texture Unity `field` 1024x1024 : tuiles 16x16, id%64 = colonne, ligne comptée depuis le bas, **tuile stockée retournée verticalement** (inverser v dans les UV).
+- Paquet 28 = fenêtre de tuiles visible : ints `[x0, y0, colonnes=25, n=1300, tuile...]`, floats `[cam_x_px, cam_y_px]` (la caméra suit le héros).
+- Sprites sur la carte : paquet 12 `(slot, 4096 + id)` -> feuille `h<id>` ; paquet 13 avec le drapeau 0x8000 = position (x, y, z en pixels, z = couche 200/180), 0x4000 = pose | direction<<8 ; le paquet 14(idx,1) précède 13.
+- Paquet 29 = icônes (villes, châteaux, grottes...) : `FieldData::draw_symbol(idx, genre, x, y)` envoie int = `idx | genre<<8`, floats `[x_px, y_px, alpha]` (alpha = octet/31) ; `0x8000|idx` = cacher ; `0xC000|idx` = autre état (sens non établi). **Non dessiné** : le tableau genre -> case de l'atlas est côté Unity (la zone d'art est dans l'atlas, lignes y=384 à 580 de l'image exportée, ~25 sprites de tailles variées, placés hors grille).
+- La texture `dsdq4wmap01` (256x256) et le TextAsset `dsdq4wmap01m` (196 608 octets = 256x256x3) du datapack sont la mini-carte DS, pas l'atlas.
+
 ## Données Unity (datapack.unity3d)
 - Se lit avec UnityPy 1.25.4 : 12 267 GameObject, 10 627 Mesh, 4 619 Texture2D, 11 645 Material, 700 TextAsset (.map), 46 AnimationClip, 38 Camera.
 - **Une carte = un GameObject racine `<nom>.fld`** (`mlb1a.fld`, `mak1f1.fld`, `ev01.fld`…) avec des enfants : décor principal `000_<nom>` (plusieurs sous-maillages = matériaux, textures `*.tim`), et des petits quads pour les accessoires (coffre, tonneau, pot, porte, torche…) dont les positions sont posées par le moteur. `<nom>.map` (TextAsset, en-tête « FHDR ») décrit objets et collisions.

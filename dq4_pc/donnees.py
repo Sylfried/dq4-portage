@@ -136,6 +136,18 @@ class Donnees:
         with open(f, 'wb') as fh: pickle.dump(res, fh, protocol=4)
         return res
 
+    def texture(self, nom):
+        """Texture Unity par son nom (ex. `field` : tuiles de la carte du monde), RGBA haut en bas ; mise en cache."""
+        f = os.path.join(self.cache, 'tex_%s.npy' % nom)
+        if os.path.exists(f): return np.load(f)
+        self.env()
+        for pid, o in self._objs.items():
+            if o.type.name == 'Texture2D':
+                t = o.read()
+                if t.m_Name == nom:
+                    a = np.array(t.image.convert('RGBA')); np.save(f, a); return a
+        return None
+
     # ---- feuille de sprites d'un personnage
     def feuille(self, ident):
         f = os.path.join(self.cache, 'sprite_h%d.npy' % ident)

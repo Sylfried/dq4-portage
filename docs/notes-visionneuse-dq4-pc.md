@@ -37,5 +37,10 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - Décor : mipmaps trilinéaires + anisotrope (jusqu'à ×8, F3 pour comparer) et anticrénelage matériel MSAA ×4 (`--msaa 0` pour couper ; repli automatique si la carte ne le propose pas ; non vérifiable en cloud : le serveur d'affichage logiciel n'en propose pas). Caméra : FOV vertical 20°, cadrage 16/9 par décalage en x (marge 0,85). Portes : battants pivotant de 90° (approximation).
 - Libellés de menus FR : fichier de textes du moteur `assets/msg/en/b1004000.mpt` (Parler, Magie, Objets, Examiner, Équiper…).
 
+## Carte du monde dans la visionneuse
+- `Moteur` : `Etat.partie`, `Etat.champ` (paquet 28) ; `demarrer_champ()` (F5). `Donnees.texture(nom)` lit une texture Unity par nom (cache `tex_<nom>.npy`).
+- `fenetre.py` : sol = un maillage de 25 x 52 tuiles reconstruit quand la fenêtre de tuiles change (`_maj_champ`), caméra inclinée (`_camera_champ`, FOV 30 deg), sprites debout (échelle `CH_ECHELLE`), même chemin de dessin que les villes. Variable `DQ_ETAT=1` = trace partie/carte/caméra toutes les 25 images.
+- Limites : pas d'icônes de villes (paquet 29), horizon limité à 25 colonnes, eau non animée.
+
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).

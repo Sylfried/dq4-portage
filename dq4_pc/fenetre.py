@@ -29,6 +29,7 @@ void main() {
 
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
+CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 BTN_PAROLE, BTN_MENU = 0x100, 0x800     # arg2 de GameUpdate : parler / examiner (exactement 0x100), ouvrir le menu de commandes
@@ -62,6 +63,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement du moteur...')
         self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
+        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -166,6 +168,48 @@ class Jeu(pyglet.window.Window):
         r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, hd=True)
         return r
 
+    def _camera_champ(self, e, aspect):
+        """Carte du monde : plan horizontal, camera inclinee qui suit le point donne par le moteur (en pixels de 16 par tuile)."""
+        cx, cz = (e.champ['cam'] or (0.0, 0.0)); cx, cz = cx / CH_PX, cz / CH_PX
+        M, droite = matrice((cx, CH_HAUT, cz + CH_RECUL), (cx, 0.0, cz), CH_FOV, aspect, 1.0, 200.0)
+        return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * CH_ECHELLE, 32 / CH_PX * CH_ECHELLE
+
+    def _maj_champ(self, e):
+        """(Re)construit la grille de tuiles quand le moteur en envoie une autre ; l'atlas est la texture Unity `field`."""
+        ch = e.champ
+        t = np.array(ch['tuiles'], np.int32)
+        cle = (ch['x0'], ch['y0'], ch['cols'], hash(t.tobytes()))
+        if cle == self.champ_cle: return
+        self.champ_cle = cle
+        if self.champ_tex is None:
+            arr = self.donnees.texture('field')
+            if arr is None: return
+            self.champ_tex = self._tex(arr, False)
+            gl.glBindTexture(self.champ_tex.target, self.champ_tex.id)
+            gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        cols = ch['cols']; lignes = len(t) // cols
+        g = t[:lignes * cols].reshape(lignes, cols)
+        X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
+        u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
+        ins = 0.25 / (CH_ATLAS * CH_PX)       # recul de 1/4 de texel sur chaque bord : pas de filet clair entre deux tuiles
+        u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
+        e_ = 0.0
+        def coins(a, b): return np.stack([a, b], -1)
+        # sommets : NO, NE, SE, SO
+        P = np.stack([np.stack([X, np.zeros_like(X), Z], -1), np.stack([X + 1, np.zeros_like(X), Z], -1),
+                      np.stack([X + 1, np.zeros_like(X), Z + 1], -1), np.stack([X, np.zeros_like(X), Z + 1], -1)], 2).astype(np.float32)   # (l, c, 4, 3)
+        U = np.stack([coins(u0, v0), coins(u0 + d, v0), coins(u0 + d, v0 + d), coins(u0, v0 + d)], 2).astype(np.float32)               # (l, c, 4, 2) ; les tuiles sont stockees tete en bas
+        idx = [0, 1, 2, 0, 2, 3]
+        pos = P[:, :, idx, :].reshape(-1, 3); uv = U[:, :, idx, :].reshape(-1, 2)
+        if self.champ_vl is not None: self.champ_vl.delete()
+        self.champ_vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', np.ones(len(pos) * 4, np.float32)))
+
+    def _tracer_champ(self):
+        if self.champ_vl is None or self.champ_tex is None: return
+        self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0; self.prog['tsize'] = (1024.0, 1024.0)
+        self._tracer(self.champ_tex, self.champ_vl)
+        self.prog['net'] = 0.0
+
     def _tracer(self, tex, vl):
         """Trace une vertex_list en ne liant le VAO et les tampons qu'une fois par image (beaucoup plus rapide que vl.draw)."""
         gl.glBindTexture(tex.target, tex.id)
@@ -183,6 +227,7 @@ class Jeu(pyglet.window.Window):
         K = pyglet.window.key
         if symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
         elif symbol == K.F4: self.stats = not self.stats
+        elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
         elif symbol == K.F3:
             self.lissage = not self.lissage
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
@@ -354,6 +399,7 @@ class Jeu(pyglet.window.Window):
         if self.args.slot and self.args.auto_message and self.n < 112:
             # (test) ferme le message d'accueil automatiquement
             p = MO.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
+        if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
         for bit in (MO.HAUT, MO.BAS, MO.GAUCHE, MO.DROITE):      # repetition des directions maintenues (curseurs de menu)
             if p & bit:
@@ -375,6 +421,7 @@ class Jeu(pyglet.window.Window):
             p &= ~(MO.A | MO.B)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s' % (self.n, p, decl, mo.msg_visible), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, mo.etat.partie, mo.etat.carte, None if mo.etat.champ is None else mo.etat.champ['cam'], p), flush=True)
         e = self.moteur.etat
         for idx, anim in e.evt_anim:
             if 'door' in self.noms.get(idx, '').lower() and idx not in self.portes: self.portes[idx] = self.n
@@ -391,32 +438,36 @@ class Jeu(pyglet.window.Window):
         if self.t_prec is not None: self.ecarts.append(t_debut - self.t_prec)
         self.t_prec = t_debut
         e = self.moteur.etat
+        champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         gl.glClearColor(e.fond[0], e.fond[1], e.fond[2], 1.0)
         self.clear()
-        if e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
-        if e.cam_pos is None or e.cam_cible is None: return
+        if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
+        if not champ and (e.cam_pos is None or e.cam_cible is None): return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.get_framebuffer_size())
         aspect = self.width / max(1, self.height)
-        cam, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
-        if self.bornes_x is not None:
-            # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
-            fv = cib - cam; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
-            if abs(fv[2]) > 0.95:
-                W = np.linalg.norm(cib - cam) * math.tan(math.radians(FOV_VERTICAL / 2)) * aspect * 0.85
-                lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
-                cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
-                d = cx - cib[0]; cam[0] += d; cib[0] += d
-        M, droite = matrice(cam, cib, FOV_VERTICAL, aspect)
-        # sprites : panneaux verticaux tournes vers la camera (listes de sommets persistantes, une par emplacement)
-        fh = np.array([e.cam_cible[0] - e.cam_pos[0], 0, e.cam_cible[2] - e.cam_pos[2]]); fh /= np.linalg.norm(fh) or 1
-        dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
-        w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE; up = np.array([0, h, 0])
+        if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
+        else:
+            cam, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
+            if self.bornes_x is not None:
+                # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
+                fv = cib - cam; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
+                if abs(fv[2]) > 0.95:
+                    W = np.linalg.norm(cib - cam) * math.tan(math.radians(FOV_VERTICAL / 2)) * aspect * 0.85
+                    lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
+                    cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
+                    d = cx - cib[0]; cam[0] += d; cib[0] += d
+            M, droite = matrice(cam, cib, FOV_VERTICAL, aspect)
+            # sprites : panneaux verticaux tournes vers la camera (listes de sommets persistantes, une par emplacement)
+            fh = np.array([e.cam_cible[0] - e.cam_pos[0], 0, e.cam_cible[2] - e.cam_pos[2]]); fh /= np.linalg.norm(fh) or 1
+            dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
+            w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
+        up = np.array([0, h, 0])
         a_dessiner = []
         for slot, s in sorted(e.sprites.items()):
             if s['pos'] is None or s['col'][3] < 0.02: continue
-            f = self._feuille(s['id'], self.mode)
+            f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
             if not f: continue
             tw, th, nl = f['tw'], f['th'], f['nl']
             col, row = s['pose'] % 3, s['dir'] % nl
@@ -426,7 +477,7 @@ class Jeu(pyglet.window.Window):
                 v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
             else:
                 u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
-            p = np.array(s['pos'], float)
+            p = np.array([s['pos'][0] / CH_PX, 0.0, s['pos'][1] / CH_PX]) if champ else np.array(s['pos'], float)
             a, b = p - dh * w / 2, p + dh * w / 2
             q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
@@ -439,7 +490,9 @@ class Jeu(pyglet.window.Window):
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
+        if champ: self._tracer_champ()
+        else:
+            for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
         self.prog['cutoff'] = 0.05
         for slot, f, vl in a_dessiner:
             self.prog['net'] = 0.0 if f['hd'] else 1.0; self.prog['tsize'] = (float(f['tw']), float(f['th']))
@@ -450,7 +503,7 @@ class Jeu(pyglet.window.Window):
                 gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
-        self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % e.carte
+        self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else e.carte)
         self.etiquette.y = self.height - 10
         self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
         self.etiq_hd.y = self.height - 30
@@ -480,6 +533,7 @@ def main():
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
+    ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image (touche F5 en jeu)')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
     ap.add_argument('--images', type=int, default=60)
     ap.add_argument('--script', default=None, help='(test) ex. "20:2,30:0" : image:masque de touches')

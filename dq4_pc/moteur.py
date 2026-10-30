@@ -4,6 +4,7 @@ import emu_core as T
 from pktlog import PacketLog
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
+PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
@@ -54,6 +55,7 @@ class Etat:
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
+        self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
 
     def appliquer(self, paquets, lire_nom):
         for t, a, f in paquets:
@@ -61,6 +63,8 @@ class Etat:
                 self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0)
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
+            elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
+                self.champ = {'x0': a[0], 'y0': a[1], 'cols': a[2], 'tuiles': a[4:4 + a[3]], 'cam': (f[0], f[1]) if len(f) >= 2 else None}
             elif t == 12 and len(a) >= 2:
                 if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0}
                 else: self.sprites.pop(a[0], None)
@@ -75,7 +79,7 @@ class Etat:
                 if s is None: continue
                 if flags & 0x800: fl = fl[1:]
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
-                if flags & 0x2000: s['pos'] = tuple(fl[:3]); fl = fl[3:]
+                if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
                 if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
 
 
@@ -160,6 +164,13 @@ class Moteur:
         pm = c.malloc(64); c.mem_w(pm, struct.pack('<%dH' % len(shorts), *shorts))
         c.call(self.E('_ZN9SDrawCTRL11CanvasSetupEPvPKs'), self.obj_msg, pm, label='CanvasSetup')
 
+    def _global(self):
+        return struct.unpack('<Q', self.core.mem(self.L + GLOBAL_PTR, 8))[0]
+
+    def demarrer_champ(self):
+        """(essai) force le passage a la carte du monde : Global::startField()."""
+        self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
+
     def _nom_carte(self):
         s = self.core.read_cstr(self.L + NOM_RESSOURCE).decode('latin-1')
         return s.split('/')[-1]
@@ -180,6 +191,8 @@ class Moteur:
         for p in pq:
             if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))
         self.etat.appliquer(pq, self._nom_carte)
+        self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
+        if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None
         self.images += 1
         return pq
 

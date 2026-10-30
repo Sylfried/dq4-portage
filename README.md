@@ -27,7 +27,7 @@ DQ Patch\
 ```
 `lancer_dq4.bat` crée un environnement Python local (3.13 > 3.12 > 3.11 > 3.14 > 3.10), installe `numpy pillow unicorn pyglet UnityPy` une fois, puis ouvre la fenêtre. Les nouvelles sauvegardes vont dans `dq4_pc\sauvegardes` (les tiennes ne sont jamais modifiées).
 
-Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; F2 = style des sprites (originaux, EPX, régions lissées, bicubique) ; F3 = lissage du décor (mipmaps, anisotrope) oui / non ; F4 = compteur d'images/s ; Échap = quitter.
+Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; F2 = style des sprites (originaux, EPX, régions lissées, bicubique) ; F3 = lissage du décor (mipmaps, anisotrope) oui / non ; F4 = compteur d'images/s ; F5 = (essai) aller directement à la carte du monde ; Échap = quitter. La carte du monde s'atteint aussi en marchant hors du village (par la porte), et on revient en repassant la porte.
 
 ## Où en est-on
 Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). L'historique des étapes déjà faites est dans [`docs/historique.md`](docs/historique.md). Le suivi du travail se fait dans les **issues** ; la manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).
