@@ -1,0 +1,39 @@
+# Visionneuse PC de DQ4 (dq4_pc) : notes (30/10/2026, soir)
+
+Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur->Unity). Remplace ses sections « Rendu : état » et « Inconnues » pour la visionneuse.
+
+## Ce qui marche
+- Fenêtre pyglet 16/9 (GL 3.3) : décor, sprites nets, caméra du moteur, marche au clavier, **portes qui s'ouvrent, changement de carte** (église `mak1f1` -> village `maout`), fond de ciel, cadrage large.
+- **Messages** (fenêtre bleue, texte FR du moteur, défilement, ouverture/fermeture), **menus** (liste de l'église, menu de commandes du terrain Objets/Magie/Carac./Divers + équipe + or, choix du personnage) avec navigation clavier : testés en cloud (captures) ; retour de l'utilisateur sur pdc : « un peu mieux, pas mal d'imperfections ».
+- Moteur ~2-4 ms/image (Unicorn), tick 30 Hz. 720 images avec touches aléatoires : aucun plantage.
+
+## Architecture (dossier `dq4_pc`)
+- `emu_core.py` (chargeur ELF + Unicorn), `pktlog.py` (paquets), `moteur.py` (`Moteur`, `Etat`, `Interface`), `fld.py` + `donnees.py` (UnityPy -> maillages, feuilles de sprites, cache `carte2_<nom>.pkl`), `fenetre.py` (fenêtre, shaders, clavier, portes, cadrage, message, menus), `lancer_dq4.bat` (venv + modules, Python 3.13 > 3.12 > 3.11 > 3.14 > 3.10).
+- Options `fenetre.py` : `--apk --saves-lecture --saves-ecriture --cache --slot --largeur --hauteur --shot --images --script "n:masque,..." --auto-message`; variable `DQ_DEBUG=1` = trace des entrées. Test sans écran (Linux) : `xvfb-run -a python3 dq4_pc/fenetre.py ... --shot x.png --images N --script "..."`.
+
+## Entrées : GameUpdate(arg1, arg2)
+- `arg1` = touches **maintenues** (marche) ; `arg2` = touches **venant d'être pressées**. Haut 0x1, Bas 0x2, Gauche 0x4, Droite 0x8, OK 0x10/0x40, Annuler 0x20/0x80.
+- `Global::NativeExec` convertit `arg2` en mot de touches du terrain (u16 à `*(GOT 0xa30)+2`) : **arg2 == 0x100 EXACTEMENT** (bit15 ignoré) -> bit 0x10 (parler/examiner ; la fenêtre de PNJ proche s'ouvre) ; **0x400** -> bit 0x20 (parler si flag `+0x971`) ; **0x800 -> bit 0x40 = ouvrir le menu de commandes** (`NormalControl::execute` -> `openMenu`) ; **0x1000 -> bit 0x80 = carte / liste des magasins** (flag global : bit4 carte, bit5 liste ; ouvre « Magasin d'armes… » ; non géré à l'affichage) ; 0x2000 -> bit 0x400 (non étudié).
+- Mapping de la visionneuse : sur le terrain (ni message ni menu actif) A = 0x100 seul, Annuler = 0x800 ; message affiché : A = 0x10 ; menu actif : les touches ne vont PAS à `GameUpdate`, elles sont injectées dans la file interface->moteur (voir plus bas).
+- `FLDObject::SetCommonAnimationEnd(idx)` existe aussi côté flux d'entrée (`inp`, paquets d'entrée type 1) : alternative à l'écriture directe du bit0.
+
+## File de messages MenuPort (interface <-> moteur)
+- `MenuPortInit(32, buf1, 129, buf2, 1089)` : les tampons sont alloués par l'appelant (nous : `malloc(0x2000)` chacun ; 4096 shorts lus). **buf2 = moteur -> interface**, **buf1 = interface -> moteur**. Même format : `[0..31]` tête par port, `[32..63]` queue (= indice du champ « suivant » du dernier message), `[64]` pointeur libre (démarre à 65) ; message = `[n, n shorts, suivant]` (indices absolus en shorts, suivant 0 = fin).
+- **Sans consommation la file déborde** (écrase la mémoire voisine) : `Moteur._consommer_messages()` lit les 32 listes après chaque `GameUpdate`, remet têtes/queues à 0 et `[64]=65`. Les messages d'initialisation (ex. libellés Objets/Magie/Carac./Divers du port 4) sont émis AVANT la 1re image : ils doivent être mémorisés (`Interface`), pas jetés.
+- `UnityMenuLoop` (appelée au début de `GameUpdate`) : pour chaque port enregistré (table `*(LIB+0x252098)`, entrées de 0x20 octets : +0x28 n° de port, +0x30 objet, +0x38 callback, nombre à `LIB+0x252094`), dépile un message et appelle le callback. Callback standard = `MenuItem::NoticeFromUnity`.
+- **Interface -> moteur** (`NoticeFromUnity`) : message `[3, 1, idx, pad]` sur le port de la fenêtre. `idx` = ligne touchée/choisie (-1 = aucune) ; `pad` : bit0 bas, bit1 haut, bit2 gauche, bit3 droite, bits 4/6 OK, bits 5/7 annuler. **Le curseur appartient à Unity** : pour déplacer, envoyer `[1, ligne, 0]` (le moteur répond `[4, ligne]` sur le port) ; pour valider, `[1, -1, 0x10]` puis `[1, -1, 0]` à l'image suivante (Annuler 0x20). Sans « touche idx » préalable, OK choisit la ligne 0. Un message `[1, ...]` seul sur flèche bas/haut ne bouge rien.
+- Fenêtre qui attend les touches : port dont l'objet MenuItem a `+8 == 1` (actif) ET `+0x50 != 0` (saisie permise) ; l'or (port 3) est actif mais sans saisie, l'équipe (port 5) est visible mais inactive tant qu'on n'a pas choisi une commande.
+
+## Messages moteur -> interface
+- Port 0 (système) : `[N, 1, type, style]` définit la fenêtre N (N=1..11 à l'init, puis 12+ dynamiques ; style = n° de gabarit Unity, positions/tailles inconnues côté moteur) ; `[N, 2]` ferme N ; `[N, 3, v]` montre/cache N (N=1 = message) ; `[0, 4|5, 127]`, `[0,7,76,76]`, `[0,8,2,1]` = volumes/divers.
+- Port P (liste) : `[1,a,b,c]` ouvre (visible) ; `[7,0]` ferme ; `[11, ligne, colonne]` annonce que le message suivant du MÊME port est le texte (UTF-16, '\n' possible) de la case ; `[12, ligne, x]` indicateur de ligne (0/1) ; `[10, ligne, ...]` style de ligne ; `[4, i]` curseur sur la ligne i ; `[5,0]`/`[6,0]` ticks à chaque image (ignorer).
+- Contenus vus : port 2 Oui/Non ; port 3 or ; port 4 Objets/Magie/Carac./Divers (colonne 1) ; port 5 équipe (colonnes 1 nom, 2 libellé PV/PM, 3 valeurs, 5 numéro ; lignes 2,3 = persos) ; port 12 liste de l'église (ligne 6 = titre, 0-4 choix, 5 « Rien ») ; port 13 liste du titre (Continuer / Reprendre / Créer / Supprimer / Sauv. cloud / Licence) ou choix du perso ; ports 12-14 aussi pour la liste des magasins (colonne 0 = noms séparés par '\n', colonne 2 = prix, colonne 3 = « 1/3 »).
+- Fenêtre de message = port 1 : `[0,0]` nouvelle page/vider, `[3, y]` défilement (pixels du canevas), `[4,x]` ?, `[1,1]` attente d'appui (curseur ▼, non dessiné), `[1,0]` fin d'attente. Texte rendu PAR LE MOTEUR dans le canevas `SDrawCTRL` (objet `LIB+0x252330`, tampon à `+0x10`, 1 octet/pixel d'opacité) créé par `CanvasSetup(obj, short*)` avec `[0, 1,0, 0,0 ...]` (ints aux offsets 2,6,10,14,18 = texId, ?, largeur 512, hauteur 256, drapeau) ; zone visible = `(int16 LIB+0x2523a0)+1` lignes × `int16(obj+0x42)`, haut = `int16(obj+0x4a)+3`. Visibilité : hook sur `MenuPort::SetVisible` (port `*(obj+0x30)`).
+
+## Autres découvertes (rappel)
+- FLD `.map` : objets FMAP = enregistrements 0x50 ; `mdl_id` = préfixe du GameObject enfant (`003_wdoor04`, `022_door01`). Paquet 5 = animation d'objet (porte...) : `index | anim<<16` ; **Unity doit remettre le bit0 de l'octet +0x14 de `table[idx*32]` à 0 à la fin** (visionneuse : 18 images), sinon le joueur est bloqué. Paquet 8 = couleur de fond (octet signé/31). Paquet 33 = teinte (non utilisé).
+- Sprites `h<id>` 24×32, filtrage Point -> shader « sharp bilinear ». Caméra : FOV vertical 20°, cadrage 16/9 par décalage en x (marge 0,85). Portes : battants pivotant de 90° (approximation).
+- Libellés de menus FR : fichier de textes du moteur `assets/msg/en/b1004000.mpt` (Parler, Magie, Objets, Examiner, Équiper…).
+
+## Reste à faire
+Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).

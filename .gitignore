@@ -1,0 +1,24 @@
+# --- Contenu Square Enix : JAMAIS dans ce dépôt ---
+*.apk
+*.so
+*.unity3d
+*.obb
+*.mpt
+*.dat
+jeux/
+saves/
+sauvegardes/
+cache/
+captures/
+*.pkl
+
+# --- Python / environnement local ---
+__pycache__/
+*.pyc
+.venv/
+modules_ok.txt
+
+# --- Archives locales hors dépôt ---
+test_faisabilite/
+*.zip
+*.log
