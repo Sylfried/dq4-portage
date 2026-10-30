@@ -11,6 +11,7 @@ import moteur as MO
 import donnees as DO
 import hd as HD
 import ui_menu as UI
+import son as SON
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -29,6 +30,8 @@ void main() {
     }
     vec4 c = texture(tex, uv) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
 
+SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
+SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
 MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
@@ -96,6 +99,8 @@ class Jeu(pyglet.window.Window):
         self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture)
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
+        self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=not args.sans_son)
+        self.son.precharger(SE_COURANTS)
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
         self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}; self.bornes_x = None
@@ -111,6 +116,7 @@ class Jeu(pyglet.window.Window):
                 e = self.moteur.etat
                 if e.carte: self._charger_carte(e.carte)      # les chargements lourds se font ici, pas pendant le jeu
                 for sp in list(e.sprites.values()): self._feuille(sp['id'], self.mode)
+                e.sons = [x for x in e.sons if x[0] == 37][-1:]      # les bruitages du chargement sont perdus, la musique de la carte reste
         self.n = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
@@ -312,11 +318,16 @@ class Jeu(pyglet.window.Window):
                 k0 = self.height / (CH_VUE_HAUT * CH_PX); self.champ_zoom = min(8, max(1, self._k_pp() + (1 if sy > 0 else -1))) / k0
             else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
 
+    def on_close(self):
+        self.son.fermer(); super().on_close()
+
     def on_key_press(self, symbol, modifiers):
         K = pyglet.window.key
         if symbol == K.F1: self.aide = not self.aide                           # afficher / masquer les lignes d'aide (haut a gauche)
         elif symbol == K.F2: self.mode = (self.mode + 1) % (MODE_PP + 1)
         elif symbol == K.F4: self.stats = not self.stats
+        elif symbol == K.F8:                                                  # son active / coupe
+            if self.son.basculer() and self.moteur.etat.musique is not None: self.son.jouer_bgm(self.moteur.etat.musique)
         elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
         elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
         elif symbol == K.F9: self.cb_ordre ^= 1                               # (essai) combat : ordre des parties des monstres inverse (l'ordre d'origine est celui des paquets)
@@ -563,16 +574,16 @@ class Jeu(pyglet.window.Window):
                 if decl & bit:
                     if bit in (MO.GAUCHE, MO.DROITE) and (f.get('grille') or (1, 1, 1))[0] < 2: pad = 2 if bit == MO.GAUCHE else 1
                     mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; return
-            if decl & MO.A: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port
-            elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port
+            if decl & MO.A: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+            elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
             return
         cle = (port, f['ordre']); cur = self.cur_local.get(cle)
         if cur not in z:
             cur = self.cur_local[cle] = f['cur'] if f['cur'] in z else min(z, key=lambda b: (-round(z[b][1]), z[b][0]))       # depart : le bouton en haut a gauche
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
-        if decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port
-        elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port
+        if decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
 
     @staticmethod
     def _voisin(z, cur, bit):
@@ -681,7 +692,7 @@ class Jeu(pyglet.window.Window):
         if bouton != M.LEFT or not self.ui_rendu: return
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
-            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); return
+            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         if mo.msg_visible: self.clic_a = True                                      # toucher le message = page suivante
 
     def on_mouse_release(self, x, y, bouton, modifiers):
@@ -834,6 +845,9 @@ class Jeu(pyglet.window.Window):
             p &= ~(MO.A | MO.B)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        self.son.image = self.n
+        if mo.etat.sons: self.son.evenements(mo.etat.sons); mo.etat.sons = []
+        self.son.tick()
         if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, mo.etat.partie, mo.etat.carte, None if mo.etat.champ is None else mo.etat.champ['cam'], p), flush=True)
         e = self.moteur.etat
         for idx, anim in e.evt_anim:
@@ -943,7 +957,7 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
-        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect (carte x%d)' % self._k_pp(), 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
+        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats | F8 : son %s' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect (carte x%d)' % self._k_pp(), 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._dessiner_fondu()
@@ -989,6 +1003,9 @@ def main():
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
+    ap.add_argument('--sans-son', action='store_true', help='coupe le son au depart (touche F8 pour l\'activer en jeu)')
+    ap.add_argument('--volume-musique', type=float, default=0.7, help='volume des musiques (0 a 1, multiplie le volume propre a chaque musique)')
+    ap.add_argument('--volume-bruitages', type=float, default=0.8, help='volume des bruitages (0 a 1)')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
     ap.add_argument('--shots-combat', default=None, help='(test) captures intermediaires a ces images de combat : "30,60,..."')

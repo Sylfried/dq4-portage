@@ -65,6 +65,7 @@ class Etat:
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
         self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
         self.fondu = {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir
+        self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
 
     def appliquer(self, paquets, lire_nom):
@@ -125,6 +126,9 @@ class Etat:
                     v = [f[3 + 5 * i:8 + 5 * i] for i in range(nv)]
                     self.maillages[a[0]] = {'pos': tuple(f[:3]), 'v': v, 'idx': list(idx), 'col': list(a[2:2 + nc])}       # col : un octet par quad (4 sommets), 255 = opaque
                     self.maillages_vus.add(a[0])
+            elif t in (35, 36, 37) and a:           # cmd_se_play / cmd_se_stop / cmd_bgm (Sound.PlaySE, StopSE, PlayBGM ; valeur >= 4096 = StopBGM)
+                self.sons.append((t, a[0]))
+                if t == 37: self.musique = a[0] if 0 <= a[0] < 4096 else None
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue

@@ -35,7 +35,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 if not exist ".venv\modules_ok.txt" (
   echo  Installation des modules ^(une seule fois, 1 a 3 minutes^)...
-  ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check numpy pillow unicorn pyglet UnityPy capstone
+  ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check numpy pillow unicorn pyglet UnityPy capstone soundfile
   if errorlevel 1 (
     echo.
     echo  L'installation a echoue. Si ton Python est tres recent, installe Python 3.12 :
@@ -45,6 +45,12 @@ if not exist ".venv\modules_ok.txt" (
     exit /b 1
   )
   echo ok> ".venv\modules_ok.txt"
+)
+
+rem --- 2a. son : module des musiques (ajoute apres coup ; une seule fois pour les environnements deja crees)
+if not exist ".venv\sound_ok.txt" (
+  ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check soundfile
+  if errorlevel 1 ( echo  Module "soundfile" non installe : les musiques seront absentes ^(les bruitages fonctionnent^). ) else ( echo ok> ".venv\sound_ok.txt" )
 )
 
 rem --- 2b. fenetres de menu d'origine : mise en page lue dans le code du jeu (une seule fois, si le dump du code existe)

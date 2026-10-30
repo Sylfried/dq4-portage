@@ -102,9 +102,17 @@
 - Paquets 16 `chara_sleep_pose`, 17 `chara_sleep_near`, 18 `chara_pose` : jamais vus dans le village de départ (personnages couchés : maillages `s_meshLie*`, shader `Custom/CharaSleep`), non rejoués.
 - Test : `DQ_PKTALL=fichier` journalise tous les paquets sauf 22, 28 et 29 (image, partie, type, entiers, flottants).
 
+## Son : conteneur AKB, paquets 35/36/37 (31/10/2026, issue #17 / #42)
+- **Fichiers** : `assets/sound/BGM01..BGM51.akb` (51 musiques) et `SE0300..SE1170.akb` (634 bruitages) dans l'APK de données (`split_UnityDataAssetPack.apk`). Lus par `libsdlib_android.so` (`akbMaterial*`), joués côté Unity par `Sound.PlayBGM / StopBGM / PlaySE / StopSE`.
+- **En-tête AKB** : `0x00` `AKB ` ; `0x04` u16 version ; `0x06` u16 taille d'en-tête ; `0x08` u32 taille du fichier ; `0x0c` u8 codec (**2 = MS-ADPCM** pour les bruitages, **5 = Ogg Vorbis** pour les musiques) ; `0x0d` u8 canaux ; `0x0e` u16 fréquence ; `0x10` u32 nombre d'échantillons ; `0x14` u32 début de boucle ; `0x18` u32 fin de boucle (0 = pas de boucle) ; `0x20` float volume propre au fichier (0,65 à 0,9 pour les musiques). Bloc d'extra à `0xc0` : u16 `0`, u16 taille de bloc ADPCM (`0xc2` : 22 mono / 44 stéréo = 32 échantillons par bloc), u32 échantillons, u32 début de boucle. Données à `0xcc` : Ogg complet (codec 5) ou 4 octets puis blocs MS-ADPCM (codec 2).
+- **MS-ADPCM** : coefficients standard de Microsoft (256/0, 512/-256, 0/0, 192/64, 240/0, 460/-208, 392/-232), en-tête de bloc = indice de prédiction, delta, échantillon 1, échantillon 2 (regroupés par canal), sortie dans l'ordre échantillon 2, échantillon 1, puis les quartets (poids fort d'abord ; en stéréo ils alternent gauche / droite). **La prédiction `(a*c1 + z*c2) >> 8` est une division entière vers zéro** (pas un décalage arithmétique) : c'était la seule différence avec ffmpeg. Vérifié : 53 bruitages sur 53 identiques à `ffmpeg -acodec adpcm_ms` (écart 0). Musiques : `soundfile` (libsndfile) et ffmpeg donnent le même signal (écart <= 1).
+- **Paquets** : **35 `[id]`** = `PlaySE(id)` (`SE%04d`) ; **36 `[id]`** = `StopSE` ; **37 `[id]`** = `PlayBGM` (`BGM%02d`), une valeur >= 4096 (ex. 16392 = 0x4008) = `StopBGM`. Vus : musique 14 = village de départ, 5 = carte du monde, 30 = combat, 23 après la victoire (précédée d'un arrêt 16392), puis retour à 14 ; bruitages 307 = pas, 300 = valider / page de message suivante (envoyé par le moteur), 400 à 415 / 804 / 805 = combat, 409 = fanfare, 306 / 609 = fin de combat.
+- **Bouton de menu** : le bruitage 300 de l'appui sur un bouton est joué par Unity (`MenuPortItem.Update`), pas par le moteur : le moteur ne l'envoie que pour la validation d'un message. La visionneuse le joue à l'appui d'un bouton (souris) et à la validation / annulation au clavier. Déplacer le curseur ne produit aucun bruitage.
+- Non étudié : `snd_vol.dat` (table de volumes), fondus entre musiques (`PlayBGM` côté Unity), bruitages 3D / positionnels.
+
 ## Rendu : état
 - Version initiale : rasteriseur numpy maison (cloud). Remplacé par la fenêtre pyglet/OpenGL de `dq4_pc/fenetre.py` (voir `notes-visionneuse-dq4-pc.md`).
 - Cadrage : vue conçue pour le portrait (ASPECT_DEF 0,5625). En 16:9 avec le même FOV vertical, une petite salle laisse des marges vides ; une ville étendue montre plus de décor sur les côtés.
 
 ## Inconnues / prochaines étapes
-Suivies dans les issues du dépôt. Rappel : paquets 4, 6, 14, 15, 18, 19-20, 27-30 (FieldData / carte du monde) à décoder ; modèles 3D id -> asset (titre, boss) ; son (`libsdlib_android.so`, non étudiée) ; combats.
+Suivies dans les issues du dépôt. Rappel : paquets 4, 6, 14, 15, 18, 19-20, 27-30 (FieldData / carte du monde) à décoder ; modèles 3D id -> asset (titre, boss) ; fondus de musique et table `snd_vol.dat` ; combats.
