@@ -18,5 +18,7 @@ Le projet a démarré le 29/10/2026 (avant la création de ce dépôt). Chaque �
 | 30/10 nuit | Menus : file MenuPort, liste de l'église, menu de commandes, saisie clavier | #36 |
 | 30/10 | Dépôt GitHub, règles de travail, issues de départ | #37 |
 
+| 30/10 nuit | Séparation du dépôt d'origine `dq4-pc` : portage natif (ici), essai Unity (`dq4-portage-unity`), patch français (inchangé) | — |
+
 ## Et maintenant
 Les jalons ouverts : **M1 Village jouable 16/9**, **M2 Monde et combats**, **M3 Son et finitions**. Prochaine issue : #1 (sprites en HD).

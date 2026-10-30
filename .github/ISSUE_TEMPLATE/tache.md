@@ -5,7 +5,7 @@ labels: "type:feature"
 ---
 **Objectif**
 
-**Critères de réussite** (comment je vérifie sur pdc)
+**Critères de réussite** (comment je vérifie sur le PC de test)
 - [ ]
 
 **Pistes / liens** (notes, fonctions du moteur, issues liées)

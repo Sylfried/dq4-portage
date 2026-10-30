@@ -3,7 +3,7 @@
 
 Closes #
 
-## Testé sur pdc
+## Testé sur le PC de test
 - [ ] `lancer_dq4.bat` démarre
 - [ ] marche, porte, changement de carte
 - [ ] message et menu s'ouvrent / se ferment

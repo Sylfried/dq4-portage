@@ -1,33 +1,41 @@
-# Dragon Quest IV : portage PC (essai)
+# Dragon Quest IV : portage PC natif (sans Unity)
 
-Portage natif sur PC de **Dragon Quest IV (Android)**, à partir de la version déjà patchée en français. Premier objectif : un affichage **16/9** propre.
+Portage natif sur PC de **Dragon Quest IV (Android)**, à partir de la version déjà patchée en français. Premier objectif : un affichage **16/9** propre, avec les fenêtres, les menus, la souris (= tactile du mobile), la musique et les bruitages d'origine.
 
 ## Principe (« voie A »)
-Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par une couche Unity. On garde le moteur tel quel et on réécrit la couche Unity :
+Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par une couche Unity. On garde le moteur tel quel et on réécrit la couche Unity en Python :
 
-- `emu_core.py` : chargeur ELF AArch64 + [Unicorn](https://www.unicorn-engine.org/) qui exécute `libdq4core.so` ;
-- `moteur.py` / `pktlog.py` : pilotage du moteur (`GameUpdate`…), décodage des paquets moteur → Unity, file de messages des menus ;
-- `fld.py` / `donnees.py` : lecture des cartes et sprites dans les données Unity (UnityPy) ;
-- `fenetre.py` : fenêtre pyglet/OpenGL (décor 3D, sprites, caméra 16/9, messages, menus, clavier).
+- `dq4_pc/emu_core.py` : chargeur ELF AArch64 + [Unicorn](https://www.unicorn-engine.org/) qui exécute `libdq4core.so` ;
+- `dq4_pc/moteur.py` / `pktlog.py` : pilotage du moteur (`GameUpdate`…), décodage des paquets moteur → Unity, file de messages des menus ;
+- `dq4_pc/fld.py` / `donnees.py` : lecture des cartes et sprites dans les données Unity (UnityPy) ;
+- `dq4_pc/fenetre.py` : fenêtre pyglet/OpenGL (décor 3D, sprites, combat, carte du monde, caméra 16/9, souris et clavier) ;
+- `dq4_pc/ui_menu.py` : fenêtres et menus d'origine, dont la mise en page est lue dans le code C# du jeu (`outils/ui_il2cpp/`) ;
+- `dq4_pc/son.py` : musiques et bruitages d'origine (conteneur AKB) ;
+- `dq4_pc/hd.py` : agrandissement des sprites (EPX, régions lissées, bicubique) et mode pixel perfect.
 
-Plan B (recompilation x64) puis plan C (émulateur Android) uniquement si la voie A échoue : elle fonctionne aujourd'hui.
+## Les dépôts du projet
+| Dépôt | Rôle |
+|---|---|
+| **`dq4-portage`** (celui-ci) | le portage natif, sans Unity |
+| `dq4-portage-unity` | essai « Unity comme afficheur » (piste 3), alimenté par le moteur de ce dépôt |
+| `dq456-traductions-fr` | patch français des APK (jamais modifié ici) |
+| `dq4-pc` (ancien) | dépôt d'origine, avant la séparation ; ses issues et pull requests (#1 à #78) gardent l'historique du suivi |
 
 ## ⚠️ Aucun contenu Square Enix ici
-Ce dépôt ne contient **que du code et des notes**. Le programme lit *tes* fichiers (APK patchés, sauvegardes) sur *ton* PC ; rien n'est copié ni distribué. Les APK, `.so`, données Unity, sauvegardes, caches et captures du jeu sont exclus par `.gitignore` : ne jamais les forcer (`git add -f`). Ce dépôt est séparé du patch FR (jamais de modification de ses fichiers).
+Ce dépôt ne contient **que du code et des notes**. Le programme lit *tes* fichiers (APK patchés, sauvegardes) sur *ton* PC ; rien n'est copié ni distribué. Les APK, `.so`, données Unity, sauvegardes, caches et captures du jeu sont exclus par `.gitignore` : ne jamais les forcer (`git add -f`).
 
 ## Lancer (Windows)
-Disposition attendue (le dépôt est le dossier `portage_pc`) :
+Il faut les 3 APK français et une sauvegarde. `dq4_pc/fenetre.py` cherche le dossier `jeux\DQ4` tout seul (variable `DQ4_JEUX` d'abord, puis `jeux\DQ4` dans ce dépôt ou à côté, puis dans un dossier voisin comme `dq456-traductions-fr`). Disposition simple, dans ce dépôt :
 
 ```
-DQ Patch\
+dq4-portage\
   jeux\DQ4\patched_apks\   (base.apk, split_config.arm64_v8a.apk, split_UnityDataAssetPack.apk)
   jeux\DQ4\saves\<horodatage>\data1.dat
-  portage_pc\              <- ce dépôt
-    dq4_pc\lancer_dq4.bat  <- double-clic
+  dq4_pc\lancer_dq4.bat      <- double-clic
 ```
-`lancer_dq4.bat` crée un environnement Python local (3.13 > 3.12 > 3.11 > 3.14 > 3.10), installe `numpy pillow unicorn pyglet UnityPy` une fois, puis ouvre la fenêtre. Les nouvelles sauvegardes vont dans `dq4_pc\sauvegardes` (les tiennes ne sont jamais modifiées).
+`lancer_dq4.bat` crée un environnement Python local (3.13 > 3.12 > 3.11 > 3.14 > 3.10), installe `numpy pillow unicorn pyglet UnityPy capstone soundfile` une fois, puis ouvre la fenêtre. Les nouvelles sauvegardes vont dans `dq4_pc\sauvegardes` (les tiennes ne sont jamais modifiées).
 
-Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; F1 = afficher / masquer les lignes d'aide en haut à gauche (cadre noir translucide) ; F2 = style des sprites (originaux, EPX, régions lissées, bicubique) ; F3 = lissage du décor (mipmaps, anisotrope) oui / non ; F4 = compteur d'images/s ; F5 = (essai) aller directement à la carte du monde ; Échap = quitter. La carte du monde s'atteint aussi en marchant hors du village (par la porte), et on revient en repassant la porte.
+Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; souris = tactile du mobile (clic gauche = toucher, clic droit = annuler, molette = zoom de la carte du monde) ; F1 = lignes d'aide ; F2 = style des sprites (dernier mode : pixel perfect) ; F3 = lissage du décor ; F4 = compteur d'images/s ; F8 = son ; F5 = (essai) carte du monde ; Échap = quitter.
 
 ## Où en est-on
-Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). L'historique des étapes déjà faites est dans [`docs/historique.md`](docs/historique.md). Le suivi du travail se fait dans les **issues** ; la manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).
+Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). L'historique des étapes est dans [`docs/historique.md`](docs/historique.md). La manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).
