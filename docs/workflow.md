@@ -22,3 +22,6 @@ Courts, au présent, préfixés : `feat:`, `fix:`, `docs:`, `refactor:`, `chore:
 - **Aucun contenu Square Enix** dans le dépôt (voir `.gitignore`). Les outils lisent les fichiers de l'utilisateur sur son PC.
 - Projet séparé du patch FR : ne jamais toucher à ses fichiers (Excel, `DQ_Patch_FR.exe`, `build_exe.bat`).
 - Les sauvegardes de l'utilisateur ne sont jamais modifiées (les nouvelles vont dans `dq4_pc\sauvegardes`).
+
+## Délégation (30/10/2026)
+Sylfried laisse à Claude la gestion des issues, commits, pushs, pull requests et fusions (squash vers `main`, branche supprimée ensuite). Les fusions restent précédées d'une vérification en cloud ; les tests sur pdc se font sur les fichiers copiés avant ou pendant la PR.
