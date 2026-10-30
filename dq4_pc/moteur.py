@@ -55,6 +55,7 @@ class Etat:
     """Ce que Unity saurait a l'ecran : decode des paquets du moteur."""
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
+        self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
         self.modeles = {}; self.maillages = {}       # combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
@@ -62,11 +63,18 @@ class Etat:
     def appliquer(self, paquets, lire_nom):
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.cam_rot = None
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.cam_rot = None; self.symboles.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
                 self.champ = {'x0': a[0], 'y0': a[1], 'cols': a[2], 'tuiles': a[4:4 + a[3]], 'cam': (f[0], f[1]) if len(f) >= 2 else None}
+            elif t == 29 and a:                     # FieldData::draw_symbol : idx | genre << 8 + [x, y, alpha] ; 0x8000 | idx = cacher ; 0xc000 | idx = remontrer
+                v = a[0]; i = v & 0xff
+                if v & 0xc000 == 0xc000:
+                    if i in self.symboles: self.symboles[i]['vis'] = True
+                elif v & 0x8000:
+                    if i in self.symboles: self.symboles[i]['vis'] = False
+                elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
                 if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0}
                 else: self.sprites.pop(a[0], None)

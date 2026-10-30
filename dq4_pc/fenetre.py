@@ -32,6 +32,9 @@ SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
 _cb = [float(x) for x in os.environ.get('DQ_CB', '45,27,1,0,0').split(',')]
 CB_FOV, CB_DEC_Z, CB_MIROIR, CB_MIROIR_X, CB_DEC_Y = _cb[0], _cb[1], int(_cb[2]), int(_cb[3]), _cb[4]      # combat : champ de vision, decalage du decor sur z, miroir en z (essais)
+CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3: (288, 512, 41, 32), 4: (384, 512, 41, 32), 5: (480, 512, 25, 31),
+             6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
+             12: (0, 448, 32, 46), 13: (64, 448, 26, 28), 14: (128, 448, 41, 39), 15: (224, 448, 27, 42), 16: (288, 448, 48, 48), 17: (384, 448, 40, 32)}   # icones de lieux de la carte du monde
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 BTN_PAROLE, BTN_MENU = 0x100, 0x800     # arg2 de GameUpdate : parler / examiner (exactement 0x100), ouvrir le menu de commandes
@@ -65,7 +68,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement du moteur...')
         self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
-        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None
+        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}                 # combat : textures de monstres (m<id>) et maillages
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
@@ -174,7 +177,8 @@ class Jeu(pyglet.window.Window):
     def _camera_champ(self, e, aspect):
         """Carte du monde : plan horizontal, camera inclinee qui suit le point donne par le moteur (en pixels de 16 par tuile)."""
         cx, cz = (e.champ['cam'] or (0.0, 0.0)); cx, cz = cx / CH_PX, cz / CH_PX
-        M, droite = matrice((cx, CH_HAUT, cz + CH_RECUL), (cx, 0.0, cz), CH_FOV, aspect, 1.0, 200.0)
+        M, droite = matrice((-cx, CH_HAUT, cz + CH_RECUL), (-cx, 0.0, cz), CH_FOV, aspect, 1.0, 200.0)
+        M = M @ np.diag([-1.0, 1.0, 1.0, 1.0])          # repere main gauche d'Unity : on retourne x pour que l'est soit a droite
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * CH_ECHELLE, 32 / CH_PX * CH_ECHELLE
 
     def _maj_champ(self, e):
@@ -189,7 +193,7 @@ class Jeu(pyglet.window.Window):
             if arr is None: return
             self.champ_tex = self._tex(arr, False)
             gl.glBindTexture(self.champ_tex.target, self.champ_tex.id)
-            gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)     # pixels nets
         cols = ch['cols']; lignes = len(t) // cols
         g = t[:lignes * cols].reshape(lignes, cols)
         X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
@@ -207,10 +211,30 @@ class Jeu(pyglet.window.Window):
         if self.champ_vl is not None: self.champ_vl.delete()
         self.champ_vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', np.ones(len(pos) * 4, np.float32)))
 
-    def _tracer_champ(self):
+    def _tracer_champ(self, e):
         if self.champ_vl is None or self.champ_tex is None: return
         self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0; self.prog['tsize'] = (1024.0, 1024.0)
         self._tracer(self.champ_tex, self.champ_vl)
+        q, uv, col = [], [], []
+        for s in e.symboles.values():                     # icones de lieux : panneaux debout, ancres au milieu du bord bas (comme le heros)
+            r = CH_ICONES.get(s['genre'])
+            if r is None or not s['vis']: continue
+            ox, bas, w, h = r
+            cx, cz = (s['x'] + w / 2) / CH_PX, (s['y'] + h) / CH_PX
+            lw, lh = w / CH_PX * CH_ECHELLE, h / CH_PX * CH_ECHELLE
+            a, b = np.array([cx - lw / 2, 0.0, cz]), np.array([cx + lw / 2, 0.0, cz]); up = np.array([0.0, lh, 0.0])
+            q += [a, b, b + up, a, b + up, a + up]
+            u0, u1, v1, v0 = ox / 1024.0, (ox + w) / 1024.0, 1 - (bas - h) / 1024.0, 1 - bas / 1024.0
+            uv += [(u0, v0), (u1, v0), (u1, v1), (u0, v0), (u1, v1), (u0, v1)]
+            col += [(1.0, 1.0, 1.0, float(s['alpha']))] * 6
+        if q:
+            n = len(q); pos = np.array(q, np.float32).ravel(); tc = np.array(uv, np.float32).ravel(); cc = np.array(col, np.float32).ravel()
+            if self.champ_ico is None or self.champ_ico[0] != n:
+                if self.champ_ico is not None: self.champ_ico[1].delete()
+                self.champ_ico = (n, self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', pos), tex_coords=('f', tc), colors=('f', cc)))
+            else:
+                v = self.champ_ico[1]; v.position[:] = pos; v.tex_coords[:] = tc; v.colors[:] = cc
+            self._tracer(self.champ_tex, self.champ_ico[1])
         self.prog['net'] = 0.0
 
     def _tracer(self, tex, vl):
@@ -548,7 +572,7 @@ class Jeu(pyglet.window.Window):
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        if champ: self._tracer_champ()
+        if champ: self._tracer_champ(e)
         elif bataille:
             self.prog['mvp'] = tuple(float(x) for x in M_decor.T.ravel())
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)

@@ -40,7 +40,8 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 ## Carte du monde dans la visionneuse
 - `Moteur` : `Etat.partie`, `Etat.champ` (paquet 28) ; `demarrer_champ()` (F5). `Donnees.texture(nom)` lit une texture Unity par nom (cache `tex_<nom>.npy`).
 - `fenetre.py` : sol = un maillage de 25 x 52 tuiles reconstruit quand la fenêtre de tuiles change (`_maj_champ`), caméra inclinée (`_camera_champ`, FOV 30 deg), sprites debout (échelle `CH_ECHELLE`), même chemin de dessin que les villes. Variable `DQ_ETAT=1` = trace partie/carte/caméra toutes les 25 images.
-- Limites : pas d'icônes de villes (paquet 29), horizon limité à 25 colonnes, eau non animée.
+- Icônes (paquet 29) : `Etat.symboles`, table `CH_ICONES` (genre -> case de l'atlas), dessinées debout par `_tracer_champ`. Carte en miroir en x (correction d'orientation) et atlas en `GL_NEAREST` (net).
+- Limites : genres 18/19/20 non dessinés, horizon limité à 25 colonnes, eau non animée.
 
 ## Combat dans la visionneuse
 - `Etat` : `cam_rot`, `modeles` (paquet 21), `maillages` (paquet 22). `fenetre.py` : `_camera_combat` (rotation -> direction, z inversé), décor décalé de +27 en z, monstres tracés depuis les maillages du moteur (texture `m<id>`).
