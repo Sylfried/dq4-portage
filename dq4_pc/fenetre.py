@@ -72,7 +72,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         _c2 = [int(x) for x in os.environ.get('DQ_CB2', '1,0,1').split(',')]            # etat initial de F6 (sol rehausse), F7 (miroir), F8 (decor tourne)
-        self.cb_y = CB_DEC_Y if _c2[0] else 0.0; self.cb_mx, self.cb_rot = _c2[1], _c2[2]                 # combat : textures de monstres (m<id>) et maillages
+        self.cb_y = CB_DEC_Y if _c2[0] else 0.0; self.cb_mx, self.cb_rot = _c2[1], _c2[2]; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -259,6 +259,7 @@ class Jeu(pyglet.window.Window):
         elif symbol == K.F6: self.cb_y = 0.0 if self.cb_y else CB_DEC_Y          # (essai) combat : sol rehausse sous les monstres
         elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
         elif symbol == K.F8: self.cb_rot ^= 1                                 # (essai) combat : decor tourne de 180 deg
+        elif symbol == K.F9: self.cb_ordre ^= 1                               # (essai) combat : ordre de superposition des parties des monstres
         elif symbol == K.F3:
             self.lissage = not self.lissage
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
@@ -293,7 +294,7 @@ class Jeu(pyglet.window.Window):
             t, tw, th = self.cb_tex[mid]
             V = np.array(mm['v'], np.float32); ix = np.array(mm['idx'], np.int64)
             tri_z = V[ix, 4].reshape(-1, 3).mean(1)
-            ordre = np.argsort(-tri_z, kind='stable')                   # parties les plus lointaines d'abord (le moteur donne un z minuscule par partie)
+            ordre = np.argsort(tri_z if self.cb_ordre else -tri_z, kind='stable')                   # parties les plus lointaines d'abord (le moteur donne un z minuscule par partie)
             ix = ix.reshape(-1, 3)[ordre].ravel(); P = V[ix]
             xyz = P[:, 2:5] * np.array([-1 if (CB_MIROIR_X ^ self.cb_mx) else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
             if CB_MIROIR: xyz[:, 2] = -xyz[:, 2]
@@ -646,7 +647,7 @@ class Jeu(pyglet.window.Window):
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
         self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
-        if bataille: self.etiq_hd.text += ' | combat : F6 sol %s | F7 miroir %s | F8 decor tourne %s' % ('oui' if self.cb_y else 'non', 'oui' if self.cb_mx else 'non', 'oui' if self.cb_rot else 'non')
+        if bataille: self.etiq_hd.text += ' | combat : F6 sol %s | F7 miroir %s | F8 decor tourne %s | F9 parties inversees %s' % ('oui' if self.cb_y else 'non', 'oui' if self.cb_mx else 'non', 'oui' if self.cb_rot else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.etiquette.draw(); self.etiq_hd.draw()
