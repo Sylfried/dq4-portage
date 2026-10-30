@@ -6,7 +6,9 @@ T = R.make()
 _H = int(os.environ.get('DQ_UI_H', '800')); T.screen = (450, _H); T.aspect = 450.0 / _H
 T.run(0xd2370c)
 M.system_init(T)
+_k0 = set(T.U)
 M.make_message(T)
+T.msg_new = [o for o in T.U if o not in _k0]      # objets Unity crees par MenuMessage..ctor
 def dump(typ, show=True):
     nm = R.tbl[typ]
     id0 = len(T.obj)

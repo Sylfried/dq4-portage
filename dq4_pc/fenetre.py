@@ -106,7 +106,7 @@ class Jeu(pyglet.window.Window):
         self.n = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
-        self.ui_rendu = None; self.ui_g = None
+        self.ui_rendu = None; self.ui_g = None; self.ui_msg = None; self.canevas_cle = None
         if not args.ui_simple: self._init_ui()
         pyglet.clock.schedule_interval(self.tick, 1 / 30.0)
 
@@ -120,8 +120,9 @@ class Jeu(pyglet.window.Window):
             from PIL import Image
             ml = UI.MiseEnPage(lay, os.path.join(a.cache, 'ui_frameData.bin'))
             feuilles = {0: np.array(Image.open(os.path.join(a.cache, 'ui_MenuTexture.png')).convert('RGBA')), 1: np.array(Image.open(os.path.join(a.cache, 'ui_Button.png')).convert('RGBA'))}
-            self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g
-            print('Menus : mise en page d\'origine chargee (%d types).' % len(ml.types), flush=True)
+            self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g; self.ui_g.proj = self._ui_x_monstres
+            if ml.message: self.ui_msg = UI.FenetreMessage(ml)
+            print('Menus : mise en page d\'origine chargee (%d types%s).' % (len(ml.types), ', fenetre de message' if self.ui_msg else ''), flush=True)
         except Exception as e:
             print('Menus : mise en page d\'origine inutilisable (%r) -> menus simples.' % (e,), flush=True); self.ui_rendu = None; self.ui_g = None
 
@@ -396,8 +397,40 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('fond de combat non calcule :', ex, flush=True); return None
 
+    def _ui_x_monstres(self, masque):
+        """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat."""
+        M = getattr(self, '_M_combat', None); e = self.moteur.etat
+        if M is None: return None
+        ech = self.height / 800.0; cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
+        xs = []
+        for i in range(32):
+            if not (masque >> i) & 1: continue
+            mm = e.maillages.get(i)
+            if not mm: continue
+            P = np.array(list(mm['pos']) + [1.0]); c = M @ P
+            if c[3] <= 0: continue
+            xs.append((((c[0] / c[3]) * 0.5 + 0.5) * self.width - cx) / ech)
+        return (min(xs), max(xs)) if xs else None
+
     def _maj_message(self):
         """Texte visible du message (canevas du moteur) -> image RGBA blanche dont l'opacite est celle du texte."""
+        if self.ui_msg:                                          # fenetre d'origine : tout le canevas (512 x 512, en boucle) + defilement par decalage d'UV
+            a = self.moteur.lire_canevas()
+            if a is not None:
+                cle = hash(a.tobytes())
+                if cle != self.canevas_cle:
+                    self.canevas_cle = cle; self.ui_rendu.maj_canevas(a)
+                    if os.environ.get('DQ_UIDBG'):                                  # (test) lignes de texte du canevas : (premiere rangee, derniere rangee)
+                        r = np.where(a.max(1) > 40)[0]; g = []
+                        if len(r):
+                            s0 = p0 = r[0]
+                            for q in r[1:]:
+                                if q > p0 + 3: g.append((int(s0), int(p0))); s0 = q
+                                p0 = q
+                            g.append((int(s0), int(p0)))
+                        print('CANEVAS image %s lignes %s msg %s' % (self.moteur.images, g, self.moteur.ui.msg), flush=True)
+            m = self.moteur.ui.msg; self.ui_msg.regler(m['type'], m['y'], m['feed'])
+            return
         a = self.moteur.lire_message()
         if a is None: self.msg_img = None; return
         h = a.shape[0]
@@ -411,6 +444,7 @@ class Jeu(pyglet.window.Window):
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 
     def _dessiner_message(self):
+        if self.ui_msg: return                                   # dessinee avec les fenetres d'origine (_dessiner_menus)
         if self.msg_img is None or not self.moteur.msg_visible: return
         ech = self.height / 720.0 * 1.3                       # taille du texte : 1 pixel du canevas = 1,3 pixel a 720p
         tl, tn = MO.CANEVAS_L * ech * 0.78, self.msg_h * ech
@@ -474,11 +508,15 @@ class Jeu(pyglet.window.Window):
     def _dessiner_menus(self):
         mo = self.moteur
         actif = mo.menu_actif()
+        if os.environ.get('DQ_UIDBG'):                      # (test) etat des fenetres a chaque changement : port, type, visible, fenetre d'origine ou menu simple
+            etat = tuple(sorted((p, f['type'], f['vis'], p in (self.ui_g.f if self.ui_g else ()), len(f['cases'])) for p, f in mo.ui.f.items() if f['vis'] or f['type'] is not None))
+            if etat != getattr(self, '_ui_etat', None):
+                self._ui_etat = etat; print('UI image %d actif=%s : %s' % (self.n, actif, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in etat)), flush=True)
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
             ech = self.height / 800.0                                  # le jeu est concu en portrait 450 x 800 : colonne centree, hauteur de la fenetre
             cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
-            fl = []
+            fl = [self.ui_msg] if (self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex) else []
             for _, p in liste:
                 fe = self.ui_g.f[p]; fe.selection(mo.ui.f[p]['cur'] if p == actif else None); fl.append(fe)
             self.ui_rendu.dessiner(fl, cx, self.height / 2, ech, (self.width, self.height))
@@ -631,7 +669,7 @@ class Jeu(pyglet.window.Window):
         aspect = self.width / max(1, self.height)
         if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
         elif bataille:
-            M, M_decor = self._camera_combat(e, aspect); dh = np.array([1.0, 0, 0]); w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
+            M, M_decor = self._camera_combat(e, aspect); self._M_combat = M; dh = np.array([1.0, 0, 0]); w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         else:
             cam, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
             if self.bornes_x is not None:

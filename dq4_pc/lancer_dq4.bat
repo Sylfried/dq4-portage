@@ -35,7 +35,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 if not exist ".venv\modules_ok.txt" (
   echo  Installation des modules ^(une seule fois, 1 a 3 minutes^)...
-  ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check numpy pillow unicorn pyglet UnityPy
+  ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check numpy pillow unicorn pyglet UnityPy capstone
   if errorlevel 1 (
     echo.
     echo  L'installation a echoue. Si ton Python est tres recent, installe Python 3.12 :
@@ -48,10 +48,20 @@ if not exist ".venv\modules_ok.txt" (
 )
 
 rem --- 2b. fenetres de menu d'origine : mise en page lue dans le code du jeu (une seule fois, si le dump du code existe)
+rem     un ancien fichier sans la fenetre de message est refait
+if exist "cache\ui_layout.json" (
+  ".venv\Scripts\python.exe" -c "import json,sys; sys.exit(0 if 'message' in json.load(open('cache/ui_layout.json', encoding='utf-8')) else 1)" >nul 2>nul
+  if errorlevel 1 del "cache\ui_layout.json"
+)
 if not exist "cache\ui_layout.json" (
   if exist "cache\il2cpp\dump.cs" (
     echo  Lecture de la mise en page d'origine des fenetres ^(une seule fois, quelques minutes^)...
     ".venv\Scripts\python.exe" "..\outils\ui_il2cpp\generer_ui.py"
+    if errorlevel 1 (
+      echo.
+      echo  La lecture a echoue : details dans cache\ui_generation.log ^(menus simples pour cette fois^).
+      pause
+    )
   ) else (
     echo  Menus simples ^(pour les fenetres d'origine : lance d'abord ..\outils\dump_il2cpp.bat^).
   )

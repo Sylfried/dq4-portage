@@ -14,7 +14,7 @@ def norm(nm):
     return nm
 
 class Tr2(t.Tr):
-    REAL = re.compile(r'^(MenuPortItemTable\.Sub_|eIndent\.|NotchFix\.|UIFix\.|MenuParts\.|MeshMaker\.|MenuPortItemTable\.(MonsterNamePlate|MonsterMarkList|BattleBar|ICityMap)\.)')
+    REAL = re.compile(r'^(MenuMessage\.SetCanvasMesh|MenuPortItemTable\.Sub_|eIndent\.|NotchFix\.|UIFix\.|MenuParts\.|MeshMaker\.|MenuPortItemTable\.(MonsterNamePlate|MonsterMarkList|BattleBar|ICityMap)\.)')
     NOREAL = re.compile(r'^(MenuParts\.(<>c|FuncIsHit|IBase\.(IntChanger|StringChanger)|IButton\.<>c))')
     def __init__(self):
         super().__init__()
@@ -355,6 +355,15 @@ class Tr2(t.Tr):
         def _(X, F): T.U[X[0]]['tris'][X[2] & 0xffffffff] = [v[0] for v in readarr(X[1], 0, '<i')]
         @reg('Mesh.set_triangles')
         def _(X, F): T.U[X[0]]['tris'][0] = [v[0] for v in readarr(X[1], 0, '<i')]
+        @reg('Mesh.get_bounds')
+        def _(X, F):         # Bounds (centre, demi-dimensions) rendus par x8 : boite des sommets du maillage
+            v = T.U[X[0]].get('vtx') or [(0.0, 0.0, 0.0)]
+            mn = [min(p[i] for p in v) for i in range(3)]; mx = [max(p[i] for p in v) for i in range(3)]
+            T.uc.mem_write(T.uc.reg_read(UC_ARM64_REG_X8), struct.pack('<6f', *[(a + b) / 2 for a, b in zip(mn, mx)], *[(b - a) / 2 for a, b in zip(mn, mx)]))
+        @reg('Screen.get_width')
+        def _(X, F): T.ret(1080)
+        @reg('Screen.get_height')
+        def _(X, F): T.ret(1920)
         @reg('Mesh.RecalculateBounds', 'Mesh.RecalculateNormals', 'Mesh.Clear', 'Mesh.set_colors', 'Mesh.set_normals')
         def _(X, F): pass
         # Renderer / Material

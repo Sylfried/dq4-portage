@@ -13,7 +13,7 @@ LIB_APK = 'lib/arm64-v8a/libdq4core.so'
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
 HAUT, BAS, GAUCHE, DROITE, A, B = 0x1, 0x2, 0x4, 0x8, 0x10, 0x20
 OBJ_MESSAGE = 0x252330                     # objet SDrawCTRL (canevas de texte des messages) dans la bibliotheque
-CANEVAS_L, CANEVAS_H = 512, 256
+CANEVAS_L, CANEVAS_H = 512, 512            # texture du canevas de message d'Unity (MenuMessage : Texture2D(512, 512)) ; le moteur y ecrit en boucle
 PILE_SHORTS = 4096                         # taille reelle allouee pour la file des messages (Unity en annonce 1089)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 
@@ -117,29 +117,43 @@ class Etat:
                 if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
 
 
+DBG = bool(os.environ.get('DQ_UIDBG'))
+
+
 class Interface:
     """Ce que l'interface Unity memorise des messages du moteur : une fenetre par port (liste de textes, curseur, ouverte ou non).
     Messages d'un port (apres le premier octet = nombre d'arguments) : [1,..] ouvre ; [7,0] ferme ; [11,ligne,colonne] annonce
     que le message suivant du port est le texte de cette case ; [4,i] curseur sur la ligne i ; [12,ligne,x] et [10,..] reglages."""
     def __init__(self):
         self.f = {}; self.attente = {}; self.ordre = 0
+        self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page
         self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
 
     def fen(self, port):
-        if port not in self.f: self.f[port] = {'cases': {}, 'vis': False, 'cur': 0, 'ordre': 0, 'indic': {}, 'type': None}
+        if port not in self.f: self.f[port] = {'cases': {}, 'vis': False, 'cur': 0, 'ordre': 0, 'indic': {}, 'type': None, 'act': False, 'req': False, 'draw': False, 'force': False, 'ign': False, 'sv': True}
         return self.f[port]
 
     def appliquer(self, liste):
+        if DBG:
+            for port, a in liste:
+                if port in (0, 1) or port >= 12: print('MSG image %s port %d %s' % (getattr(self, 'image', '?'), port, a[:10]), flush=True)
         for port, a in liste:
-            if port == 1: continue                              # fenetre de message : dessinee d'apres le canevas du moteur
+            if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement
+                if len(a) >= 2:
+                    c, v = a[0], a[1]
+                    if c == 0: self.msg['type'] = v
+                    elif c == 1: self.msg['feed'] = (v & 0xffff) == 1
+                    elif c == 3: self.msg['y'] = v
+                continue
             if port == 0:
                 if len(a) >= 2 and 2 <= a[0] < 32:
-                    if a[1] == 3: self.fen(a[0])['vis'] = bool(a[2]) if len(a) > 2 else True     # [fenetre, 3, visible]
+                    if a[1] == 3: self.fen(a[0])['sv'] = bool(a[2]) if len(a) > 2 else True       # [fenetre, 3, visible] : MenuPort.SetVisible
                     elif a[1] == 2:                                                                # [fenetre, 2] : fermee
-                        self.fen(a[0])['vis'] = False
+                        f = self.fen(a[0]); f['act'] = f['vis'] = False
                         if self.obs: self.obs.fermer(a[0])
                     elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
                         f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0
+                        f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
@@ -147,13 +161,23 @@ class Interface:
                 cle = self.attente.pop(port); txt = ''.join(chr(v & 0xffff) for v in a if v); f['cases'][cle] = txt
                 if self.obs: self.obs.param_str(port, cle[0], cle[1], txt)
                 continue
+            if f['type'] == 31 and f.get('att'):               # plaque de monstre : messages qui suivent un code > 0 (nom, puis [x, y, ...])
+                i, etape = f['att']
+                if etape == 'nom': f['plaq'][i]['nom'] = ''.join(chr(v & 0xffff) for v in a if v); f['att'] = (i, 'prm')
+                else:
+                    f['plaq'][i]['prm'] = list(a); f['att'] = None
+                    if self.obs and hasattr(self.obs, 'plaque'): self.obs.plaque(port, i, f['plaq'][i]['nom'], f['plaq'][i]['prm'], f['plaq'][i]['code'])
+                continue
             if not a: continue
             cmd = a[0]
+            if cmd != 7 and not f['act']: f['act'] = True; f['force'] = True       # MenuPortItem.NoticeReceive : premiere commande -> parties activees, dessin force
             if cmd == 11 and len(a) >= 3: self.attente[port] = (a[1], a[2])
             elif cmd == 1:
                 if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0           # fenetre dynamique : contenu neuf
-                f['vis'] = True; self.ordre += 1; f['ordre'] = self.ordre
-            elif cmd == 7: f['vis'] = False
+                self.ordre += 1; f['ordre'] = self.ordre
+            elif cmd == 5: f['req'] = True                                             # demande de dessin : le moteur la renvoie a chaque image tant que la fenetre doit etre vue
+            elif cmd == 7: f['act'] = False                                            # arret : parties desactivees
+            elif cmd == 8 and len(a) >= 2: f['ign'] = (a[1] & 0xffff) != 0            # ignorer les demandes de dessin (toujours visible)
             elif cmd == 4 and len(a) >= 2:
                 f['cur'] = a[1]
                 if self.obs: self.obs.selection(port, a[1])
@@ -162,7 +186,18 @@ class Interface:
                 if self.obs: self.obs.param_int(port, a[1], a[2], v - (1 << 32) if v & 0x80000000 else v)
             elif cmd == 12 and len(a) >= 3:
                 f['indic'][a[1]] = a[2]
-                if self.obs: self.obs.code(port, a[1], a[2])
+                if f['type'] == 31 and a[1] < 4 and a[2] >= 1:                                  # MonsterNamePlate.ReceiveParameters(code >= 1)
+                    f.setdefault('plaq', {})[a[1]] = {'code': a[2]}; f['att'] = (a[1], 'nom')
+                elif f['type'] == 31 and a[1] == 5:                                             # disposition des plaques (nombre de plaques)
+                    if self.obs and hasattr(self.obs, 'disposer'): self.obs.disposer(port, a[2])
+                elif self.obs: self.obs.code(port, a[1], a[2])
+
+        for f in self.f.values():                              # MenuPortItem.Update : visible tant que le moteur demande le dessin a chaque image
+            if not f['ign']:
+                if f['force']: f['force'] = False; f['draw'] = f['req']
+                elif f['draw'] != f['req']: f['draw'] = f['req']
+            f['req'] = False
+            f['vis'] = f['act'] and f['sv'] and (f['draw'] or f['ign'])
 
     def visibles(self):
         return sorted(((p, f) for p, f in self.f.items() if f['vis'] and f['cases']), key=lambda x: x[1]['ordre'])
@@ -239,6 +274,7 @@ class Moteur:
         if os.environ.get('DQ_PKT') and self.etat.partie == PARTIE_COMBAT:       # (test) journal des paquets de combat : image, [(type, ints...)]
             with open(os.environ['DQ_PKT'], 'a') as fj:
                 fj.write('%d %s\n' % (self.images, [(t, a[:2]) if t != 22 else (22, a[0], a[1], [round(x, 2) for x in f[:3]], [round(min(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(min(f[3 + 5 * i + 3] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 3] for i in range(a[1])), 2)]) for t, a, f in pq if t not in (12, 13, 14)]))
+        self.ui.image = self.images
         self._consommer_messages()
         for p in pq:
             if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))

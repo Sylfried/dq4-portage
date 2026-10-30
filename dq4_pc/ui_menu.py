@@ -47,7 +47,7 @@ class MiseEnPage:
     """cache/ui_layout.json : {'header': {...}, 'types': {numero: {...}}} ; cadres : maillages des fenetres (frameData)"""
     def __init__(self, chemin, cadres=None):
         with open(chemin, encoding='utf-8') as f: d = json.load(f)
-        self.hdr = d['header']; self.types = d['types']
+        self.hdr = d['header']; self.types = d['types']; self.message = d.get('message')       # message : fenetre de dialogue (MenuMessage), absente des anciens fichiers
         self.infos = self.hdr['info']; self.couleurs = [tuple(c) for c in self.hdr['colors']]
         self.pousse = tuple(self.hdr['pushed'])
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
@@ -82,6 +82,11 @@ class Fenetre:
         for p in self.t['params']: self.params[(p['id'], p['no'])] = p
         self.codes = {}
         for c in self.t['codes']: self.codes.setdefault(c['id'], []).append(c)
+        for lst in self.codes.values():                       # codes « fonction » (plaque de monstre...) : le code -1 = rien a montrer, etat de depart
+            for e in lst:
+                if e['kind'] == 'func':
+                    for nid, dd in ((e.get('fx') or {}).get('-1') or {}).get('d', {}).items():
+                        if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         self.vu = True; self.sel = None; self.ordre = 0
 
     # ---- application des messages
@@ -180,6 +185,9 @@ class Fenetre:
                     if not nd: continue
                     if 'pos' in dd: nd['pos'] = list(dd['pos'])
                     if 'act' in dd: nd['act'] = bool(dd['act'])
+                cache = {int(n) for v in e['fx'].values() for n, dd in v['d'].items() if dd.get('act') is False}
+                for nid in cache:                   # un element que d'autres codes masquent est visible pour celui-ci s'il ne le masque pas
+                    if str(nid) not in fx['d'] and nid in self.N: self.N[nid]['act'] = True
                 for t in fx.get('tc', []):          # MenuParts.SetTextColor(code) : couleur des textes marques du masque
                     pt = self.parts[t['parts']] if t.get('parts') is not None else None
                     if pt:
@@ -190,6 +198,48 @@ class Fenetre:
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
         self.sel = bouton
 
+    # ---- plaques de noms de monstres (MenuPortItemTable.MonsterNamePlate, type 31)
+    def _noeuds_plaque(self, i):
+        for e in self.codes.get(i, []):
+            fx = e.get('fx') or {}
+            cadre = next(iter(((fx.get('-1') or {}).get('d') or {}).keys()), None)
+            texte = next(iter(((fx.get('1') or {}).get('d') or {}).keys()), None)
+            if cadre is not None and texte is not None: return int(cadre), int(texte)
+        return None, None
+
+    def plaque(self, i, nom, prm, code):
+        """ReceiveParameters(code >= 1) : nom du monstre, fenetre ajustee a une ou deux lignes (VariableWindow 142 x 18 ou 36), masque des monstres du groupe."""
+        cadre, texte = self._noeuds_plaque(i)
+        if cadre is None or cadre not in self.N or texte not in self.N: return
+        pl = getattr(self, 'pl', None)
+        if pl is None: pl = self.pl = {}
+        nc = self.N[cadre]
+        if 'base_vtx' not in nc: nc['base_vtx'] = [list(v) for v in nc['vtx']]; pl_off = [a - b for a, b in zip(self.N[texte]['pos'], nc['pos'])]; nc['off_texte'] = pl_off
+        if nom[:1] == '^' and len(nom) >= 2: nom = nom[2:]                    # marque de couleur : retiree par la plaque
+        deux = '\n' in nom
+        nc['vtx'] = [[x, z if deux else (z - 9.0 if z > 0 else z + 9.0)] for x, z in nc['base_vtx']]       # fenetre de 36 -> 18 de haut : lignes du haut/bas rapprochees du centre
+        nt = self.N[texte]; nt['text']['text'] = nom; nt['vu'] = True; nt['tcol'] = 0
+        mask = (prm[4] & 0xffff if len(prm) > 4 else 0) | ((prm[5] & 0xffff) << 16 if len(prm) > 5 else 0)
+        pl[i] = dict(cadre=cadre, texte=texte, masque=mask, code=code, deux=deux)
+        nc['act'] = True
+
+    def disposer(self, n, proj):
+        """b__1(code = nombre de plaques) : x = centre des monstres du groupe (borne a +-142), z = 105 (69 si plus de deux plaques), rangees de 58 vers le haut."""
+        pl = getattr(self, 'pl', {})
+        lst = [i for i in range(min(n, 4)) if i in pl]
+        xs = {}
+        for i in lst:
+            b = proj(pl[i]['masque']) if proj else None
+            xs[i] = (b[0] + b[1]) / 2 if b else 0.0
+        zs = {i: (69.0 if n > 2 else 105.0) for i in lst}
+        if n > 2:
+            for k, i in enumerate(sorted(lst, key=lambda i: xs[i])):
+                if 1 <= k <= n - 2: zs[i] += 58.0
+        for i in lst:
+            d = pl[i]; x = min(max(xs[i], -142.0), 142.0); z = zs[i]
+            nc, nt = self.N[d['cadre']], self.N[d['texte']]
+            nc['pos'] = [x, nc['pos'][1], z]; off = nc.get('off_texte', [0, 0, 0]); nt['pos'] = [x + off[0], nt['pos'][1], z + off[2]]
+
     def visible(self, nid):
         while nid is not None:
             nd = self.N.get(nid)
@@ -197,6 +247,41 @@ class Fenetre:
             if not nd['act']: return False
             nid = nd['par']
         return True
+
+
+class FenetreMessage:
+    """Fenetre de message du jeu (MenuMessage) : cadre (frameData) + canevas de texte dessine par le moteur + curseur de fin de page.
+    Le canevas est une texture 512 x 512 qui boucle ; le defilement `[3, y]` decale l'origine verticale de ses UV de (y & 0x1ff) / 512."""
+    def __init__(self, ml):
+        self.ml = ml; self.d = ml.message; self.vu = True; self.sel = None; self.ordre = 0
+        self.type = -1; self.y = 0; self.feed = False; self.N = {}
+        self.regler(0, 0, False)
+
+    @staticmethod
+    def _nd(nid, pos, vtx, uv, tris, mat):
+        return dict(id=nid, par=None, pos=pos, act=True, mats=[mat], vtx=vtx, uv=uv, sub={'0': tris}, text=None, buttonId=None, etat=0, tcol=0, tscale=1.0)
+
+    def regler(self, typ, y, feed):
+        """typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page."""
+        ts = self.d['types']; t = ts[typ] if 0 <= typ < len(ts) else ts[0]
+        fm = self.d.get('frame_mats') or [{'sheet': 0, 'part': 4}]
+        if typ != self.type:
+            self.type = typ; w = t['win']; cv = t['canvas']; fl = t['feed_local']; fd = self.d['feed']
+            self.N = {
+                'cadre': self._nd('cadre', list(w), t['frame_mesh']['vtx'], t['frame_mesh']['uv'], t['frame_mesh']['tris'], dict(sheet=fm[0]['sheet'], part=fm[0]['part'], color=None)),
+                'canevas': self._nd('canevas', [w[0], w[1] + 4.0, w[2]], [[v[0], v[2]] for v in cv['vtx']], [list(u) for u in cv['uv']], cv['tris'], dict(sheet='msg', color=[1, 1, 1, 1])),
+                'curseur': self._nd('curseur', [w[0] + fl[0], w[1] + fl[1] + 6.0, w[2] + fl[2]], fd['vtx'], fd['uv'], fd['tris'], dict(sheet=fd['mats'][0]['sheet'], part=fd['mats'][0]['part'], color=None)),
+            }
+            self.uv0 = [list(u) for u in cv['uv']]
+        self.N['curseur']['act'] = bool(feed); self.feed = bool(feed)
+        if y != self.y or typ != getattr(self, '_ty', None):
+            self.y = y; self._ty = typ
+            dv = (int(y) & 0x1ff) / 512.0
+            self.N['canevas']['uv'] = [[u[0], u[1] + dv] for u in self.uv0]
+
+    def visible(self, nid):
+        nd = self.N.get(nid)
+        return bool(nd and nd['act'])
 
 
 class Textes:
@@ -247,6 +332,16 @@ class Rendu:
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
             self.tex[k] = t
         self.textes = Textes(police)
+
+    def maj_canevas(self, a):
+        """Canevas de texte du moteur (512 x 512 octets d'opacite) -> texture « msg » (blanc, alpha = opacite), qui boucle comme dans Unity."""
+        h, w = a.shape
+        rgba = np.empty((h, w, 4), np.uint8); rgba[..., :3] = 255; rgba[..., 3] = a
+        img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(rgba).tobytes(), pitch=w * 4)      # ligne 0 en premier = v 0, comme la texture Unity
+        t = img.get_texture(); gl.glBindTexture(t.target, t.id)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        self.tex['msg'] = t
 
     # ---- construction des elements a dessiner
     def _items(self, fen):
@@ -359,6 +454,13 @@ class Gestionnaire:
     def selection(self, port, b):
         f = self.f.get(port)
         if f: f.selection(b)
+    proj = None            # appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None (fournie par la visionneuse)
+    def plaque(self, port, i, nom, prm, code):
+        f = self.f.get(port)
+        if f: f.plaque(i, nom, prm, code)
+    def disposer(self, port, n):
+        f = self.f.get(port)
+        if f: f.disposer(n, self.proj)
 
 
 RESSOURCES = {'ui_MenuTexture.png': 'MenuTexture', 'ui_Button.png': 'Button'}
