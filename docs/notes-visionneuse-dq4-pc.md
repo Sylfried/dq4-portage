@@ -68,6 +68,9 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - **Fenêtre de message du terrain** descendue en bas de l'écran (`--msg-origine` pour l'ancienne position), Oui/Non avec elle ; textes colorés `@cN`.
 - Tests sans écran : `--clics "image:x:y[:d],..."` (pixels depuis le haut gauche, d = clic droit ; appui à l'image, relâchement 3 images plus tard).
 
+## Sprites du terrain (31/10/2026, #40)
+- Sprites cachés / montrés par le moteur (paquet 14) respectés ; fondus d'apparition par la couleur alpha (paquet 13, déjà en place) ; bulles « ! » au-dessus des villageois (paquets 19/20, feuille d'icônes des menus, nécessite `cache\ui_MenuTexture.png`, créé avec les fenêtres d'origine). Ombres sous les personnages, personnages couchés et icônes sur la carte du monde : pas encore.
+
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
 

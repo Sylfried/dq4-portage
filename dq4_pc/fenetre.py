@@ -81,7 +81,7 @@ class Jeu(pyglet.window.Window):
         self.args = args
         self._attente('Chargement du moteur...')
         self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
-        self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
+        self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
@@ -621,6 +621,40 @@ class Jeu(pyglet.window.Window):
         cx, cy, ech = self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
         return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr) for b, pad, x0, z0, x1, z1, pr in fe.boutons()]
 
+    def _tex_icone(self, ident):
+        """Texture de l'icone `ident` (case 32 x 32 de la feuille MenuTexture, numerotee de gauche a droite et de haut en bas ; Riseup.SetTexture -> UV 1/32) ; None si la feuille est absente."""
+        if ident in self.icone_tex: return self.icone_tex[ident]
+        if self._menu_tex is None:
+            try:
+                from PIL import Image
+                self._menu_tex = np.array(Image.open(os.path.join(self.args.cache, 'ui_MenuTexture.png')).convert('RGBA'))
+            except Exception: self._menu_tex = False
+        t = None
+        if self._menu_tex is not False:
+            r, c = divmod(ident, 32); h = self._menu_tex.shape[0]
+            if (r + 1) * 32 <= h: t = self._tex(self._menu_tex[r * 32:(r + 1) * 32, c * 32:(c + 1) * 32], False)
+        self.icone_tex[ident] = t
+        return t
+
+    def _icones(self, e, champ, bataille, dh):
+        """Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)]."""
+        if champ or bataille or not e.icones or e.cam_pos is None or e.cam_cible is None: return []
+        fwd = np.array(e.cam_cible, float) - np.array(e.cam_pos, float); fwd /= np.linalg.norm(fwd) or 1
+        out = []
+        for slot, ic in sorted(e.icones.items()):
+            if ic['pos'] is None or ic['alpha'] < 0.02: continue
+            tex = self._tex_icone(ic['id'])
+            if not tex: continue
+            p = np.array(ic['pos'], float) - fwd * 0.48
+            a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
+            q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+            uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, float(min(max(ic['alpha'], 0.0), 1.0))] * 6
+            vl = self.icone_vl.get(slot)
+            if vl is None: vl = self.icone_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
+            else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
+            out.append((tex, vl))
+        return out
+
     def _bouton_sous(self, port, x, y):
         """Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur) ou None."""
         h = [(pr, b, pad) for b, pad, x0, y0, x1, y1, pr in self._zones(port) if x0 <= x <= x1 and y0 <= y <= y1]
@@ -843,7 +877,7 @@ class Jeu(pyglet.window.Window):
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
         a_dessiner = []
         for slot, s in sorted(e.sprites.items()):
-            if s['pos'] is None or s['col'][3] < 0.02: continue
+            if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
             if not f: continue
             tw, th, nl = f['tw'], f['th'], f['nl']
@@ -863,6 +897,7 @@ class Jeu(pyglet.window.Window):
             if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             a_dessiner.append((slot, f, vl))
+        icones = self._icones(e, champ, bataille, dh)
         self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
@@ -890,6 +925,8 @@ class Jeu(pyglet.window.Window):
                 gl.glDepthFunc(gl.GL_GREATER); gl.glDepthMask(gl.GL_FALSE); self.prog['amul'] = 0.4
                 self._tracer(f['t'], vl)
                 gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
+        self.prog['net'] = 1.0; self.prog['tsize'] = (32.0, 32.0)
+        for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))

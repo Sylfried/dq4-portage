@@ -60,6 +60,7 @@ class Etat:
         self.modeles = {}; self.maillages = {}       # combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
         self.mesh_etat = {}                           # combat : emplacement -> {'shader', 'vis', 'col', 'off'} (paquets 21, 23, 24, 25, 26 : MeshChara cote Unity)
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
+        self.icones = {}                              # paquets 19/20 (Riseup) : emplacement (0..15) -> {'id' (case 32 x 32 de la feuille MenuTexture), 'pos', 'alpha'} : bulle « ! » au-dessus d'un personnage
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
         self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
@@ -70,7 +71,7 @@ class Etat:
         self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.symboles.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.symboles.clear(); self.icones.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -83,8 +84,16 @@ class Etat:
                     if i in self.symboles: self.symboles[i]['vis'] = False
                 elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
-                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0}
+                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True}
                 else: self.sprites.pop(a[0], None)
+            elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
+                if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
+            elif t == 19 and len(a) >= 2 and 0 <= a[0] < 16:        # cmd_rise_icon_load : emplacement, numero d'icone (< 0 = liberation) ; objet Riseup, materiau Custom/Riseup sur la feuille MenuTexture
+                if a[1] >= 0: self.icones[a[0]] = {'id': a[1], 'pos': None, 'alpha': 1.0}
+                else: self.icones.pop(a[0], None)
+            elif t == 20 and a and len(f) >= 4:     # cmd_rise_icon : emplacement ; x, y, z (SetPosition) puis alpha (Material.color = 1, 1, 1, alpha)
+                ic = self.icones.get(a[0])
+                if ic is not None: ic['pos'] = tuple(f[:3]); ic['alpha'] = f[3]
             elif t == 9 and a:                      # cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : devant l'interface
                 self._fondu(a[0], f)
             elif t == 5 and a:
@@ -314,6 +323,10 @@ class Moteur:
         if os.environ.get('DQ_PKT') and self.etat.partie == PARTIE_COMBAT:       # (test) journal des paquets de combat : image, [(type, ints...)]
             with open(os.environ['DQ_PKT'], 'a') as fj:
                 fj.write('%d %s\n' % (self.images, [(t, a[:2]) if t != 22 else (22, a[0], a[1], [round(x, 2) for x in f[:3]], [round(min(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(min(f[3 + 5 * i + 3] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 3] for i in range(a[1])), 2)]) for t, a, f in pq if t not in (12, 13, 14)]))
+        if os.environ.get('DQ_PKTALL'):       # (test temporaire) tous les paquets sauf 22/28/29
+            with open(os.environ['DQ_PKTALL'], 'a') as fj:
+                for t, a, f in pq:
+                    if t not in (22, 28, 29): fj.write('%d p=%#x %d %s %s\n' % (self.images, self.etat.partie, t, a[:6], [round(x, 3) for x in f[:6]]))
         self.ui.image = self.images
         self._consommer_messages()
         for p in pq:
