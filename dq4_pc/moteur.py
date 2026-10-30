@@ -62,9 +62,12 @@ class Etat:
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
+        self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
+        self.fondu = {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
 
     def appliquer(self, paquets, lire_nom):
+        self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
                 self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.symboles.clear()
@@ -82,6 +85,8 @@ class Etat:
             elif t == 12 and len(a) >= 2:
                 if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0}
                 else: self.sprites.pop(a[0], None)
+            elif t == 9 and a:                      # cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : devant l'interface
+                self._fondu(a[0], f)
             elif t == 5 and a:
                 self.evt_anim.append((a[0] & 0xffff, a[0] >> 16))
             elif t == 10 and a:
@@ -110,6 +115,7 @@ class Etat:
                 if len(f) >= 3 + 5 * nv and idx:
                     v = [f[3 + 5 * i:8 + 5 * i] for i in range(nv)]
                     self.maillages[a[0]] = {'pos': tuple(f[:3]), 'v': v, 'idx': list(idx), 'col': list(a[2:2 + nc])}       # col : un octet par quad (4 sommets), 255 = opaque
+                    self.maillages_vus.add(a[0])
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue
@@ -117,6 +123,32 @@ class Etat:
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
                 if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
                 if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
+
+    def _fondu(self, v, f):
+        """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
+        entree = le plan repart de l'opacite 1 vers 0. Duree <= 1 image : immediat."""
+        d = v & 0x7ff; fd = self.fondu; fd['noir'] = 0
+        if v & 0x1000:
+            fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
+            fd['fin'] = 1.0
+            if d <= 1: fd['a'] = 1.0; fd['n'] = 0; fd['pas'] = 0.0
+            else: fd['pas'] = (1.0 - fd['a']) / d; fd['n'] = d
+        else:
+            fd['fin'] = 0.0
+            if d <= 1: fd['a'] = 0.0; fd['n'] = 0; fd['pas'] = 0.0
+            else: fd['a'] = 1.0; fd['pas'] = -1.0 / d; fd['n'] = d
+
+    def tick_fondu(self):
+        """FadePlane.Update : une fois par image du jeu. Garde-fou : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert."""
+        fd = self.fondu
+        if fd['n'] >= 1:
+            fd['n'] -= 1
+            if fd['n'] < 1: fd['a'] = fd['fin']
+            else: fd['a'] += fd['pas']
+        if fd['a'] >= 0.999 and fd['n'] < 1:
+            fd['noir'] += 1
+            if fd['noir'] > 180: fd['fin'] = 0.0; fd['pas'] = -1.0 / 15; fd['n'] = 15; fd['noir'] = 0
+        else: fd['noir'] = 0
 
 
 DBG = bool(os.environ.get('DQ_UIDBG'))
@@ -267,7 +299,7 @@ class Moteur:
 
     def step(self, tenu=0, decl=None):
         """Une image du jeu. tenu = touches maintenues (marche) ; decl = touches qui viennent d'etre pressees (boutons, menus).
-        Le fondu d'ecran est considere comme instantane. -> liste de paquets"""
+        Les fondus d ecran sont rejoues dans Etat (tick_fondu). -> liste de paquets"""
         if decl is None: decl = tenu
         c = self.core
         w = struct.unpack('<I', c.mem(c.outp, 4))[0]
@@ -285,6 +317,7 @@ class Moteur:
         for p in pq:
             if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))
         self.etat.appliquer(pq, self._nom_carte)
+        self.etat.tick_fondu()
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
         if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None; self.etat.monde = None
         else: self._lire_monde()

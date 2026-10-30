@@ -376,6 +376,7 @@ class Jeu(pyglet.window.Window):
         R = self._rot_camera(e); Rb = R @ rot_unity(0.0, 180.0, 0.0)            # MeshChara.SetBillboard : rotation de la camera x SceneCamera.s_yReverse (Euler(0, 180, 0))
         cam = np.array(e.cam_pos, float); fw = R @ np.array([0.0, 0.0, 1.0])
         for slot, mm in sorted(e.maillages.items()):
+            if slot not in e.maillages_vus: continue                # mode immediat : pas de paquet cette image = pas dessine
             mid = e.modeles.get(slot)
             if mid is None: continue
             st = e.mesh_etat.get(slot) or {'shader': 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}
@@ -495,6 +496,15 @@ class Jeu(pyglet.window.Window):
         t = self.msg_img.get_texture()
         gl.glBindTexture(t.target, t.id)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+
+    def _dessiner_fondu(self):
+        """Plan de fondu d'ecran (Fade.FadePlane) : derriere l'interface (messages, menus), devant la scene."""
+        fd = self.moteur.etat.fondu
+        if fd['a'] <= 0.004: return
+        gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        r = pyglet.shapes.Rectangle(0, 0, self.width, self.height, color=tuple(int(round(255 * min(max(c, 0.0), 1.0))) for c in fd['col']))
+        r.opacity = int(round(255 * min(fd['a'], 1.0)))
+        r.draw()
 
     def _dessiner_message(self):
         if self.ui_msg: return                                   # dessinee avec les fenetres d'origine (_dessiner_menus)
@@ -795,6 +805,7 @@ class Jeu(pyglet.window.Window):
         self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
+        self._dessiner_fondu()
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if self.aide:
