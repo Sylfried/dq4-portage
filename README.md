@@ -25,7 +25,7 @@ Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par u
 Ce dépôt ne contient **que du code et des notes**. Le programme lit *tes* fichiers (APK patchés, sauvegardes) sur *ton* PC ; rien n'est copié ni distribué. Les APK, `.so`, données Unity, sauvegardes, caches et captures du jeu sont exclus par `.gitignore` : ne jamais les forcer (`git add -f`).
 
 ## Lancer (Windows)
-Il faut les 3 APK français et une sauvegarde. `dq4_pc/fenetre.py` cherche le dossier `jeux\DQ4` tout seul (variable `DQ4_JEUX` d'abord, puis `jeux\DQ4` dans ce dépôt ou à côté, puis dans un dossier voisin comme `dq456-traductions-fr`). Disposition simple, dans ce dépôt :
+Il faut les 3 APK français et une sauvegarde, dans le dossier `jeux\DQ4` **de ce dépôt** (le projet ne dépend d'aucun autre dossier ; variable `DQ4_JEUX` pour en indiquer un autre). Disposition simple, dans ce dépôt :
 
 ```
 dq4-portage\

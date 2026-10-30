@@ -5,8 +5,8 @@ title Dragon Quest IV - portage PC (essai 16/9)
 echo.
 echo  Dragon Quest IV - portage PC (essai)
 echo  ------------------------------------
-echo  Lit tes APK francais et ta derniere sauvegarde dans le dossier "jeux\DQ4"
-echo  ^(trouve tout seul a cote du projet ; sinon : set DQ4_JEUX=chemin\vers\jeux\DQ4^)
+echo  Lit tes APK francais et ta derniere sauvegarde dans "jeux\DQ4" ^(a la racine de ce projet^)
+echo  ^(autre dossier : set DQ4_JEUX=chemin\vers\jeux\DQ4^)
 echo  (tes fichiers ne sont jamais modifies ; les nouvelles sauvegardes vont dans le dossier "sauvegardes" ici)
 echo.
 

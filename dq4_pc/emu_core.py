@@ -734,8 +734,8 @@ class Core:
 # ----------------------------------------------------------------------------------------------
 def find_apks(path_hint, here):
     cands = [path_hint] if path_hint else []
-    cands += [os.path.join(here, '..', '..', 'jeux', 'DQ4', 'patched_apks'),
-              os.path.join(here, '..', '..', 'jeux', 'DQ4', 'apks')]
+    cands += [os.path.join(here, '..', 'jeux', 'DQ4', 'patched_apks'),
+              os.path.join(here, '..', 'jeux', 'DQ4', 'apks')]
     for c in cands:
         c = os.path.abspath(c)
         if os.path.isfile(os.path.join(c, 'split_config.arm64_v8a.apk')):
