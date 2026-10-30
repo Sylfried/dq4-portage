@@ -97,7 +97,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.cur_local = {}; self.appui = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
+        self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.aide = True; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'aide en haut a gauche + cadre noir translucide
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -731,6 +731,28 @@ class Jeu(pyglet.window.Window):
             _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         if mo.msg_visible: self.clic_a = True                                      # toucher le message = page suivante
 
+    def on_mouse_motion(self, x, y, dx, dy):
+        """Survol de la souris : le bouton sous le pointeur est selectionne comme avec les fleches. Menu tactile (curseur local) : immediat ; menu a curseur du moteur :
+        le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _survol_pas)."""
+        if not self.ui_rendu or self.appui: return
+        mo = self.moteur
+        touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and h[0] >= 0]
+        if not touches: self.survol = None; return
+        _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]
+        if f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
+        elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
+
+    def _survol_pas(self):
+        """Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis)."""
+        sv = self.survol; mo = self.moteur
+        if not sv: return
+        port, b, n = sv; f = mo.ui.f.get(port)
+        if f is None or not f.get('grille') or port != mo.menu_actif() or f['cur'] == b or n >= 24: self.survol = None; return
+        if self.n % 3: return
+        cols = max(1, f['grille'][0]); cc, cr = f['cur'] % cols, f['cur'] // cols; tc, tr = b % cols, b // cols
+        pad = (1 if tr > cr else 2) if tr != cr else (4 if tc > cc else 8)       # manette du jeu : bas 1, haut 2, droite 4, gauche 8
+        mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; sv[2] += 1
+
     def on_mouse_release(self, x, y, bouton, modifiers):
         """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
         if bouton != pyglet.window.mouse.LEFT or not self.appui: return
@@ -856,6 +878,9 @@ class Jeu(pyglet.window.Window):
         if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
         if self.args.clics:                                                # (test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
             for c in self.args.clics:
+                if c[3] == 2:                                              # d = 2 : survol sans clic
+                    if self.n == c[0]: self.on_mouse_motion(c[1], self.height - c[2], 0, 0)
+                    continue
                 if self.n == c[0]: (self.on_mouse_press(c[1], self.height - c[2], pyglet.window.mouse.RIGHT if c[3] else pyglet.window.mouse.LEFT, 0))
                 if self.n == c[0] + 3: self.on_mouse_release(c[1], self.height - c[2], pyglet.window.mouse.LEFT, 0)
         if self.clic_a: p |= MO.A; self.clic_a = False                  # clics de souris : page suivante / annuler
@@ -872,6 +897,7 @@ class Jeu(pyglet.window.Window):
             mo.envoyer_menu(self.menu_relacher, 1, -1, 0); self.menu_relacher = None
         port = mo.menu_actif()
         if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None      # critere memoire seul : le message d'abord
+        if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
             self._saisie_menu(port, decl)
             p = decl = 0
@@ -1032,7 +1058,7 @@ def main():
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--ui-simple', action='store_true', help='menus simples (zones de texte) au lieu des fenetres d\'origine')
     ap.add_argument('--carte-zoom', type=float, default=1.0, help='carte du monde : zoom de depart (1 = la hauteur visible de l\'ecran portrait d\'origine, 28 tuiles ; molette de la souris pour changer en jeu)')
-    ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = clic droit)')
+    ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = 1 clic droit, 2 survol sans clic)')
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
