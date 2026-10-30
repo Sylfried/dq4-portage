@@ -274,6 +274,7 @@ class Moteur:
         CoreJeu.dossier_lecture, CoreJeu.dossier_ecriture = dossier_lecture, dossier_ecriture
         c = self.core = CoreJeu(lib, T.ApkFs([pack]), self.log, real_files={'/dq/assets.apk': pack})
         self.E = c.export; self.L = c.LIB_BASE
+        self._elargir_symboles()
         if not c.run_init(): raise RuntimeError('constructeurs C++ en echec')
         c.call(self.E('DevInit'), c.cstr('/dq/assets.apk'), c.cstr('/dq/'), langue)
         self.buf1, self.buf2 = c.malloc(0x2000), c.malloc(0x2000)          # files de messages interface <-> moteur (allouees par l'appelant)
@@ -305,6 +306,22 @@ class Moteur:
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
+
+    def _elargir_symboles(self):
+        """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
+        (x de -192 a +448, y de -192 a +788 pixels, plus une marge) : en 16/9 les lieux des cotes n'apparaissaient qu'une fois tout pres. Les trois constantes de
+        la fonction (add w22/w23/w24, w9, #imm) sont portees a 1600 pixels : la fenetre couvre tout ce que la visionneuse peut montrer, meme dezoomee."""
+        c = self.core
+        try:
+            a = c.export('_ZN9FieldData10drawSymbolEv')
+            for dec, imm in ((0x44, 0xc0), (0x48, 0x1c0), (0x4c, 0x314)):
+                w = struct.unpack('<I', c.mem(a + dec, 4))[0]
+                if w & 0xffc003e0 != 0x11000120 or (w >> 10) & 0xfff != imm: return        # autre version du moteur : on ne touche a rien
+            for dec in (0x44, 0x48, 0x4c):
+                w = struct.unpack('<I', c.mem(a + dec, 4))[0]
+                c.mem_w(a + dec, struct.pack('<I', (w & ~(0xfff << 10)) | (1600 << 10)))
+        except Exception as ex:
+            print('fenetre des lieux non elargie :', ex, flush=True)
 
     def _creer_canevas(self):
         c = self.core
