@@ -61,14 +61,29 @@ def main():
     extraire(trouver_apk('base'), 'assets/bin/Data/Managed/Metadata/global-metadata.dat', os.path.join(ENTREES, 'global-metadata.dat'))
     exe = telecharger_outil()
     print('Extraction du code (1 a 3 minutes)...')
-    r = subprocess.run([exe, os.path.join(ENTREES, 'libil2cpp.so'), os.path.join(ENTREES, 'global-metadata.dat'), SORTIE],
-                       input=b'\n', cwd=os.path.dirname(exe))
+    env = dict(os.environ, DOTNET_ROLL_FORWARD='Major')      # l'outil vise .NET 6 : accepte aussi .NET 7/8/9 s'ils sont installes
+    journal = os.path.join(SORTIE, 'journal.txt')
+    lignes = []
+    try:
+        p = subprocess.Popen([exe, os.path.join(ENTREES, 'libil2cpp.so'), os.path.join(ENTREES, 'global-metadata.dat'), SORTIE],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=os.path.dirname(exe), env=env)
+        p.stdin.write(b'\n'); p.stdin.close()                 # l'outil attend une touche a la fin
+        for brut in p.stdout:
+            l = brut.decode('utf-8', 'replace').rstrip()
+            lignes.append(l); print(' ', l)
+        p.wait()
+    except OSError as ex:
+        lignes.append('Impossible de lancer Il2CppDumper : %s' % ex); print(lignes[-1])
+    with open(journal, 'w', encoding='utf-8') as fj: fj.write('\n'.join(lignes) + '\n')
     dump = os.path.join(SORTIE, 'dump.cs')
-    if os.path.exists(dump):                                  # l'outil attend une touche a la fin : un code non nul apres l'ecriture est sans importance
+    if os.path.exists(dump):                                  # un code non nul apres l'ecriture (attente de touche) est sans importance
         print('\nOK : %s (%.1f Mo)' % (dump, os.path.getsize(dump) / 1e6))
         print('Dis a Claude : "le dump est pret" (il lit le fichier sur ton PC).')
     else:
-        raise SystemExit("Echec : dump.cs n'a pas ete cree (code %s). Copie le texte ci-dessus a Claude." % r.returncode)
+        print("\nEchec : dump.cs n'a pas ete cree. Journal : " + journal)
+        print("Cause probable : .NET manque. Installe-le puis relance ce fichier :")
+        print("    winget install Microsoft.DotNet.Runtime.8")
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':
