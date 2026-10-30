@@ -30,8 +30,9 @@ void main() {
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
-_cb = [float(x) for x in os.environ.get('DQ_CB', '53.13,27,1,0,3.5625').split(',')]
-CB_FOV, CB_DEC_Z, CB_MIROIR, CB_MIROIR_X, CB_DEC_Y = _cb[0], _cb[1], int(_cb[2]), int(_cb[3]), _cb[4]      # combat : champ de vision, decalage du decor sur z, miroir en z (essais)
+CB_FOV_NOM, CB_NEAR, CB_FAR, CB_YOFFSET, CB_ECHELLE_DECOR = 48.0, 0.25, 500.0, 0.04, 6.0      # combat : Global.CameraInitParams[1] du Unity d'origine (champ de vision nominal ; Unity le multiplie par 4/3 et l'applique a l'horizontale d'une vue 4/3)
+_cb = [float(x) for x in os.environ.get('DQ_CB', '0,0').split(',')]
+CB_MIROIR_X, CB_DEC_Z = int(_cb[0]), _cb[1]      # (essais) miroir gauche/droite ; decalage du decor sur z
 CB_CAP = 1536       # sommets reserves par monstre (listes de taille fixe)
 CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3: (288, 512, 41, 32), 4: (384, 512, 41, 32), 5: (480, 512, 25, 31),
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
@@ -41,9 +42,16 @@ POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 BTN_PAROLE, BTN_MENU = 0x100, 0x800     # arg2 de GameUpdate : parler / examiner (exactement 0x100), ouvrir le menu de commandes
 
 
-def matrice(cam, cible, fov, aspect, n=1.0, f=200.0):
+def rot_unity(ex, ey, ez):
+    """Matrice 3x3 d'une rotation Unity (angles d'Euler en degres, ordre z puis x puis y, espace gauche) : colonne = axe local dans le monde."""
+    cx, sx, cy, sy, cz, sz = (math.cos(math.radians(ex)), math.sin(math.radians(ex)), math.cos(math.radians(ey)), math.sin(math.radians(ey)), math.cos(math.radians(ez)), math.sin(math.radians(ez)))
+    Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]]); Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]]); Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+    return Ry @ Rx @ Rz
+
+
+def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
     pos = np.array(cam, float); fw = np.array(cible, float) - pos; fw /= np.linalg.norm(fw)
-    droite = np.cross([0, 1, 0], fw); droite /= np.linalg.norm(droite); haut = np.cross(fw, droite)
+    droite = np.cross(haut, fw); droite /= np.linalg.norm(droite); haut = np.cross(fw, droite)
     th = math.tan(math.radians(fov) / 2)
     M = np.zeros((4, 4))
     M[0, :3] = droite / (th * aspect); M[0, 3] = -pos @ droite / (th * aspect)
@@ -71,8 +79,7 @@ class Jeu(pyglet.window.Window):
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        _c2 = [int(x) for x in os.environ.get('DQ_CB2', '1,0,1').split(',')]            # etat initial de F6 (sol rehausse), F7 (miroir), F8 (decor tourne)
-        self.cb_y = CB_DEC_Y if _c2[0] else 0.0; self.cb_mx, self.cb_rot = _c2[1], _c2[2]; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
+        self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -256,34 +263,42 @@ class Jeu(pyglet.window.Window):
         if symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
         elif symbol == K.F4: self.stats = not self.stats
         elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
-        elif symbol == K.F6: self.cb_y = 0.0 if self.cb_y else CB_DEC_Y          # (essai) combat : sol rehausse sous les monstres
         elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
-        elif symbol == K.F8: self.cb_rot ^= 1                                 # (essai) combat : decor tourne de 180 deg
-        elif symbol == K.F9: self.cb_ordre ^= 1                               # (essai) combat : ordre de superposition des parties des monstres
+        elif symbol == K.F9: self.cb_ordre ^= 1                               # (essai) combat : ordre des parties des monstres inverse (l'ordre d'origine est celui des paquets)
         elif symbol == K.F3:
             self.lissage = not self.lissage
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
         else: return super().on_key_press(symbol, modifiers)
 
     # ---- combat : decor + monstres (maillages dynamiques du moteur)
+    def _rot_camera(self, e):
+        """Rotation Unity de la camera de combat (NativeManager.cmd_camera + SceneCamera.Update, mode sans cible) : euler (-x, -(y + 180), z)."""
+        ax, ay, az = e.cam_rot
+        return rot_unity(-ax, -(ay + 180.0), az)
+
     def _camera_combat(self, e, aspect):
-        p, y = math.radians(e.cam_rot[0]), math.radians(e.cam_rot[1])
-        fw = np.array([math.sin(y) * math.cos(p), -math.sin(p), math.cos(y) * math.cos(p)])
-        cam = np.array(e.cam_pos, float)
-        if CB_MIROIR: cam[2] = -cam[2]          # le moteur donne les z de combat inverses par rapport a Unity (la rotation est deja celle d'Unity)
-        M, _ = matrice(cam, cam + fw * 10, CB_FOV, aspect)
+        R = self._rot_camera(e)
+        cam = np.array(e.cam_pos, float); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
+        fov_h = math.radians((e.cam_fov if e.cam_fov is not None else CB_FOV_NOM) * 4.0 / 3.0)         # SceneCamera.Update : fov x 4/3, applique a l'horizontale (matrice de projection transposee)
+        fov_v = math.degrees(2 * math.atan(math.tan(fov_h / 2) / (4.0 / 3.0)))                         # vue d'origine 4/3 ; en 16/9 on garde la meme hauteur de champ et on montre plus de decor sur les cotes
+        M, _ = matrice(cam, cam + fw * 10, fov_v, aspect, n=CB_NEAR, f=CB_FAR, haut=haut)
+        Ty = np.eye(4); Ty[1, 3] = CB_YOFFSET; M = Ty @ M                                              # SceneCamera.s_yOffset : decalage vertical de l'image
         if self.cb_mx: M = M @ np.diag([-1.0, 1.0, 1.0, 1.0])
-        if self.cb_rot: T = np.diag([-1.0, 1.0, -1.0, 1.0]); T[2, 3] = 6.0 + CB_DEC_Z       # decor tourne autour de l'axe vertical passant par (0, 3)
-        else: T = np.eye(4); T[2, 3] = CB_DEC_Z
-        T[1, 3] = self.cb_y
+        T = np.diag([CB_ECHELLE_DECOR] * 3 + [1.0]); T[2, 3] = CB_DEC_Z                              # NativeManager.cmd_fld_load en mode combat : FldObject.SetDispScale(6, 6, 6), applique a la racine du decor (FldObject.Update)
         return M, M @ T
 
     def _maillages_combat(self, e):
-        """Liste (texture, vertex_list) des maillages de monstres de l'image courante."""
+        """Liste (texture, vertex_list, ...) des maillages de monstres de l'image courante, dans l'ordre de dessin d'Unity :
+        shaders DssaMonster* = fusion alpha, pas d'ecriture de profondeur, pas de masquage des faces -> parties dessinees dans l'ordre des paquets ;
+        entre monstres : file de rendu du shader (Transparent+150, +200...) puis du plus loin au plus proche."""
         out = []
+        R = self._rot_camera(e); Rb = R @ rot_unity(0.0, 180.0, 0.0)            # MeshChara.SetBillboard : rotation de la camera x SceneCamera.s_yReverse (Euler(0, 180, 0))
+        cam = np.array(e.cam_pos, float); fw = R @ np.array([0.0, 0.0, 1.0])
         for slot, mm in sorted(e.maillages.items()):
             mid = e.modeles.get(slot)
             if mid is None: continue
+            st = e.mesh_etat.get(slot) or {'shader': 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}
+            if not st['vis']: continue
             if mid not in self.cb_tex:
                 try: arr = self.donnees.texture('m%03d' % mid)
                 except Exception as ex:
@@ -293,15 +308,13 @@ class Jeu(pyglet.window.Window):
                 self.cb_tex[mid] = (t, arr.shape[1], arr.shape[0])
             t, tw, th = self.cb_tex[mid]
             V = np.array(mm['v'], np.float32); ix = np.array(mm['idx'], np.int64)
-            tri_z = V[ix, 4].reshape(-1, 3).mean(1)
-            ordre = np.argsort(tri_z if self.cb_ordre else -tri_z, kind='stable')                   # parties les plus lointaines d'abord (le moteur donne un z minuscule par partie)
-            ix = ix.reshape(-1, 3)[ordre].ravel(); P = V[ix]
-            xyz = P[:, 2:5] * np.array([-1 if (CB_MIROIR_X ^ self.cb_mx) else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
-            if CB_MIROIR: xyz[:, 2] = -xyz[:, 2]
-            uv = np.c_[P[:, 0], 1.0 + P[:, 1]].astype(np.float32)
+            if self.cb_ordre and len(ix) % 6 == 0: ix = ix.reshape(-1, 6)[::-1].ravel()          # (essai) quadrilateres en ordre inverse
+            P = V[ix]
+            xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
+            uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
-            coul = np.c_[np.ones((len(ix), 3), np.float32), alpha].astype(np.float32)
+            coul = np.c_[np.ones((len(ix), 3), np.float32) * np.array(st['col'], np.float32), alpha].astype(np.float32)           # Material.color (paquet 25) x couleur de sommet
             n = len(xyz)
             vl = self.cb_vl.get(slot)
             if vl is None or vl[0] < n:                                  # capacite FIXE : recreer une liste quand le nombre de sommets change corrompt les autres monstres (glitchs/clignotements)
@@ -313,8 +326,11 @@ class Jeu(pyglet.window.Window):
             pu = np.zeros((cap, 2), np.float32); pu[:n] = uv
             pc = np.zeros((cap, 4), np.float32); pc[:n] = coul
             vl[1].position[:] = pp.ravel(); vl[1].tex_coords[:] = pu.ravel(); vl[1].colors[:] = pc.ravel()
-            out.append((t, tw, th, vl[1]))
-        return out
+            queue = {0: 2100, 1: 2150, 2: 2200, 3: 3850}.get(st['shader'], 2150)       # file de rendu des shaders Custom/DssaChara, DssaMonster0, DssaMonster1, DssaCharaTransparent
+            centre = (xyz.min(0) + xyz.max(0)) / 2
+            out.append(((queue, -float((centre - cam) @ fw)), t, tw, th, vl[1], st['shader']))
+        out.sort(key=lambda o: o[0])
+        return [o[1:] for o in out]
 
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
@@ -627,9 +643,11 @@ class Jeu(pyglet.window.Window):
             self.prog['mvp'] = tuple(float(x) for x in M_decor.T.ravel())
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
             self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
-            gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # les parties d'un monstre se superposent dans l'ordre (pas de test de profondeur entre elles)
-            for tex, tw, th, vl in self._maillages_combat(e):
+            gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # shaders DssaMonster* : ZWrite Off, Cull Off, ZTest LEqual
+            for tex, tw, th, vl, shader in self._maillages_combat(e):
+                if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)                 # DssaCharaTransparent : ZTest Always
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
+                if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
@@ -647,7 +665,7 @@ class Jeu(pyglet.window.Window):
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
         self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
-        if bataille: self.etiq_hd.text += ' | combat : F6 sol %s | F7 miroir %s | F8 decor tourne %s | F9 parties inversees %s' % ('oui' if self.cb_y else 'non', 'oui' if self.cb_mx else 'non', 'oui' if self.cb_rot else 'non', 'oui' if self.cb_ordre else 'non')
+        if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.etiquette.draw(); self.etiq_hd.draw()

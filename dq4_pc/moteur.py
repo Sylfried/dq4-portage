@@ -57,13 +57,15 @@ class Etat:
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
         self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
         self.modeles = {}; self.maillages = {}       # combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
+        self.mesh_etat = {}                           # combat : emplacement -> {'shader', 'vis', 'col', 'off'} (paquets 21, 23, 24, 25, 26 : MeshChara cote Unity)
+        self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
 
     def appliquer(self, paquets, lire_nom):
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.cam_rot = None; self.symboles.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.symboles.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -86,8 +88,21 @@ class Etat:
                 if a[0] & 2 and len(fl) >= 3: self.cam_cible = tuple(fl[:3]); fl = fl[3:]
                 if a[0] & 4 and len(fl) >= 3: self.cam_rot = tuple(fl[:3])        # combat : rotation (tangage, lacet, roulis) en degres
             elif t == 21 and len(a) >= 2:           # DSSAObject::send_unity_load(emplacement, id de modele) ; id < 0 = liberation
-                if a[1] >= 0: self.modeles[a[0]] = a[1]
-                else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None)
+                if a[1] >= 0:
+                    self.modeles[a[0]] = a[1]
+                    self.mesh_etat[a[0]] = {'shader': 3 if a[1] > 999 else 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}      # MeshChara..ctor : shader 1 (DssaMonster0) sauf id > 999 (DssaCharaTransparent) ; couleur blanche
+                else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None); self.mesh_etat.pop(a[0], None)
+            elif t == 23 and len(a) >= 2:           # cmd_mesh_on_off : emplacement, visible
+                if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['vis'] = bool(a[1])
+            elif t == 24 and a:                     # cmd_mesh_shader : emplacement | numero de shader << 8 (0 Chara, 1 DssaMonster0, 2 DssaMonster1, 3 DssaCharaTransparent)
+                if (a[0] & 0xff) in self.mesh_etat: self.mesh_etat[a[0] & 0xff]['shader'] = a[0] >> 8
+            elif t == 25 and a and len(f) >= 3:     # cmd_mesh_color : emplacement ; r, g, b (Material.color, alpha 1)
+                if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['col'] = tuple(f[:3])
+            elif t == 26 and a and len(f) >= 2:     # cmd_mesh_tex_offset : emplacement ; u, v (Material.SetTextureOffset)
+                if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['off'] = tuple(f[:2])
+            elif t == 11 and a and a[0] & 4:        # cmd_camera_sub : bit 0 near, bit 1 far, bit 2 fov (flottants dans l'ordre des bits)
+                k = (a[0] & 1) + ((a[0] >> 1) & 1)
+                if len(f) > k: self.cam_fov = min(max(f[k], 0.0), 78.0)      # SceneCamera.SetFOV2 : borne a 78
             elif t == 22 and len(a) >= 2:           # maillage dynamique : [emplacement, nb sommets, couleurs (1 octet/sommet, 4 par entier), indices...] + flottants [x, y, z, (u, v, x, y, z) * nb sommets]
                 nv = a[1]; nc = (nv + 3) // 4; idx = a[2 + nc:]
                 if len(f) >= 3 + 5 * nv and idx:
