@@ -62,7 +62,7 @@ class Etat:
         self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.cam_bas = None      # paquet 11 : near, far, yOffset (None = valeurs de Global.CameraInitParams), camera libre (sans cible), lookDownAdjust (None = 0,2 du .cctor de SceneCamera)
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
         self.icones = {}                              # paquets 19/20 (Riseup) : emplacement (0..15) -> {'id' (case 32 x 32 de la feuille MenuTexture), 'pos', 'alpha'} : bulle « ! » au-dessus d'un personnage
-        self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
+        self.sprites = {}; self.cartes_chargees = 0; self.objets_cmd = []; self.fond = (0.0, 0.0, 0.0)       # objets_cmd : ordres sur les objets de la carte (paquets 2 a 5 et 7), vides par la fenetre : (genre, objet, valeurs...)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
         self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
         self.fondu = {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir
@@ -73,7 +73,7 @@ class Etat:
         self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -98,8 +98,16 @@ class Etat:
                 if ic is not None: ic['pos'] = tuple(f[:3]); ic['alpha'] = f[3]
             elif t == 9 and a:                      # cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : devant l'interface
                 self._fondu(a[0], f)
-            elif t == 5 and a:
-                self.evt_anim.append((a[0] & 0xffff, a[0] >> 16))
+            elif t == 5 and a:                      # cmd_fld_common_anim : objet = v & 0xffff, numero d'animation commune = v >> 16 (FldObject.SetCommonAnimation)
+                self.objets_cmd.append(('anim', a[0] & 0xffff, (a[0] >> 16) & 0xffff))
+            elif t == 7 and a:                      # cmd_fld_on_off : objet = v & 0xffff, drapeau = v >> 16 (SetMapObjOnOff : drapeau non nul = objet masque)
+                self.objets_cmd.append(('onoff', a[0] & 0xffff, (a[0] >> 16) & 0xffff))
+            elif t == 2 and a:                      # cmd_fld_alpha : objet = v & 0xffff, niveau (0..31) = v >> 16 & 0xff (SetMapObjAlpha : opacite = niveau / 31)
+                self.objets_cmd.append(('alpha', a[0] & 0xffff, (a[0] >> 16) & 0xff))
+            elif t == 3 and a and len(f) >= 3:      # cmd_fld_pos : objet ; x, y, z
+                self.objets_cmd.append(('pos', a[0] & 0xffff, tuple(f[:3])))
+            elif t == 4 and a and len(f) >= 2:      # cmd_fld_rot : objet ; rotation x, y (z = 0)
+                self.objets_cmd.append(('rot', a[0] & 0xffff, tuple(f[:2])))
             elif t == 10 and a:
                 fl = list(f)
                 if a[0] & 1 and len(fl) >= 3: self.cam_pos = tuple(fl[:3]); fl = fl[3:]
@@ -280,6 +288,7 @@ class Moteur:
         self.images = 0
         # animations d'objets de la carte (portes...) : le moteur attend qu'Unity les termine (bit0 de l'octet +0x14 de l'entree)
         self.anims = []                          # [(image d'echeance, index d'objet)]
+        self.duree_anim = None                   # (objet, numero) -> images avant la fin de l'animation commune (donnee par la fenetre, d'apres les donnees de la carte) ; None = DUREE_ANIM
         self.fldobj = 0
         self.msg_visible = False                 # fenetre de message affichee ? (MenuPort::SetVisible sur le port du message)
         def _sv(uc, a, sz, u):
@@ -339,7 +348,9 @@ class Moteur:
         self.ui.image = self.images
         self._consommer_messages()
         for p in pq:
-            if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))
+            if p[0] == 5 and p[1]:
+                d = self.duree_anim(p[1][0] & 0xffff, (p[1][0] >> 16) & 0xffff) if self.duree_anim else None
+                self.anims.append((self.images + (d or DUREE_ANIM), p[1][0] & 0xffff))
         self.etat.appliquer(pq, self._nom_carte)
         self.etat.tick_fondu()
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]

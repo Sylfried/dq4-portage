@@ -94,9 +94,21 @@ class Donnees:
         return None
 
     # ---- une carte
+    def _enfants_images(self, cg):
+        """Maillages d'image d'un modele (enfants sNN_*, FldObject.seq_build_mesh) : liste de MeshFilter, dans l'ordre ; l'image 0 est le maillage du modele lui-meme."""
+        t = self._components(cg)['Transform'].read(); out = []
+        for ch in t.m_Children:
+            cgo = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
+            if re.match(r's\d+_', cgo.m_Name):
+                c = self._components(cgo)
+                if 'MeshFilter' in c: out.append((cgo.m_Name, c['MeshFilter'].read().m_Mesh))
+        return [m for _, m in sorted(out, key=lambda x: x[0])]
+
     def carte(self, nom):
-        """-> dict : 'groupes' {cle_texture: (positions Nx3, uv Nx2, couleurs Nx4)}, 'textures' {cle: RGBA}, 'objets' (FMAP)"""
-        f = os.path.join(self.cache, 'carte2_%s.pkl' % nom)
+        """-> dict : 'groupes' {cle_texture: (positions Nx3, uv Nx2, couleurs Nx4)}, 'textures' {cle: RGBA}, 'objets' (FMAP), 'plages' {objet: [(cle, debut, nombre)]},
+        'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
+        et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD)"""
+        f = os.path.join(self.cache, 'carte3_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         self.log('Extraction de la carte %s ...' % nom)
@@ -111,12 +123,11 @@ class Donnees:
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
         tex = {}; acc = {}; lens = {}; plages = {}; noms = {}
-        for iobj, o in enumerate(objs):
-            cg = kids.get(o['mdl'])
-            if cg is None: continue
-            noms[iobj] = cg.m_Name
+
+        def cuire(o, cg):
+            """Geometrie d'un modele a la position d'origine de l'objet -> ([(cle, debut, nombre)], images ou None) ; ajoutee aux groupes."""
             comps = self._components(cg)
-            if 'MeshFilter' not in comps or 'MeshRenderer' not in comps: continue
+            if 'MeshFilter' not in comps or 'MeshRenderer' not in comps: return [], None
             t = comps['Transform'].read(); p, q, s = t.m_LocalPosition, t.m_LocalRotation, t.m_LocalScale
             L = np.eye(4); L[:3, :3] = _quat_mat(q.x, q.y, q.z, q.w) @ np.diag([s.x, s.y, s.z]); L[:3, 3] = (p.x, p.y, p.z)
             M = np.eye(4); M[:3, :3] = euler_mat(*o['rot']) @ np.diag(o['scl']); M[:3, 3] = o['pos']
@@ -124,15 +135,38 @@ class Donnees:
             mr = comps['MeshRenderer'].read()
             v, uv, col, tris = self._mesh_data(comps['MeshFilter'].read().m_Mesh)
             vw = (np.c_[v, np.ones(len(v))] @ W.T)[:, :3].astype(np.float32)
+            vws = [vw]
+            for mref in self._enfants_images(cg):                      # images suivantes (meme nombre de sommets que le modele)
+                vi = self._mesh_data(mref)[0]
+                if len(vi) == len(v): vws.append((np.c_[vi, np.ones(len(vi))] @ W.T)[:, :3].astype(np.float32))
+            out = []; imgs = []
             for i, tr in enumerate(tris):
                 mat = mr.m_Materials[min(i, len(mr.m_Materials) - 1)]
                 key, sc, off = self._texture(mat, tex)
                 idx = tr.ravel()
                 a = acc.setdefault(key, ([], [], []))
-                plages.setdefault(iobj, []).append((key, lens.get(key, 0), len(idx))); lens[key] = lens.get(key, 0) + len(idx)
+                out.append((key, lens.get(key, 0), len(idx))); lens[key] = lens.get(key, 0) + len(idx)
                 a[0].append(vw[idx]); a[1].append(uv[idx] * np.array(sc, np.float32) + np.array(off, np.float32)); a[2].append(col[idx])
+                imgs.append(np.stack([x[idx] for x in vws]) if len(vws) > 1 else None)
+            return out, imgs
+
+        for iobj, o in enumerate(objs):
+            cg = kids.get(o['mdl'])
+            if cg is None: continue
+            noms[iobj] = cg.m_Name
+            pl, _ = cuire(o, cg)
+            if pl: plages[iobj] = pl
+        tabs = fld.canim(raw); var = {}
+        for iobj, o in enumerate(objs):                              # variantes des animations communes (porte ouverte, jarre ou tonneau casse, coffre ouvert...)
+            if not 0 <= o['canim'] < len(tabs): continue
+            for m, sq, pm in tabs[o['canim']]:
+                if m == o['mdl'] or (iobj, m) in var or kids.get(m) is None: continue
+                pl, imgs = cuire(o, kids[m])
+                if pl: var[(iobj, m)] = {'plages': pl, 'images': imgs}
         groupes = {k: tuple(np.concatenate(x).astype(np.float32) for x in a) for k, a in acc.items()}
-        res = {'groupes': groupes, 'textures': {k: tex[k] for k in groupes if k in tex}, 'objets': objs, 'plages': plages, 'noms': noms}
+        seqent, seqs = fld.sequences(raw)
+        res = {'groupes': groupes, 'textures': {k: tex[k] for k in groupes if k in tex}, 'objets': objs, 'plages': plages, 'noms': noms,
+               'var': var, 'tabs': tabs, 'mots': fld.pmv(raw), 'seqent': seqent, 'seqs': seqs}
         with open(f, 'wb') as fh: pickle.dump(res, fh, protocol=4)
         return res
 

@@ -9,6 +9,7 @@ from pyglet.graphics.shader import Shader, ShaderProgram
 
 import moteur as MO
 import donnees as DO
+import objets_carte as OC
 import hd as HD
 import ui_menu as UI
 import son as SON
@@ -101,14 +102,14 @@ class Jeu(pyglet.window.Window):
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
-        self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture)
+        self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture); self.moteur.duree_anim = self._duree_anim
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=not args.sans_son)
         self.son.precharger(SE_COURANTS)
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
-        self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}; self.bornes_x = None
+        self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
         self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255), multiline=True, width=600)
         self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255), multiline=True, width=600)
@@ -466,17 +467,18 @@ class Jeu(pyglet.window.Window):
 
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
-        self.carte_vl = []; self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}
+        self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
         try:
             c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart)
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
             if (src, key) not in self.tex_gl:
                 self.tex_gl[(src, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
-            vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', col.ravel()))
+            vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', self.objets.cur[key].ravel()), tex_coords=('f', uv.ravel()), colors=('f', col.ravel()))
             self.carte_vl.append((self.tex_gl[(src, key)], vl, key)); self.carte_pos[key] = pos.copy()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
         allp = np.concatenate([g[0] for g in c['groupes'].values()]) if c['groupes'] else np.zeros((1, 3), np.float32)
@@ -810,26 +812,27 @@ class Jeu(pyglet.window.Window):
                     pyglet.shapes.Triangle(x + pad, ty + 9 * ech, x + pad, ty - 9 * ech, x + pad + 15 * ech, ty, color=(255, 235, 130)).draw()
                 cy -= hl
 
-    def _animer_portes(self):
-        """Les battants de porte pivotent de 90 degres vers l'exterieur (-z) autour de leur charniere (bord le plus eloigne du centre)."""
-        if not self.portes: return
-        touches = set()
-        for idx, debut in self.portes.items():
-            t = min(1.0, (self.n - debut + 1) / float(MO.DUREE_ANIM)); t = t * t * (3 - 2 * t)
-            for key, start, cnt in self.plages.get(idx, []):
-                orig = self.carte_pos.get(key)
-                if orig is None: continue
-                seg = orig[start:start + cnt]
-                cx = float((seg[:, 0].min() + seg[:, 0].max()) / 2)
-                hx = float(seg[:, 0].max() if cx > 0 else seg[:, 0].min()); hz = float(seg[:, 2].mean())
-                phi = math.radians(90.0 * t) * (-1.0 if cx > 0 else 1.0)
-                c, sn = math.cos(phi), math.sin(phi)
-                dx, dz = seg[:, 0] - hx, seg[:, 2] - hz
-                nv = seg.copy(); nv[:, 0] = hx + dx * c + dz * sn; nv[:, 2] = hz - dx * sn + dz * c
-                self.carte_cur.setdefault(key, orig.copy())[start:start + cnt] = nv
-                touches.add(key)
+    def _objets_carte(self):
+        """Ordres du moteur sur les objets de la carte (portes, jarres...), puis une image d'animation ; les sommets modifies sont renvoyes a la carte graphique."""
+        e = self.moteur.etat; cmds, e.objets_cmd = e.objets_cmd, []
+        for c in cmds:
+            if c[0] == 'carte':
+                if self.objets is not None and self.carte_nom == e.carte: self.objets.reinit()
+                continue
+            if self.objets is None: continue
+            if self.carte_nom != e.carte and e.partie != MO.PARTIE_CHAMP and e.carte: self._charger_carte(e.carte)       # la carte est chargee avant ses ordres
+            if c[0] == 'anim': self.objets.anim_commune(c[1], c[2])
+            elif c[0] == 'onoff': self.objets.on_off(c[1], c[2])
+            elif c[0] == 'alpha': self.objets.alpha(c[1], c[2])
+            elif c[0] == 'pos': self.objets.position(c[1], c[2])
+            elif c[0] == 'rot': self.objets.rotation(c[1], c[2])
+        if self.objets is None: return
+        sales = self.objets.tick()
         for tex, vl, key in self.carte_vl:
-            if key in touches: vl.position[:] = self.carte_cur[key].ravel()
+            if key in sales: vl.position[:] = self.objets.cur[key].ravel()
+
+    def _duree_anim(self, idx, no):
+        return self.objets.duree(idx, no) if self.objets is not None else None
 
     # ---- boucle
     def pad(self):
@@ -883,10 +886,7 @@ class Jeu(pyglet.window.Window):
         self.son.tick()
         if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, mo.etat.partie, mo.etat.carte, None if mo.etat.champ is None else mo.etat.champ['cam'], p), flush=True)
         e = self.moteur.etat
-        for idx, anim in e.evt_anim:
-            if 'door' in self.noms.get(idx, '').lower() and idx not in self.portes: self.portes[idx] = self.n
-        e.evt_anim.clear()
-        self._animer_portes()
+        self._objets_carte()
         self.n += 1
         self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
         if self.args.shots_combat and self.n_combat in self.args.shots_combat and self.args.shot:       # (test) captures intermediaires pendant un combat
