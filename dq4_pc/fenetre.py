@@ -30,7 +30,7 @@ void main() {
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
-_cb = [float(x) for x in os.environ.get('DQ_CB', '45,27,1,0,0').split(',')]
+_cb = [float(x) for x in os.environ.get('DQ_CB', '45,27,1,0,3.5625').split(',')]
 CB_FOV, CB_DEC_Z, CB_MIROIR, CB_MIROIR_X, CB_DEC_Y = _cb[0], _cb[1], int(_cb[2]), int(_cb[3]), _cb[4]      # combat : champ de vision, decalage du decor sur z, miroir en z (essais)
 CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3: (288, 512, 41, 32), 4: (384, 512, 41, 32), 5: (480, 512, 25, 31),
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
@@ -69,7 +69,9 @@ class Jeu(pyglet.window.Window):
         self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
-        self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}                 # combat : textures de monstres (m<id>) et maillages
+        self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
+        _c2 = [int(x) for x in os.environ.get('DQ_CB2', '1,0,1').split(',')]            # etat initial de F6 (sol rehausse), F7 (miroir), F8 (decor tourne)
+        self.cb_y = CB_DEC_Y if _c2[0] else 0.0; self.cb_mx, self.cb_rot = _c2[1], _c2[2]                 # combat : textures de monstres (m<id>) et maillages
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -253,6 +255,9 @@ class Jeu(pyglet.window.Window):
         if symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
         elif symbol == K.F4: self.stats = not self.stats
         elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
+        elif symbol == K.F6: self.cb_y = 0.0 if self.cb_y else CB_DEC_Y          # (essai) combat : sol rehausse sous les monstres
+        elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
+        elif symbol == K.F8: self.cb_rot ^= 1                                 # (essai) combat : decor tourne de 180 deg
         elif symbol == K.F3:
             self.lissage = not self.lissage
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
@@ -265,7 +270,10 @@ class Jeu(pyglet.window.Window):
         cam = np.array(e.cam_pos, float)
         if CB_MIROIR: cam[2] = -cam[2]          # le moteur donne les z de combat inverses par rapport a Unity (la rotation est deja celle d'Unity)
         M, _ = matrice(cam, cam + fw * 10, CB_FOV, aspect)
-        T = np.eye(4); T[2, 3] = CB_DEC_Z; T[1, 3] = CB_DEC_Y
+        if self.cb_mx: M = M @ np.diag([-1.0, 1.0, 1.0, 1.0])
+        if self.cb_rot: T = np.diag([-1.0, 1.0, -1.0, 1.0]); T[2, 3] = 6.0 + CB_DEC_Z       # decor tourne autour de l'axe vertical passant par (0, 3)
+        else: T = np.eye(4); T[2, 3] = CB_DEC_Z
+        T[1, 3] = self.cb_y
         return M, M @ T
 
     def _maillages_combat(self, e):
@@ -283,7 +291,7 @@ class Jeu(pyglet.window.Window):
                 self.cb_tex[mid] = (t, arr.shape[1], arr.shape[0])
             t, tw, th = self.cb_tex[mid]
             V = np.array(mm['v'], np.float32); P = V[np.array(mm['idx'], np.int64)]
-            xyz = P[:, 2:5] * np.array([-1 if CB_MIROIR_X else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
+            xyz = P[:, 2:5] * np.array([-1 if (CB_MIROIR_X ^ self.cb_mx) else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
             if CB_MIROIR: xyz[:, 2] = -xyz[:, 2]
             uv = np.c_[P[:, 0], 1.0 + P[:, 1]].astype(np.float32)
             n = len(xyz)
@@ -530,8 +538,6 @@ class Jeu(pyglet.window.Window):
         self._animer_portes()
         self.n += 1
         self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
-        if os.environ.get('DQ_DUMP') and self.n_combat == 55:
-            import pickle; pickle.dump((dict(self.moteur.etat.modeles), dict(self.moteur.etat.maillages)), open(os.environ['DQ_DUMP'], 'wb'))
         if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
@@ -623,6 +629,7 @@ class Jeu(pyglet.window.Window):
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
         self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
+        if bataille: self.etiq_hd.text += ' | combat : F6 sol %s | F7 miroir %s | F8 decor tourne %s' % ('oui' if self.cb_y else 'non', 'oui' if self.cb_mx else 'non', 'oui' if self.cb_rot else 'non')
         self.etiq_hd.y = self.height - 30
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.etiquette.draw(); self.etiq_hd.draw()

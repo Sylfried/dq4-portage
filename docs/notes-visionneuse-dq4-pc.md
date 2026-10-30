@@ -44,8 +44,8 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - Limites : genres 18/19/20 non dessinés, horizon limité à 25 colonnes, eau non animée.
 
 ## Combat dans la visionneuse
-- `Etat` : `cam_rot`, `modeles` (paquet 21), `maillages` (paquet 22). `fenetre.py` : `_camera_combat` (rotation -> direction, z inversé), décor décalé de +27 en z, monstres tracés depuis les maillages du moteur (texture `m<id>`).
-- Réglage rapide : variable `DQ_CB="fov,dec_z,miroir_z,miroir_x,dec_y"` (défaut `45,27,1,0,0`).
+- `Etat` : `cam_rot`, `modeles` (paquet 21), `maillages` (paquet 22). `fenetre.py` : `_camera_combat` (rotation -> direction, z inversé), décor tourné de 180°, décalé de +27 en z et de +3,5625 en y, monstres tracés depuis les maillages du moteur (texture `m<id>`).
+- Réglage rapide : variable `DQ_CB="fov,dec_z,miroir_z,miroir_x,dec_y"` (défaut `45,27,1,0,3.5625`). En combat : **F6** sol rehaussé, **F7** scène en miroir gauche/droite, **F8** décor tourné de 180° (état affiché dans la ligne d'aide) ; état initial `DQ_CB2="1,0,1"`.
 - Tests sans écran : `--images-combat N` (capture N images après le début d'un combat), `--script-combat "n:masque,..."` (touches pendant un combat, n = images depuis son début).
 - Fond : le moteur n'envoie pas de couleur de fond en combat (paquet 8 absent) et le décor laisse un vide entre le bord du sol et le dôme du ciel (plaine : dôme `plsora_d` dont l'anneau bas est à y = 3,7) ; `_fond_combat` calcule la couleur moyenne du sol à la périphérie de l'arène (texture x couleur de sommet) et s'en sert comme couleur d'effacement. Estimation : la vraie couleur du fond de caméra est côté Unity (inconnue).
 - Test : `DQ_DECOR=btl_pl_d` force un autre décor de combat (comparer plaine/forêt sans attendre la bonne rencontre).
