@@ -30,8 +30,9 @@ void main() {
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
-_cb = [float(x) for x in os.environ.get('DQ_CB', '45,27,1,0,3.5625').split(',')]
+_cb = [float(x) for x in os.environ.get('DQ_CB', '53.13,27,1,0,3.5625').split(',')]
 CB_FOV, CB_DEC_Z, CB_MIROIR, CB_MIROIR_X, CB_DEC_Y = _cb[0], _cb[1], int(_cb[2]), int(_cb[3]), _cb[4]      # combat : champ de vision, decalage du decor sur z, miroir en z (essais)
+CB_CAP = 1536       # sommets reserves par monstre (listes de taille fixe)
 CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3: (288, 512, 41, 32), 4: (384, 512, 41, 32), 5: (480, 512, 25, 31),
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
              12: (0, 448, 32, 46), 13: (64, 448, 26, 28), 14: (128, 448, 41, 39), 15: (224, 448, 27, 42), 16: (288, 448, 48, 48), 17: (384, 448, 40, 32)}   # icones de lieux de la carte du monde
@@ -290,16 +291,27 @@ class Jeu(pyglet.window.Window):
                 gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
                 self.cb_tex[mid] = (t, arr.shape[1], arr.shape[0])
             t, tw, th = self.cb_tex[mid]
-            V = np.array(mm['v'], np.float32); P = V[np.array(mm['idx'], np.int64)]
+            V = np.array(mm['v'], np.float32); ix = np.array(mm['idx'], np.int64)
+            tri_z = V[ix, 4].reshape(-1, 3).mean(1)
+            ordre = np.argsort(-tri_z, kind='stable')                   # parties les plus lointaines d'abord (le moteur donne un z minuscule par partie)
+            ix = ix.reshape(-1, 3)[ordre].ravel(); P = V[ix]
             xyz = P[:, 2:5] * np.array([-1 if (CB_MIROIR_X ^ self.cb_mx) else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
             if CB_MIROIR: xyz[:, 2] = -xyz[:, 2]
             uv = np.c_[P[:, 0], 1.0 + P[:, 1]].astype(np.float32)
+            cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
+            alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
+            coul = np.c_[np.ones((len(ix), 3), np.float32), alpha].astype(np.float32)
             n = len(xyz)
             vl = self.cb_vl.get(slot)
-            if vl is None or vl[0] != n:
+            if vl is None or vl[0] < n:                                  # capacite FIXE : recreer une liste quand le nombre de sommets change corrompt les autres monstres (glitchs/clignotements)
                 if vl is not None: vl[1].delete()
-                vl = self.cb_vl[slot] = (n, self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', xyz.ravel()), tex_coords=('f', uv.ravel()), colors=('f', [1.0] * (4 * n))))
-            else: vl[1].position[:] = xyz.ravel(); vl[1].tex_coords[:] = uv.ravel()
+                cap = max(CB_CAP, n)
+                vl = self.cb_vl[slot] = (cap, self.prog.vertex_list(cap, gl.GL_TRIANGLES, position=('f', np.zeros(cap * 3, np.float32)), tex_coords=('f', np.zeros(cap * 2, np.float32)), colors=('f', np.zeros(cap * 4, np.float32))))
+            cap = vl[0]
+            pp = np.zeros((cap, 3), np.float32); pp[:n] = xyz                  # sommets inutilises : triangles degeneres (au point 0), jamais dessines
+            pu = np.zeros((cap, 2), np.float32); pu[:n] = uv
+            pc = np.zeros((cap, 4), np.float32); pc[:n] = coul
+            vl[1].position[:] = pp.ravel(); vl[1].tex_coords[:] = pu.ravel(); vl[1].colors[:] = pc.ravel()
             out.append((t, tw, th, vl[1]))
         return out
 
@@ -538,6 +550,10 @@ class Jeu(pyglet.window.Window):
         self._animer_portes()
         self.n += 1
         self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
+        if self.args.shots_combat and self.n_combat in self.args.shots_combat and self.args.shot:       # (test) captures intermediaires pendant un combat
+            self.dispatch_event('on_draw'); self.flip()
+            pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot.replace('.png', '_%d.png' % self.n_combat))
+            print('combat', self.n_combat, 'engine image', self.moteur.images, [(k, len(m['v']), m['pos']) for k, m in sorted(self.moteur.etat.maillages.items())], flush=True)
         if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
@@ -610,9 +626,10 @@ class Jeu(pyglet.window.Window):
             self.prog['mvp'] = tuple(float(x) for x in M_decor.T.ravel())
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
             self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
-            gl.glDisable(gl.GL_CULL_FACE)
+            gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # les parties d'un monstre se superposent dans l'ordre (pas de test de profondeur entre elles)
             for tex, tw, th, vl in self._maillages_combat(e):
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
+            gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
@@ -658,6 +675,7 @@ def main():
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
+    ap.add_argument('--shots-combat', default=None, help='(test) captures intermediaires a ces images de combat : "30,60,..."')
     ap.add_argument('--images-combat', type=int, default=0, help='(test) prend la capture N images apres le debut d\'un combat')
     ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image (touche F5 en jeu)')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
@@ -676,6 +694,7 @@ def main():
             for (i, m) in pts:
                 if n >= i: cur = m
             a.script[n] = cur
+    if a.shots_combat: a.shots_combat = set(int(x) for x in a.shots_combat.split(','))
     if a.script_combat is not None:
         pts = sorted((int(x.split(':')[0]), int(x.split(':')[1], 0)) for x in a.script_combat.split(','))
         sc = {}; cur = 0

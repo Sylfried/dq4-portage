@@ -92,7 +92,7 @@ class Etat:
                 nv = a[1]; nc = (nv + 3) // 4; idx = a[2 + nc:]
                 if len(f) >= 3 + 5 * nv and idx:
                     v = [f[3 + 5 * i:8 + 5 * i] for i in range(nv)]
-                    self.maillages[a[0]] = {'pos': tuple(f[:3]), 'v': v, 'idx': list(idx)}
+                    self.maillages[a[0]] = {'pos': tuple(f[:3]), 'v': v, 'idx': list(idx), 'col': list(a[2:2 + nc])}       # col : un octet par quad (4 sommets), 255 = opaque
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue
@@ -206,6 +206,9 @@ class Moteur:
         r = c.call(self.E('GameUpdate'), tenu, decl, label='GameUpdate')
         if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lignes[-12:]))
         pq = self.pk.packets()
+        if os.environ.get('DQ_PKT') and self.etat.partie == PARTIE_COMBAT:       # (test) journal des paquets de combat : image, [(type, ints...)]
+            with open(os.environ['DQ_PKT'], 'a') as fj:
+                fj.write('%d %s\n' % (self.images, [(t, a[:2]) if t != 22 else (22, a[0], a[1], [round(x, 2) for x in f[:3]], [round(min(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 2] for i in range(a[1])), 2), round(min(f[3 + 5 * i + 3] for i in range(a[1])), 2), round(max(f[3 + 5 * i + 3] for i in range(a[1])), 2)]) for t, a, f in pq if t not in (12, 13, 14)]))
         self._consommer_messages()
         for p in pq:
             if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))
