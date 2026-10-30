@@ -59,6 +59,7 @@ class Etat:
         self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
         self.modeles = {}; self.maillages = {}       # combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
         self.mesh_etat = {}                           # combat : emplacement -> {'shader', 'vis', 'col', 'off'} (paquets 21, 23, 24, 25, 26 : MeshChara cote Unity)
+        self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.cam_bas = None      # paquet 11 : near, far, yOffset (None = valeurs de Global.CameraInitParams), camera libre (sans cible), lookDownAdjust (None = 0,2 du .cctor de SceneCamera)
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
         self.icones = {}                              # paquets 19/20 (Riseup) : emplacement (0..15) -> {'id' (case 32 x 32 de la feuille MenuTexture), 'pos', 'alpha'} : bulle « ! » au-dessus d'un personnage
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
@@ -72,7 +73,7 @@ class Etat:
         self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.symboles.clear(); self.icones.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -117,9 +118,13 @@ class Etat:
                 if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['col'] = tuple(f[:3])
             elif t == 26 and a and len(f) >= 2:     # cmd_mesh_tex_offset : emplacement ; u, v (Material.SetTextureOffset)
                 if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['off'] = tuple(f[:2])
-            elif t == 11 and a and a[0] & 4:        # cmd_camera_sub : bit 0 near, bit 1 far, bit 2 fov (flottants dans l'ordre des bits)
-                k = (a[0] & 1) + ((a[0] >> 1) & 1)
-                if len(f) > k: self.cam_fov = min(max(f[k], 0.0), 78.0)      # SceneCamera.SetFOV2 : borne a 78
+            elif t == 11 and a:        # cmd_camera_sub : bit 0 near, 1 far, 2 fov, 4 yOffset, 5 lookDownAdjust (un flottant chacun, dans l'ordre des bits), 7 camera libre (s_targetCamera = faux)
+                k = 0
+                for bit, nom in ((0, 'cam_near'), (1, 'cam_far'), (2, 'cam_fov'), (4, 'cam_yoff'), (5, 'cam_bas')):
+                    if a[0] >> bit & 1 and k < len(f):
+                        v = f[k]; k += 1
+                        setattr(self, nom, min(max(v, 0.0), 78.0) if nom == 'cam_fov' else v)       # SceneCamera.SetFOV2 : borne a 78
+                if a[0] & 128: self.cam_libre = True
             elif t == 22 and len(a) >= 2:           # maillage dynamique : [emplacement, nb sommets, couleurs (1 octet/sommet, 4 par entier), indices...] + flottants [x, y, z, (u, v, x, y, z) * nb sommets]
                 nv = a[1]; nc = (nv + 3) // 4; idx = a[2 + nc:]
                 if len(f) >= 3 + 5 * nv and idx:

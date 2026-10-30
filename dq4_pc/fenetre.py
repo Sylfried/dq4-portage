@@ -33,7 +33,12 @@ void main() {
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
 MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
-FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
+# Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/notes-technique-portage-dq4.md) :
+ASPECT_PORTRAIT = 0.5625      # SceneCamera.ASPECT_DEF : l'original est concu pour un ecran portrait 450 x 800 ; Unity fixe le champ de vision HORIZONTAL (fov x 4/3) et en deduit la hauteur
+FOV_VILLE_DEF = 9.5           # fov nominal du mode 0 (terrain) tant que le moteur n'en envoie pas (paquet 11)
+VILLE_NEAR, VILLE_FAR = 5.0, 100.0
+DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
+BAS_DEF = 0.2                 # SceneCamera.s_lookDownAdjust (.cctor) : la camera releve son tangage de 0,2 degre
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
@@ -341,6 +346,33 @@ class Jeu(pyglet.window.Window):
         """Rotation Unity de la camera de combat (NativeManager.cmd_camera + SceneCamera.Update, mode sans cible) : euler (-x, -(y + 180), z)."""
         ax, ay, az = e.cam_rot
         return rot_unity(-ax, -(ay + 180.0), az)
+
+    def _camera_ville(self, e, aspect):
+        """Camera d'une ville comme Unity (SceneCamera.Update, mode avec cible) : LookAt(position, cible), tangage - lookDownAdjust, puis avance de distanceAdjust le long de l'axe.
+        Projection : champ HORIZONTAL fov x 4/3 fixe, hauteur deduite de l'ecran portrait d'origine (0,5625). En 16/9 on garde la meme hauteur de champ que sur mobile
+        et on montre plus de decor sur les cotes : la bande centrale de la fenetre est exactement l'image du telephone."""
+        pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
+        fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
+        th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
+        if self.bornes_x is not None:
+            # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
+            fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
+            if abs(fv[2]) > 0.95:
+                W = np.linalg.norm(cib - pos) * th_v * aspect * 0.85
+                lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
+                cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
+                d = cx - cib[0]; pos[0] += d; cib[0] += d
+        if e.cam_libre and e.cam_rot is not None:                         # camera libre (paquet 11, bit 7) : position + angles, comme en combat
+            R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
+        else:
+            fw = cib - pos; fw /= np.linalg.norm(fw)
+            lacet = math.atan2(fw[0], fw[2]); tang = math.asin(-fw[1]) - math.radians(e.cam_bas if e.cam_bas is not None else BAS_DEF)
+            fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
+            pos = pos + fw * DIST_ADJ_VILLE
+        M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=e.cam_far or VILLE_FAR, haut=haut)
+        if e.cam_yoff:
+            Ty = np.eye(4); Ty[1, 3] = e.cam_yoff; M = Ty @ M              # SceneCamera.s_yOffset
+        return M, (droite, np.cross(fw, droite), fw)
 
     def _camera_combat(self, e, aspect):
         R = self._rot_camera(e)
@@ -659,7 +691,7 @@ class Jeu(pyglet.window.Window):
         self.icone_tex[ident] = t
         return t
 
-    def _icones(self, e, champ, bataille, dh):
+    def _icones(self, e, champ, bataille, dh, cam3d=None):
         """Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)]."""
         if champ or bataille or not e.icones or e.cam_pos is None or e.cam_cible is None: return []
         fwd = np.array(e.cam_cible, float) - np.array(e.cam_pos, float); fwd /= np.linalg.norm(fwd) or 1
@@ -669,7 +701,8 @@ class Jeu(pyglet.window.Window):
             tex = self._tex_icone(ic['id'])
             if not tex: continue
             p = np.array(ic['pos'], float) - fwd * 0.48
-            a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
+            if cam3d is not None: a, b, up = p - cam3d[0] * 0.48, p + cam3d[0] * 0.48, cam3d[1] * 0.96       # de face a l'ecran, comme les personnages (rotation de la camera)
+            else: a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
             q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, float(min(max(ic['alpha'], 0.0), 1.0))] * 6
             vl = self.icone_vl.get(slot)
@@ -871,6 +904,7 @@ class Jeu(pyglet.window.Window):
         self.t_prec = t_debut
         e = self.moteur.etat
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
+        cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
         fond = e.fond
         if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
@@ -886,16 +920,7 @@ class Jeu(pyglet.window.Window):
         elif bataille:
             M, M_decor = self._camera_combat(e, aspect); self._M_combat = M; dh = np.array([1.0, 0, 0]); w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         else:
-            cam, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
-            if self.bornes_x is not None:
-                # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
-                fv = cib - cam; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
-                if abs(fv[2]) > 0.95:
-                    W = np.linalg.norm(cib - cam) * math.tan(math.radians(FOV_VERTICAL / 2)) * aspect * 0.85
-                    lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
-                    cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
-                    d = cx - cib[0]; cam[0] += d; cib[0] += d
-            M, droite = matrice(cam, cib, FOV_VERTICAL, aspect)
+            M, cam3d = self._camera_ville(e, aspect)
             # sprites : panneaux verticaux tournes vers la camera (listes de sommets persistantes, une par emplacement)
             fh = np.array([e.cam_cible[0] - e.cam_pos[0], 0, e.cam_cible[2] - e.cam_pos[2]]); fh /= np.linalg.norm(fh) or 1
             dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
@@ -915,15 +940,23 @@ class Jeu(pyglet.window.Window):
             else:
                 u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
             p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 - slot * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
-            a, b = p - dh * w / 2, p + dh * w / 2
-            q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+            if cam3d is not None:
+                # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
+                # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
+                r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
+                a, b = p - r_ * w / 2 - f_ * zb, p + r_ * w / 2 - f_ * zb
+                c, d = b + u_ * h - f_ * zh, a + u_ * h - f_ * zh
+                q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
+            else:
+                a, b = p - dh * w / 2, p + dh * w / 2
+                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
             cl = list(map(float, s['col'])) * 6
             vl = self.sprite_vl.get(slot)
             if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             a_dessiner.append((slot, f, vl))
-        icones = self._icones(e, champ, bataille, dh)
+        icones = self._icones(e, champ, bataille, dh, cam3d)
         self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
@@ -946,11 +979,7 @@ class Jeu(pyglet.window.Window):
         self.prog['cutoff'] = 0.05
         for slot, f, vl in a_dessiner:
             self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
-            self._tracer(f['t'], vl)
-            if slot < 8:       # equipe : silhouette translucide quand un decor la cache
-                gl.glDepthFunc(gl.GL_GREATER); gl.glDepthMask(gl.GL_FALSE); self.prog['amul'] = 0.4
-                self._tracer(f['t'], vl)
-                gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
+            self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
         self.prog['net'] = 2.0 if pp else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
