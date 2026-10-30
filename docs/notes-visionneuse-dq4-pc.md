@@ -39,7 +39,7 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 
 ## Carte du monde dans la visionneuse
 - `Moteur` : `Etat.partie`, `Etat.champ` (paquet 28) ; `demarrer_champ()` (F5). `Donnees.texture(nom)` lit une texture Unity par nom (cache `tex_<nom>.npy`).
-- `fenetre.py` (31/10) : **caméra orthographique vue de dessus, comme `Field.Init` du jeu** (`_camera_champ`) ; hauteur visible = celle de l'écran portrait d'origine (28,4 tuiles, `CH_VUE_HAUT`) quelle que soit la fenêtre (en 16/9 : ~50 tuiles de large) ; **molette = zoom** (x1,1 par cran, 0,4 à 4) ou `--carte-zoom`. Héros et compagnons **à plat** (haut du sprite = nord), taille d'origine ~24,9 x 33,2 px (`CH_ECHELLE` 1,0368, `Chara.SetFieldMode`). Sol : `_maj_champ` construit un maillage couvrant la zone visible (bornes arrondies à 4 tuiles) à partir de **la carte entière lue dans le moteur** (`Moteur._lire_monde` : grille CWorldMap 256 x 256 à `FieldData+0x188`, table des blocs de 6 octets à `+0x180`, décalages d'animation de l'eau en `0x275830/34/38`, même règle que `FieldData::drawBlock`, vérifiée 1300/1300 ; objet `FieldData` capturé par un crochet sur `drawBlock`). Le moteur n'envoie que 25 colonnes (paquet 28) : insuffisant dès qu'on dézoome ; ce paquet ne sert plus que de repli. `DQ_ETAT=1` : état du moteur.
+- `fenetre.py` (30/10) : **caméra orthographique vue de dessus, comme `Field.Init` du jeu** (`_camera_champ`) ; hauteur visible = celle de l'écran portrait d'origine (28,4 tuiles, `CH_VUE_HAUT`) quelle que soit la fenêtre (en 16/9 : ~50 tuiles de large) ; **molette = zoom** (x1,1 par cran, 0,4 à 4) ou `--carte-zoom`. Héros et compagnons **à plat** (haut du sprite = nord), taille d'origine ~24,9 x 33,2 px (`CH_ECHELLE` 1,0368, `Chara.SetFieldMode`). Sol : `_maj_champ` construit un maillage couvrant la zone visible (bornes arrondies à 4 tuiles) à partir de **la carte entière lue dans le moteur** (`Moteur._lire_monde` : grille CWorldMap 256 x 256 à `FieldData+0x188`, table des blocs de 6 octets à `+0x180`, décalages d'animation de l'eau en `0x275830/34/38`, même règle que `FieldData::drawBlock`, vérifiée 1300/1300 ; objet `FieldData` capturé par un crochet sur `drawBlock`). Le moteur n'envoie que 25 colonnes (paquet 28) : insuffisant dès qu'on dézoome ; ce paquet ne sert plus que de repli. `DQ_ETAT=1` : état du moteur.
 - Icônes (paquet 29) : `Etat.symboles`, table `CH_ICONES` (genre -> case de l'atlas), dessinées à plat (tête en bas dans l'atlas, retournées) par `_tracer_champ`. Carte en miroir en x (correction d'orientation) et atlas en `GL_NEAREST` (net).
 - Limites : genres 18/19/20 non dessinés ; pas de marche sur l'eau/bateau testée ; la fenêtre d'icônes (paquet 29) reste celle du moteur.
 
@@ -62,27 +62,27 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - Test en cloud : `DQ_UIDBG=1` journalise les messages des fenêtres (ports 0, 1 et >= 12), l'état des fenêtres et les lignes du canevas de message.
 - Limites : voir « Lacunes » dans les notes techniques (classes `IBase` personnalisées, type 66, curseur de liste). Le texte d'action sous le bandeau des personnages (« Attaquer / ▼ / cible ») s'affiche sans cadre propre.
 
-## Saisie : clavier et souris (31/10/2026, #38 #39)
+## Saisie : clavier et souris (30/10/2026, #38 #39)
 - **Souris = tactile du mobile** : appui sur un bouton du menu actif (il s'enfonce), relâchement sur le même bouton = sélection ; clic gauche sur le message = page suivante ; clic droit = Annuler (B). Les zones sont celles du jeu d'origine (`Fenetre.boutons()`), le bouton le plus en avant prime.
 - **Clavier** : flèches (gauche/droite comprises) déplacent le curseur dans les grilles de menus ; une seule colonne : gauche/droite = page précédente/suivante ; Entrée = valider, Retour arrière / X = annuler. Menus du moteur à grille (Oui/Non, combat) : les flèches sont transmises au moteur ; menus tactiles : curseur local d'après la position des boutons.
 - **Fenêtre de message du terrain** descendue en bas de l'écran (`--msg-origine` pour l'ancienne position), Oui/Non avec elle ; textes colorés `@cN`.
 - Tests sans écran : `--clics "image:x:y[:d],..."` (pixels depuis le haut gauche, d = clic droit ; appui à l'image, relâchement 3 images plus tard).
 
-## Sprites du terrain (31/10/2026, #40)
+## Sprites du terrain (30/10/2026, #40)
 - Sprites cachés / montrés par le moteur (paquet 14) respectés ; fondus d'apparition par la couleur alpha (paquet 13, déjà en place) ; bulles « ! » au-dessus des villageois (paquets 19/20, feuille d'icônes des menus, nécessite `cache\ui_MenuTexture.png`, créé avec les fenêtres d'origine). Ombres sous les personnages, personnages couchés et icônes sur la carte du monde : pas encore.
 
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
 
-## Monstres de combat et mode F2 (31/10)
+## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
 
-## Mode « pixel perfect » (F2, dernier mode ; `--hd 4`, 31/10/2026, #41)
+## Mode « pixel perfect » (F2, dernier mode ; `--hd 4`, 30/10/2026, #41)
 - « Originaux (pixels nets) » garde un adoucissement d'un demi-pixel aux frontières des texels et, sur la carte du monde, une taille de héros de 1,04 x l'original : ce n'est pas du pixel perfect. Le dernier mode de F2 l'est vraiment : **plus proche voisin strict** (`net = 2` dans le shader) pour les sprites, monstres, icônes ; **carte du monde à échelle entière** (k pixels d'écran par pixel de la carte, k = `round(hauteur / 454 x zoom)`, soit 2 en 720p et 1080p ; la molette change k d'un cran) ; **caméra calée sur un pixel de la carte** (le défilement se fait par pas de k pixels d'écran, comme sur le jeu d'origine), positions des sprites et des icônes de lieux arrondies au pixel, héros à 24 x 32 exactement, tuiles sans recul d'UV (les centres des pixels d'écran ne tombent jamais sur un bord de texel). Vérifié en capture : 100 % de blocs k x k uniformes (k = 2 et 3) sur la carte, défilement compris.
 - Ville et combat sont en perspective : l'échelle n'est jamais entière, le mode donne seulement des texels nets sans lissage. Les fenêtres d'interface (échelle H/800) ne sont pas concernées.
 
 
-## Son (`son.py`, F8, 31/10/2026, #42)
+## Son (`son.py`, F8, 30/10/2026, #42)
 - Le module `son.py` lit les `.akb` directement dans l'APK de données (rien n'est copié), les décode (MS-ADPCM en numpy, Ogg via le module `soundfile`) et les joue avec `pyglet.media` : une musique à la fois avec **boucle à l'échantillon près** (source maison `SourceBoucle`), jusqu'à 24 bruitages en parallèle. Le décodage se fait en tâche de fond (0,3 à 0,7 s pour une musique) ; les bruitages décodés sont mis en cache dans `cache/son_SExxxx.npz`.
 - `moteur.Etat` mémorise les paquets 35 / 36 / 37 (`sons`, et `musique` = dernière musique demandée) ; la fenêtre les transmet à `Son` à chaque image. Au chargement d'une sauvegarde, les bruitages perdus sont ignorés mais la musique de la carte est gardée.
 - **F8** coupe / remet le son (la musique en cours reprend). Options : `--sans-son`, `--volume-musique` (0,7), `--volume-bruitages` (0,8) ; ils multiplient le volume propre à chaque fichier.
