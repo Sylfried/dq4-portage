@@ -30,4 +30,4 @@ DQ Patch\
 Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; Échap = quitter.
 
 ## Où en est-on
-Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). Le suivi du travail se fait dans les **issues** ; la manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).
+Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). L'historique des étapes déjà faites est dans [`docs/historique.md`](docs/historique.md). Le suivi du travail se fait dans les **issues** ; la manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).
