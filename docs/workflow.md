@@ -25,3 +25,9 @@ Courts, au présent, préfixés : `feat:`, `fix:`, `docs:`, `refactor:`, `chore:
 
 ## Délégation (30/10/2026)
 Sylfried laisse à Claude la gestion des issues, commits, pushs, pull requests et fusions (squash vers `main`, branche supprimée ensuite). Les fusions restent précédées d'une vérification en cloud ; les tests sur pdc se font sur les fichiers copiés avant ou pendant la PR.
+
+## Deux discussions en parallèle (30/10/2026)
+- **Piste 1** (visionneuse pyglet fidèle, en lisant le code Unity d'origine) : zone `dq4_pc/`, `outils/`, `docs/notes-*.md`. Issue #56.
+- **Piste 3** (essai Unity comme afficheur) : zone `unity_pc/`, `outils/`, `docs/piste-3-*`. Issue #57. Fiche de reprise : `docs/piste-3-projet-unity.md`.
+- `git pull` avant chaque nouvelle branche ; une PR = un sujet ; ne pas réécrire les documents de l'autre piste. Les docs du Projet Claude sont remplacés en entier à chaque écriture : chaque discussion n'écrit que les siens (la piste 3 : `claude/piste-3-projet-unity.md` seulement).
+

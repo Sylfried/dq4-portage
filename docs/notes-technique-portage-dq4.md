@@ -53,6 +53,12 @@
 - Lecture Mesh : `MeshHandler(m).process()` (sommets, UV0, couleurs, triangles par sous-maillage). Textures : `Texture2D.image` ; UV : v inversé.
 - Lien id de modèle 3D (8900…, titre) -> objet Unity : non résolu.
 
+## Côté Unity d'origine : inventaire (30/10/2026)
+- `base.apk` : `assets/bin/Data/data.unity3d` (8,5 Mo) = **une scène minimale** (`Main Camera`, `New Text`), 8 matériaux (Sprites-Default, Button, Menu, SE-GARRIR, polices), 45 shaders, 491 MonoScripts dont **51 classes de jeu** (`Assembly-CSharp`) : `Boot, MainLoop, Global, NativeCall, NativeManager, Field, FldObject, FbxObject, Chara, MeshChara, MeshCapture, BillboardObject, SceneCamera, BackColor, Fade, FrameMaker, MenuParts, MenuMessage, MenuPortSystem, MenuPortItem, MenuPortItemTable, HoppingNumber, Riseup, Sound, Staffroll, TouchPad, InputName, Capture, Cleaner, DebugViewer...`. `Managed/Metadata/global-metadata.dat` (5 Mo) + `lib/arm64-v8a/libil2cpp.so` (30 Mo, dans `split_config.arm64_v8a.apk`).
+- **Pas de prefabs d'interface ni de scènes dans les données** : fenêtres, menus, caméras (champ de vision, déplacements) et placement des scènes sont du code C# compilé (IL2CPP) + des paramètres envoyés par le moteur. Les valeurs « estimées » de la visionneuse (champ de vision de combat, positions des fenêtres) sont donc à lire dans ce code (outil `outils/dump_il2cpp.bat` : liste des classes, champs, méthodes avec leurs adresses ; puis désassemblage ciblé avec capstone).
+- `split_UnityDataAssetPack.apk` : `datapack.unity3d` (64 Mo) et `assets/` : `msg` 1002 textes, `sound` 686 `.akb` (musiques/bruitages, non décodés), `map` 530, `script` 397, `monster` 179 `.dssa` (animations/maillages des monstres, lus par le moteur), `effect` 171 `.dssa`, `camera` 163 `.cam` (données de caméra lues par le moteur : ex. `bagix.cam`, `baron.cam` ; à décoder), `trans` 116 `.dssa`, `Large.font`.
+- Les shaders du datapack sont compilés pour Android : inutilisables tels quels sous Windows (voir `docs/piste-3-projet-unity.md`).
+
 ## Rendu : état
 - Version initiale : rasteriseur numpy maison (cloud). Remplacé par la fenêtre pyglet/OpenGL de `dq4_pc/fenetre.py` (voir `notes-visionneuse-dq4-pc.md`).
 - Cadrage : vue conçue pour le portrait (ASPECT_DEF 0,5625). En 16:9 avec le même FOV vertical, une petite salle laisse des marges vides ; une ville étendue montre plus de décor sur les côtés.

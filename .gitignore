@@ -22,3 +22,20 @@ modules_ok.txt
 test_faisabilite/
 *.zip
 *.log
+
+# --- Piste 3 : projet Unity (seuls nos scripts/shaders/scenes sont versionnes) ---
+unity_pc/Library/
+unity_pc/Temp/
+unity_pc/Logs/
+unity_pc/UserSettings/
+unity_pc/obj/
+unity_pc/Build*/
+unity_pc/Export/
+unity_pc/Assets/Export/
+unity_pc/Assets/StreamingAssets/
+*.csproj
+*.sln
+
+# --- Piste 1 : sorties de l'extraction IL2CPP (code du jeu, jamais versionne) ---
+il2cpp/
+
