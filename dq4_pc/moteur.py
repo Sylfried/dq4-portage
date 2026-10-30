@@ -1,5 +1,6 @@
 """Le moteur du jeu (libdq4core.so, ARM64) execute dans un emulateur + decodage de ce qu'il demande a Unity."""
 import os, re, struct, zipfile, unicorn
+import numpy as np
 import emu_core as T
 from pktlog import PacketLog
 
@@ -61,6 +62,7 @@ class Etat:
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
+        self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
 
     def appliquer(self, paquets, lire_nom):
         for t, a, f in paquets:
@@ -233,6 +235,10 @@ class Moteur:
             if port and port == struct.unpack('<Q', c.mem(self.L + OBJ_MESSAGE + 0x30, 8))[0]: self.msg_visible = bool(uc.reg_read(c.XREG[1]) & 0xff)
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
+        self.fielddata = 0; self._grille = None; self._grille_img = -999
+        def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
+        hfd = c.export('_ZN9FieldData9drawBlockEv')
+        c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
         def _sca(uc, a, sz, u): self.fldobj = uc.reg_read(c.XREG[0])
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
@@ -280,9 +286,31 @@ class Moteur:
             if p[0] == 5 and p[1]: self.anims.append((self.images + DUREE_ANIM, p[1][0] & 0xffff))
         self.etat.appliquer(pq, self._nom_carte)
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
-        if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None
+        if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None; self.etat.monde = None
+        else: self._lire_monde()
         self.images += 1
         return pq
+
+    def _lire_monde(self):
+        """Carte du monde entiere (FieldData : grille CWorldMap +0x188 de 256 x 256 numeros de bloc, table des blocs +0x180 de 6 octets,
+        decalages d'animation de l'eau aux adresses 0x275830/34/38). Meme regle que FieldData::drawBlock (verifiee : 1300 tuiles sur 1300).
+        Le moteur n'envoie que 25 colonnes autour du heros ; ici on peut dessiner autour de lui autant qu'on veut."""
+        c, fd = self.core, self.fielddata
+        if not fd: return
+        try:
+            if self._grille is None or self.images - self._grille_img >= 30:
+                gp, = struct.unpack('<Q', c.mem(fd + 0x188, 8)); l, h = struct.unpack('<ii', c.mem(fd + 0x198, 8))
+                if not gp or not (0 < l <= 1024 and 0 < h <= 1024): return
+                self._grille = np.frombuffer(c.mem(gp, l * h * 2), '<u2').reshape(h, l).astype(np.int32); self._grille_img = self.images
+            tbl, = struct.unpack('<Q', c.mem(fd + 0x180, 8))
+            ch = np.frombuffer(c.mem(tbl, 1024 * 6), np.uint8).reshape(1024, 6)
+            b0, b1, b2 = (struct.unpack('<h', c.mem(self.L + a, 2))[0] for a in (0x275830, 0x275834, 0x275838))
+            t = ch[:, 1]; s2 = np.ascontiguousarray(ch[:, 2:4]).view('<i2').ravel().astype(np.int32); s4 = np.ascontiguousarray(ch[:, 4:6]).view('<i2').ravel().astype(np.int32)
+            tuile = np.where(t == 0, s4 + b0, np.where(t == 0x18, s2 + b2, np.where(t == 8, s2 + b1, s2)))
+            h, l = self._grille.shape
+            self.etat.monde = {'ids': tuile[(self._grille - 1) & 0x3ff], 'l': l, 'h': h}
+        except Exception:
+            self.etat.monde = None
 
     def lire_canevas(self):
         """Bitmap du texte du message (hauteur x largeur, 0-255 = opacite), ou None si le canevas n'existe pas encore."""

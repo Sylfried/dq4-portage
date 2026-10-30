@@ -39,9 +39,9 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 
 ## Carte du monde dans la visionneuse
 - `Moteur` : `Etat.partie`, `Etat.champ` (paquet 28) ; `demarrer_champ()` (F5). `Donnees.texture(nom)` lit une texture Unity par nom (cache `tex_<nom>.npy`).
-- `fenetre.py` : sol = un maillage de 25 x 52 tuiles reconstruit quand la fenêtre de tuiles change (`_maj_champ`), caméra inclinée (`_camera_champ`, FOV 30 deg), sprites debout (échelle `CH_ECHELLE`), même chemin de dessin que les villes. Variable `DQ_ETAT=1` = trace partie/carte/caméra toutes les 25 images.
+- `fenetre.py` (31/10) : **caméra orthographique vue de dessus, comme `Field.Init` du jeu** (`_camera_champ`) ; hauteur visible = celle de l'écran portrait d'origine (28,4 tuiles, `CH_VUE_HAUT`) quelle que soit la fenêtre (en 16/9 : ~50 tuiles de large) ; **molette = zoom** (x1,1 par cran, 0,4 à 4) ou `--carte-zoom`. Héros et compagnons **à plat** (haut du sprite = nord), taille d'origine ~24,9 x 33,2 px (`CH_ECHELLE` 1,0368, `Chara.SetFieldMode`). Sol : `_maj_champ` construit un maillage couvrant la zone visible (bornes arrondies à 4 tuiles) à partir de **la carte entière lue dans le moteur** (`Moteur._lire_monde` : grille CWorldMap 256 x 256 à `FieldData+0x188`, table des blocs de 6 octets à `+0x180`, décalages d'animation de l'eau en `0x275830/34/38`, même règle que `FieldData::drawBlock`, vérifiée 1300/1300 ; objet `FieldData` capturé par un crochet sur `drawBlock`). Le moteur n'envoie que 25 colonnes (paquet 28) : insuffisant dès qu'on dézoome ; ce paquet ne sert plus que de repli. `DQ_ETAT=1` : état du moteur.
 - Icônes (paquet 29) : `Etat.symboles`, table `CH_ICONES` (genre -> case de l'atlas), dessinées à plat (tête en bas dans l'atlas, retournées) par `_tracer_champ`. Carte en miroir en x (correction d'orientation) et atlas en `GL_NEAREST` (net).
-- Limites : genres 18/19/20 non dessinés, horizon limité à 25 colonnes, eau non animée.
+- Limites : genres 18/19/20 non dessinés ; pas de marche sur l'eau/bateau testée ; la fenêtre d'icônes (paquet 29) reste celle du moteur.
 
 ## Combat dans la visionneuse
 - `Etat` : `cam_rot`, `cam_fov`, `modeles` (paquet 21), `maillages` (paquet 22), `mesh_etat` (paquets 21/23/24/25/26 : shader, visibilité, couleur, décalage de texture). `fenetre.py` : `_camera_combat` = **caméra du Unity d'origine** (euler `(-ax, -(ay+180), az)`, champ nominal 48 ×4/3 horizontal sur vue 4/3 -> 50,25° vertical, near 0,25, far 500, décalage vertical 0,04), décor **×6** (aucune autre correction), monstres = sommets tournés par `caméra × Euler(0,180,0)` (`_maillages_combat`). Détails et sources (classe/méthode) : `docs/notes-technique-portage-dq4.md`, section Combat.
@@ -64,3 +64,6 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
+
+## Monstres de combat et mode F2 (31/10)
+- Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
