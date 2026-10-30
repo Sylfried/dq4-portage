@@ -77,7 +77,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
-        self.carte_nom = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
+        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
         self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}; self.bornes_x = None
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255))
         self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255))
@@ -300,21 +300,46 @@ class Jeu(pyglet.window.Window):
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
         self.carte_vl = []; self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}
+        src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
         try:
-            c = self.donnees.carte(nom)
+            c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
-            if (nom, key) not in self.tex_gl:
-                self.tex_gl[(nom, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
+            if (src, key) not in self.tex_gl:
+                self.tex_gl[(src, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
             vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', col.ravel()))
-            self.carte_vl.append((self.tex_gl[(nom, key)], vl, key)); self.carte_pos[key] = pos.copy()
+            self.carte_vl.append((self.tex_gl[(src, key)], vl, key)); self.carte_pos[key] = pos.copy()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
         allp = np.concatenate([g[0] for g in c['groupes'].values()]) if c['groupes'] else np.zeros((1, 3), np.float32)
         self.bornes_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
         self.carte_nom = nom
+        self.fond_decor = self._fond_combat(c) if nom.startswith('btl_') else None
         print('carte %s : %d groupes' % (nom, len(self.carte_vl)), flush=True)
+
+    def _fond_combat(self, c):
+        """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
+        on prend la couleur moyenne (texture x couleur de sommet) du sol a la peripherie de l'arene, ciel exclu."""
+        try:
+            pts = []
+            for iobj, nm in c.get('noms', {}).items():
+                if 'sora' in nm.lower(): continue
+                for key, deb, n in c['plages'].get(iobj, []):
+                    pos, uv, col = c['groupes'][key]; tex = c['textures'].get(key)
+                    if tex is None: continue
+                    p, u, k = pos[deb:deb + n], uv[deb:deb + n], col[deb:deb + n]
+                    h, w = tex.shape[:2]
+                    px = tex[np.clip(((1 - u[:, 1]) * (h - 1)).astype(int) % h, 0, h - 1), np.clip((u[:, 0] * (w - 1)).astype(int) % w, 0, w - 1)]
+                    rgb = px[:, :3] / 255.0 * k[:, :3]
+                    ok = px[:, 3] > 128
+                    pts.append(np.c_[np.hypot(p[:, 0], p[:, 2] - 3.0), p[:, 1], rgb][ok])
+            a = np.concatenate(pts)
+            sol = a[(a[:, 1] < 2.0) & (a[:, 0] >= np.percentile(a[:, 0], 60))]        # sol de la peripherie de l'arene
+            if len(sol) < 20: sol = a[a[:, 0] >= np.percentile(a[:, 0], 85)]
+            return tuple(float(x) for x in sol[:, 2:].mean(0))
+        except Exception as ex:
+            print('fond de combat non calcule :', ex, flush=True); return None
 
     def _maj_message(self):
         """Texte visible du message (canevas du moteur) -> image RGBA blanche dont l'opacite est celle du texte."""
@@ -518,9 +543,11 @@ class Jeu(pyglet.window.Window):
         self.t_prec = t_debut
         e = self.moteur.etat
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
-        gl.glClearColor(e.fond[0], e.fond[1], e.fond[2], 1.0)
-        self.clear()
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
+        fond = e.fond
+        if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
+        gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
+        self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
         if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)

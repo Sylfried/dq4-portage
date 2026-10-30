@@ -47,7 +47,9 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - `Etat` : `cam_rot`, `modeles` (paquet 21), `maillages` (paquet 22). `fenetre.py` : `_camera_combat` (rotation -> direction, z inversé), décor décalé de +27 en z, monstres tracés depuis les maillages du moteur (texture `m<id>`).
 - Réglage rapide : variable `DQ_CB="fov,dec_z,miroir_z,miroir_x,dec_y"` (défaut `45,27,1,0,0`).
 - Tests sans écran : `--images-combat N` (capture N images après le début d'un combat), `--script-combat "n:masque,..."` (touches pendant un combat, n = images depuis son début).
-- Limites : fond de ciel noir, pas d'animation d'entrée du décor, effets et chiffres de dégâts, fenêtres encore approximatives.
+- Fond : le moteur n'envoie pas de couleur de fond en combat (paquet 8 absent) et le décor laisse un vide entre le bord du sol et le dôme du ciel (plaine : dôme `plsora_d` dont l'anneau bas est à y = 3,7) ; `_fond_combat` calcule la couleur moyenne du sol à la périphérie de l'arène (texture x couleur de sommet) et s'en sert comme couleur d'effacement. Estimation : la vraie couleur du fond de caméra est côté Unity (inconnue).
+- Test : `DQ_DECOR=btl_pl_d` force un autre décor de combat (comparer plaine/forêt sans attendre la bonne rencontre).
+- Limites : pas d'animation d'entrée du décor, teinte `_Color` des matériaux ignorée, effets et chiffres de dégâts, fenêtres encore approximatives.
 
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
