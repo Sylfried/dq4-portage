@@ -4,6 +4,7 @@ import emu_core as T
 from pktlog import PacketLog
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
+PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
@@ -53,14 +54,15 @@ class CoreJeu(T.Core):
 class Etat:
     """Ce que Unity saurait a l'ecran : decode des paquets du moteur."""
     def __init__(self):
-        self.carte = None; self.cam_pos = None; self.cam_cible = None
+        self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
+        self.modeles = {}; self.maillages = {}       # combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
         self.sprites = {}; self.cartes_chargees = 0; self.evt_anim = []; self.fond = (0.0, 0.0, 0.0)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
 
     def appliquer(self, paquets, lire_nom):
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0)
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.cam_rot = None
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -73,7 +75,16 @@ class Etat:
             elif t == 10 and a:
                 fl = list(f)
                 if a[0] & 1 and len(fl) >= 3: self.cam_pos = tuple(fl[:3]); fl = fl[3:]
-                if a[0] & 2 and len(fl) >= 3: self.cam_cible = tuple(fl[:3])
+                if a[0] & 2 and len(fl) >= 3: self.cam_cible = tuple(fl[:3]); fl = fl[3:]
+                if a[0] & 4 and len(fl) >= 3: self.cam_rot = tuple(fl[:3])        # combat : rotation (tangage, lacet, roulis) en degres
+            elif t == 21 and len(a) >= 2:           # DSSAObject::send_unity_load(emplacement, id de modele) ; id < 0 = liberation
+                if a[1] >= 0: self.modeles[a[0]] = a[1]
+                else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None)
+            elif t == 22 and len(a) >= 2:           # maillage dynamique : [emplacement, nb sommets, couleurs (1 octet/sommet, 4 par entier), indices...] + flottants [x, y, z, (u, v, x, y, z) * nb sommets]
+                nv = a[1]; nc = (nv + 3) // 4; idx = a[2 + nc:]
+                if len(f) >= 3 + 5 * nv and idx:
+                    v = [f[3 + 5 * i:8 + 5 * i] for i in range(nv)]
+                    self.maillages[a[0]] = {'pos': tuple(f[:3]), 'v': v, 'idx': list(idx)}
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue

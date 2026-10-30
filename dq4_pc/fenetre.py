@@ -30,6 +30,8 @@ void main() {
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 CH_PX, CH_ATLAS, CH_FOV, CH_HAUT, CH_RECUL, CH_ECHELLE = 16.0, 64, 30.0, 19.0, 12.0, 0.75     # carte du monde : pixels par tuile, tuiles par ligne d'atlas, camera, taille des sprites
+_cb = [float(x) for x in os.environ.get('DQ_CB', '45,27,1,0,0').split(',')]
+CB_FOV, CB_DEC_Z, CB_MIROIR, CB_MIROIR_X, CB_DEC_Y = _cb[0], _cb[1], int(_cb[2]), int(_cb[3]), _cb[4]      # combat : champ de vision, decalage du decor sur z, miroir en z (essais)
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 BTN_PAROLE, BTN_MENU = 0x100, 0x800     # arg2 de GameUpdate : parler / examiner (exactement 0x100), ouvrir le menu de commandes
@@ -64,6 +66,7 @@ class Jeu(pyglet.window.Window):
         self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None
+        self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}                 # combat : textures de monstres (m<id>) et maillages
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -233,6 +236,43 @@ class Jeu(pyglet.window.Window):
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
         else: return super().on_key_press(symbol, modifiers)
 
+    # ---- combat : decor + monstres (maillages dynamiques du moteur)
+    def _camera_combat(self, e, aspect):
+        p, y = math.radians(e.cam_rot[0]), math.radians(e.cam_rot[1])
+        fw = np.array([math.sin(y) * math.cos(p), -math.sin(p), math.cos(y) * math.cos(p)])
+        cam = np.array(e.cam_pos, float)
+        if CB_MIROIR: cam[2] = -cam[2]          # le moteur donne les z de combat inverses par rapport a Unity (la rotation est deja celle d'Unity)
+        M, _ = matrice(cam, cam + fw * 10, CB_FOV, aspect)
+        T = np.eye(4); T[2, 3] = CB_DEC_Z; T[1, 3] = CB_DEC_Y
+        return M, M @ T
+
+    def _maillages_combat(self, e):
+        """Liste (texture, vertex_list) des maillages de monstres de l'image courante."""
+        out = []
+        for slot, mm in sorted(e.maillages.items()):
+            mid = e.modeles.get(slot)
+            if mid is None: continue
+            if mid not in self.cb_tex:
+                try: arr = self.donnees.texture('m%03d' % mid)
+                except Exception as ex:
+                    print('texture de monstre introuvable :', mid, ex, flush=True); arr = np.zeros((16, 16, 4), np.uint8)
+                t = self._tex(arr, False, 0)
+                gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+                self.cb_tex[mid] = (t, arr.shape[1], arr.shape[0])
+            t, tw, th = self.cb_tex[mid]
+            V = np.array(mm['v'], np.float32); P = V[np.array(mm['idx'], np.int64)]
+            xyz = P[:, 2:5] * np.array([-1 if CB_MIROIR_X else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
+            if CB_MIROIR: xyz[:, 2] = -xyz[:, 2]
+            uv = np.c_[P[:, 0], 1.0 + P[:, 1]].astype(np.float32)
+            n = len(xyz)
+            vl = self.cb_vl.get(slot)
+            if vl is None or vl[0] != n:
+                if vl is not None: vl[1].delete()
+                vl = self.cb_vl[slot] = (n, self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', xyz.ravel()), tex_coords=('f', uv.ravel()), colors=('f', [1.0] * (4 * n))))
+            else: vl[1].position[:] = xyz.ravel(); vl[1].tex_coords[:] = uv.ravel()
+            out.append((t, tw, th, vl[1]))
+        return out
+
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
         self.carte_vl = []; self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}
@@ -290,7 +330,7 @@ class Jeu(pyglet.window.Window):
         for r in sorted(rows):
             cols = rows[r]
             pre, lab, val = cols.get(5, ''), cols.get(2, ''), cols.get(3, '')
-            princ = ' '.join(t for c, t in sorted(cols.items()) if c not in (2, 3, 5) and t)
+            princ = ' '.join(' '.join(t.split('\n')) for c, t in sorted(cols.items()) if c not in (2, 3, 5) and t)     # retours a la ligne -> espaces (resume d'action : « Attaquer ▼ cible »)
             if not (princ or val or lab): continue
             out.append((r, (pre + ' ' + princ).strip(), lab, val, princ.rstrip().endswith('?')))
         return [l for l in out if l[4]] + [l for l in out if not l[4]]
@@ -334,9 +374,14 @@ class Jeu(pyglet.window.Window):
             sel = [l[0] for l in lignes if not l[4]]
             # largeur : texte le plus large + zone etiquette/valeur
             largeur_g = max(self._etiq(l[1], taille).content_width for l in lignes)
-            largeur_d = max([max(self._etiq(l[2], taille * 0.8).content_width if l[2] else 0, self._etiq(l[3], taille).content_width if l[3] else 0) for l in lignes] + [0])
-            deux = [l for l in lignes if l[2] and l[3]]
-            hauts = [rh * (1.5 if (l[2] and l[3]) else 1) for l in lignes]
+            def pile(l): return bool((l[2] and '\n' in l[2]) or (l[3] and '\n' in l[3]))        # etiquettes/valeurs sur plusieurs lignes (PV / PM / Nv.)
+            def larg_bloc(l):
+                if pile(l):
+                    wl = max([self._etiq(t, taille * 0.8).content_width for t in (l[2] or '').split('\n')] + [0]); wv = max([self._etiq(t, taille).content_width for t in (l[3] or '').split('\n')] + [0])
+                    return wl + 10 * ech + wv
+                return max(self._etiq(l[2], taille * 0.8).content_width if l[2] else 0, self._etiq(l[3], taille).content_width if l[3] else 0)
+            largeur_d = max([larg_bloc(l) for l in lignes] + [0])
+            hauts = [rh * (0.3 + 0.62 * max(len((l[2] or '').split('\n')), len((l[3] or '').split('\n'))) if pile(l) else (1.5 if (l[2] and l[3]) else 1)) for l in lignes]
             w = pad * 2 + 26 * ech + largeur_g + (largeur_d + 24 * ech if largeur_d else 0); h = pad * 2 + sum(hauts)
             if port == 3: x, ytop = W - w - 24 * ech, H - 24 * ech
             elif port == 2: x, ytop = W - w - 40 * ech, H * 0.62
@@ -347,7 +392,15 @@ class Jeu(pyglet.window.Window):
             cy = ytop - pad
             for (idx, gauche, lab, val, titre), hl in zip(lignes, hauts):
                 base = cy - rh * 0.72
-                if lab and val:
+                if pile((idx, gauche, lab, val, titre)):
+                    labs, vals = (lab or '').split('\n'), (val or '').split('\n')
+                    wv = max([self._etiq(t, taille).content_width for t in vals] + [0]); wl = max([self._etiq(t, taille * 0.8).content_width for t in labs] + [0])
+                    for i in range(max(len(labs), len(vals))):
+                        yy = cy - rh * 0.62 * (i + 1) - rh * 0.05
+                        if i < len(vals): e = self._etiq(vals[i], taille); e.x = x + w - pad - e.content_width; e.y = yy; e.draw()
+                        if i < len(labs): e = self._etiq(labs[i], taille * 0.8); e.x = x + w - pad - wv - 10 * ech - wl; e.y = yy; e.draw()
+                    gy = cy - rh * 0.62 - rh * 0.05
+                elif lab and val:
                     base = cy - rh * 0.72
                     e = self._etiq(lab, taille * 0.8); e.x = x + w - pad - e.content_width; e.y = base; e.draw()
                     e = self._etiq(val, taille); e.x = x + w - pad - e.content_width; e.y = base - rh * 0.5; e.draw()
@@ -355,7 +408,7 @@ class Jeu(pyglet.window.Window):
                 elif val:
                     e = self._etiq(val, taille); e.x = x + w - pad - e.content_width; e.y = base; e.draw(); gy = base
                 else: gy = base
-                e = self._etiq(gauche, taille, (255, 235, 130, 255) if titre else (255, 255, 255, 255)); e.x = x + pad + (0 if titre else 26 * ech); e.y = gy if not (lab and val) else cy - rh * 0.72 - rh * 0.25; e.draw()
+                e = self._etiq(gauche, taille, (255, 235, 130, 255) if titre else (255, 255, 255, 255)); e.x = x + pad + (0 if titre else 26 * ech); e.y = gy if not (lab and val) or pile((idx, gauche, lab, val, titre)) else cy - rh * 0.72 - rh * 0.25; e.draw()
                 if not titre and port == actif and idx == f['cur']:
                     ty = (cy - hl / 2) if not (lab and val) else cy - rh * 0.6
                     pyglet.shapes.Triangle(x + pad, ty + 9 * ech, x + pad, ty - 9 * ech, x + pad + 15 * ech, ty, color=(255, 235, 130)).draw()
@@ -399,6 +452,7 @@ class Jeu(pyglet.window.Window):
         if self.args.slot and self.args.auto_message and self.n < 112:
             # (test) ferme le message d'accueil automatiquement
             p = MO.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
+        if self.args.script_combat is not None and self.n_combat > 0: p = self.args.script_combat.get(self.n_combat, 0)
         if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
         for bit in (MO.HAUT, MO.BAS, MO.GAUCHE, MO.DROITE):      # repetition des directions maintenues (curseurs de menu)
@@ -428,7 +482,8 @@ class Jeu(pyglet.window.Window):
         e.evt_anim.clear()
         self._animer_portes()
         self.n += 1
-        if self.args.shot and self.n >= self.args.images:
+        self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
+        if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
             print('capture :', self.args.shot, [(q, list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
@@ -442,12 +497,15 @@ class Jeu(pyglet.window.Window):
         gl.glClearColor(e.fond[0], e.fond[1], e.fond[2], 1.0)
         self.clear()
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
-        if not champ and (e.cam_pos is None or e.cam_cible is None): return
+        bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
+        if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.get_framebuffer_size())
         aspect = self.width / max(1, self.height)
         if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
+        elif bataille:
+            M, M_decor = self._camera_combat(e, aspect); dh = np.array([1.0, 0, 0]); w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         else:
             cam, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
             if self.bornes_x is not None:
@@ -491,6 +549,14 @@ class Jeu(pyglet.window.Window):
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
         gl.glActiveTexture(gl.GL_TEXTURE0)
         if champ: self._tracer_champ()
+        elif bataille:
+            self.prog['mvp'] = tuple(float(x) for x in M_decor.T.ravel())
+            for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
+            self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
+            gl.glDisable(gl.GL_CULL_FACE)
+            for tex, tw, th, vl in self._maillages_combat(e):
+                self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
+            self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
         self.prog['cutoff'] = 0.05
@@ -503,7 +569,7 @@ class Jeu(pyglet.window.Window):
                 gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
-        self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else e.carte)
+        self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
         self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
         self.etiq_hd.y = self.height - 30
@@ -533,6 +599,8 @@ def main():
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
+    ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
+    ap.add_argument('--images-combat', type=int, default=0, help='(test) prend la capture N images apres le debut d\'un combat')
     ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image (touche F5 en jeu)')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
     ap.add_argument('--images', type=int, default=60)
@@ -550,6 +618,14 @@ def main():
             for (i, m) in pts:
                 if n >= i: cur = m
             a.script[n] = cur
+    if a.script_combat is not None:
+        pts = sorted((int(x.split(':')[0]), int(x.split(':')[1], 0)) for x in a.script_combat.split(','))
+        sc = {}; cur = 0
+        for n in range(0, 20000):
+            for (i, m) in pts:
+                if n >= i: cur = m
+            sc[n] = cur
+        a.script_combat = sc
     Jeu(a)
     pyglet.app.run()
 

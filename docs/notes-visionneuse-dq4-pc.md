@@ -42,5 +42,11 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - `fenetre.py` : sol = un maillage de 25 x 52 tuiles reconstruit quand la fenêtre de tuiles change (`_maj_champ`), caméra inclinée (`_camera_champ`, FOV 30 deg), sprites debout (échelle `CH_ECHELLE`), même chemin de dessin que les villes. Variable `DQ_ETAT=1` = trace partie/carte/caméra toutes les 25 images.
 - Limites : pas d'icônes de villes (paquet 29), horizon limité à 25 colonnes, eau non animée.
 
+## Combat dans la visionneuse
+- `Etat` : `cam_rot`, `modeles` (paquet 21), `maillages` (paquet 22). `fenetre.py` : `_camera_combat` (rotation -> direction, z inversé), décor décalé de +27 en z, monstres tracés depuis les maillages du moteur (texture `m<id>`).
+- Réglage rapide : variable `DQ_CB="fov,dec_z,miroir_z,miroir_x,dec_y"` (défaut `45,27,1,0,0`).
+- Tests sans écran : `--images-combat N` (capture N images après le début d'un combat), `--script-combat "n:masque,..."` (touches pendant un combat, n = images depuis son début).
+- Limites : fond de ciel noir, pas d'animation d'entrée du décor, effets et chiffres de dégâts, fenêtres encore approximatives.
+
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
