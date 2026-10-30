@@ -123,9 +123,10 @@ class Interface:
     que le message suivant du port est le texte de cette case ; [4,i] curseur sur la ligne i ; [12,ligne,x] et [10,..] reglages."""
     def __init__(self):
         self.f = {}; self.attente = {}; self.ordre = 0
+        self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
 
     def fen(self, port):
-        if port not in self.f: self.f[port] = {'cases': {}, 'vis': False, 'cur': 0, 'ordre': 0, 'indic': {}}
+        if port not in self.f: self.f[port] = {'cases': {}, 'vis': False, 'cur': 0, 'ordre': 0, 'indic': {}, 'type': None}
         return self.f[port]
 
     def appliquer(self, liste):
@@ -134,11 +135,18 @@ class Interface:
             if port == 0:
                 if len(a) >= 2 and 2 <= a[0] < 32:
                     if a[1] == 3: self.fen(a[0])['vis'] = bool(a[2]) if len(a) > 2 else True     # [fenetre, 3, visible]
-                    elif a[1] == 2: self.fen(a[0])['vis'] = False                                  # [fenetre, 2] : fermee
+                    elif a[1] == 2:                                                                # [fenetre, 2] : fermee
+                        self.fen(a[0])['vis'] = False
+                        if self.obs: self.obs.fermer(a[0])
+                    elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
+                        f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0
+                        if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
             if port in self.attente:                            # texte de la case annoncee
-                f['cases'][self.attente.pop(port)] = ''.join(chr(v & 0xffff) for v in a if v); continue
+                cle = self.attente.pop(port); txt = ''.join(chr(v & 0xffff) for v in a if v); f['cases'][cle] = txt
+                if self.obs: self.obs.param_str(port, cle[0], cle[1], txt)
+                continue
             if not a: continue
             cmd = a[0]
             if cmd == 11 and len(a) >= 3: self.attente[port] = (a[1], a[2])
@@ -146,8 +154,15 @@ class Interface:
                 if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0           # fenetre dynamique : contenu neuf
                 f['vis'] = True; self.ordre += 1; f['ordre'] = self.ordre
             elif cmd == 7: f['vis'] = False
-            elif cmd == 4 and len(a) >= 2: f['cur'] = a[1]
-            elif cmd == 12 and len(a) >= 3: f['indic'][a[1]] = a[2]
+            elif cmd == 4 and len(a) >= 2:
+                f['cur'] = a[1]
+                if self.obs: self.obs.selection(port, a[1])
+            elif cmd == 10 and len(a) >= 5:                    # setItemParamInt [id, no, bas, haut] : valeur 32 bits
+                v = (a[3] & 0xffff) | ((a[4] & 0xffff) << 16)
+                if self.obs: self.obs.param_int(port, a[1], a[2], v - (1 << 32) if v & 0x80000000 else v)
+            elif cmd == 12 and len(a) >= 3:
+                f['indic'][a[1]] = a[2]
+                if self.obs: self.obs.code(port, a[1], a[2])
 
     def visibles(self):
         return sorted(((p, f) for p, f in self.f.items() if f['vis'] and f['cases']), key=lambda x: x[1]['ordre'])

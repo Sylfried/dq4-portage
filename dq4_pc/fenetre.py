@@ -10,6 +10,7 @@ from pyglet.graphics.shader import Shader, ShaderProgram
 import moteur as MO
 import donnees as DO
 import hd as HD
+import ui_menu as UI
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -90,9 +91,9 @@ class Jeu(pyglet.window.Window):
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
         self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}; self.bornes_x = None
-        self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255))
-        self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255))
-        self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255))
+        self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
+        self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255), multiline=True, width=600)
+        self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255), multiline=True, width=600)
         if args.slot:
             ok = self.moteur.charger_sauvegarde(args.slot)
             print('sauvegarde %d chargee : %s' % (args.slot, 'oui' if ok else 'NON (fichier data%d.dat introuvable ou invalide dans %s)' % (args.slot, args.saves_lecture)), flush=True)
@@ -105,7 +106,24 @@ class Jeu(pyglet.window.Window):
         self.n = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
+        self.ui_rendu = None; self.ui_g = None
+        if not args.ui_simple: self._init_ui()
         pyglet.clock.schedule_interval(self.tick, 1 / 30.0)
+
+    def _init_ui(self):
+        """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
+        a = self.args; lay = os.path.join(a.cache, 'ui_layout.json')
+        if not os.path.exists(lay):
+            print('Menus : mise en page d\'origine absente (%s) -> menus simples. Lancez outils\\generer_ui.bat pour la creer.' % lay, flush=True); return
+        if not UI.preparer_ressources(a.apk, a.cache, log=lambda *x: print(*x, flush=True)): return
+        try:
+            from PIL import Image
+            ml = UI.MiseEnPage(lay, os.path.join(a.cache, 'ui_frameData.bin'))
+            feuilles = {0: np.array(Image.open(os.path.join(a.cache, 'ui_MenuTexture.png')).convert('RGBA')), 1: np.array(Image.open(os.path.join(a.cache, 'ui_Button.png')).convert('RGBA'))}
+            self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g
+            print('Menus : mise en page d\'origine chargee (%d types).' % len(ml.types), flush=True)
+        except Exception as e:
+            print('Menus : mise en page d\'origine inutilisable (%r) -> menus simples.' % (e,), flush=True); self.ui_rendu = None; self.ui_g = None
 
     def _attente(self, texte):
         """Ecran noir avec un message : la fenetre reste vivante pendant les chargements."""
@@ -445,13 +463,29 @@ class Jeu(pyglet.window.Window):
             l = self.etiq_menu[k] = pyglet.text.Label(texte, font_name=POLICES, font_size=taille, color=couleur, anchor_x='left', anchor_y='baseline')
         return l
 
+    def _marge_aide(self):
+        """Largeur disponible pour les lignes d'aide : la marge a gauche de la colonne d'interface (portrait 450 x 800 centre), pour ne pas cacher les fenetres du jeu."""
+        if self.ui_rendu and self.args.ui_pos == 'centre':
+            return int(max(260, (self.width - 450 * self.height / 800.0) / 2 - 16))
+        if self.ui_rendu and self.args.ui_pos == 'droite':
+            return int(max(260, self.width - 450 * self.height / 800.0 - 16))
+        return int(max(260, self.width - 20))
+
     def _dessiner_menus(self):
         mo = self.moteur
-        fens = mo.ui.visibles()
+        actif = mo.menu_actif()
+        if self.ui_rendu:
+            liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
+            ech = self.height / 800.0                                  # le jeu est concu en portrait 450 x 800 : colonne centree, hauteur de la fenetre
+            cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
+            fl = []
+            for _, p in liste:
+                fe = self.ui_g.f[p]; fe.selection(mo.ui.f[p]['cur'] if p == actif else None); fl.append(fe)
+            self.ui_rendu.dessiner(fl, cx, self.height / 2, ech, (self.width, self.height))
+        fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
         ech = self.height / 720.0; W, H = self.width, self.height
         taille = 17 * ech; rh = 36 * ech; pad = 16 * ech; gap = 18 * ech
-        actif = mo.menu_actif()
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         x_main = 40 * ech
         for port, f in fens:
@@ -676,12 +710,17 @@ class Jeu(pyglet.window.Window):
             if stats:
                 if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | pire image %.0f ms | moteur %.1f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), max(self.ecarts) * 1000, self.dt_moteur * 1000, self.dt_dessin * 1000)
                 self.etiq_stats.y = self.height - 50
-            lignes = [(self.etiquette, 10), (self.etiq_hd, 30)] + ([(self.etiq_stats, 50)] if stats else [])
-            bas = min(self.height - dy - l.content_height for l, dy in lignes) - 6       # cadre noir translucide derriere le texte (lisible sur le decor)
+            lignes = [self.etiquette, self.etiq_hd] + ([self.etiq_stats] if stats else [])
+            marge = self._marge_aide()
+            y = self.height - 10
+            for l in lignes:                                 # lignes d'aide empilees, a la ligne dans la marge laissee libre par la colonne d'interface
+                if l.width != marge: l.width = marge
+                l.y = y; y -= l.content_height + 3
+            bas = y - 3                                       # cadre noir translucide derriere le texte (lisible sur le decor)
             self.cadre_aide.x, self.cadre_aide.y = 4, bas
-            self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l, _ in lignes) + 16, self.height - 4 - bas
+            self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l in lignes) + 16, self.height - 4 - bas
             self.cadre_aide.draw()
-            for l, _ in lignes: l.draw()
+            for l in lignes: l.draw()
 
 
 def trouver_defauts():
@@ -700,6 +739,8 @@ def main():
     ap.add_argument('--slot', type=int, default=1, help='numero de sauvegarde a charger (1-5), 0 = aucune')
     ap.add_argument('--largeur', type=int, default=1280); ap.add_argument('--hauteur', type=int, default=720)
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
+    ap.add_argument('--ui-simple', action='store_true', help='menus simples (zones de texte) au lieu des fenetres d\'origine')
+    ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')

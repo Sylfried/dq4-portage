@@ -47,6 +47,16 @@ if not exist ".venv\modules_ok.txt" (
   echo ok> ".venv\modules_ok.txt"
 )
 
+rem --- 2b. fenetres de menu d'origine : mise en page lue dans le code du jeu (une seule fois, si le dump du code existe)
+if not exist "cache\ui_layout.json" (
+  if exist "cache\il2cpp\dump.cs" (
+    echo  Lecture de la mise en page d'origine des fenetres ^(une seule fois, quelques minutes^)...
+    ".venv\Scripts\python.exe" "..\outils\ui_il2cpp\generer_ui.py"
+  ) else (
+    echo  Menus simples ^(pour les fenetres d'origine : lance d'abord ..\outils\dump_il2cpp.bat^).
+  )
+)
+
 rem --- 3. lancement
 ".venv\Scripts\python.exe" fenetre.py %*
 echo.

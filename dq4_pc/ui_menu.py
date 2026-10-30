@@ -1,0 +1,394 @@
+"""Fenetres de menu du jeu d'origine : mise en page exacte (lue dans le code Unity du jeu, voir outils/ui_il2cpp), dessinee avec les feuilles du jeu.
+
+Le fichier de mise en page (cache/ui_layout.json) decrit, pour chaque type de fenetre (Make_* de MenuPortItemTable) : les objets (position, maillage,
+materiaux, texte), les elements modifiables (IText / IIcon / IButton / IBar...) et leurs liaisons (id, no) -> element, et l'effet de chaque code
+(deplacement / affichage). Ce module applique les messages du moteur (setItemParam*, setItemCode, curseur) a ces objets et les dessine.
+Repere du jeu : portrait 450 x 800, X vers la droite, Z vers le haut, origine au centre de l'ecran, Y = profondeur (plus grand = devant)."""
+import os, json, math
+import numpy as np
+import pyglet
+from pyglet import gl
+from pyglet.graphics.shader import Shader, ShaderProgram
+
+VERT = '''#version 330 core
+in vec2 position; in vec2 tex_coords; in vec4 colors;
+uniform vec2 vp;
+out vec2 v_uv; out vec4 v_col;
+void main() { gl_Position = vec4(position.x / vp.x * 2.0 - 1.0, position.y / vp.y * 2.0 - 1.0, 0.0, 1.0); v_uv = tex_coords; v_col = colors; }'''
+FRAG = '''#version 330 core
+in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
+uniform sampler2D tex; uniform int mode;
+void main() {
+    vec4 c = texture(tex, v_uv);
+    if (mode == 1) { float g = dot(c.rgb, vec3(0.299, 0.587, 0.114)); c.rgb = vec3(g); }          // bouton grise
+    else if (mode == 2) { c.rgb = vec3(1.0) - c.rgb; }                                            // bouton inverse
+    c *= v_col;
+    if (c.a < 0.004) discard;
+    fragColor = c; }'''
+
+HAUTEUR_LIGNE = 1.246     # hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/PM (28 px) et le centrage des boutons
+TAILLE_POLICE = 19.0        # taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
+MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
+
+
+def lire_cadres(chemin):
+    """frameData (TextAsset du jeu) : nombre de maillages, puis pour chacun : nb sommets, nb indices, sommets (x, y, z, u, v), indices."""
+    import struct
+    b = open(chemin, 'rb').read(); n = struct.unpack_from('<i', b, 0)[0]; p = 4; out = []
+    for _ in range(n):
+        nv, ni = struct.unpack_from('<ii', b, p); p += 8
+        v = np.frombuffer(b, '<f4', nv * 5, p).reshape(nv, 5); p += 20 * nv
+        t = np.frombuffer(b, '<i4', ni, p); p += 4 * ni
+        out.append(dict(vtx=[[float(x[0]), float(x[2])] for x in v], uv=[[float(x[3]), float(x[4])] for x in v], tri=[int(i) for i in t]))
+    return out
+
+
+class MiseEnPage:
+    """cache/ui_layout.json : {'header': {...}, 'types': {numero: {...}}} ; cadres : maillages des fenetres (frameData)"""
+    def __init__(self, chemin, cadres=None):
+        with open(chemin, encoding='utf-8') as f: d = json.load(f)
+        self.hdr = d['header']; self.types = d['types']
+        self.infos = self.hdr['info']; self.couleurs = [tuple(c) for c in self.hdr['colors']]
+        self.pousse = tuple(self.hdr['pushed'])
+        self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
+
+
+def uv_icone(info, no, decal):
+    """PartsInfo.SetUV : 4 sommets (HG, HD, BD, BG) de l'icone numero `no` dans la feuille."""
+    n = no + info['startNo']; w = info['widthNum']
+    col = int(math.fmod(n, w)); lig = int(n / w)          # division entiere du C (vers zero)
+    u0 = col * info['uvsize']; v0 = -(info['startV'] + lig * info['uvsize']); u1 = u0 + info['uvsize']; v1 = v0 - info['uvsize']
+    return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+
+
+class Fenetre:
+    """Une fenetre de menu ouverte (un port du moteur) : etat modifiable d'apres les messages du moteur."""
+    def __init__(self, ml, typ):
+        self.ml = ml; self.typ = typ; self.t = ml.types[str(typ)]
+        self.N = {}
+        for n in self.t['nodes']:
+            m = n.get('mesh')
+            self.N[n['id']] = dict(id=n['id'], par=n['par'], pos=list(n['pos']), act=n['act'], mats=[dict(x) for x in n.get('mats', [])],
+                                   vtx=[list(v) for v in m['vtx']] if m else None, uv=[list(v) for v in m['uv']] if m else None, sub=m['sub'] if m else None,
+                                   text=dict(n['text']) if n.get('text') is not None else None, buttonId=(n.get('parts') or {}).get('buttonId'), etat=0, tcol=0, tscale=1.0)
+        self.parts = self.t['parts']
+        for pt in self.parts:
+            nd = self.N.get(pt['node'])
+            for ib in pt['ib']:
+                if ib['k'] == 'bar' and nd and nd['vtx'] and ib['vtx'] + 1 < len(nd['vtx']):      # IBar.firstFunc : zero/largeur lus sur le quad
+                    ib['zero'] = nd['vtx'][ib['vtx']][0]; ib['width'] = nd['vtx'][ib['vtx'] + 1][0] - nd['vtx'][ib['vtx']][0]
+                elif ib['k'] == 'frame' and ib.get('init') is not None: self._cadre(ib, ib['init'])
+        self.params = {}
+        for p in self.t['params']: self.params[(p['id'], p['no'])] = p
+        self.codes = {}
+        for c in self.t['codes']: self.codes.setdefault(c['id'], []).append(c)
+        self.vu = True; self.sel = None; self.ordre = 0
+
+    # ---- application des messages
+    def _ib(self, p):
+        if 'parts' not in p or p['parts'] >= len(self.parts): return None, None
+        pt = self.parts[p['parts']]
+        return pt, (pt['ib'][p['base']] if p['base'] < len(pt['ib']) else None)
+
+    def _cadre(self, ib, v):
+        nd = self.N.get(ib.get('go'))
+        if nd and 0 <= v < len(self.ml.cadres):
+            c = self.ml.cadres[v]; nd['vtx'] = [list(x) for x in c['vtx']]; nd['uv'] = [list(x) for x in c['uv']]; nd['sub'] = {'0': c['tri']}
+
+    def _barre(self, ib, pt, v):
+        nd = self.N.get(pt['node'])
+        if nd and nd['vtx']:
+            o = ib['vtx']
+            if v < 0: o -= 4; v = ~v
+            if o + 2 < len(nd['vtx']) and o >= 0:
+                x = ib['zero'] + ib['width'] * v * 0.01
+                nd['vtx'][o + 1][0] = x; nd['vtx'][o + 2][0] = x
+
+    def _enrobe(self, p):
+        w = (p.get('custom') or {}).get('wrap')
+        if not w or w['parts'] >= len(self.parts): return None, None
+        pt = self.parts[w['parts']]
+        return pt, (pt['ib'][w['base']] if w['base'] < len(pt['ib']) else None)
+
+    def param_int(self, i, no, v):
+        p = self.params.get((i, no))
+        if not p: return
+        if 'custom' in p:
+            cu = p['custom']; pt, ib = self._enrobe(p)
+            if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
+                cu['_v'] = v; self._barre(ib, pt, v)
+            return
+        if 'textcolor' in p and p['textcolor'] is not None:
+            for ib in self.parts[p['textcolor']]['ib']:
+                if ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = v
+            return
+        pt, ib = self._ib(p)
+        if not ib: return
+        k = ib['k']
+        if k == 'icon':
+            nd = self.N.get(pt['node'])
+            if nd and nd['uv']:
+                info = self.ml.infos[ib['partsNo']]; o = ib['vtx']
+                for j, uv in enumerate(uv_icone(info, v, 0)):
+                    if o + j < len(nd['uv']): nd['uv'][o + j] = list(uv)
+        elif k == 'text':
+            if ib.get('go') in self.N: self.N[ib['go']]['tcol'] = v
+        elif k == 'bar': self._barre(ib, pt, v)
+        elif k == 'button':
+            nd = self.N.get(pt['node'])
+            if nd: nd['etat'] = v
+        elif k == 'frame': self._cadre(ib, v)
+
+    def param_str(self, i, no, s):
+        p = self.params.get((i, no))
+        if not p: return
+        if 'custom' in p:
+            cu = p['custom']; pt, ib = self._enrobe(p)
+            if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(string) = RedApply : barre « rouge » = valeur courante
+                self._barre(ib, pt, ~cu.get('_v', 0))
+            return
+        pt, ib = self._ib(p)
+        if not ib or ib['k'] != 'text': return
+        nd = self.N.get(ib.get('go'))
+        if not nd or nd['text'] is None: return
+        base = nd.setdefault('base', dict(cs=nd['text']['characterSize']))
+        nd['tscale'] = 1.0; nd['text']['characterSize'] = base['cs']
+        if ib.get('variant') == 1 and '^' in s:
+            j = s.index('^')
+            if j + 1 < len(s):
+                c = ord(s[j + 1]) - 48
+                if 0 <= c <= 5:
+                    ech, cs = MARQUES_TEXTE[c]
+                    hiro = self.ml.hdr['lang']['hiro']
+                    nd['tscale'] = hiro if ech == 1.0 and c == 0 else (min(hiro * 1.4, 1.0) if c == 5 else 1.0)
+                    if isinstance(cs, float): nd['text']['characterSize'] = cs
+                    elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
+                s = s[:j] + s[j + 2:]
+        elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
+        nd['text']['text'] = s; nd['vu'] = True
+
+    def code(self, i, c):
+        for e in self.codes.get(i, []):
+            if e['kind'] == 'active':
+                pt = self.parts[e['parts']]
+                if pt['node'] in self.N: self.N[pt['node']]['act'] = (c != 0)
+            elif e['kind'] == 'func':
+                fx = (e.get('fx') or {}).get(str(c))
+                if not fx: continue
+                for nid, dd in fx['d'].items():
+                    nd = self.N.get(int(nid))
+                    if not nd: continue
+                    if 'pos' in dd: nd['pos'] = list(dd['pos'])
+                    if 'act' in dd: nd['act'] = bool(dd['act'])
+                for t in fx.get('tc', []):          # MenuParts.SetTextColor(code) : couleur des textes marques du masque
+                    pt = self.parts[t['parts']] if t.get('parts') is not None else None
+                    if pt:
+                        for j, ib in enumerate(pt['ib']):
+                            if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    def selection(self, bouton):
+        """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
+        self.sel = bouton
+
+    def visible(self, nid):
+        while nid is not None:
+            nd = self.N.get(nid)
+            if nd is None: return True
+            if not nd['act']: return False
+            nid = nd['par']
+        return True
+
+
+class Textes:
+    """Lignes de texte -> textures (police du jeu rendue par Pillow, blanche ; la couleur est appliquee au dessin)."""
+    def __init__(self, police):
+        self.police = police; self.pol = {}; self.tex = {}
+    def _font(self, px):
+        from PIL import ImageFont
+        f = self.pol.get(px)
+        if f is None:
+            for chemin in (self.police, 'DejaVuSans.ttf', 'arial.ttf'):
+                try: f = ImageFont.truetype(chemin, px); break
+                except Exception: f = None
+            if f is None: f = ImageFont.load_default()
+            self.pol[px] = f
+        return f
+    def ligne(self, texte, px):
+        """-> (texture, largeur, hauteur, base) ; base = distance du haut de l'image a la ligne de base."""
+        k = (texte, px)
+        r = self.tex.get(k)
+        if r is None:
+            from PIL import Image, ImageDraw
+            if len(self.tex) > 600:
+                for t, *_ in self.tex.values(): t.delete() if hasattr(t, 'delete') else None
+                self.tex.clear()
+            f = self._font(px); asc, desc = f.getmetrics(); w = int(math.ceil(f.getlength(texte))) + 4; h = asc + desc + 4
+            im = Image.new('L', (w, h), 0); ImageDraw.Draw(im).text((2, 2 + asc), texte, font=f, fill=255, anchor='ls')
+            a = np.zeros((h, w, 4), np.uint8); a[..., :3] = 255; a[..., 3] = np.asarray(im)
+            img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=w * 4)
+            t = img.get_texture(); gl.glBindTexture(t.target, t.id)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+            r = self.tex[k] = (t, w, h, 2 + asc)
+        return r
+
+
+class Rendu:
+    """Dessine des Fenetre sur l'ecran : prog GL maison, feuilles 0 (MenuTexture) et 1 (Button)."""
+    def __init__(self, ml, feuilles, police):
+        self.ml = ml
+        self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
+        self.tex = {}
+        for k, arr in feuilles.items():
+            h, w = arr.shape[:2]
+            img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(arr[::-1]).tobytes(), pitch=w * 4)
+            t = img.get_texture(); gl.glBindTexture(t.target, t.id)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            self.tex[k] = t
+        self.textes = Textes(police)
+
+    # ---- construction des elements a dessiner
+    def _items(self, fen):
+        """-> liste de (profondeur, ordre, genre, donnees) d'une fenetre."""
+        items = []; o = 0
+        for nd in fen.N.values():
+            if not fen.visible(nd['id']): continue
+            o += 1
+            if nd['vtx']: items.append((nd['pos'][1], o, 'm', (fen, nd)))
+            if nd['text'] is not None and nd['text'].get('text'): items.append((nd['pos'][1] + 0.001, o, 't', (fen, nd)))
+        items.sort(key=lambda x: (x[0], x[1]))
+        return items
+
+    def dessiner(self, fens, cx, cy, s, vp):
+        """fens : liste de Fenetre ; (cx, cy) = pixel du centre de l'ecran du jeu ; s = pixels par unite ; vp = (largeur, hauteur) de la fenetre."""
+        if not fens: return
+        items = []
+        for fen in fens: items += self._items(fen)          # fenetres empilees dans l'ordre d'ouverture ; profondeur propre a chaque fenetre
+        gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
+        self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
+        lot = None; buf = []
+        def vider():
+            nonlocal buf
+            if buf and lot:
+                a = np.concatenate(buf).astype(np.float32); n = len(a)
+                vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', a[:, 4:8].ravel()))
+                gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(lot[0].target, lot[0].id); self.prog['mode'] = lot[1]
+                vl.draw(gl.GL_TRIANGLES); vl.delete()
+            buf = []
+        for _, _, g, (fen, nd) in items:
+            if g == 'm':
+                for k, mat in enumerate(nd['mats']):
+                    idx = nd['sub'].get(str(k))
+                    if not idx: continue
+                    sh = mat.get('sheet')
+                    if sh not in self.tex: continue
+                    col = list(mat.get('color') or (1, 1, 1, 1)); mode = 0; off = (0.0, 0.0)
+                    if k == 0 and nd['buttonId'] is not None and nd['buttonId'] >= 0 and 'part' in mat and mat['part'] == 7:
+                        etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId']) else nd['etat']
+                        if etat == 1 or etat == 4: off = self.ml.pousse
+                        if etat == 2: col[3] = 0.0
+                        if etat == 3: mode = 1
+                        if etat == 4: mode = 2
+                    if col[3] <= 0: continue
+                    t = self.tex[sh]
+                    if lot != (t, mode): vider(); lot = (t, mode)
+                    v = np.array(nd['vtx'], np.float32); u = np.array(nd['uv'], np.float32)
+                    ia = np.array(idx, np.int64); vv = v[ia]; uu = u[ia] + np.array(off, np.float32)
+                    x = cx + (nd['pos'][0] + vv[:, 0]) * s; y = cy + (nd['pos'][2] + vv[:, 1]) * s
+                    c = np.tile(np.array(col, np.float32), (len(ia), 1))
+                    buf.append(np.column_stack([x, y, uu[:, 0], uu[:, 1], c]))
+            else:
+                vider(); lot = None
+                self._texte(fen, nd, cx, cy, s)
+        vider()
+
+    def _texte(self, fen, nd, cx, cy, s):
+        t = nd['text']; lang = self.ml.hdr['lang']
+        lignes = t['text'].split('\n'); N = len(lignes)
+        em = TAILLE_POLICE * t['characterSize'] * 0.1 * nd['tscale']; emy = TAILLE_POLICE * t['characterSize'] * 0.1
+        pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
+        zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
+        row = t['anchor'] // 3; col = t['anchor'] % 3
+        hb = N * pas                                                    # hauteur du bloc de texte
+        haut = zp + hb / 2 if row == 1 else zp                             # les ancrages « bas » se comportent comme les ancrages « haut » (verifie sur la mise en page : le texte reste dans son cadre)
+        base0 = haut - asc
+        px = max(6, int(round(emy * s)))
+        pal = self.ml.couleurs[nd['tcol']] if 0 <= nd['tcol'] < len(self.ml.couleurs) else (1, 1, 1, 1)
+        coul = (min(pal[0], 1.0), min(pal[1], 1.0), min(pal[2], 1.0), 1.0)
+        larg = []
+        for l in lignes:
+            if not l: larg.append(0.0); continue
+            tex, w, h, b = self.textes.ligne(l, px); larg.append((w - 4) / s * (nd['tscale']))
+        bl = max(larg) if larg else 0.0
+        for i, l in enumerate(lignes):
+            if not l: continue
+            tex, w, h, b = self.textes.ligne(l, px)
+            lw = larg[i]
+            ax = {0: 0.0, 1: lw / 2, 2: lw}[col]                         # point d'ancrage horizontal sur la ligne
+            al = {0: 0.0, 1: (bl - lw) / 2, 2: bl - lw}[t['alignment']]  # alignement de la ligne dans le bloc
+            bx = {0: 0.0, 1: bl / 2, 2: bl}[col]
+            x0 = nd['pos'][0] - bx + al
+            y_base = base0 - i * pas
+            x = cx + x0 * s - 2 * nd['tscale']; y = cy + y_base * s - (h - b)
+            wd = w * nd['tscale']
+            a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + h, 1, 1], [x, y, 0, 0], [x + wd, y + h, 1, 1], [x, y + h, 0, 1]], np.float32)
+            vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.tile(np.array(coul, np.float32), 6)))
+            gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(tex.target, tex.id); self.prog['mode'] = 0
+            vl.draw(gl.GL_TRIANGLES); vl.delete()
+
+
+class Gestionnaire:
+    """Recoit ce que l'interface du jeu memorise (Interface.obs) et tient une Fenetre par port de menu."""
+    def __init__(self, ml):
+        self.ml = ml; self.f = {}
+    def ouvrir(self, port, typ):
+        t = self.ml.types.get(str(typ))
+        if t and not t.get('err') and t.get('nodes'): self.f[port] = Fenetre(self.ml, typ)
+        else: self.f.pop(port, None)
+    def fermer(self, port): self.f.pop(port, None)
+    def param_int(self, port, i, no, v):
+        f = self.f.get(port)
+        if f: f.param_int(i, no, v)
+    def param_str(self, port, i, no, s):
+        f = self.f.get(port)
+        if f: f.param_str(i, no, s)
+    def code(self, port, i, c):
+        f = self.f.get(port)
+        if f: f.code(i, c)
+    def selection(self, port, b):
+        f = self.f.get(port)
+        if f: f.selection(b)
+
+
+RESSOURCES = {'ui_MenuTexture.png': 'MenuTexture', 'ui_Button.png': 'Button'}
+
+
+def preparer_ressources(dossier_apk, cache, log=print):
+    """Extrait des APK du jeu (une seule fois) : feuilles MenuTexture et Button, police, maillages des cadres. -> True si tout est la."""
+    dest = {n: os.path.join(cache, n) for n in list(RESSOURCES) + ['ui_font.otf', 'ui_frameData.bin']}
+    if all(os.path.exists(p) for p in dest.values()): return True
+    try:
+        import UnityPy, zipfile
+        os.makedirs(cache, exist_ok=True)
+        log('Lecture des ressources de menu du jeu (une seule fois)...')
+        base = UnityPy.load(os.path.join(dossier_apk, 'base.apk'))
+        for o in base.objects:
+            if o.type.name == 'Texture2D':
+                d = o.read()
+                for fich, nom in RESSOURCES.items():
+                    if d.m_Name == nom and not os.path.exists(dest[fich]): d.image.convert('RGBA').save(dest[fich])
+            elif o.type.name == 'Font':
+                d = o.read()
+                if d.m_Name == 'GMaruGoPro-M' and d.m_FontData and not os.path.exists(dest['ui_font.otf']):
+                    open(dest['ui_font.otf'], 'wb').write(bytes(d.m_FontData))
+        if not os.path.exists(dest['ui_frameData.bin']):
+            pack = UnityPy.load(zipfile.ZipFile(os.path.join(dossier_apk, 'split_UnityDataAssetPack.apk')).read('assets/bin/Data/datapack.unity3d'))
+            for o in pack.objects:
+                if o.type.name == 'TextAsset':
+                    d = o.read()
+                    if d.m_Name == 'frameData':
+                        raw = d.m_Script; open(dest['ui_frameData.bin'], 'wb').write(raw.encode('utf-8', 'surrogateescape') if isinstance(raw, str) else bytes(raw)); break
+        return all(os.path.exists(p) for p in dest.values())
+    except Exception as e:
+        log('Ressources de menu indisponibles : %r' % (e,)); return False
