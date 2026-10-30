@@ -982,9 +982,16 @@ class Jeu(pyglet.window.Window):
 
 
 def trouver_defauts():
+    """-> (dossier de ce fichier, dossier `jeux/DQ4` des APK francais et des sauvegardes).
+    Cherche dans l'ordre : la variable d'environnement DQ4_JEUX, ..\\..\\jeux\\DQ4 (portage_pc a cote de jeux, comme sur le premier PC), ..\\jeux\\DQ4,
+    puis ..\\..\\<n'importe quel dossier>\\jeux\\DQ4 (ex. dq4-pc a cote du dossier du patch francais). On retient le premier qui contient `patched_apks`."""
     ici = os.path.dirname(os.path.abspath(__file__))
-    jeux = os.path.normpath(os.path.join(ici, '..', '..', 'jeux', 'DQ4'))
-    return ici, jeux
+    cands = [os.environ.get('DQ4_JEUX')] if os.environ.get('DQ4_JEUX') else []
+    cands += [os.path.join(ici, '..', '..', 'jeux', 'DQ4'), os.path.join(ici, '..', 'jeux', 'DQ4')]
+    cands += sorted(glob.glob(os.path.join(ici, '..', '..', '*', 'jeux', 'DQ4')))
+    for c in cands:
+        if os.path.isdir(os.path.join(c, 'patched_apks')): return ici, os.path.normpath(c)
+    return ici, os.path.normpath(os.path.join(ici, '..', '..', 'jeux', 'DQ4'))
 
 
 def main():
@@ -1015,6 +1022,7 @@ def main():
     ap.add_argument('--images', type=int, default=60)
     ap.add_argument('--script', default=None, help='(test) ex. "20:2,30:0" : image:masque de touches')
     a = ap.parse_args()
+    print('Jeu : APK dans %s' % a.apk, flush=True)
     sys.setswitchinterval(0.001)      # le calcul HD en tache de fond ne doit pas retarder le dessin
     if a.saves_lecture is None:
         dossiers = sorted(glob.glob(os.path.join(jeux, 'saves', '*')))

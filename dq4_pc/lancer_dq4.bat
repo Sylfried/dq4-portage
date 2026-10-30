@@ -5,8 +5,8 @@ title Dragon Quest IV - portage PC (essai 16/9)
 echo.
 echo  Dragon Quest IV - portage PC (essai)
 echo  ------------------------------------
-echo  Lit tes APK francais dans ..\..\jeux\DQ4\patched_apks
-echo  et ta derniere sauvegarde dans ..\..\jeux\DQ4\saves
+echo  Lit tes APK francais et ta derniere sauvegarde dans le dossier "jeux\DQ4"
+echo  ^(trouve tout seul a cote du projet ; sinon : set DQ4_JEUX=chemin\vers\jeux\DQ4^)
 echo  (tes fichiers ne sont jamais modifies ; les nouvelles sauvegardes vont dans le dossier "sauvegardes" ici)
 echo.
 
@@ -25,6 +25,15 @@ if not defined PY (
   echo  ^(coche "Add python.exe to PATH"^), puis relance ce fichier.
   pause
   exit /b 1
+)
+
+rem --- 1b. un ".venv" copie depuis un autre PC ne marche pas (il pointe vers le Python de l'autre machine) : on le refait
+if exist ".venv\Scripts\python.exe" (
+  ".venv\Scripts\python.exe" -c "import sys" >nul 2>nul
+  if errorlevel 1 (
+    echo  L'environnement Python ^(.venv^) vient d'un autre PC : il est refait ^(une seule fois^)...
+    rd /s /q ".venv"
+  )
 )
 
 rem --- 2. environnement isole + modules (une seule fois)
