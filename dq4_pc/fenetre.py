@@ -22,12 +22,14 @@ centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
 uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul;
 void main() {
     vec2 uv = v_uv;
-    if (net > 0.5) {   // pixel art : on garde des pixels nets, seule la frontiere entre deux pixels est adoucie
+    if (net > 1.5) { uv = (floor(uv * tsize) + 0.5) / tsize; }      // pixel perfect : plus proche voisin strict, aucun adoucissement
+    else if (net > 0.5) {   // pixel art : on garde des pixels nets, seule la frontiere entre deux pixels est adoucie
         vec2 p = uv * tsize; vec2 pc = floor(p) + 0.5; vec2 w = max(fwidth(p), vec2(1e-4));
         uv = (pc + clamp((p - pc) / w, -0.5, 0.5)) / tsize;
     }
     vec4 c = texture(tex, uv) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
 
+MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
@@ -80,7 +82,7 @@ class Jeu(pyglet.window.Window):
         print('MSAA : %s' % ('x%d' % self.msaa if self.msaa else 'non'), flush=True)
         self.args = args
         self._attente('Chargement du moteur...')
-        self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
+        self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
@@ -194,7 +196,7 @@ class Jeu(pyglet.window.Window):
     def _feuille(self, ident, mode):
         """Feuille de sprites pour le mode choisi. Les versions HD sont calculees en tache de fond : en attendant, l'original sert."""
         orig = self._feuille_orig(ident)
-        if not orig or mode == 0: return orig
+        if not orig or mode in (0, MODE_PP): return orig
         cle = (ident, mode)
         if cle in self.sprite_tex: return self.sprite_tex[cle]
         fut = self.hd_jobs.get(cle)
@@ -213,11 +215,19 @@ class Jeu(pyglet.window.Window):
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
         (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = celle de l'ecran portrait d'origine (28,4 tuiles) / zoom."""
-        cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0)); cx, cz = cx / CH_PX, cz / CH_PX
-        dh = CH_VUE_HAUT / 2 / self.champ_zoom; dl = dh * aspect
+        cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0))
+        if self.mode == MODE_PP:       # pixel perfect : k pixels d'ecran par pixel de la carte (entier), camera sur un pixel de la carte, heros a sa taille exacte (24 x 32)
+            k = self._k_pp(); cx, cz = round(cx) / CH_PX, round(cz) / CH_PX
+            dh = self.height / (2.0 * k * CH_PX); dl = self.width / (2.0 * k * CH_PX); ech = 1.0
+        else:
+            cx, cz = cx / CH_PX, cz / CH_PX; dh = CH_VUE_HAUT / 2 / self.champ_zoom; dl = dh * aspect; ech = CH_ECHELLE
         self._vue_champ = (cx, cz, dl, dh)
         M = np.zeros((4, 4)); M[0, 0] = 1 / dl; M[0, 3] = -cx / dl; M[1, 2] = -1 / dh; M[1, 3] = cz / dh; M[2, 1] = -1 / 100.0; M[3, 3] = 1.0
-        return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * CH_ECHELLE, 32 / CH_PX * CH_ECHELLE
+        return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
+
+    def _k_pp(self):
+        """Pixel perfect : nombre entier de pixels d'ecran par pixel de la carte (celui qui s'approche le plus de la hauteur d'origine, x zoom de la molette)."""
+        return max(1, int(round(self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom)))
 
     def _maj_champ(self, e):
         """(Re)construit la grille de tuiles quand le moteur en envoie une autre ; l'atlas est la texture Unity `field`."""
@@ -232,7 +242,7 @@ class Jeu(pyglet.window.Window):
             ch = {'x0': x0, 'y0': y0, 'cols': cols}
         else:
             t = np.array(ch['tuiles'], np.int32)
-        cle = (ch['x0'], ch['y0'], ch['cols'], hash(t.tobytes()))
+        cle = (ch['x0'], ch['y0'], ch['cols'], hash(t.tobytes()), self.mode == MODE_PP)
         if cle == self.champ_cle: return
         self.champ_cle = cle
         if self.champ_tex is None:
@@ -245,7 +255,7 @@ class Jeu(pyglet.window.Window):
         g = t[:lignes * cols].reshape(lignes, cols)
         X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
         u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
-        ins = 0.3 / (CH_ATLAS * CH_PX)       # recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
+        ins = 0.0 if self.mode == MODE_PP else 0.3 / (CH_ATLAS * CH_PX)       # pixel perfect : echelle entiere et plus proche voisin, les centres des pixels d'ecran ne tombent jamais sur un bord de texel ; sinon recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
         u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
         e_ = 0.0
         def coins(a, b): return np.stack([a, b], -1)
@@ -267,7 +277,7 @@ class Jeu(pyglet.window.Window):
             r = CH_ICONES.get(s['genre'])
             if r is None or not s['vis']: continue
             ox, bas, w, h = r
-            x0, z0 = s['x'] / CH_PX, s['y'] / CH_PX; x1, z1 = x0 + w / CH_PX, z0 + h / CH_PX       # a plat sur la carte, comme les tuiles (dessin vu de dessus)
+            x0, z0 = (round(s['x']) if self.mode == MODE_PP else s['x']) / CH_PX, (round(s['y']) if self.mode == MODE_PP else s['y']) / CH_PX; x1, z1 = x0 + w / CH_PX, z0 + h / CH_PX       # a plat sur la carte, comme les tuiles (dessin vu de dessus)
             q += [(x0, 0.02, z0), (x1, 0.02, z0), (x1, 0.02, z1), (x0, 0.02, z0), (x1, 0.02, z1), (x0, 0.02, z1)]
             u0, u1, v1, v0 = ox / 1024.0, (ox + w) / 1024.0, 1 - (bas - h) / 1024.0, 1 - bas / 1024.0
             uv += [(u0, v0), (u1, v0), (u1, v1), (u0, v0), (u1, v1), (u0, v1)]       # tete en bas dans l'atlas, comme les tuiles : le haut de la carte = le bas de l'image
@@ -298,12 +308,14 @@ class Jeu(pyglet.window.Window):
     def on_mouse_scroll(self, x, y, sx, sy):
         """Carte du monde : molette = zoom (x1,1 par cran, de 0,4 a 4)."""
         if self.moteur.etat.partie == MO.PARTIE_CHAMP and sy:
-            self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
+            if self.mode == MODE_PP:     # un cran = un pixel d'ecran de plus ou de moins par pixel de la carte
+                k0 = self.height / (CH_VUE_HAUT * CH_PX); self.champ_zoom = min(8, max(1, self._k_pp() + (1 if sy > 0 else -1))) / k0
+            else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
 
     def on_key_press(self, symbol, modifiers):
         K = pyglet.window.key
         if symbol == K.F1: self.aide = not self.aide                           # afficher / masquer les lignes d'aide (haut a gauche)
-        elif symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
+        elif symbol == K.F2: self.mode = (self.mode + 1) % (MODE_PP + 1)
         elif symbol == K.F4: self.stats = not self.stats
         elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
         elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
@@ -354,7 +366,7 @@ class Jeu(pyglet.window.Window):
             t = self._tex(arr, False, 0)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
             orig = self.cb_tex[(mid, 0)] = dict(t=t, tw=arr.shape[1], th=arr.shape[0], hd=False, arr=arr)
-        if self.mode == 0: return orig
+        if self.mode in (0, MODE_PP): return orig
         cle = (mid, self.mode); jc = ('m',) + cle
         if cle in self.cb_tex: return self.cb_tex[cle]
         fut = self.hd_jobs.get(jc)
@@ -875,7 +887,7 @@ class Jeu(pyglet.window.Window):
             dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
             w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
-        a_dessiner = []
+        a_dessiner = []; pp = self.mode == MODE_PP
         for slot, s in sorted(e.sprites.items()):
             if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
@@ -888,7 +900,7 @@ class Jeu(pyglet.window.Window):
                 v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
             else:
                 u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
-            p = np.array([s['pos'][0] / CH_PX, 0.04 - slot * 0.0005, s['pos'][1] / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
+            p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 - slot * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
             a, b = p - dh * w / 2, p + dh * w / 2
             q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
@@ -909,7 +921,7 @@ class Jeu(pyglet.window.Window):
             self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
             gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # shaders DssaMonster* : ZWrite Off, Cull Off, ZTest LEqual
             for tex, tw, th, vl, shader, hd in self._maillages_combat(e):
-                self.prog['net'] = 0.0 if hd else 1.0           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets
+                self.prog['net'] = 0.0 if hd else (2.0 if pp else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets
                 if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)                 # DssaCharaTransparent : ZTest Always
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
                 if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
@@ -919,19 +931,19 @@ class Jeu(pyglet.window.Window):
             for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
         self.prog['cutoff'] = 0.05
         for slot, f, vl in a_dessiner:
-            self.prog['net'] = 0.0 if f['hd'] else 1.0; self.prog['tsize'] = (float(f['tw']), float(f['th']))
+            self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
             self._tracer(f['t'], vl)
             if slot < 8:       # equipe : silhouette translucide quand un decor la cache
                 gl.glDepthFunc(gl.GL_GREATER); gl.glDepthMask(gl.GL_FALSE); self.prog['amul'] = 0.4
                 self._tracer(f['t'], vl)
                 gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
-        self.prog['net'] = 1.0; self.prog['tsize'] = (32.0, 32.0)
+        self.prog['net'] = 2.0 if pp else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
-        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
+        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect (carte x%d)' % self._k_pp(), 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._dessiner_fondu()
@@ -976,7 +988,7 @@ def main():
     ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = clic droit)')
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
-    ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
+    ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
     ap.add_argument('--shots-combat', default=None, help='(test) captures intermediaires a ces images de combat : "30,60,..."')

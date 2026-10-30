@@ -76,3 +76,8 @@ Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets 
 
 ## Monstres de combat et mode F2 (31/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
+
+## Mode « pixel perfect » (F2, dernier mode ; `--hd 4`, 31/10/2026, #41)
+- « Originaux (pixels nets) » garde un adoucissement d'un demi-pixel aux frontières des texels et, sur la carte du monde, une taille de héros de 1,04 x l'original : ce n'est pas du pixel perfect. Le dernier mode de F2 l'est vraiment : **plus proche voisin strict** (`net = 2` dans le shader) pour les sprites, monstres, icônes ; **carte du monde à échelle entière** (k pixels d'écran par pixel de la carte, k = `round(hauteur / 454 x zoom)`, soit 2 en 720p et 1080p ; la molette change k d'un cran) ; **caméra calée sur un pixel de la carte** (le défilement se fait par pas de k pixels d'écran, comme sur le jeu d'origine), positions des sprites et des icônes de lieux arrondies au pixel, héros à 24 x 32 exactement, tuiles sans recul d'UV (les centres des pixels d'écran ne tombent jamais sur un bord de texel). Vérifié en capture : 100 % de blocs k x k uniformes (k = 2 et 3) sur la carte, défilement compris.
+- Ville et combat sont en perspective : l'échelle n'est jamais entière, le mode donne seulement des texels nets sans lissage. Les fenêtres d'interface (échelle H/800) ne sont pas concernées.
+
