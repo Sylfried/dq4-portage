@@ -983,15 +983,11 @@ class Jeu(pyglet.window.Window):
 
 def trouver_defauts():
     """-> (dossier de ce fichier, dossier `jeux/DQ4` des APK francais et des sauvegardes).
-    Cherche dans l'ordre : la variable d'environnement DQ4_JEUX, ..\\..\\jeux\\DQ4 (portage_pc a cote de jeux, comme sur le premier PC), ..\\jeux\\DQ4,
-    puis ..\\..\\<n'importe quel dossier>\\jeux\\DQ4 (ex. dq4-pc a cote du dossier du patch francais). On retient le premier qui contient `patched_apks`."""
+    Le projet est autonome : il lit `jeux\\DQ4` dans ce depot (dq4-portage\\jeux\\DQ4), ou le dossier donne par la variable d'environnement DQ4_JEUX.
+    Il ne va jamais chercher dans les dossiers des autres projets (patch francais, essai Unity)."""
     ici = os.path.dirname(os.path.abspath(__file__))
-    cands = [os.environ.get('DQ4_JEUX')] if os.environ.get('DQ4_JEUX') else []
-    cands += [os.path.join(ici, '..', '..', 'jeux', 'DQ4'), os.path.join(ici, '..', 'jeux', 'DQ4')]
-    cands += sorted(glob.glob(os.path.join(ici, '..', '..', '*', 'jeux', 'DQ4')))
-    for c in cands:
-        if os.path.isdir(os.path.join(c, 'patched_apks')): return ici, os.path.normpath(c)
-    return ici, os.path.normpath(os.path.join(ici, '..', '..', 'jeux', 'DQ4'))
+    if os.environ.get('DQ4_JEUX'): return ici, os.path.normpath(os.environ['DQ4_JEUX'])
+    return ici, os.path.normpath(os.path.join(ici, '..', 'jeux', 'DQ4'))
 
 
 def main():
@@ -1023,6 +1019,9 @@ def main():
     ap.add_argument('--script', default=None, help='(test) ex. "20:2,30:0" : image:masque de touches')
     a = ap.parse_args()
     print('Jeu : APK dans %s' % a.apk, flush=True)
+    if not os.path.isfile(os.path.join(a.apk, 'base.apk')):
+        print('\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et ta sauvegarde dans %s\\saves\\<date>\\data1.dat). Autre dossier : set DQ4_JEUX=chemin\\vers\\jeux\\DQ4' % (os.path.normpath(a.apk), jeux), flush=True)
+        sys.exit(1)
     sys.setswitchinterval(0.001)      # le calcul HD en tache de fond ne doit pas retarder le dessin
     if a.saves_lecture is None:
         dossiers = sorted(glob.glob(os.path.join(jeux, 'saves', '*')))
