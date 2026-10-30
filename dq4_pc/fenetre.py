@@ -213,7 +213,7 @@ class Jeu(pyglet.window.Window):
 
     def _tracer_champ(self, e):
         if self.champ_vl is None or self.champ_tex is None: return
-        self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0; self.prog['tsize'] = (1024.0, 1024.0)
+        self.prog['cutoff'] = 0.05; self.prog['net'] = 0.0; self.prog['tsize'] = (1024.0, 1024.0)      # net = 0 : le mode « net » vise le bord des texels et, avec GL_NEAREST, pioche la tuile voisine (filets clairs)
         self._tracer(self.champ_tex, self.champ_vl)
         q, uv, col = [], [], []
         for s in e.symboles.values():                     # icones de lieux : panneaux debout, ancres au milieu du bord bas (comme le heros)
