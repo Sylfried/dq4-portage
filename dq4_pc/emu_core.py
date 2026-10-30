@@ -331,6 +331,7 @@ class Core:
         uc.mem_write(self.LIB_BASE, bytes(self.elf.img))
         # compteurs
         self.import_calls, self.unimpl = {}, {}
+        self._arite = {}
         self.files, self.fopen_log = {}, []
         self.next_file = 0
         self.gl_calls, self.gl_count = [], {}
@@ -397,7 +398,13 @@ class Core:
         try:
             name = self.stub_names[(address - self.STUB_BASE) // 4]
             self.import_calls[name] = self.import_calls.get(name, 0) + 1
-            regs = [uc.reg_read(self.XREG[i]) for i in range(8)]
+            n = self._arite.get(name)      # on ne lit que les registres dont le gestionnaire a besoin (appel tres frequent)
+            if n is None:
+                g = getattr(self, 'h_' + name, None)
+                try: n = (g.__func__.__code__.co_argcount - 1) if g is not None else 0
+                except AttributeError: n = 8
+                self._arite[name] = n
+            regs = [uc.reg_read(self.XREG[i]) for i in range(n)]
             h = getattr(self, 'h_' + name, None)
             if h is None:
                 self.unimpl[name] = self.unimpl.get(name, 0) + 1

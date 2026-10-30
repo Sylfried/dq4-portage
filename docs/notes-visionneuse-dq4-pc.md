@@ -8,8 +8,8 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - Moteur ~2-4 ms/image (Unicorn), tick 30 Hz. 720 images avec touches aléatoires : aucun plantage.
 
 ## Architecture (dossier `dq4_pc`)
-- `emu_core.py` (chargeur ELF + Unicorn), `pktlog.py` (paquets), `moteur.py` (`Moteur`, `Etat`, `Interface`), `fld.py` + `donnees.py` (UnityPy -> maillages, feuilles de sprites, cache `carte2_<nom>.pkl`), `fenetre.py` (fenêtre, shaders, clavier, portes, cadrage, message, menus), `lancer_dq4.bat` (venv + modules, Python 3.13 > 3.12 > 3.11 > 3.14 > 3.10).
-- Options `fenetre.py` : `--apk --saves-lecture --saves-ecriture --cache --slot --largeur --hauteur --shot --images --script "n:masque,..." --auto-message`; variable `DQ_DEBUG=1` = trace des entrées. Test sans écran (Linux) : `xvfb-run -a python3 dq4_pc/fenetre.py ... --shot x.png --images N --script "..."`.
+- `emu_core.py` (chargeur ELF + Unicorn), `pktlog.py` (paquets), `moteur.py` (`Moteur`, `Etat`, `Interface`), `fld.py` + `donnees.py` (UnityPy -> maillages, feuilles de sprites, cache `carte2_<nom>.pkl`), `hd.py` (agrandissement HD des sprites), `fenetre.py` (fenêtre, shaders, clavier, portes, cadrage, message, menus), `lancer_dq4.bat` (venv + modules, Python 3.13 > 3.12 > 3.11 > 3.14 > 3.10).
+- Options `fenetre.py` : `--apk --saves-lecture --saves-ecriture --cache --slot --largeur --hauteur --hd --msaa --shot --images --script "n:masque,..." --auto-message`; variable `DQ_DEBUG=1` = trace des entrées. Test sans écran (Linux) : `xvfb-run -a python3 dq4_pc/fenetre.py ... --shot x.png --images N --script "..."`.
 
 ## Entrées : GameUpdate(arg1, arg2)
 - `arg1` = touches **maintenues** (marche) ; `arg2` = touches **venant d'être pressées**. Haut 0x1, Bas 0x2, Gauche 0x4, Droite 0x8, OK 0x10/0x40, Annuler 0x20/0x80.
@@ -32,7 +32,9 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 
 ## Autres découvertes (rappel)
 - FLD `.map` : objets FMAP = enregistrements 0x50 ; `mdl_id` = préfixe du GameObject enfant (`003_wdoor04`, `022_door01`). Paquet 5 = animation d'objet (porte...) : `index | anim<<16` ; **Unity doit remettre le bit0 de l'octet +0x14 de `table[idx*32]` à 0 à la fin** (visionneuse : 18 images), sinon le joueur est bloqué. Paquet 8 = couleur de fond (octet signé/31). Paquet 33 = teinte (non utilisé).
-- Sprites `h<id>` 24×32, filtrage Point -> shader « sharp bilinear ». Caméra : FOV vertical 20°, cadrage 16/9 par décalage en x (marge 0,85). Portes : battants pivotant de 90° (approximation).
+- Sprites `h<id>` 24×32. **Styles (F2 les fait défiler, `--hd 0..3`)** : 0 originaux (shader « sharp bilinear »), 1 **EPX ×8** (défaut), 2 **régions lissées** (EPX ×4 puis chaque couleur = masque interpolé et flouté, la plus forte l'emporte), 3 **bicubique** (doux). `hd.py` les calcule ×8 par case, en **tâche de fond** (l'original s'affiche en attendant) avec **cache disque** `cache/hd_<algo>_v<VERSION>_h<id>.npy` (incrémenter `hd.VERSION` si un algorithme change) ; chaque case est replacée dans un atlas avec une gouttière de 4 px (bords répétés) + mipmaps (2 niveaux) ; les pixels transparents reprennent la couleur du voisin opaque (pas de liseré). Les feuilles à alpha déjà adouci (ex. `h106`) passent en bicubique. xBR / ScaleFX réels : non portés (à faire si besoin).
+- Performance : le tracé réutilise les listes de sommets (une par emplacement de sprite) et ne lie le VAO qu'une fois par image (`_tracer`) ; F4 affiche images/s, pire image, durée moteur et dessin Python. Au chargement d'une carte, créer ~55 textures de décor bloque ~0,1-0,5 s (à lisser plus tard).
+- Décor : mipmaps trilinéaires + anisotrope (jusqu'à ×8, F3 pour comparer) et anticrénelage matériel MSAA ×4 (`--msaa 0` pour couper ; repli automatique si la carte ne le propose pas ; non vérifiable en cloud : le serveur d'affichage logiciel n'en propose pas). Caméra : FOV vertical 20°, cadrage 16/9 par décalage en x (marge 0,85). Portes : battants pivotant de 90° (approximation).
 - Libellés de menus FR : fichier de textes du moteur `assets/msg/en/b1004000.mpt` (Parler, Magie, Objets, Examiner, Équiper…).
 
 ## Reste à faire

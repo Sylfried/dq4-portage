@@ -1,5 +1,6 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
-import os, sys, math, time, argparse, glob
+import os, sys, math, time, argparse, glob, collections
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -8,6 +9,7 @@ from pyglet.graphics.shader import Shader, ShaderProgram
 
 import moteur as MO
 import donnees as DO
+import hd as HD
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -27,6 +29,7 @@ void main() {
 
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
+HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 BTN_PAROLE, BTN_MENU = 0x100, 0x800     # arg2 de GameUpdate : parler / examiner (exactement 0x100), ouvrir le menu de commandes
 
@@ -46,36 +49,144 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0):
 
 class Jeu(pyglet.window.Window):
     def __init__(self, args):
-        cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)
-        super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        self.msaa = 0
+        for ms in ((args.msaa, 0) if args.msaa else (0,)):       # anticrenelage materiel si la carte le permet
+            try:
+                cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3, sample_buffers=1 if ms else 0, samples=ms)
+                super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+                self.msaa = ms; break
+            except pyglet.window.NoSuchConfigException:
+                print('MSAA x%d indisponible' % ms, flush=True)
+        print('MSAA : %s' % ('x%d' % self.msaa if self.msaa else 'non'), flush=True)
         self.args = args
+        self._attente('Chargement du moteur...')
+        self.mode = max(0, min(int(args.hd), len(HD.MODES) - 1)); self.lissage = True; self.aniso = self._anisotropie()
+        self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self._dom_lie = None
+        self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
         self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture)
+        self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
         self.carte_pos = {}; self.carte_cur = {}; self.plages = {}; self.noms = {}; self.portes = {}; self.bornes_x = None
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255))
+        self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255))
+        self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255))
         if args.slot:
             ok = self.moteur.charger_sauvegarde(args.slot)
             print('sauvegarde %d chargee : %s' % (args.slot, 'oui' if ok else 'NON (fichier data%d.dat introuvable ou invalide dans %s)' % (args.slot, args.saves_lecture)), flush=True)
             if ok:      # on laisse le moteur lancer la carte sauvegardee avant le premier affichage
                 for _ in range(6): self.moteur.step(0, 0)
+                self._attente('Chargement de la carte...')
+                e = self.moteur.etat
+                if e.carte: self._charger_carte(e.carte)      # les chargements lourds se font ici, pas pendant le jeu
+                for sp in list(e.sprites.values()): self._feuille(sp['id'], self.mode)
         self.n = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
         pyglet.clock.schedule_interval(self.tick, 1 / 30.0)
 
+    def _attente(self, texte):
+        """Ecran noir avec un message : la fenetre reste vivante pendant les chargements."""
+        try:
+            self.switch_to(); gl.glClearColor(0, 0, 0, 1); self.clear()
+            pyglet.text.Label(texte, x=self.width // 2, y=self.height // 2, anchor_x='center', anchor_y='center', font_size=16, color=(255, 255, 255, 255)).draw()
+            self.flip(); self.dispatch_events()
+        except Exception: pass
+
     # ---- textures
-    def _tex(self, arr, repeat):
+    def _anisotropie(self):
+        """Niveau d'anisotropie maximal utilisable (1.0 si l'extension manque), plafonne a 8."""
+        try:
+            v = (gl.GLfloat * 1)(); gl.glGetFloatv(0x84FF, v); return max(1.0, min(8.0, float(v[0])))
+        except Exception:
+            return 1.0
+
+    def _tex(self, arr, repeat, mip=0):
+        """Texture RGBA ; mip > 0 : mipmaps (limites a `mip` niveaux, 99 = tous) + filtrage anisotrope."""
         h, w = arr.shape[:2]
         img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(arr[::-1]).tobytes(), pitch=w * 4)
         t = img.get_texture()
         gl.glBindTexture(t.target, t.id)
         m = gl.GL_REPEAT if repeat else gl.GL_CLAMP_TO_EDGE
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, m); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, m)
+        if mip:
+            gl.glGenerateMipmap(t.target)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAX_LEVEL, min(mip, 20))
+            self._filtrer(t, True)
         return t
+
+    def _filtrer(self, t, lisse):
+        """Filtrage d'une texture mipmappee : lisse = mipmaps trilineaires + anisotrope, sinon bilineaire simple."""
+        gl.glBindTexture(t.target, t.id)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR if lisse else gl.GL_LINEAR)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        if self.aniso > 1.0: gl.glTexParameterf(t.target, 0x84FE, self.aniso if lisse else 1.0)
+
+    def _feuille_orig(self, ident):
+        """Feuille `h<ident>` d'origine (pixels nets) ; False si absente."""
+        cle = (ident, 0)
+        if cle in self.sprite_tex: return self.sprite_tex[cle]
+        arr = self.donnees.feuille(ident); r = False
+        if arr is not None:
+            nl = 8 if arr[4 * SPRITE_H:5 * SPRITE_H, :72, 3].any() else 4
+            r = dict(t=self._tex(arr, False), tw=arr.shape[1], th=arr.shape[0], nl=nl, hd=False, arr=arr)
+        self.sprite_tex[cle] = r
+        return r
+
+    def _calcul_hd(self, arr, nl, ident, cid, algo):
+        """(tache de fond) atlas HD d'une feuille, lu dans le cache disque s'il existe."""
+        f = os.path.join(self.args.cache, 'hd_%s_v%d_h%d.npy' % (cid, HD.VERSION, ident))
+        try:
+            if os.path.exists(f): return np.load(f), SPRITE_L * HD.FACTEUR, SPRITE_H * HD.FACTEUR
+        except Exception: pass
+        atlas, cl, ch = HD.agrandir_feuille(arr, SPRITE_L, SPRITE_H, 3, nl, algo, HD_GOUTTIERE)
+        try: np.save(f, atlas)
+        except Exception: pass
+        return atlas, cl, ch
+
+    def _feuille(self, ident, mode):
+        """Feuille de sprites pour le mode choisi. Les versions HD sont calculees en tache de fond : en attendant, l'original sert."""
+        orig = self._feuille_orig(ident)
+        if not orig or mode == 0: return orig
+        cle = (ident, mode)
+        if cle in self.sprite_tex: return self.sprite_tex[cle]
+        fut = self.hd_jobs.get(cle)
+        if fut is None:
+            _nom, cid, algo = HD.MODES[mode]
+            self.hd_jobs[cle] = self.pool.submit(self._calcul_hd, orig['arr'], orig['nl'], ident, cid, algo)
+            return orig
+        if not fut.done(): return orig
+        del self.hd_jobs[cle]
+        try: atlas, cl, ch = fut.result()
+        except Exception as ex:
+            print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
+        r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, hd=True)
+        return r
+
+    def _tracer(self, tex, vl):
+        """Trace une vertex_list en ne liant le VAO et les tampons qu'une fois par image (beaucoup plus rapide que vl.draw)."""
+        gl.glBindTexture(tex.target, tex.id)
+        try:
+            dom = vl.domain
+            if dom is not self._dom_lie:
+                dom.vao.bind()
+                for buf, _ in dom.buffer_attributes: buf.commit()
+                self._dom_lie = dom
+            gl.glDrawArrays(gl.GL_TRIANGLES, vl.start, vl.count)
+        except AttributeError:
+            vl.draw(gl.GL_TRIANGLES)
+
+    def on_key_press(self, symbol, modifiers):
+        K = pyglet.window.key
+        if symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
+        elif symbol == K.F4: self.stats = not self.stats
+        elif symbol == K.F3:
+            self.lissage = not self.lissage
+            for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
+        else: return super().on_key_press(symbol, modifiers)
 
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
@@ -86,7 +197,8 @@ class Jeu(pyglet.window.Window):
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
-            if (nom, key) not in self.tex_gl: self.tex_gl[(nom, key)] = self._tex(c['textures'][key], True)
+            if (nom, key) not in self.tex_gl:
+                self.tex_gl[(nom, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
             vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', col.ravel()))
             self.carte_vl.append((self.tex_gl[(nom, key)], vl, key)); self.carte_pos[key] = pos.copy()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
@@ -275,6 +387,9 @@ class Jeu(pyglet.window.Window):
             print('capture :', self.args.shot, [(q, list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
 
     def on_draw(self):
+        t_debut = time.perf_counter()
+        if self.t_prec is not None: self.ecarts.append(t_debut - self.t_prec)
+        self.t_prec = t_debut
         e = self.moteur.etat
         gl.glClearColor(e.fond[0], e.fond[1], e.fond[2], 1.0)
         self.clear()
@@ -294,44 +409,57 @@ class Jeu(pyglet.window.Window):
                 cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
                 d = cx - cib[0]; cam[0] += d; cib[0] += d
         M, droite = matrice(cam, cib, FOV_VERTICAL, aspect)
+        # sprites : panneaux verticaux tournes vers la camera (listes de sommets persistantes, une par emplacement)
+        fh = np.array([e.cam_cible[0] - e.cam_pos[0], 0, e.cam_cible[2] - e.cam_pos[2]]); fh /= np.linalg.norm(fh) or 1
+        dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
+        w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE; up = np.array([0, h, 0])
+        a_dessiner = []
+        for slot, s in sorted(e.sprites.items()):
+            if s['pos'] is None or s['col'][3] < 0.02: continue
+            f = self._feuille(s['id'], self.mode)
+            if not f: continue
+            tw, th, nl = f['tw'], f['th'], f['nl']
+            col, row = s['pose'] % 3, s['dir'] % nl
+            if f['hd']:     # case (col, row) de l'atlas HD, marges exclues
+                pl, ph, g = f['cl'] + 2 * HD_GOUTTIERE, f['ch'] + 2 * HD_GOUTTIERE, HD_GOUTTIERE
+                u0, u1 = (col * pl + g) / tw, (col * pl + g + f['cl']) / tw
+                v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
+            else:
+                u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
+            p = np.array(s['pos'], float)
+            a, b = p - dh * w / 2, p + dh * w / 2
+            q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+            uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
+            cl = list(map(float, s['col'])) * 6
+            vl = self.sprite_vl.get(slot)
+            if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
+            else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
+            a_dessiner.append((slot, f, vl))
+        self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        for tex, vl, _cle in self.carte_vl:
-            gl.glBindTexture(tex.target, tex.id); vl.draw(gl.GL_TRIANGLES)
-        # sprites : panneaux verticaux tournes vers la camera
-        fh = np.array([e.cam_cible[0] - e.cam_pos[0], 0, e.cam_cible[2] - e.cam_pos[2]]); fh /= np.linalg.norm(fh) or 1
-        dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
-        self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
-        for slot, s in sorted(e.sprites.items()):
-            if s['pos'] is None or s['col'][3] < 0.02: continue
-            tex = self.sprite_tex.get(s['id'])
-            if tex is None:
-                arr = self.donnees.feuille(s['id'])
-                tex = self.sprite_tex[s['id']] = (self._tex(arr, False), arr.shape[1], arr.shape[0], 8 if arr[4 * SPRITE_H:5 * SPRITE_H, :72, 3].any() else 4) if arr is not None else False
-            if not tex: continue
-            t, tw, th, nl = tex
-            self.prog['tsize'] = (float(tw), float(th))
-            col, row = s['pose'] % 3, s['dir'] % nl
-            u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
-            p = np.array(s['pos'], float); w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
-            a, b = p - dh * w / 2, p + dh * w / 2; up = np.array([0, h, 0])
-            q = np.array([a, b, b + up, a, b + up, a + up], np.float32)
-            uv = np.array([[u0, v0], [u1, v0], [u1, v1], [u0, v0], [u1, v1], [u0, v1]], np.float32)
-            cl = np.tile(np.array(s['col'], np.float32), (6, 1))
-            vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q.ravel()), tex_coords=('f', uv.ravel()), colors=('f', cl.ravel()))
-            gl.glBindTexture(t.target, t.id); vl.draw(gl.GL_TRIANGLES)
+        for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
+        self.prog['cutoff'] = 0.05
+        for slot, f, vl in a_dessiner:
+            self.prog['net'] = 0.0 if f['hd'] else 1.0; self.prog['tsize'] = (float(f['tw']), float(f['th']))
+            self._tracer(f['t'], vl)
             if slot < 8:       # equipe : silhouette translucide quand un decor la cache
                 gl.glDepthFunc(gl.GL_GREATER); gl.glDepthMask(gl.GL_FALSE); self.prog['amul'] = 0.4
-                vl.draw(gl.GL_TRIANGLES)
+                self._tracer(f['t'], vl)
                 gl.glDepthFunc(gl.GL_LESS); gl.glDepthMask(gl.GL_TRUE); self.prog['amul'] = 1.0
-            vl.delete()
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
-        self.etiquette.text = 'Carte %s | %.0f ms moteur | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % (e.carte, self.dt_moteur * 1000)
+        self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % e.carte
         self.etiquette.y = self.height - 10
+        self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
+        self.etiq_hd.y = self.height - 30
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
-        self.etiquette.draw()
+        self.etiquette.draw(); self.etiq_hd.draw()
+        self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
+        if self.stats and self.ecarts:
+            if self.n % 10 == 0: self.etiq_stats.text = '%.0f images/s | pire image %.0f ms | moteur %.1f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), max(self.ecarts) * 1000, self.dt_moteur * 1000, self.dt_dessin * 1000)
+            self.etiq_stats.y = self.height - 50; self.etiq_stats.draw()
 
 
 def trouver_defauts():
@@ -350,10 +478,13 @@ def main():
     ap.add_argument('--slot', type=int, default=1, help='numero de sauvegarde a charger (1-5), 0 = aucune')
     ap.add_argument('--largeur', type=int, default=1280); ap.add_argument('--hauteur', type=int, default=720)
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
+    ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
+    ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
     ap.add_argument('--images', type=int, default=60)
     ap.add_argument('--script', default=None, help='(test) ex. "20:2,30:0" : image:masque de touches')
     a = ap.parse_args()
+    sys.setswitchinterval(0.001)      # le calcul HD en tache de fond ne doit pas retarder le dessin
     if a.saves_lecture is None:
         dossiers = sorted(glob.glob(os.path.join(jeux, 'saves', '*')))
         a.saves_lecture = dossiers[-1] if dossiers else a.saves_ecriture
