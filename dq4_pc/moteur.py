@@ -209,6 +209,8 @@ class Interface:
             elif cmd == 1:
                 if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0           # fenetre dynamique : contenu neuf
                 self.ordre += 1; f['ordre'] = self.ordre
+            elif cmd == 2 and len(a) >= 3: f['grille'] = tuple(a[1:4])                 # setItemMenu : colonnes, lignes, nombre de cases du curseur du moteur
+            elif cmd == 6: f['inp'] = True                                              # demande de saisie (a chaque image tant que le menu attend une touche)
             elif cmd == 5: f['req'] = True                                             # demande de dessin : le moteur la renvoie a chaque image tant que la fenetre doit etre vue
             elif cmd == 7: f['act'] = False                                            # arret : parties desactivees
             elif cmd == 8 and len(a) >= 2: f['ign'] = (a[1] & 0xffff) != 0            # ignorer les demandes de dessin (toujours visible)
@@ -230,7 +232,7 @@ class Interface:
             if not f['ign']:
                 if f['force']: f['force'] = False; f['draw'] = f['req']
                 elif f['draw'] != f['req']: f['draw'] = f['req']
-            f['req'] = False
+            f['req'] = False; f['entree'] = f.get('inp', False); f['inp'] = False
             f['vis'] = f['act'] and f['sv'] and (f['draw'] or f['ign'])
 
     def visibles(self):
@@ -384,7 +386,13 @@ class Moteur:
             if this and u(e + 0x38, 8) and port > 1 and u(this + 8, 1) == 1 and u(this + 0x50, 2):
                 f = self.ui.f.get(port)
                 if f and f['vis'] and f['cases']: cand.append((f['ordre'], port))
+        if not cand:                                 # sinon : menu dont le moteur demande la saisie (commande 6 a chaque image), meme sous un message : Oui / Non d'une question
+            cand = [(self.ui.f[p]['ordre'], p) for p in self.menus_saisie()]
         return max(cand)[1] if cand else None
+
+    def menus_saisie(self):
+        """Tous les ports de menu dont le moteur demande la saisie (le toucher agit sur chacun d'eux) : le plus recent d'abord."""
+        return sorted((p for p, f in self.ui.f.items() if p > 1 and f.get('entree') and f['vis'] and f['cases']), key=lambda p: -self.ui.f[p]['ordre'])
 
     def envoyer_menu(self, port, *args):
         """Ce que fait Unity : depose un message [n, args...] dans la file moteur<-interface du port (touches/pointeur des menus)."""

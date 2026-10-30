@@ -30,6 +30,7 @@ void main() {
 
 FOV_VERTICAL = 20.0           # champ de vision vertical des villes (camera Unity du jeu)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
+MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 CH_VUE_HAUT = 256.0 * 800.0 / 450.0 / CH_PX                                 # Field.Init : camera ORTHOGRAPHIQUE vue de dessus, orthographicSize = 128 / (largeur / hauteur), soit 256 px (16 tuiles) en largeur ; en portrait 450 x 800 cela fait 28,4 tuiles en hauteur, qu'on garde en 16/9
 CH_ECHELLE = 51.84 * 0.48 / 24                                              # Chara.SetFieldMode : echelle 28,8 x 1,8 = 51,84 sur un maillage de 0,48 x 0,64 : le heros fait ~24,9 x 33,2 px (1,04 x la feuille 24 x 32), a plat sur la carte
@@ -84,6 +85,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
+        self.cur_local = {}; self.appui = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.aide = True; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'aide en haut a gauche + cadre noir translucide
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -124,7 +126,7 @@ class Jeu(pyglet.window.Window):
             from PIL import Image
             ml = UI.MiseEnPage(lay, os.path.join(a.cache, 'ui_frameData.bin'))
             feuilles = {0: np.array(Image.open(os.path.join(a.cache, 'ui_MenuTexture.png')).convert('RGBA')), 1: np.array(Image.open(os.path.join(a.cache, 'ui_Button.png')).convert('RGBA'))}
-            self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g; self.ui_g.proj = self._ui_x_monstres
+            self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g; self.ui_g.proj = self._ui_x_monstres; self.ui_g.rejouer(self.moteur.ui)
             if ml.message: self.ui_msg = UI.FenetreMessage(ml)
             print('Menus : mise en page d\'origine chargee (%d types%s).' % (len(ml.types), ', fenetre de message' if self.ui_msg else ''), flush=True)
         except Exception as e:
@@ -537,20 +539,44 @@ class Jeu(pyglet.window.Window):
         return [l for l in out if l[4]] + [l for l in out if not l[4]]
 
     def _saisie_menu(self, port, decl):
+        """Touches -> menu actif, comme MenuPort.Send d'Unity : [1, numero de bouton, manette] (manette du jeu : bas 1, haut 2, droite 4, gauche 8, A 16, B 32).
+        Menu a curseur du moteur (message 2 : colonnes x lignes, ex. Oui / Non) : les touches lui sont transmises, il deplace son curseur (messages 4) et valide ;
+        gauche/droite sur une seule colonne = precedent/suivant. Menu tactile (boutons sans curseur du moteur) : curseur local deplace d'apres la position des boutons, A = toucher."""
         mo = self.moteur; f = mo.ui.f[port]
-        sel = [l[0] for l in self._lignes_menu(f) if not l[4]]
-        cle = (port, f['ordre'])
-        if sel and (cle != self.focus_vu or f['cur'] not in sel):
-            self.focus_vu = cle
-            if f['cur'] not in sel: f['cur'] = sel[0]; mo.envoyer_menu(port, 1, sel[0], 0)
-        if sel and (decl & (MO.HAUT | MO.BAS)):
-            i = sel.index(f['cur']) if f['cur'] in sel else 0
-            i = (i + (1 if decl & MO.BAS else -1)) % len(sel)
-            f['cur'] = sel[i]; mo.envoyer_menu(port, 1, sel[i], 0)
-        elif decl & MO.A:
-            mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port
-        elif decl & MO.B:
-            mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port
+        dirs = ((MO.HAUT, 2), (MO.BAS, 1), (MO.GAUCHE, 8), (MO.DROITE, 4))
+        fe = self.ui_g.f.get(port) if self.ui_g else None
+        z = {b: ((x0 + x1) / 2, (z0 + z1) / 2) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}
+        if f.get('grille') or len(z) < 1:
+            for bit, pad in dirs:
+                if decl & bit:
+                    if bit in (MO.GAUCHE, MO.DROITE) and (f.get('grille') or (1, 1, 1))[0] < 2: pad = 2 if bit == MO.GAUCHE else 1
+                    mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; return
+            if decl & MO.A: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port
+            elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port
+            return
+        cle = (port, f['ordre']); cur = self.cur_local.get(cle)
+        if cur not in z:
+            cur = self.cur_local[cle] = f['cur'] if f['cur'] in z else min(z, key=lambda b: (-round(z[b][1]), z[b][0]))       # depart : le bouton en haut a gauche
+        for bit, _ in dirs:
+            if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
+        if decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port
+        elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port
+
+    @staticmethod
+    def _voisin(z, cur, bit):
+        """Bouton voisin dans la direction pressee (z : numero -> centre en unites d'interface, Z vers le haut) ; au bord on boucle vers l'autre extremite de la rangee/colonne."""
+        x, y = z[cur]
+        if bit in (MO.GAUCHE, MO.DROITE):
+            sens = 1.0 if bit == MO.DROITE else -1.0
+            avant = [(b, (c[0] - x) * sens + 3.0 * abs(c[1] - y)) for b, c in z.items() if (c[0] - x) * sens > 4.0]
+            if avant: return min(avant, key=lambda t: t[1])[0]
+            tour = [(b, abs(c[1] - y) * 100.0 - (c[0] - x) * sens) for b, c in z.items() if b != cur and abs(c[1] - y) < 12.0]
+        else:
+            sens = 1.0 if bit == MO.HAUT else -1.0
+            avant = [(b, (c[1] - y) * sens + 3.0 * abs(c[0] - x)) for b, c in z.items() if (c[1] - y) * sens > 4.0]
+            if avant: return min(avant, key=lambda t: t[1])[0]
+            tour = [(b, abs(c[0] - x) * 100.0 - (c[1] - y) * sens) for b, c in z.items() if b != cur and abs(c[0] - x) < 12.0]
+        return min(tour, key=lambda t: t[1])[0] if tour else cur
 
     def _etiq(self, texte, taille, couleur=(255, 255, 255, 255)):
         k = (texte, round(taille, 1), couleur)
@@ -568,6 +594,60 @@ class Jeu(pyglet.window.Window):
             return int(max(260, self.width - 450 * self.height / 800.0 - 16))
         return int(max(260, self.width - 20))
 
+    def _curseur(self, port):
+        """Bouton en surbrillance du menu actif : curseur du moteur (messages 4) ou, sans curseur du moteur, curseur local des fleches."""
+        f = self.moteur.ui.f[port]
+        if f.get('grille'): return f['cur']
+        return self.cur_local.get((port, f['ordre']), f['cur'])
+
+    def _ui_repere(self):
+        """Colonne d'interface du jeu (portrait 450 x 800 centre, hauteur de la fenetre) : (x du centre, y du centre, pixels par unite)."""
+        ech = self.height / 800.0
+        return {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2), self.height / 2.0, ech
+
+    def _dz_message(self, ports):
+        """Fenetre de message du terrain : l'original la pose au-dessus de la zone des menus du bas (portrait) ; en 16/9 on la descend en bas de l'ecran,
+        sauf si une autre fenetre occupe le bas (elle resterait dessous)."""
+        m = self.ui_msg
+        if self.args.msg_origine or not m or m.type != 0: return 0.0
+        b = m.bas()
+        if any(self.ui_g.f[p].typ != 1 and self.ui_g.f[p].bas() < b - 2 for p in ports): return 0.0
+        return MSG_BAS - b
+
+    def _zones(self, port):
+        """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1)] en pixels."""
+        fe = self.ui_g.f.get(port) if self.ui_g else None
+        if not fe: return []
+        cx, cy, ech = self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
+        return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr) for b, pad, x0, z0, x1, z1, pr in fe.boutons()]
+
+    def _bouton_sous(self, port, x, y):
+        """Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur) ou None."""
+        h = [(pr, b, pad) for b, pad, x0, y0, x1, y1, pr in self._zones(port) if x0 <= x <= x1 and y0 <= y <= y1]
+        if not h: return None
+        pr, b, pad = max(h, key=lambda t: t[0])
+        return b, pad, pr
+
+    def on_mouse_press(self, x, y, bouton, modifiers):
+        """Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler."""
+        M = pyglet.window.mouse; mo = self.moteur
+        if bouton == M.RIGHT: self.clic_b = True; return
+        if bouton != M.LEFT or not self.ui_rendu: return
+        touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
+        if touches:
+            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); return
+        if mo.msg_visible: self.clic_a = True                                      # toucher le message = page suivante
+
+    def on_mouse_release(self, x, y, bouton, modifiers):
+        """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
+        if bouton != pyglet.window.mouse.LEFT or not self.appui: return
+        port, b, pad = self.appui; self.appui = None
+        h = self._bouton_sous(port, x, y)
+        if h and h[0] == b and port in self.moteur.menus_saisie():
+            self.moteur.envoyer_menu(port, 1, b, pad); self.menu_relacher = port
+            f = self.moteur.ui.f.get(port)
+            if f: f['cur'] = b
+
     def _dessiner_menus(self):
         mo = self.moteur
         actif = mo.menu_actif()
@@ -577,12 +657,17 @@ class Jeu(pyglet.window.Window):
                 self._ui_etat = etat; print('UI image %d actif=%s : %s' % (self.n, actif, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in etat)), flush=True)
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
-            ech = self.height / 800.0                                  # le jeu est concu en portrait 450 x 800 : colonne centree, hauteur de la fenetre
-            cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
-            fl = [self.ui_msg] if (self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex) else []
+            cx, cy, ech = self._ui_repere()
+            msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex)
+            dz = self._dz_message([p for _, p in liste]) if msg else 0.0
+            self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if dz else set()      # le Oui/Non (type 1) suit la fenetre de message
+            haut, bas = ([self.ui_msg] if msg else []), []
             for _, p in liste:
-                fe = self.ui_g.f[p]; fe.selection(mo.ui.f[p]['cur'] if p == actif else None); fl.append(fe)
-            self.ui_rendu.dessiner(fl, cx, self.height / 2, ech, (self.width, self.height))
+                fe = self.ui_g.f[p]
+                fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
+                (haut if p in self.ui_suit else bas).append(fe)
+            if haut: self.ui_rendu.dessiner(haut, cx, cy + dz * ech, ech, (self.width, self.height))
+            if bas: self.ui_rendu.dessiner(bas, cx, cy, ech, (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
         ech = self.height / 720.0; W, H = self.width, self.height
@@ -675,6 +760,12 @@ class Jeu(pyglet.window.Window):
             p = MO.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
         if self.args.script_combat is not None and self.n_combat > 0: p = self.args.script_combat.get(self.n_combat, 0)
         if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
+        if self.args.clics:                                                # (test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
+            for c in self.args.clics:
+                if self.n == c[0]: (self.on_mouse_press(c[1], self.height - c[2], pyglet.window.mouse.RIGHT if c[3] else pyglet.window.mouse.LEFT, 0))
+                if self.n == c[0] + 3: self.on_mouse_release(c[1], self.height - c[2], pyglet.window.mouse.LEFT, 0)
+        if self.clic_a: p |= MO.A; self.clic_a = False                  # clics de souris : page suivante / annuler
+        if self.clic_b: p |= MO.B; self.clic_b = False
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
         for bit in (MO.HAUT, MO.BAS, MO.GAUCHE, MO.DROITE):      # repetition des directions maintenues (curseurs de menu)
             if p & bit:
@@ -685,7 +776,8 @@ class Jeu(pyglet.window.Window):
         mo = self.moteur
         if self.menu_relacher is not None:                 # fin de l'appui OK / Annuler envoye au menu
             mo.envoyer_menu(self.menu_relacher, 1, -1, 0); self.menu_relacher = None
-        port = mo.menu_actif() if not mo.msg_visible else None
+        port = mo.menu_actif()
+        if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None      # critere memoire seul : le message d'abord
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
             self._saisie_menu(port, decl)
             p = decl = 0
@@ -694,7 +786,7 @@ class Jeu(pyglet.window.Window):
             if decl & MO.A: decl = BTN_PAROLE
             elif decl & MO.B: decl = BTN_MENU
             p &= ~(MO.A | MO.B)
-        if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s' % (self.n, p, decl, mo.msg_visible), flush=True)
+        if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
         if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, mo.etat.partie, mo.etat.carte, None if mo.etat.champ is None else mo.etat.champ['cam'], p), flush=True)
         e = self.moteur.etat
@@ -711,7 +803,7 @@ class Jeu(pyglet.window.Window):
         if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
-            print('capture :', self.args.shot, [(q, list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
+            print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
 
     def on_draw(self):
         t_debut = time.perf_counter()
@@ -844,6 +936,8 @@ def main():
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--ui-simple', action='store_true', help='menus simples (zones de texte) au lieu des fenetres d\'origine')
     ap.add_argument('--carte-zoom', type=float, default=1.0, help='carte du monde : zoom de depart (1 = la hauteur visible de l\'ecran portrait d\'origine, 28 tuiles ; molette de la souris pour changer en jeu)')
+    ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = clic droit)')
+    ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique ; touche F2 pour changer en jeu')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
@@ -868,6 +962,7 @@ def main():
                 if n >= i: cur = m
             a.script[n] = cur
     if a.shots_combat: a.shots_combat = set(int(x) for x in a.shots_combat.split(','))
+    if a.clics: a.clics = [tuple(int(v) for v in c.split(':')) + (0,) * (4 - len(c.split(':'))) for c in a.clics.split(',')]
     if a.script_combat is not None:
         pts = sorted((int(x.split(':')[0]), int(x.split(':')[1], 0)) for x in a.script_combat.split(','))
         sc = {}; cur = 0

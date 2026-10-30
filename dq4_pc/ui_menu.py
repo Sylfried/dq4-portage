@@ -4,7 +4,7 @@ Le fichier de mise en page (cache/ui_layout.json) decrit, pour chaque type de fe
 materiaux, texte), les elements modifiables (IText / IIcon / IButton / IBar...) et leurs liaisons (id, no) -> element, et l'effet de chaque code
 (deplacement / affichage). Ce module applique les messages du moteur (setItemParam*, setItemCode, curseur) a ces objets et les dessine.
 Repere du jeu : portrait 450 x 800, X vers la droite, Z vers le haut, origine au centre de l'ecran, Y = profondeur (plus grand = devant)."""
-import os, json, math
+import os, re, json, math
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -70,7 +70,7 @@ class Fenetre:
             m = n.get('mesh')
             self.N[n['id']] = dict(id=n['id'], par=n['par'], pos=list(n['pos']), act=n['act'], mats=[dict(x) for x in n.get('mats', [])],
                                    vtx=[list(v) for v in m['vtx']] if m else None, uv=[list(v) for v in m['uv']] if m else None, sub=m['sub'] if m else None,
-                                   text=dict(n['text']) if n.get('text') is not None else None, buttonId=(n.get('parts') or {}).get('buttonId'), etat=0, tcol=0, tscale=1.0)
+                                   text=dict(n['text']) if n.get('text') is not None else None, buttonId=(n.get('parts') or {}).get('buttonId'), pad=(n.get('parts') or {}).get('gamepad') or 0, etat=0, tcol=0, tscale=1.0)
         self.parts = self.t['parts']
         for pt in self.parts:
             nd = self.N.get(pt['node'])
@@ -240,6 +240,20 @@ class Fenetre:
             nc, nt = self.N[d['cadre']], self.N[d['texte']]
             nc['pos'] = [x, nc['pos'][1], z]; off = nc.get('off_texte', [0, 0, 0]); nt['pos'] = [x + off[0], nt['pos'][1], z + off[2]]
 
+    def boutons(self):
+        """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface."""
+        out = []
+        for nd in self.N.values():
+            if not nd['pad'] or nd['buttonId'] is None or not nd['vtx'] or nd['etat'] == 2 or not self.visible(nd['id']): continue
+            xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
+            out.append((nd['buttonId'], nd['pad'], min(xs), min(zs), max(xs), max(zs), nd['pos'][1]))
+        return out
+
+    def bas(self):
+        """Ordonnee (unites d'interface) du bord bas des parties visibles de la fenetre."""
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        return min(zs) if zs else 0.0
+
     def visible(self, nid):
         while nid is not None:
             nd = self.N.get(nid)
@@ -282,6 +296,11 @@ class FenetreMessage:
     def visible(self, nid):
         nd = self.N.get(nid)
         return bool(nd and nd['act'])
+
+    def bas(self):
+        """Ordonnee (unites d'interface) du bord bas du cadre."""
+        c = self.N.get('cadre')
+        return c['pos'][2] + min(v[1] for v in c['vtx']) if c and c['vtx'] else 0.0
 
 
 class Textes:
@@ -409,28 +428,36 @@ class Rendu:
         haut = zp + hb / 2 if row == 1 else zp                             # les ancrages « bas » se comportent comme les ancrages « haut » (verifie sur la mise en page : le texte reste dans son cadre)
         base0 = haut - asc
         px = max(6, int(round(emy * s)))
-        pal = self.ml.couleurs[nd['tcol']] if 0 <= nd['tcol'] < len(self.ml.couleurs) else (1, 1, 1, 1)
-        coul = (min(pal[0], 1.0), min(pal[1], 1.0), min(pal[2], 1.0), 1.0)
-        larg = []
+        def teinte(i):
+            pal = self.ml.couleurs[i] if 0 <= i < len(self.ml.couleurs) else (1, 1, 1, 1)
+            return (min(pal[0], 1.0), min(pal[1], 1.0), min(pal[2], 1.0), 1.0)
+        segs_l = []; cur = nd['tcol']                                    # « @cN » change la couleur du texte (palette du jeu) ; elle se prolonge d'une ligne a l'autre
         for l in lignes:
-            if not l: larg.append(0.0); continue
-            tex, w, h, b = self.textes.ligne(l, px); larg.append((w - 4) / s * (nd['tscale']))
+            segs = []; pos = 0
+            for m in re.finditer(r'@c(\d)', l):
+                if m.start() > pos: segs.append((l[pos:m.start()], cur))
+                cur = int(m.group(1)); pos = m.end()
+            if pos < len(l): segs.append((l[pos:], cur))
+            segs_l.append(segs)
+        larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * nd['tscale'] for t, _ in segs) for segs in segs_l]
         bl = max(larg) if larg else 0.0
-        for i, l in enumerate(lignes):
-            if not l: continue
-            tex, w, h, b = self.textes.ligne(l, px)
+        for i, segs in enumerate(segs_l):
+            if not segs: continue
             lw = larg[i]
             ax = {0: 0.0, 1: lw / 2, 2: lw}[col]                         # point d'ancrage horizontal sur la ligne
             al = {0: 0.0, 1: (bl - lw) / 2, 2: bl - lw}[t['alignment']]  # alignement de la ligne dans le bloc
             bx = {0: 0.0, 1: bl / 2, 2: bl}[col]
-            x0 = nd['pos'][0] - bx + al
+            xs = nd['pos'][0] - bx + al
             y_base = base0 - i * pas
-            x = cx + x0 * s - 2 * nd['tscale']; y = cy + y_base * s - (h - b)
-            wd = w * nd['tscale']
-            a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + h, 1, 1], [x, y, 0, 0], [x + wd, y + h, 1, 1], [x, y + h, 0, 1]], np.float32)
-            vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.tile(np.array(coul, np.float32), 6)))
-            gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(tex.target, tex.id); self.prog['mode'] = 0
-            vl.draw(gl.GL_TRIANGLES); vl.delete()
+            for texte, ci in segs:
+                tex, w, h, b = self.textes.ligne(texte, px)
+                x = cx + xs * s - 2 * nd['tscale']; y = cy + y_base * s - (h - b)
+                wd = w * nd['tscale']
+                a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + h, 1, 1], [x, y, 0, 0], [x + wd, y + h, 1, 1], [x, y + h, 0, 1]], np.float32)
+                vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.tile(np.array(teinte(ci), np.float32), 6)))
+                gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(tex.target, tex.id); self.prog['mode'] = 0
+                vl.draw(gl.GL_TRIANGLES); vl.delete()
+                xs += (w - 4) / s * nd['tscale']
 
 
 class Gestionnaire:
@@ -442,6 +469,13 @@ class Gestionnaire:
         if t and not t.get('err') and t.get('nodes'): self.f[port] = Fenetre(self.ml, typ)
         else: self.f.pop(port, None)
     def fermer(self, port): self.f.pop(port, None)
+    def rejouer(self, ui):
+        """Les fenetres des ports 2 a 11 (menus du terrain) sont creees par le moteur au demarrage, avant que la visionneuse n'ecoute : on rejoue leur creation et leur contenu."""
+        for port, f in sorted(ui.f.items()):
+            if f.get('type') is None: continue
+            self.ouvrir(port, f['type'])
+            for (i, no), txt in f['cases'].items(): self.param_str(port, i, no, txt)
+            for i, c in f['indic'].items(): self.code(port, i, c)
     def param_int(self, port, i, no, v):
         f = self.f.get(port)
         if f: f.param_int(i, no, v)

@@ -62,6 +62,12 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 - Test en cloud : `DQ_UIDBG=1` journalise les messages des fenêtres (ports 0, 1 et >= 12), l'état des fenêtres et les lignes du canevas de message.
 - Limites : voir « Lacunes » dans les notes techniques (classes `IBase` personnalisées, type 66, curseur de liste). Le texte d'action sous le bandeau des personnages (« Attaquer / ▼ / cible ») s'affiche sans cadre propre.
 
+## Saisie : clavier et souris (31/10/2026, #38 #39)
+- **Souris = tactile du mobile** : appui sur un bouton du menu actif (il s'enfonce), relâchement sur le même bouton = sélection ; clic gauche sur le message = page suivante ; clic droit = Annuler (B). Les zones sont celles du jeu d'origine (`Fenetre.boutons()`), le bouton le plus en avant prime.
+- **Clavier** : flèches (gauche/droite comprises) déplacent le curseur dans les grilles de menus ; une seule colonne : gauche/droite = page précédente/suivante ; Entrée = valider, Retour arrière / X = annuler. Menus du moteur à grille (Oui/Non, combat) : les flèches sont transmises au moteur ; menus tactiles : curseur local d'après la position des boutons.
+- **Fenêtre de message du terrain** descendue en bas de l'écran (`--msg-origine` pour l'ancienne position), Oui/Non avec elle ; textes colorés `@cN`.
+- Tests sans écran : `--clics "image:x:y[:d],..."` (pixels depuis le haut gauche, d = clic droit ; appui à l'image, relâchement 3 images plus tard).
+
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
 
