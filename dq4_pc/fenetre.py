@@ -80,6 +80,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
+        self.aide = True; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'aide en haut a gauche + cadre noir translucide
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
@@ -260,7 +261,8 @@ class Jeu(pyglet.window.Window):
 
     def on_key_press(self, symbol, modifiers):
         K = pyglet.window.key
-        if symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
+        if symbol == K.F1: self.aide = not self.aide                           # afficher / masquer les lignes d'aide (haut a gauche)
+        elif symbol == K.F2: self.mode = (self.mode + 1) % len(HD.MODES)
         elif symbol == K.F4: self.stats = not self.stats
         elif symbol == K.F5: self.moteur.demarrer_champ()          # (essai) aller a la carte du monde
         elif symbol == K.F7: self.cb_mx ^= 1                                  # (essai) combat : scene en miroir gauche/droite
@@ -664,15 +666,22 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
-        self.etiq_hd.text = 'F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
+        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats' % (HD.MODES[self.mode][0], 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
-        self.etiquette.draw(); self.etiq_hd.draw()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
-        if self.stats and self.ecarts:
-            if self.n % 10 == 0: self.etiq_stats.text = '%.0f images/s | pire image %.0f ms | moteur %.1f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), max(self.ecarts) * 1000, self.dt_moteur * 1000, self.dt_dessin * 1000)
-            self.etiq_stats.y = self.height - 50; self.etiq_stats.draw()
+        if self.aide:
+            stats = self.stats and bool(self.ecarts)
+            if stats:
+                if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | pire image %.0f ms | moteur %.1f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), max(self.ecarts) * 1000, self.dt_moteur * 1000, self.dt_dessin * 1000)
+                self.etiq_stats.y = self.height - 50
+            lignes = [(self.etiquette, 10), (self.etiq_hd, 30)] + ([(self.etiq_stats, 50)] if stats else [])
+            bas = min(self.height - dy - l.content_height for l, dy in lignes) - 6       # cadre noir translucide derriere le texte (lisible sur le decor)
+            self.cadre_aide.x, self.cadre_aide.y = 4, bas
+            self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l, _ in lignes) + 16, self.height - 4 - bas
+            self.cadre_aide.draw()
+            for l, _ in lignes: l.draw()
 
 
 def trouver_defauts():
