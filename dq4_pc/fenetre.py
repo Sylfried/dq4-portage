@@ -14,10 +14,10 @@ import hd as HD
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
 uniform mat4 mvp;
-out vec2 v_uv; out vec4 v_col;
+centroid out vec2 v_uv; out vec4 v_col;
 void main() { gl_Position = mvp * vec4(position, 1.0); v_uv = tex_coords; v_col = colors; }'''
 FRAG = '''#version 330 core
-in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
+centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
 uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul;
 void main() {
     vec2 uv = v_uv;
@@ -198,7 +198,7 @@ class Jeu(pyglet.window.Window):
         g = t[:lignes * cols].reshape(lignes, cols)
         X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
         u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
-        ins = 0.25 / (CH_ATLAS * CH_PX)       # recul de 1/4 de texel sur chaque bord : pas de filet clair entre deux tuiles
+        ins = 0.3 / (CH_ATLAS * CH_PX)       # recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
         u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
         e_ = 0.0
         def coins(a, b): return np.stack([a, b], -1)
@@ -216,16 +216,14 @@ class Jeu(pyglet.window.Window):
         self.prog['cutoff'] = 0.05; self.prog['net'] = 0.0; self.prog['tsize'] = (1024.0, 1024.0)      # net = 0 : le mode « net » vise le bord des texels et, avec GL_NEAREST, pioche la tuile voisine (filets clairs)
         self._tracer(self.champ_tex, self.champ_vl)
         q, uv, col = [], [], []
-        for s in e.symboles.values():                     # icones de lieux : panneaux debout, ancres au milieu du bord bas (comme le heros)
+        for s in e.symboles.values():                     # icones de lieux : posees a plat (le heros se tient au milieu du bord bas)
             r = CH_ICONES.get(s['genre'])
             if r is None or not s['vis']: continue
             ox, bas, w, h = r
-            cx, cz = (s['x'] + w / 2) / CH_PX, (s['y'] + h) / CH_PX
-            lw, lh = w / CH_PX * CH_ECHELLE, h / CH_PX * CH_ECHELLE
-            a, b = np.array([cx - lw / 2, 0.0, cz]), np.array([cx + lw / 2, 0.0, cz]); up = np.array([0.0, lh, 0.0])
-            q += [a, b, b + up, a, b + up, a + up]
+            x0, z0 = s['x'] / CH_PX, s['y'] / CH_PX; x1, z1 = x0 + w / CH_PX, z0 + h / CH_PX       # a plat sur la carte, comme les tuiles (dessin vu de dessus)
+            q += [(x0, 0.02, z0), (x1, 0.02, z0), (x1, 0.02, z1), (x0, 0.02, z0), (x1, 0.02, z1), (x0, 0.02, z1)]
             u0, u1, v1, v0 = ox / 1024.0, (ox + w) / 1024.0, 1 - (bas - h) / 1024.0, 1 - bas / 1024.0
-            uv += [(u0, v0), (u1, v0), (u1, v1), (u0, v0), (u1, v1), (u0, v1)]
+            uv += [(u0, v0), (u1, v0), (u1, v1), (u0, v0), (u1, v1), (u0, v1)]       # tete en bas dans l'atlas, comme les tuiles : le haut de la carte = le bas de l'image
             col += [(1.0, 1.0, 1.0, float(s['alpha']))] * 6
         if q:
             n = len(q); pos = np.array(q, np.float32).ravel(); tc = np.array(uv, np.float32).ravel(); cc = np.array(col, np.float32).ravel()
@@ -532,6 +530,8 @@ class Jeu(pyglet.window.Window):
         self._animer_portes()
         self.n += 1
         self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
+        if os.environ.get('DQ_DUMP') and self.n_combat == 55:
+            import pickle; pickle.dump((dict(self.moteur.etat.modeles), dict(self.moteur.etat.maillages)), open(os.environ['DQ_DUMP'], 'wb'))
         if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
