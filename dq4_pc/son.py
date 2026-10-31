@@ -76,6 +76,11 @@ def decoder_akb(d):
     return dict(pcm=np.ascontiguousarray(pcm), frequence=h['frequence'], debut=deb if boucle else 0, fin=fin if boucle else 0, volume=h['volume'], boucle=boucle)
 
 
+BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur - 0x1000) avec reprise : la musique en cours est memorisee et reprise (depuis le debut) quand ce morceau est fini (jingle)
+BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
+SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
+
+
 class Son:
     """Lecture : une musique a la fois (avec boucle), des bruitages en parallele. Le decodage se fait en tache de fond."""
     def __init__(self, apk, cache, log=print, volume_musique=0.7, volume_bruitages=0.8, actif=True):
@@ -85,6 +90,7 @@ class Son:
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.dec = collections.OrderedDict(); self.jobs = {}
         self.bgm = None; self.bgm_id = None; self.bgm_demande = None
+        self.reprise = None; self.bgm_fin = None                           # jingle : musique a reprendre, heure de fin du jingle
         self.se = []                                                       # [(id, Player)]
         self.verrou = threading.Lock(); self.zip = None; self.ogg = False
         try:
@@ -147,7 +153,11 @@ class Son:
             self.dec[nom] = r
             while len(self.dec) > 80 or sum(x['pcm'].nbytes for x in self.dec.values()) > 400 * 2 ** 20: self.dec.popitem(last=False)
             for cb in rappels: cb(r)
-        vivants = []; maintenant = time.time()
+        maintenant = time.time()
+        if self.reprise is not None and self.bgm_fin is not None and maintenant >= self.bgm_fin:       # Sound.SystemUpdate : le jingle est fini, la musique d'avant reprend
+            n = self.reprise; self.reprise = None; self.bgm_fin = None
+            self.arreter_bgm(); self.jouer_bgm(n)
+        vivants = []
         for i, p, fin in self.se:                                          # un bruitage termine (ou depasse sa duree) est libere
             if maintenant < fin and p.playing: vivants.append((i, p, fin))
             else:
@@ -173,9 +183,10 @@ class Son:
     def _lancer_se(self, ident, r):
         try:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
-            src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], 0, 0)             # meme source que la musique, sans boucle
+            boucle = r['boucle']                                                            # bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
+            src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'] if boucle else 0, r['fin'] if boucle else 0)
             p = self.media.Player(); p.queue(src); p.volume = max(0.0, min(1.0, self.vol_b * r['volume'])); p.play()
-            self.se.append((ident, p, time.time() + len(r['pcm']) / r['frequence'] + 0.5))
+            self.se.append((ident, p, time.time() + (SE_BOUCLE_MAX if boucle else len(r['pcm']) / r['frequence'] + 0.5)))
             if len(self.se) > 24:
                 try: self.se[0][1].delete()
                 except Exception: pass
@@ -191,11 +202,14 @@ class Son:
         self.se = [x for x in self.se if x[0] != ident]
 
     def jouer_bgm(self, v):
-        if v >= 4096:                                              # cmd_bgm : >= 0x1000 = Sound.StopBGM
-            self.arreter_bgm(); return
+        if v >= BGM_ARRET:                                         # cmd_bgm : >= 0x4000 = Sound.StopBGM
+            self.reprise = None; self.arreter_bgm(); return
         if not self.ogg: return
-        if v == self.bgm_id and self.bgm is not None: return       # deja en cours
-        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v
+        reprise = None
+        if v >= BGM_RELANCE: v -= BGM_RELANCE; reprise = self.bgm_id        # Sound.PlayBGM avec reprise : jingle, puis retour a la musique en cours
+        elif v == self.bgm_id and self.bgm is not None: self.reprise = None; return       # deja en cours
+        else: self.reprise = None
+        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None
         self._obtenir('BGM%02d' % v, lambda r, i=v: self._lancer_bgm(i, r))
 
     def _lancer_bgm(self, ident, r):
@@ -205,6 +219,7 @@ class Son:
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'], r['fin'] if r['boucle'] else 0)
             p = self.media.Player(); p.queue(src); p.volume = max(0.0, min(1.0, self.vol_m * r['volume'])); p.play()
             self.bgm = p
+            self.bgm_fin = None if r['boucle'] else time.time() + len(r['pcm']) / r['frequence']       # jingle sans boucle : heure de la reprise de la musique d'avant
         except Exception as e:
             self.log('Son : musique impossible (%r)' % (e,)); self.ok = False
 
