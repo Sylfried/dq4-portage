@@ -14,7 +14,12 @@ Animations jouees en continu, sans ordre du moteur (FldObject.update_seq / updat
   * sequence de maillages (FMAP : seq_obj_id -> entree de FSEQ) : eau qui coule, lampes qui vacillent... Le maillage est interpole d'une image a l'autre
     (sommets, UV et couleurs : FldObject.seq_build_mesh) ; l'entree donne le delai de depart, le delai entre deux tours et le nombre de tours (-1 : sans fin) ;
   * mouvement (FMAP : pmv_id -> FPMV) : objets qui tournent, balancent...
-  * palettes animees (FPLP / FPAM) : la texture d'une surface (eau scintillante, marais, sol qui fait mal) change d'image en image (classe PalettesCarte)."""
+  * palettes animees (FPLP / FPAM) : la texture d'une surface (eau scintillante, marais, sol qui fait mal) change d'image en image (classe PalettesCarte).
+
+Panneaux de decor (FldObject, drapeaux FLD_OBJ_FLAG_BILLBOARD_Y = 4 et FLD_OBJ_FLAG_BILLBOARD_XYZ = 32 : arbres, bougies, torches, tonneaux, chaises...) : un quadrilatere dont l'origine est le pied ;
+il pivote autour de l'axe vertical (4) ou prend toute la rotation de la camera (32) pour rester de face. Les sommets sont cuits a l'orientation d'origine ; `orienter` les recalcule
+quand la camera tourne (touches de rotation de la camera, villes et donjons)."""
+import math
 import numpy as np
 from donnees import euler_mat
 
@@ -45,6 +50,8 @@ class ObjetsCarte:
         self.cur_uv = {}; self.cur_col = {}                                          # UV et couleurs affichees : copies creees a la demande (groupes dont l'une ou l'autre change)
         self.sale_uv = set(); self.sale_col = set()
         self.etat = {}; self.sale = set(); self._inv = {}; self.auto = {}
+        self.bill = {i: o['flag'] for i, o in enumerate(self.objs) if o.get('flag', 0) & 36 and self.valide(i)}     # panneaux de decor : objet -> drapeaux
+        self._rb = {4: np.eye(3), 32: np.eye(3)}; self.bill_ok = False                  # orientation actuelle (autour de Y / camera complete) ; faux tant que les sommets ne la suivent pas
         self._o64 = {}; self._cles = {}; self._emat = {}                              # caches : position/rotation/echelle d'origine, cles des mouvements en tableaux, matrices de rotation
         self._semer()
 
@@ -56,7 +63,7 @@ class ObjetsCarte:
         for k in self.cur_col: self.cur_col[k][:] = self.col0[k]
         for pl in (v['plages'] for v in self.var.values()):
             for key, d, n in pl: self.cur[key][d:d + n] = 0.0
-        self.sale = set(self.cur); self.sale_uv = set(self.cur_uv); self.sale_col = set(self.cur_col)
+        self.sale = set(self.cur); self.sale_uv = set(self.cur_uv); self.sale_col = set(self.cur_col); self.bill_ok = False
         self._semer()
 
     def _semer(self):
@@ -85,7 +92,18 @@ class ObjetsCarte:
         for i, a in self.auto.items():
             st = self._st(i); st['seq'] = a['seq']; st['mot'] = a['mot']
         for i in list(self.etat): self._poser(i)
-        self.sale |= set(self.cur); self.sale_uv |= set(self.cur_uv); self.sale_col |= set(self.cur_col)
+        self.sale |= set(self.cur); self.sale_uv |= set(self.cur_uv); self.sale_col |= set(self.cur_col); self.bill_ok = False
+
+    def orienter(self, lacet, base):
+        """Tourne les panneaux de decor vers la camera. `lacet` : cap de la camera (radians, 0 = vers +Z, positif vers +X) ; `base` : (droite, haut, avant) de la camera. -> True si des sommets ont change."""
+        if not self.bill: return False
+        c, s = math.cos(lacet), math.sin(lacet)
+        ry = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])                      # Quaternion.Euler(0, lacet, 0)
+        rf = np.column_stack([np.asarray(b, np.float64) for b in base])                   # rotation complete de la camera (axes x, y, z de l'objet = droite, haut, avant)
+        if self.bill_ok and np.allclose(ry, self._rb[4], atol=1e-5) and np.allclose(rf, self._rb[32], atol=1e-5): return False
+        self._rb = {4: ry, 32: rf}; self.bill_ok = True
+        for i in self.bill: self._poser(i)
+        return True
 
     def uv(self, key): return self.cur_uv.get(key, self.uv0[key])
 
@@ -205,9 +223,11 @@ class ObjetsCarte:
             pos = pos + (cp[a] if a == b or f == 0.0 else cp[a] * (1 - f) + cp[b] * f)
             rot = rot + (cr[a] if a == b or f == 0.0 else cr[a] * (1 - f) + cr[b] * f)
             scl = scl * (cs[a] if a == b or f == 0.0 else cs[a] * (1 - f) + cs[b] * f)
-        identite = st['pos'] is None and st['rot'] is None and mot is None             # le modele reste a sa place d'origine
+        panneau = self.bill.get(i) if self.bill_ok else None
+        identite = st['pos'] is None and st['rot'] is None and mot is None and panneau is None       # le modele reste a sa place d'origine
         if not identite:
-            T = self._rot(rot) @ (scl[:, None] * self._matrice(i))                       # monde d'origine -> monde actuel : (v - pos0) -> T, puis + pos  (= R . diag(scl) . inv(R0 . diag(scl0)))
+            R = self._rot(rot) if panneau is None else self._rb[32 if panneau & 32 else 4] @ self._rot(rot - rot0)       # panneau : l'orientation vient de la camera (le reste du mouvement s'y ajoute)
+            T = R @ (scl[:, None] * self._matrice(i))                                    # monde d'origine -> monde actuel : (v - pos0) -> T, puis + pos  (= R . diag(scl) . inv(R0 . diag(scl0)))
         for m, plages, images in base:
             vivant = (m is None and st['mdl'] == o['mdl']) or (m is not None and st['mdl'] == m)
             vivant = vivant and not st['off'] and st['alpha'] > 0

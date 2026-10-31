@@ -5,6 +5,7 @@ import emu_core as T
 from pktlog import PacketLog
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
+PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
 PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 GLOBAL_PTR = 0x23d438                       # singleton Global
