@@ -35,7 +35,7 @@ dq4-portage\
 ```
 `lancer_dq4.bat` crée un environnement Python local (3.13 > 3.12 > 3.11 > 3.14 > 3.10), installe `numpy pillow unicorn pyglet UnityPy capstone soundfile` une fois, puis ouvre la fenêtre. Les nouvelles sauvegardes vont dans `dq4_pc\sauvegardes` (les tiennes ne sont jamais modifiées).
 
-Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; souris = tactile du mobile (clic gauche = toucher, clic droit = annuler, molette = zoom de la carte du monde) ; F1 = lignes d'aide ; F2 = style des sprites (dernier mode : pixel perfect) ; F3 = lissage du décor ; F4 = compteur d'images/s ; F8 = son ; F5 = (essai) carte du monde ; Échap = quitter.
+Touches : flèches / ZQSD = marcher ou déplacer le curseur ; Entrée / Espace = valider, avancer un message, parler ; Retour arrière / X = menu de commandes, annuler ; souris = tactile du mobile (clic gauche = toucher, clic droit = annuler, molette = zoom de la carte du monde) ; F1 = lignes d'aide ; F2 = style des sprites (dernier mode : pixel perfect) ; F3 = lissage du décor ; F4 = images/s et pas du moteur par seconde (30) ; F8 = son ; F5 = (essai) carte du monde ; Échap = quitter.
 
 ## Où en est-on
 Voir [`docs/notes-visionneuse-dq4-pc.md`](docs/notes-visionneuse-dq4-pc.md) (état, protocole, « reste à faire ») et [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md) (architecture du jeu, protocole moteur → Unity). L'historique des étapes est dans [`docs/historique.md`](docs/historique.md). La manière de travailler est dans [`docs/workflow.md`](docs/workflow.md).

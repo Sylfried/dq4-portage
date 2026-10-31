@@ -61,8 +61,13 @@ CH_MOTIF_NUM = np.array([0, 1, 2, 0, 3, 4, 0])                              # mo
 CH_MOTIF_PAS = (0, 76, 4, 64, 4)                                            # decalage ajoute a chaque pas, par motif (Field.m_patternInfo.acc)
 CH_MOTIF_LIM = (0, 608, 96, 512, 96)                                        # le decalage retombe a 0 des qu'il atteint cette limite (.limit)
 CH_MOTIF_PERIODE = 17
-CH_VUE_HAUT = 256.0 * 800.0 / 450.0 / CH_PX                                 # Field.Init : camera ORTHOGRAPHIQUE vue de dessus, orthographicSize = 128 / (largeur / hauteur), soit 256 px (16 tuiles) en largeur ; en portrait 450 x 800 cela fait 28,4 tuiles en hauteur, qu'on garde en 16/9
 CH_ECHELLE = 51.84 * 0.48 / 24                                              # Chara.SetFieldMode : echelle 28,8 x 1,8 = 51,84 sur un maillage de 0,48 x 0,64 : le heros fait ~24,9 x 33,2 px (1,04 x la feuille 24 x 32), a plat sur la carte
+# ZOOM COMMUN (carte du monde, villes, grottes, tours) : le heros garde partout la meme taille a l'ecran, celle des villes en 16/9 (camera d'origine : distance 39,55 jusqu'a la cible, 4 de moins apres
+# SceneCamera.s_distanceAdjust, champ horizontal fov x 4/3 deduit de l'ecran portrait 450 x 800). HEROS_FRAC = hauteur du panneau du heros / hauteur de la fenetre.
+HEROS_FRAC = SPRITE_H * SPRITE_ECHELLE / (2.0 * (39.55 - DIST_ADJ_VILLE) * math.tan(math.radians(FOV_VILLE_DEF * 4.0 / 3.0) / 2) / ASPECT_PORTRAIT)       # ~ 0,103
+CH_VUE_HAUT = 32.0 / CH_PX * CH_ECHELLE / HEROS_FRAC                         # carte du monde : tuiles visibles en hauteur (~ 20) ; en portrait l'original en montre 28,4 en hauteur et 16 en largeur
+PP_ECHELLES = (1, 2, 4, 8)                                                  # pixel perfect : pixels d'ecran par pixel de la carte
+PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
 
 CB_FOV_NOM, CB_NEAR, CB_FAR, CB_YOFFSET, CB_ECHELLE_DECOR = 48.0, 0.25, 500.0, 0.04, 6.0      # combat : Global.CameraInitParams[1] du Unity d'origine (champ de vision nominal ; Unity le multiplie par 4/3 et l'applique a l'horizontale d'une vue 4/3)
 _cb = [float(x) for x in os.environ.get('DQ_CB', '0,0').split(',')]
@@ -112,7 +117,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement du moteur...')
         self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
-        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
+        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None; self.champ_ins = 0.0       # eau animee de la carte du monde
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
@@ -153,7 +158,10 @@ class Jeu(pyglet.window.Window):
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
         self.ui_rendu = None; self.ui_g = None; self.ui_msg = None; self.canevas_cle = None
         if not args.ui_simple: self._init_ui()
-        pyglet.clock.schedule_interval(self.tick, 1 / 30.0)
+        # boucle a pas fixe : le moteur avance exactement a 30 Hz (comme FixedUpdate de l'original) quelle que soit la cadence d'affichage, et l'image affichee est calculee entre deux pas
+        self.acc = 0.0; self.t_boucle = None; self.alpha = 1.0; self.prec = None; self.pas_t = collections.deque(maxlen=60)
+        self.fixe_test = bool(args.shot)         # (test) un pas par image affichee, sans horloge ni interpolation
+        pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
 
     def _init_ui(self):
         """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
@@ -251,7 +259,7 @@ class Jeu(pyglet.window.Window):
 
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
-        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = celle de l'ecran portrait d'origine (28,4 tuiles) / zoom."""
+        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) / zoom."""
         cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0))
         if self.mode == MODE_PP:       # pixel perfect : k pixels d'ecran par pixel de la carte (entier), camera sur un pixel de la carte, heros a sa taille exacte (24 x 32)
             k = self._k_pp(); cx, cz = round(cx) / CH_PX, round(cz) / CH_PX
@@ -263,16 +271,17 @@ class Jeu(pyglet.window.Window):
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
     def _k_pp(self):
-        """Pixel perfect : nombre entier de pixels d'ecran par pixel de la carte (celui qui s'approche le plus de la hauteur d'origine, x zoom de la molette)."""
-        return max(1, int(round(self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom)))
+        """Pixel perfect : pixels d'ecran par pixel de la carte, parmi x1, x2, x4, x8 (le plus proche, a l'echelle logarithmique, de la hauteur voulue x zoom de la molette)."""
+        ideal = max(1e-3, self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom)
+        return min(PP_ECHELLES, key=lambda k: abs(math.log(k / ideal)))
 
     def _maj_champ(self, e):
         """(Re)construit la grille de tuiles quand le moteur en envoie une autre ; l'atlas est la texture Unity `field`."""
         ch = e.champ; mo = e.monde
         if mo is not None and self._vue_champ is not None:      # carte entiere lue dans le moteur : on dessine toute la zone visible (le moteur n'en envoie que 25 colonnes)
             cx, cz, dl, dh = self._vue_champ
-            x0 = int(math.floor(cx - dl)) - 1; x1 = int(math.ceil(cx + dl)) + 2; y0 = int(math.floor(cz - dh)) - 1; y1 = int(math.ceil(cz + dh)) + 2
-            x0 -= x0 % 4; y0 -= y0 % 4; x1 += -x1 % 4; y1 += -y1 % 4                              # bornes arrondies : on ne reconstruit pas le maillage a chaque pas
+            x0 = 4 * int(math.floor((cx - dl - 1) / 4)); x1 = x0 + 4 * int(math.ceil((2 * dl + 7) / 4))                  # bornes sur des multiples de 4 et largeur constante : le maillage garde la meme taille
+            y0 = 4 * int(math.floor((cz - dh - 1) / 4)); y1 = y0 + 4 * int(math.ceil((2 * dh + 7) / 4))                  # a la marche et ses sommets sont remplaces sur place (pas de reallocation : pas d'a-coup)
             x0, x1 = max(x0, int(cx) - 120), min(x1, int(cx) + 120); y0, y1 = max(y0, int(cz) - 80), min(y1, int(cz) + 80)
             cols = x1 - x0
             t = mo['ids'][(np.arange(y0, y1) % mo['h'])[:, None], (np.arange(x0, x1) % mo['l'])[None, :]].astype(np.int32).ravel()
@@ -290,17 +299,19 @@ class Jeu(pyglet.window.Window):
             gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)     # pixels nets
         cols = ch['cols']; lignes = len(t) // cols
         g = t[:lignes * cols].reshape(lignes, cols)
-        X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
         self.champ_ins = 0.0 if self.mode == MODE_PP else 0.3 / (CH_ATLAS * CH_PX)       # pixel perfect : echelle entiere et plus proche voisin, les centres des pixels d'ecran ne tombent jamais sur un bord de texel ; sinon recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
         self.champ_g = g; self.champ_pat = CH_MOTIF_NUM[np.searchsorted(CH_MOTIF_FIN, g, side='right')]; self.champ_acc_vu = tuple(self.motif_acc)
-        def coins(a, b): return np.stack([a, b], -1)
-        # sommets : NO, NE, SE, SO
-        P = np.stack([np.stack([X, np.zeros_like(X), Z], -1), np.stack([X + 1, np.zeros_like(X), Z], -1),
-                      np.stack([X + 1, np.zeros_like(X), Z + 1], -1), np.stack([X, np.zeros_like(X), Z + 1], -1)], 2).astype(np.float32)   # (l, c, 4, 3)
-        idx = [0, 1, 2, 0, 2, 3]
-        pos = P[:, :, idx, :].reshape(-1, 3); uv = self._uv_tuiles(g + self.motif_acc[self.champ_pat])
-        if self.champ_vl is not None: self.champ_vl.delete()
-        self.champ_vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', np.ones(len(pos) * 4, np.float32)))
+        if self.champ_base is None or self.champ_base[0] != (cols, lignes):        # sommets de la grille a l'origine (NO, NE, SE, SO, deux triangles par tuile), decales ensuite de (x0, y0)
+            X, Z = np.meshgrid(np.arange(cols), np.arange(lignes)); O = np.zeros_like(X)
+            P = np.stack([np.stack([X, O, Z], -1), np.stack([X + 1, O, Z], -1), np.stack([X + 1, O, Z + 1], -1), np.stack([X, O, Z + 1], -1)], 2).astype(np.float32)   # (l, c, 4, 3)
+            self.champ_base = ((cols, lignes), P[:, :, [0, 1, 2, 0, 2, 3], :].reshape(-1, 3))
+        pos = (self.champ_base[1] + np.array([ch['x0'], 0, ch['y0']], np.float32)).ravel(); uv = self._uv_tuiles(g + self.motif_acc[self.champ_pat])
+        n = len(pos) // 3
+        if self.champ_vl is not None and self.champ_vl.count == n:                  # meme taille : remplacement sur place
+            self.champ_vl.position[:] = pos; self.champ_vl.tex_coords[:] = uv
+        else:
+            if self.champ_vl is not None: self.champ_vl.delete()
+            self.champ_vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', pos), tex_coords=('f', uv.ravel()), colors=('f', np.ones(n * 4, np.float32)))
 
     def _uv_tuiles(self, g):
         """Coordonnees de texture (6 sommets par tuile, a plat) de la grille de numeros de tuile `g` ; les tuiles sont stockees tete en bas dans l'atlas."""
@@ -365,8 +376,9 @@ class Jeu(pyglet.window.Window):
     def on_mouse_scroll(self, x, y, sx, sy):
         """Carte du monde : molette = zoom (x1,1 par cran, de 0,4 a 4)."""
         if self.moteur.etat.partie == MO.PARTIE_CHAMP and sy:
-            if self.mode == MODE_PP:     # un cran = un pixel d'ecran de plus ou de moins par pixel de la carte
-                k0 = self.height / (CH_VUE_HAUT * CH_PX); self.champ_zoom = min(8, max(1, self._k_pp() + (1 if sy > 0 else -1))) / k0
+            if self.mode == MODE_PP:     # un cran = l'echelle suivante (x1, x2, x4, x8)
+                i = PP_ECHELLES.index(self._k_pp()) + (1 if sy > 0 else -1); k0 = self.height / (CH_VUE_HAUT * CH_PX)
+                self.champ_zoom = PP_ECHELLES[min(len(PP_ECHELLES) - 1, max(0, i))] / k0
             else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
 
     def on_close(self):
@@ -400,6 +412,9 @@ class Jeu(pyglet.window.Window):
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
+        if not e.cam_libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
+            prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
+            if prof > 1.0: th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)
         if self.bornes_x is not None:
             # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
             fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
@@ -975,6 +990,62 @@ class Jeu(pyglet.window.Window):
         if k[K.BACKSPACE] or k[K.X]: p |= MO.B
         return p
 
+    def _boucle(self, dt):
+        """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
+        t = time.perf_counter()
+        dt = 0.0 if self.t_boucle is None else t - self.t_boucle
+        self.t_boucle = t
+        if self.fixe_test:
+            self._pas(); self.alpha = 1.0; return
+        self.acc += min(dt, 3 * PAS_MOTEUR)
+        n = 0
+        while self.acc >= PAS_MOTEUR * 0.85 and n < 3:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
+            self._pas(); self.acc -= PAS_MOTEUR; n += 1
+        if n == 3: self.acc = 0.0
+        self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
+
+    def _pas(self):
+        self.prec = self._instantane()
+        self.pas_t.append(time.perf_counter())
+        self.tick(PAS_MOTEUR)
+
+    def _instantane(self):
+        """Etat du pas qui vient de finir : positions des personnages et de la camera, pour l'interpolation."""
+        e = self.moteur.etat
+        tup = lambda v: None if v is None else tuple(float(x) for x in v)
+        return dict(cle=(e.partie, e.carte), sp={k: tup(s['pos']) for k, s in e.sprites.items() if s['pos'] is not None},
+                    cam_pos=tup(e.cam_pos), cam_cible=tup(e.cam_cible), champ=tup(e.champ['cam']) if e.champ and e.champ['cam'] else None)
+
+    def _interpoler(self):
+        """Remplace, le temps d'un dessin, les positions des personnages et de la camera (carte du monde, villes) par celles de l'instant entre le pas precedent et le pas actuel ;
+        un saut (changement de carte, deplacement force) n'est pas interpole. Renvoie de quoi tout remettre en place."""
+        pr, a, e = self.prec, self.alpha, self.moteur.etat
+        sauve = []
+        if pr is None or a >= 1.0 or e.partie == MO.PARTIE_COMBAT or pr['cle'] != (e.partie, e.carte): return sauve
+        seuil = 24.0 if e.partie == MO.PARTIE_CHAMP else 1.5       # pixels de la carte / unites de la ville par pas ; au-dela, c'est un saut
+        def entre(q, c):
+            if q is None or c is None or len(q) != len(c): return None
+            d = max(abs(x - y) for x, y in zip(q, c))
+            return None if d == 0 or d > seuil else tuple(x + (y - x) * a for x, y in zip(q, c))
+        for k, sp in e.sprites.items():
+            v = entre(pr['sp'].get(k), sp['pos'])
+            if v is not None: sauve.append((sp, 'pos', sp['pos'], False)); sp['pos'] = v
+        for nom in ('cam_pos', 'cam_cible'):
+            v = entre(pr[nom], getattr(e, nom))
+            if v is not None: sauve.append((e, nom, getattr(e, nom), True)); setattr(e, nom, v)
+        if e.champ and e.champ['cam']:
+            v = entre(pr['champ'], e.champ['cam'])
+            if v is not None: sauve.append((e.champ, 'cam', e.champ['cam'], False)); e.champ['cam'] = v
+        return sauve
+
+    def on_draw(self):
+        sauve = self._interpoler()
+        try: self._dessiner()
+        finally:
+            for obj, nom, ancien, attr in sauve:
+                if attr: setattr(obj, nom, ancien)
+                else: obj[nom] = ancien
+
     def tick(self, dt):
         p = self.args.script.get(self.n, self.pad()) if self.args.script is not None else self.pad()
         if self.args.slot and self.args.auto_message and self.n < 112:
@@ -1035,15 +1106,15 @@ class Jeu(pyglet.window.Window):
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
             print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
 
-    def on_draw(self):
+    def _dessiner(self):
         t_debut = time.perf_counter()
         if self.t_prec is not None: self.ecarts.append(t_debut - self.t_prec)
         self.t_prec = t_debut
         e = self.moteur.etat
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
-        if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); return
+        if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); self._dessiner_aide(); return
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
-            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); return
+            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self._dessiner_aide(); return
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
@@ -1052,7 +1123,11 @@ class Jeu(pyglet.window.Window):
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
         self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
-        if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): return
+        if (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
+            # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite)
+            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+            gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu(); self._maj_message(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_aide(); return
+        if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.get_framebuffer_size())
@@ -1134,22 +1209,27 @@ class Jeu(pyglet.window.Window):
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
-        if self.aide:
-            stats = self.stats and bool(self.ecarts)
-            if stats:
-                if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | pire image %.0f ms | moteur %.1f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), max(self.ecarts) * 1000, self.dt_moteur * 1000, self.dt_dessin * 1000)
-                self.etiq_stats.y = self.height - 50
-            lignes = [self.etiquette, self.etiq_hd] + ([self.etiq_stats] if stats else [])
-            marge = self._marge_aide()
-            y = self.height - 10
-            for l in lignes:                                 # lignes d'aide empilees, a la ligne dans la marge laissee libre par la colonne d'interface
-                if l.width != marge: l.width = marge
-                l.y = y; y -= l.content_height + 3
-            bas = y - 3                                       # cadre noir translucide derriere le texte (lisible sur le decor)
-            self.cadre_aide.x, self.cadre_aide.y = 4, bas
-            self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l in lignes) + 16, self.height - 4 - bas
-            self.cadre_aide.draw()
-            for l in lignes: l.draw()
+        self._dessiner_aide()
+
+    def _dessiner_aide(self):
+        """Lignes d'aide en haut a gauche (F1 les masque). Dessinees aussi pendant les ecrans noirs et l'effet de debut de combat : sans cela elles clignotent a chaque changement de scene."""
+        if not self.aide: return
+        gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        stats = self.stats and bool(self.ecarts)
+        if stats:
+            if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | moteur %.1f pas/s (%.1f ms) | pire image %.0f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), (len(self.pas_t) - 1) / max(1e-6, self.pas_t[-1] - self.pas_t[0]) if len(self.pas_t) > 2 else 0.0, self.dt_moteur * 1000, max(self.ecarts) * 1000, self.dt_dessin * 1000)
+            self.etiq_stats.y = self.height - 50
+        lignes = [self.etiquette, self.etiq_hd] + ([self.etiq_stats] if stats else [])
+        marge = self._marge_aide()
+        y = self.height - 10
+        for l in lignes:                                 # lignes d'aide empilees, a la ligne dans la marge laissee libre par la colonne d'interface
+            if l.width != marge: l.width = marge
+            l.y = y; y -= l.content_height + 3
+        bas = y - 3                                       # cadre noir translucide derriere le texte (lisible sur le decor)
+        self.cadre_aide.x, self.cadre_aide.y = 4, bas
+        self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l in lignes) + 16, self.height - 4 - bas
+        self.cadre_aide.draw()
+        for l in lignes: l.draw()
 
 
 def trouver_defauts():
@@ -1172,7 +1252,7 @@ def main():
     ap.add_argument('--largeur', type=int, default=1280); ap.add_argument('--hauteur', type=int, default=720)
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--ui-simple', action='store_true', help='menus simples (zones de texte) au lieu des fenetres d\'origine')
-    ap.add_argument('--carte-zoom', type=float, default=1.0, help='carte du monde : zoom de depart (1 = la hauteur visible de l\'ecran portrait d\'origine, 28 tuiles ; molette de la souris pour changer en jeu)')
+    ap.add_argument('--carte-zoom', type=float, default=1.0, help='carte du monde : zoom de depart (1 = le heros a la meme taille que dans les villes, ~ 20 tuiles de haut ; molette de la souris pour changer en jeu ; en pixel perfect : x1, x2, x4, x8)')
     ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = 1 clic droit, 2 survol sans clic)')
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
@@ -1219,7 +1299,7 @@ def main():
             sc[n] = cur
         a.script_combat = sc
     Jeu(a)
-    pyglet.app.run()
+    pyglet.app.run(interval=0)       # la boucle fixe (Jeu._boucle) tourne avant chaque dessin ; le dessin suit la synchronisation verticale
 
 
 if __name__ == '__main__':
