@@ -74,21 +74,29 @@ class Donnees:
             self._mesh[ref.path_id] = (v, uv, col, tris)
         return self._mesh[ref.path_id]
 
-    def _texture(self, matref, tex_out, nom_out=None):
-        """-> (cle, scale, offset) ; remplit tex_out[cle] = tableau RGBA (haut en premier) et nom_out[cle] = nom de la texture"""
+    def _texture(self, matref, tex_out, nom_out=None, fmt_out=None):
+        """-> (cle, scale, offset, couleur _Color du materiau, genre) ; remplit tex_out[cle] = tableau RGBA (haut en premier) et nom_out[cle] = nom de la texture.
+        genre = shader choisi par FldObject.set_shader (CD5414) : 'trans' (Custom/fld_trans : fusion SrcAlpha / OneMinusSrcAlpha, ZWrite off) si le nom de la texture ne contient pas '.tim'
+        ou si _Color.a != 1 ; sinon 'atest' (fld_atest) si la texture est en RGBA32 (format 4), 'normal' (fld_normal) autrement."""
         try:
             m = matref.deref_parse_as_object()
+            col = (1.0, 1.0, 1.0, 1.0)
+            for k, c in m.m_SavedProperties.m_Colors:
+                if k == '_Color': col = (c.r, c.g, c.b, c.a)
             for k, v in m.m_SavedProperties.m_TexEnvs:
                 if v.m_Texture.path_id:
                     key = v.m_Texture.path_id
-                    if key not in tex_out:
+                    if key not in tex_out or (fmt_out is not None and key not in fmt_out):
                         t = v.m_Texture.deref_parse_as_object()
                         tex_out[key] = np.array(t.image.convert('RGBA'))
                         if nom_out is not None: nom_out[key] = t.m_Name
-                    return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y)
+                        if fmt_out is not None: fmt_out[key] = int(t.m_TextureFormat)
+                    nom = (nom_out or {}).get(key, '.tim'); fmt = (fmt_out or {}).get(key, 3)
+                    genre = 'trans' if ('.tim' not in nom or col[3] != 1.0) else ('atest' if fmt == 4 else 'normal')
+                    return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y), col, genre
         except Exception as ex:
             self.log('  texture illisible: %s' % ex)
-        return None, (1, 1), (0, 0)
+        return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
 
     def _components(self, g):
         out = {}
@@ -121,7 +129,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte5_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte6_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -130,12 +138,12 @@ class Donnees:
             return self._extraire_carte(nom, f, silencieux)
 
     @staticmethod
-    def _images(ip, iuv, icol, idx, sc, off):
+    def _images(ip, iuv, icol, idx, sc, off, mc=(1.0, 1.0, 1.0, 1.0)):
         """Images d'un sous-maillage : {'pos': (images, n, 3), 'uv': (images, n, 2) ou None, 'col': (images, n, 4) ou None} ; UV et couleurs seulement si elles changent d'une image a l'autre (eau qui coule, lampe qui vacille)."""
         im = {'pos': np.stack([x[idx] for x in ip]), 'uv': None, 'col': None}
         u = np.stack([x[idx] * np.array(sc, np.float32) + np.array(off, np.float32) for x in iuv]).astype(np.float32)
         if np.abs(u - u[0]).max() > 1e-6: im['uv'] = u
-        c = np.stack([x[idx] for x in icol]).astype(np.float32)
+        c = np.stack([x[idx] for x in icol]).astype(np.float32) * np.array(mc, np.float32)
         if np.abs(c - c[0]).max() > 1e-6: im['col'] = c
         return im
 
@@ -169,7 +177,7 @@ class Donnees:
         for o in objs:                                               # coffres : l'origine du modele (charniere) est au bord superieur du coffre, et la carte la place a 0,5 sous le sol ; le jeu la releve de 1 (le coffre posait enfonce d'une unite sous le sol)
             cg = kids.get(o['mdl'])
             if cg is not None and 'tbox' in cg.m_Name: o['pos'] = (o['pos'][0], o['pos'][1] + 1.0, o['pos'][2])
-        tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}
+        tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}; tfmt = {}
         pams = fld.pam(raw); plp_obj = {}; pamdef = {}
         for q in fld.plp(raw):                                       # FldObject.set_palette_data : textures de l'objet dont le nom contient celui de la palette
             if 0 <= q['pam'] < len(pams) and 0 <= q['obj'] < len(objs): plp_obj.setdefault(q['obj'], []).append(q)
@@ -192,15 +200,21 @@ class Donnees:
             out = []; imgs = []
             for i, tr in enumerate(tris):
                 mat = mr.m_Materials[min(i, len(mr.m_Materials) - 1)]
-                key, sc, off = self._texture(mat, tex, tnom)
+                key, sc, off, mc, genre = self._texture(mat, tex, tnom, tfmt)
                 for q in plp_obj.get(o['i'], ()):
                     if q['nom'] in tnom.get(key, '').rsplit('.', 1)[0]:
                         key = self._groupe_pam(q, pams[q['pam']], tex, pamdef) or key; break
+                mcol = np.array(mc, np.float32)                       # FldObject : fld_*.vert : couleur du sommet x _Color du materiau
+                if genre == 'trans' and key is not None:               # materiau transparent : groupe a part, trace apres le decor opaque dans la file 3000 + priorite (FldObject.set_priority)
+                    gk = ('tr', o['prio'], key)
+                    if gk not in tex and key in tex: tex[gk] = tex[key]
+                    if key in pamdef and pamdef[key]: pamdef[gk] = pamdef[key]
+                    key = gk
                 idx = tr.ravel()
                 a = acc.setdefault(key, ([], [], []))
                 out.append((key, lens.get(key, 0), len(idx))); lens[key] = lens.get(key, 0) + len(idx)
-                a[0].append(vw[idx]); a[1].append(uv[idx] * np.array(sc, np.float32) + np.array(off, np.float32)); a[2].append(col[idx])
-                imgs.append(self._images(ip, iuv, icol, idx, sc, off) if ip else None)
+                a[0].append(vw[idx]); a[1].append(uv[idx] * np.array(sc, np.float32) + np.array(off, np.float32)); a[2].append(col[idx] * mcol)
+                imgs.append(self._images(ip, iuv, icol, idx, sc, off, mcol) if ip else None)
             return out, imgs
 
         seqent, seqs = fld.sequences(raw); imgobj = {}
@@ -264,16 +278,16 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte5_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte6_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', [])]
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte4_ : sans les animations de palette et de sequence, coffres enfonces), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte5_ : sans les animations de palette et de sequence, coffres enfonces), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-4]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-5]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 
