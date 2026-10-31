@@ -14,12 +14,13 @@ def _quat_mat(x, y, z, w):
 
 
 def euler_mat(rx, ry, rz):
-    """Quaternion.Euler d'Unity (degres) : Z, puis X, puis Y."""
-    a, b, c = math.radians(rx), math.radians(ry), math.radians(rz)
+    """Rotation d'un objet de carte (degres) comme FldObject.rotateXZY (0xCD47F0) : q = AngleAxis(-rx, droite) * AngleAxis(ry, haut) * AngleAxis(-rz, avant) -- angles X et Z inverses, Z appliquee d'abord, puis Y, puis X
+    (et non Quaternion.Euler d'Unity : Z, X, Y). Utilisee par init_fld (rotation de depart), SetCommonAnimation, pmv_func et c_pmv_func (mouvements) : le couvercle d'un coffre, cle X = -60, se releve."""
+    a, b, c = math.radians(-rx), math.radians(ry), math.radians(-rz)
     Rx = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
     Ry = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
     Rz = np.array([[math.cos(c), -math.sin(c), 0], [math.sin(c), math.cos(c), 0], [0, 0, 1]])
-    return Ry @ Rx @ Rz
+    return Rx @ Ry @ Rz
 
 
 class Donnees:
@@ -129,7 +130,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte6_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte7_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -258,6 +259,32 @@ class Donnees:
             if o is None: return None
             a = np.array(o.read().image.convert('RGBA')); np.save(f, a); return a
 
+    # ---- grand plan du monde (fenetre « Carte » de la carte du monde : MenuPortItemTable.Make_WorldLargeMap / LoadLargeWorldMap)
+    def plan_monde(self):
+        """{'base': image 1024 x 1024 RVB (haut en premier), 'pieces': [(bit, x, y, image h x l x 3)]} : le fond `dsdq4lmap0_1024` et les pieces `P<bit>_<x>_<y>_<largeur>` (MAP_DIFF : posees sur le fond quand
+        le bit du drapeau envoye par le moteur est leve ; x et y comptes depuis le coin haut gauche). Ce sont des TextAsset a donnees brutes (3 octets par pixel). Mis en cache dans plan_monde.npz."""
+        f = os.path.join(self.cache, 'plan_monde.npz')
+        def lire(z):
+            pieces = [(int(k[1:].split('_')[0]), int(k.split('_')[1]), int(k.split('_')[2]), z[k]) for k in sorted(z.files) if k != 'base']
+            return {'base': z['base'], 'pieces': pieces}
+        if os.path.exists(f):
+            with np.load(f) as z: return lire(z)
+        with self._verrou:
+            if os.path.exists(f):
+                with np.load(f) as z: return lire(z)
+            self.env(); out = {}
+            for o in self._objs.values():
+                if o.type.name != 'TextAsset': continue
+                t = o.read(); nm = t.m_Name
+                if nm == 'dsdq4lmap0_1024' or re.fullmatch(r'P\d_\d+_\d+_\d+', nm):
+                    s = t.m_Script; out[nm] = bytes(s) if isinstance(s, (bytes, bytearray)) else s.encode('utf-8', 'surrogateescape')
+            if 'dsdq4lmap0_1024' not in out: return None
+            arrs = {'base': np.frombuffer(out.pop('dsdq4lmap0_1024'), np.uint8).reshape(1024, 1024, 3)}
+            for nm, b in out.items():
+                w = int(nm.split('_')[3]); arrs[nm] = np.frombuffer(b, np.uint8).reshape(-1, w, 3)
+            tmp = f + '.tmp.npz'; np.savez(tmp, **arrs); os.replace(tmp, f)
+            with np.load(f) as z: return lire(z)
+
     # ---- feuille de sprites d'un personnage
     def feuille(self, ident):
         f = os.path.join(self.cache, 'sprite_h%d.npy' % ident)
@@ -278,16 +305,17 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte6_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte7_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', [])]
+        el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte5_ : sans les animations de palette et de sequence, coffres enfonces), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte6_ : sans les animations de palette et de sequence, coffres enfonces ou au couvercle a l'envers), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-5]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-6]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 
@@ -320,6 +348,7 @@ class Donnees:
                 try:
                     if genre == 'carte': self.carte(n, True)
                     elif genre == 'feuille': self.feuille(int(n))
+                    elif genre == 'plan_monde': self.plan_monde()
                     else: self.texture(n)
                 except Exception as ex:
                     echecs.add(n); self.log('Preparation : %s %s ignore (%s)' % (genre, n, str(ex)[:60]))

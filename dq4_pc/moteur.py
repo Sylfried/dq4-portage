@@ -96,6 +96,14 @@ class Etat:
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
+            elif t == 15 and a:                     # cmd_chara_shadow (D13150) : personnage = v & 0xff ; bits 8-9 : ombre visible (bit 8) ; bits 10-11 : ombre separee (bit 10) ; bit 12 : position de l'ombre (3 flottants,
+                v = a[0]; s = self.sprites.get(v & 0xff)        # SetShadowPosition) ; bit 13 : opacite (SetShadowAlpha) ; bit 14 : position de l'ombre sur la carte du monde (SetFieldShadowPosition)
+                if s is not None:
+                    fl = list(f)
+                    if v & 0x300: s['ombre'] = bool(v & 0x100)
+                    if v & 0xc00: s['ombre_sep'] = bool(v & 0x400)
+                    if v & 0x1000 and len(fl) >= 3: s['ombre_pos'] = tuple(fl[:3]); fl = fl[3:]
+                    if v & 0x2000 and fl: s['ombre_a'] = float(fl[0])
             elif t == 19 and len(a) >= 2 and 0 <= a[0] < 16:        # cmd_rise_icon_load : emplacement, numero d'icone (< 0 = liberation) ; objet Riseup, materiau Custom/Riseup sur la feuille MenuTexture
                 if a[1] >= 0: self.icones[a[0]] = {'id': a[1], 'pos': None, 'alpha': 1.0}
                 else: self.icones.pop(a[0], None)

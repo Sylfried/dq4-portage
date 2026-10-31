@@ -25,7 +25,7 @@ DEFAUT = {
     'plein_ecran': False,
     'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
     'infos': False,               # F1 : lignes d'information
-    'son': True, 'volume_musique': 0.7, 'volume_bruitages': 0.8,
+    'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
     'resolution': None,           # taille de la fenetre [largeur, hauteur] (None : 1280 x 720) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu)
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche
