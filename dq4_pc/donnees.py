@@ -74,8 +74,8 @@ class Donnees:
             self._mesh[ref.path_id] = (v, uv, col, tris)
         return self._mesh[ref.path_id]
 
-    def _texture(self, matref, tex_out):
-        """-> (cle, scale, offset) ; remplit tex_out[cle] = tableau RGBA (haut en premier)"""
+    def _texture(self, matref, tex_out, nom_out=None):
+        """-> (cle, scale, offset) ; remplit tex_out[cle] = tableau RGBA (haut en premier) et nom_out[cle] = nom de la texture"""
         try:
             m = matref.deref_parse_as_object()
             for k, v in m.m_SavedProperties.m_TexEnvs:
@@ -84,6 +84,7 @@ class Donnees:
                     if key not in tex_out:
                         t = v.m_Texture.deref_parse_as_object()
                         tex_out[key] = np.array(t.image.convert('RGBA'))
+                        if nom_out is not None: nom_out[key] = t.m_Name
                     return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y)
         except Exception as ex:
             self.log('  texture illisible: %s' % ex)
@@ -118,14 +119,40 @@ class Donnees:
     def carte(self, nom, silencieux=False):
         """-> dict : 'groupes' {cle_texture: (positions Nx3, uv Nx2, couleurs Nx4)}, 'textures' {cle: RGBA}, 'objets' (FMAP), 'plages' {objet: [(cle, debut, nombre)]},
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
-        et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD)"""
-        f = os.path.join(self.cache, 'carte3_%s.pkl' % nom)
+        et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
+        'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
+        f = os.path.join(self.cache, 'carte4_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
             if os.path.exists(f):                                   # produite entre-temps par la preparation en arriere-plan
                 with open(f, 'rb') as fh: return pickle.load(fh)
             return self._extraire_carte(nom, f, silencieux)
+
+    @staticmethod
+    def _images(ip, iuv, icol, idx, sc, off):
+        """Images d'un sous-maillage : {'pos': (images, n, 3), 'uv': (images, n, 2) ou None, 'col': (images, n, 4) ou None} ; UV et couleurs seulement si elles changent d'une image a l'autre (eau qui coule, lampe qui vacille)."""
+        im = {'pos': np.stack([x[idx] for x in ip]), 'uv': None, 'col': None}
+        u = np.stack([x[idx] * np.array(sc, np.float32) + np.array(off, np.float32) for x in iuv]).astype(np.float32)
+        if np.abs(u - u[0]).max() > 1e-6: im['uv'] = u
+        c = np.stack([x[idx] for x in icol]).astype(np.float32)
+        if np.abs(c - c[0]).max() > 1e-6: im['col'] = c
+        return im
+
+    def _groupe_pam(self, q, pam, tex, pamdef):
+        """Cle du groupe de texture d'une palette animee (une par nom, animation et evenement) ; ses images sont les textures 'pam/<nom>.NNN' (FldObject.init_fld). None si elles manquent."""
+        key = ('pam', q['nom'], q['pam'], q['event'])
+        if key not in pamdef:
+            tx = self._textures(); imgs = []
+            for k in range(len(pam['durees'])):
+                o = tx.get('%s.%03d' % (q['nom'], k))
+                if o is None: break
+                imgs.append(np.array(o.read().image.convert('RGBA')))
+            if len(imgs) < len(pam['durees']) or not imgs:
+                self.log('  palette animee %s : %d textures sur %d, ignoree' % (q['nom'], len(imgs), len(pam['durees']))); pamdef[key] = None
+            else:
+                pamdef[key] = {'nom': q['nom'], 'pam': q['pam'], 'evenement': q['event'], 'images': imgs}; tex[key] = imgs[0]
+        return key if pamdef[key] else None
 
     def _extraire_carte(self, nom, f, silencieux=False):
         if not silencieux: self.log('Extraction de la carte %s ...' % nom)
@@ -139,7 +166,10 @@ class Donnees:
             cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
-        tex = {}; acc = {}; lens = {}; plages = {}; noms = {}
+        tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}
+        pams = fld.pam(raw); plp_obj = {}; pamdef = {}
+        for q in fld.plp(raw):                                       # FldObject.set_palette_data : textures de l'objet dont le nom contient celui de la palette
+            if 0 <= q['pam'] < len(pams) and 0 <= q['obj'] < len(objs): plp_obj.setdefault(q['obj'], []).append(q)
 
         def cuire(o, cg):
             """Geometrie d'un modele a la position d'origine de l'objet -> ([(cle, debut, nombre)], images ou None) ; ajoutee aux groupes."""
@@ -152,27 +182,32 @@ class Donnees:
             mr = comps['MeshRenderer'].read()
             v, uv, col, tris = self._mesh_data(comps['MeshFilter'].read().m_Mesh)
             vw = (np.c_[v, np.ones(len(v))] @ W.T)[:, :3].astype(np.float32)
-            vws = [vw]
-            for mref in self._enfants_images(cg):                      # images suivantes (meme nombre de sommets que le modele)
-                vi = self._mesh_data(mref)[0]
-                if len(vi) == len(v): vws.append((np.c_[vi, np.ones(len(vi))] @ W.T)[:, :3].astype(np.float32))
+            ip, iuv, icol = [], [], []
+            for mref in self._enfants_images(cg):                      # images de la sequence (FldObject.seq_build_mesh : Transform.GetChild(valeur de la cle)), meme nombre de sommets que le modele
+                vi, uvi, ci, _ = self._mesh_data(mref)
+                if len(vi) == len(v): ip.append((np.c_[vi, np.ones(len(vi))] @ W.T)[:, :3].astype(np.float32)); iuv.append(uvi); icol.append(ci)
             out = []; imgs = []
             for i, tr in enumerate(tris):
                 mat = mr.m_Materials[min(i, len(mr.m_Materials) - 1)]
-                key, sc, off = self._texture(mat, tex)
+                key, sc, off = self._texture(mat, tex, tnom)
+                for q in plp_obj.get(o['i'], ()):
+                    if q['nom'] in tnom.get(key, '').rsplit('.', 1)[0]:
+                        key = self._groupe_pam(q, pams[q['pam']], tex, pamdef) or key; break
                 idx = tr.ravel()
                 a = acc.setdefault(key, ([], [], []))
                 out.append((key, lens.get(key, 0), len(idx))); lens[key] = lens.get(key, 0) + len(idx)
                 a[0].append(vw[idx]); a[1].append(uv[idx] * np.array(sc, np.float32) + np.array(off, np.float32)); a[2].append(col[idx])
-                imgs.append(np.stack([x[idx] for x in vws]) if len(vws) > 1 else None)
+                imgs.append(self._images(ip, iuv, icol, idx, sc, off) if ip else None)
             return out, imgs
 
+        seqent, seqs = fld.sequences(raw); imgobj = {}
         for iobj, o in enumerate(objs):
             cg = kids.get(o['mdl'])
             if cg is None: continue
             noms[iobj] = cg.m_Name
-            pl, _ = cuire(o, cg)
+            pl, imgs = cuire(o, cg)
             if pl: plages[iobj] = pl
+            if pl and imgs and any(imgs) and 0 <= o['seqobj'] < len(seqent) and 0 <= seqent[o['seqobj']][1] < len(seqs): imgobj[iobj] = imgs      # sequence jouee en continu (eau, lampes...)
         tabs = fld.canim(raw); var = {}
         for iobj, o in enumerate(objs):                              # variantes des animations communes (porte ouverte, jarre ou tonneau casse, coffre ouvert...)
             if not 0 <= o['canim'] < len(tabs): continue
@@ -181,9 +216,8 @@ class Donnees:
                 pl, imgs = cuire(o, kids[m])
                 if pl: var[(iobj, m)] = {'plages': pl, 'images': imgs}
         groupes = {k: tuple(np.concatenate(x).astype(np.float32) for x in a) for k, a in acc.items()}
-        seqent, seqs = fld.sequences(raw)
         res = {'groupes': groupes, 'textures': {k: tex[k] for k in groupes if k in tex}, 'objets': objs, 'plages': plages, 'noms': noms,
-               'var': var, 'tabs': tabs, 'mots': fld.pmv(raw), 'seqent': seqent, 'seqs': seqs}
+               'var': var, 'tabs': tabs, 'mots': fld.pmv(raw), 'seqent': seqent, 'seqs': seqs, 'imgobj': imgobj, 'pam': pams, 'pamdef': {k: v for k, v in pamdef.items() if k in groupes}}
         with open(f + '.tmp', 'wb') as fh: pickle.dump(res, fh, protocol=4)
         os.replace(f + '.tmp', f)                                   # ecriture atomique : jamais de fichier a moitie ecrit
         return res
@@ -227,10 +261,18 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte3_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte4_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres']]
         return el
+
+    def _purger_anciens(self):
+        """Supprime les cartes d'une ancienne version du cache (carte2_, carte3_ : sans les animations de palette et de sequence), devenues inutiles."""
+        try:
+            for f in os.listdir(self.cache):
+                if re.fullmatch(r'carte[0-3]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+        except OSError as ex:
+            self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 
     def preparer(self, arret):
         """Extrait en arriere-plan, au rythme tranquille, toutes les cartes, feuilles de sprites et textures de monstres pas encore en cache : le jeu n'a plus jamais a lire
@@ -243,7 +285,7 @@ class Donnees:
                 except Exception: liste = None
             if liste is not None:
                 echecs = set(liste.get('echecs', []))
-                if all(os.path.exists(os.path.join(self.cache, f)) or n in echecs for _, n, f in self._elements(liste)): return       # deja tout pret
+                if all(os.path.exists(os.path.join(self.cache, f)) or n in echecs for _, n, f in self._elements(liste)): self._purger_anciens(); return       # deja tout pret
             else:
                 with self._verrou:
                     go = self._gos(); tx = self._textures()
@@ -269,6 +311,7 @@ class Donnees:
             with open(fp + '.tmp', 'w', encoding='utf-8') as fh: json.dump(liste, fh)
             os.replace(fp + '.tmp', fp)
             if n_faits: self.log('Preparation du cache terminee : %d elements en %.0f s.' % (n_faits, time.time() - t_debut))
+            self._purger_anciens()
             self.liberer()
         except Exception as ex:
             self.log('Preparation du cache interrompue : %s' % ex)

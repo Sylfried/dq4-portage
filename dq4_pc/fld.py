@@ -20,7 +20,7 @@ def map_objs(raw):
         rot = struct.unpack_from('<3f', raw, o + 16); mdl, com = struct.unpack_from('<hH', raw, o + 28)
         scl = struct.unpack_from('<3f', raw, o + 32); uid = struct.unpack_from('<i', raw, o + 44)[0]
         flag, prio = struct.unpack_from('<HH', raw, o + 48); rest = raw[o + 52:o + 80]
-        seqobj, pmv = struct.unpack_from('<hh', raw, o + 56); canim = struct.unpack_from('<h', raw, o + 74)[0]       # FLD_MAP_OBJ : seq_obj_id, pmv_id ; canim_id (numero de la table d'animations communes de FCAN, -1 = aucune)
+        seqobj, pmv = struct.unpack_from('<hh', raw, o + 64); canim = struct.unpack_from('<h', raw, o + 74)[0]       # FLD_MAP_OBJ : seq_obj_id (entree de FSEQ : sequence de maillages jouee en continu), pmv_id (mouvement FPMV joue en continu), -1 = aucun ; canim_id (numero de la table d'animations communes de FCAN, -1 = aucune)
         objs.append(dict(i=i, pos=pos, id=oid, rot=rot, mdl=mdl, com=com, scl=scl, uid=uid, flag=flag, prio=prio, seqobj=seqobj, pmv=pmv, canim=canim, rest=rest.hex()))
     return nobj, objs
 def canim(raw):
@@ -51,16 +51,43 @@ def pmv(raw):
     return out
 
 def sequences(raw):
-    """FSQD : sequences de maillages (cle = image 1/60 s, valeur = numero de maillage d'image) ; FSEQ : objets de sequence (obj_id, seq_id, grp_id, delai).
-    -> (liste d'entrees FSEQ [(obj, seq)], liste de sequences {'fin', 'repeat', 'keys': [(image, valeur)]})"""
+    """FSQD : sequences de maillages (cle = image 1/60 s, valeur = numero de maillage d'image) ; FSEQ : objets de sequence (FldObject.FLD_SEQ_OBJ, 20 octets).
+    -> (liste d'entrees FSEQ [(obj, seq, groupe, delai de depart, delai entre deux tours, nombre de tours, _, nombre de tours d'origine)], liste de sequences {'fin', 'repeat', 'keys': [(image, valeur)]}).
+    Nombre de tours : -1 = sans fin, N = N tours puis arret sur la derniere cle, 0 = jamais lancee d'elle-meme (seulement par une animation commune) ; delais en 1/60 s."""
     cs = {t: (p, s) for t, p, s in chunks(raw)}; ent = []; seqs = []
     if 'FSEQ' in cs:
         p, s = cs['FSEQ']; n = struct.unpack_from('<i', raw, p + 8)[0]
-        ent = [struct.unpack_from('<2h', raw, p + 12 + 20 * i) for i in range(n)]
+        ent = [struct.unpack_from('<8h', raw, p + 12 + 20 * i) for i in range(n)]
     for t, p, s in chunks(raw):
         if t != 'FSQD': continue
         m = _entete_motion(raw, p + 16); m['keys'] = [struct.unpack_from('<2i', raw, p + 48 + 8 * k) for k in range(m['nkey'])]; seqs.append(m)
     return ent, seqs
+
+def plp(raw):
+    """FPLP : palettes animees des objets (FldObject.FLD_PLP_DATA). -> liste de {'nom', 'pam', 'event', 'obj'} : l'objet `obj` de la carte (FMAP) voit ses textures dont le nom contient `nom`
+    remplacees, image apres image, par celles de l'animation de palette `pam` (FPAM) ; `event` >= 1 : seulement pendant l'animation d'evenement de ce numero (sinon image 0).
+    Enregistrement de 24 octets : nom (16, termine par 0), numero d'animation (1), numero d'evenement (1), objet (2), 4 octets sans usage."""
+    cs = {t: (p, s) for t, p, s in chunks(raw)}
+    if 'FPLP' not in cs: return []
+    p, s = cs['FPLP']; n = struct.unpack_from('<i', raw, p + 8)[0]; out = []
+    for k in range(n):
+        o = p + 12 + 24 * k
+        nom = raw[o:o + 16].split(b'\0')[0].decode('ascii', 'replace'); pam, ev, obj = struct.unpack_from('<BBh', raw, o + 16)
+        out.append(dict(nom=nom, pam=pam, event=ev, obj=obj))
+    return out
+
+def pam(raw):
+    """FPAM : animations de palette (FldObject.FLD_PAM_DATA). -> liste de {'frame', 'cle', 'durees'} : image et cle de depart, duree de chaque cle (1/60 s ; les textures de chaque cle sont 'pam/<nom>.NNN').
+    Entete (4 x int16 : image, cle, nombre de cles, drapeau) puis, par cle : duree (int16) + palette (16 couleurs de 2 octets, 256 si drapeau & 1)."""
+    cs = {t: (p, s) for t, p, s in chunks(raw)}
+    if 'FPAM' not in cs: return []
+    p, s = cs['FPAM']; n = struct.unpack_from('<i', raw, p + 8)[0]; out = []
+    for o in struct.unpack_from('<%di' % n, raw, p + 12):
+        fr, cle, nc, flag = struct.unpack_from('<4h', raw, o); q = o + 8; durees = []
+        for _ in range(nc):
+            durees.append(struct.unpack_from('<h', raw, q)[0]); q += 2 + (0x200 if flag & 1 else 0x20)
+        out.append(dict(frame=fr, cle=cle, durees=durees))
+    return out
 
 if __name__ == '__main__':
     raw = open(sys.argv[1], 'rb').read()

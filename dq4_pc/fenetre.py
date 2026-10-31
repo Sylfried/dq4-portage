@@ -148,7 +148,7 @@ class Jeu(pyglet.window.Window):
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
         self.son.precharger(SE_COURANTS)
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
-        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}
+        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
         self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255), multiline=True, width=600)
@@ -472,7 +472,8 @@ class Jeu(pyglet.window.Window):
 
     def sauver_etat(self, n, miniature_png=b''):
         """Enregistre l'etat du jeu dans l'emplacement n (objets animes de la carte compris)."""
-        viewer = {'objets_etat': self.objets.etat if self.objets is not None else None, 'carte_nom': self.carte_nom, 'motif_n': self.motif_n, 'motif_acc': self.motif_acc.copy()}
+        viewer = {'objets_etat': self.objets.etat if self.objets is not None else None, 'objets_auto': self.objets.auto if self.objets is not None else None,
+                  'palettes': self.palettes.etat() if self.palettes is not None else None, 'carte_nom': self.carte_nom, 'motif_n': self.motif_n, 'motif_acc': self.motif_acc.copy()}
         d = ET.instantane(self.moteur, viewer)
         ET.ecrire(self.chemin_etat(n), d, {'lieu': self._lieu(), 'carte': self.moteur.etat.carte, 'partie': self.moteur.etat.partie, 'images': self.moteur.images}, miniature_png)
 
@@ -490,10 +491,11 @@ class Jeu(pyglet.window.Window):
         elif e.carte and e.partie == MO.PARTIE_COMBAT: self._charger_carte(e.carte)
         if viewer and 'motif_acc' in viewer: self.motif_n = viewer['motif_n']; self.motif_acc[:] = viewer['motif_acc']; self.champ_acc_vu = None          # eau animee de la carte du monde
         if viewer and viewer.get('objets_etat') and self.objets is not None:
-            self.objets.reinit(); self.objets.etat = viewer['objets_etat']
-            for i in list(self.objets.etat): self.objets._poser(i)
-            for tex, vl, key in self.carte_vl: vl.position[:] = self.objets.cur[key].ravel()
-            self.objets.sale = set()
+            self.objets.reinit(); self.objets.restaurer(viewer['objets_etat'], viewer.get('objets_auto'))
+            for tex, vl, key in self.carte_vl:
+                vl.position[:] = self.objets.cur[key].ravel(); vl.tex_coords[:] = self.objets.uv(key).ravel(); vl.colors[:] = self.objets.col(key).ravel()
+            self.objets.sale = set(); self.objets.sale_uv = set(); self.objets.sale_col = set()
+        if viewer and viewer.get('palettes') and self.palettes is not None: self.palettes.regler(viewer['palettes'])
         for sp in list(e.sprites.values()): self._feuille(sp['id'] - 4096 if (e.partie == MO.PARTIE_CHAMP and sp['id'] >= 4096) else sp['id'], self.mode)
         self.son.arreter_bgm()
         if e.musique is not None: self.son.jouer_bgm(e.musique)
@@ -643,20 +645,29 @@ class Jeu(pyglet.window.Window):
 
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
-        self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None
+        self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
         try:
             c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
         self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
-        self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart)
+        self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
+        self.palettes = OC.PalettesCarte(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
             if (src, key) not in self.tex_gl:
                 self.tex_gl[(src, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
-            vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', self.objets.cur[key].ravel()), tex_coords=('f', uv.ravel()), colors=('f', col.ravel()))
+            vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', self.objets.cur[key].ravel()), tex_coords=('f', self.objets.uv(key).ravel()), colors=('f', self.objets.col(key).ravel()))
             self.carte_vl.append((self.tex_gl[(src, key)], vl, key)); self.carte_pos[key] = pos.copy()
+        for key, dd in self.palettes.defs.items():                         # images de chaque animation de palette
+            if key not in c['groupes']: continue
+            self.pam_gl[key] = []
+            for k, a in enumerate(dd['images']):
+                if (src, key, k) not in self.tex_gl:
+                    self.tex_gl[(src, key, k)] = t = self._tex(a, True, 99); self._filtrer(t, self.lissage)
+                self.pam_gl[key].append(self.tex_gl[(src, key, k)])
+        self.objets.sale = set(); self.objets.sale_uv = set(); self.objets.sale_col = set()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
         allp = np.concatenate([g[0] for g in c['groupes'].values()]) if c['groupes'] else np.zeros((1, 3), np.float32)
         self.bornes_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
@@ -701,7 +712,8 @@ class Jeu(pyglet.window.Window):
         lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
         for tex, vl, key in self.carte_vl:
-            t = r.get(key, tex) if r else tex
+            pg = self.pam_gl.get(key)
+            t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
             self.prog['net'] = 0.0
             self.prog['tsize'] = (float(t.width), float(t.height))
             self._tracer(t, vl)
@@ -1134,9 +1146,16 @@ class Jeu(pyglet.window.Window):
             elif c[0] == 'pos': self.objets.position(c[1], c[2])
             elif c[0] == 'rot': self.objets.rotation(c[1], c[2])
         if self.objets is None: return
+        if os.environ.get('DQ_ANIM_TEST') and self.carte_nom == os.environ.get('DQ_CARTE_TEST', ';').split(';')[0]:   # (test) DQ_ANIM_TEST="objet:numero:image" : lance une animation commune a cette image de boucle
+            o_t, no_t, n_t = (int(v) for v in os.environ['DQ_ANIM_TEST'].split(':'))
+            if self.n == n_t: self.objets.anim_commune(o_t, no_t)
         sales = self.objets.tick()
+        if self.palettes is not None: self.palettes.tick()
+        sales_uv, sales_col = self.objets.sale_uv, self.objets.sale_col; self.objets.sale_uv = set(); self.objets.sale_col = set()
         for tex, vl, key in self.carte_vl:
             if key in sales: vl.position[:] = self.objets.cur[key].ravel()
+            if key in sales_uv: vl.tex_coords[:] = self.objets.uv(key).ravel()
+            if key in sales_col: vl.colors[:] = self.objets.col(key).ravel()
 
     def _duree_anim(self, idx, no):
         return self.objets.duree(idx, no) if self.objets is not None else None
@@ -1324,6 +1343,10 @@ class Jeu(pyglet.window.Window):
         if self.t_prec is not None: self.ecarts.append(t_debut - self.t_prec)
         self.t_prec = t_debut
         e = self.moteur.etat
+        if os.environ.get('DQ_CARTE_TEST'):                                  # (test) DQ_CARTE_TEST="nom;x,y,z;cx,cy,cz" : montre une carte de ville/grotte avec une camera fixe (animations de decor)
+            nom_t, pc, cc = os.environ['DQ_CARTE_TEST'].split(';')
+            e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.cam_libre = False
+            e.cam_pos = tuple(float(v) for v in pc.split(',')); e.cam_cible = tuple(float(v) for v in cc.split(','))
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
         if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); self._dessiner_aide(); return
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
