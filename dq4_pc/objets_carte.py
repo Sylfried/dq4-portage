@@ -51,6 +51,7 @@ class ObjetsCarte:
         self.sale_uv = set(); self.sale_col = set()
         self.etat = {}; self.sale = set(); self._inv = {}; self.auto = {}
         self.bill = {i: o['flag'] for i, o in enumerate(self.objs) if o.get('flag', 0) & 36 and self.valide(i)}     # panneaux de decor : objet -> drapeaux
+        self.SENS_TANGAGE = 1.0
         self._rb = {4: np.eye(3), 32: np.eye(3)}; self.bill_ok = False                  # orientation actuelle (autour de Y / camera complete) ; faux tant que les sommets ne la suivent pas
         self._o64 = {}; self._cles = {}; self._emat = {}                              # caches : position/rotation/echelle d'origine, cles des mouvements en tableaux, matrices de rotation
         self._semer()
@@ -94,11 +95,15 @@ class ObjetsCarte:
         for i in list(self.etat): self._poser(i)
         self.sale |= set(self.cur); self.sale_uv |= set(self.cur_uv); self.sale_col |= set(self.cur_col); self.bill_ok = False
 
-    def orienter(self, lacet, base):
-        """Tourne les panneaux de decor vers la camera. `lacet` : cap de la camera (radians, 0 = vers +Z, positif vers +X) ; `base` : (droite, haut, avant) de la camera. -> True si des sommets ont change."""
+    def orienter(self, lacet, base, tangage=0.0):
+        """Tourne les panneaux de decor vers la camera. `lacet` : cap de la camera (radians, 0 = vers +Z, positif vers +X) ; `base` : (droite, haut, avant) de la camera ; `tangage` : inclinaison ajoutee a la camera
+        (degres, 0 = vue du jeu) : les panneaux qui ne tournent qu'autour de Y (tonneaux, jarres...) se penchent d'autant, pour rester de face a la camera quand on la releve ou l'abaisse. -> True si des sommets ont change."""
         if not self.bill: return False
         c, s = math.cos(lacet), math.sin(lacet)
         ry = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])                      # Quaternion.Euler(0, lacet, 0)
+        if tangage:
+            a = math.radians(tangage) * self.SENS_TANGAGE; ca, sa = math.cos(a), math.sin(a)
+            ry = ry @ np.array([[1.0, 0.0, 0.0], [0.0, ca, -sa], [0.0, sa, ca]])         # puis penche autour de l'axe horizontal du panneau (son pied reste en place)
         rf = np.column_stack([np.asarray(b, np.float64) for b in base])                   # rotation complete de la camera (axes x, y, z de l'objet = droite, haut, avant)
         if self.bill_ok and np.allclose(ry, self._rb[4], atol=1e-5) and np.allclose(rf, self._rb[32], atol=1e-5): return False
         self._rb = {4: ry, 32: rf}; self.bill_ok = True

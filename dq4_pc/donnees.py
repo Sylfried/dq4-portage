@@ -284,6 +284,23 @@ class Donnees:
             tmp = f + '.tmp.npz'; np.savez(tmp, **arrs); os.replace(tmp, f)
             with np.load(f) as z: return lire(z)
 
+    # ---- voile de la carte du monde (fenetre « Carte », ICityMap : code 5)
+    def voile_monde(self):
+        """Image 192 x 256 x 4 (RGBA) du TextAsset `dsdq4wmap01m` : silhouette grisee des terres que la fenetre de carte pose sur les blocs de 10 x 10 pixels (a partir de x = 56, y = 16) non encore explores. Mise en cache."""
+        f = os.path.join(self.cache, 'voile_monde.npy')
+        if os.path.exists(f): return np.load(f)
+        with self._verrou:
+            if os.path.exists(f): return np.load(f)
+            self.env()
+            for o in self._objs.values():
+                if o.type.name != 'TextAsset': continue
+                t = o.read()
+                if t.m_Name != 'dsdq4wmap01m': continue
+                s = t.m_Script; b = bytes(s) if isinstance(s, (bytes, bytearray)) else s.encode('utf-8', 'surrogateescape')
+                if len(b) != 192 * 256 * 4: return None
+                a = np.frombuffer(b, np.uint8).reshape(192, 256, 4).copy(); np.save(f, a); return a
+        return None
+
     # ---- feuille de sprites d'un personnage
     def feuille(self, ident):
         f = os.path.join(self.cache, 'sprite_h%d.npy' % ident)

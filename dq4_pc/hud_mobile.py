@@ -9,11 +9,11 @@ import pyglet
 from pyglet import gl
 
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
-NOMS = ('carte', 'menu', 'discussion')
-DEFAUT = {'carte': (30, 1), 'menu': (30, 12), 'discussion': (30, 14)}      # coin superieur gauche (colonne, ligne) : colonne de droite, comme sur le telephone (Carte en haut, Commandes puis Discussion plus bas)
-DECL = {'carte': 0x1000, 'menu': 0x800, 'discussion': 0x400}
-ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
-LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion'}
+NOMS = ('carte', 'mode_carte', 'menu', 'discussion')
+DEFAUT = {'carte': (30, 1), 'mode_carte': (30, 3), 'menu': (30, 12), 'discussion': (30, 14)}      # coin superieur gauche (colonne, ligne) : colonne de droite, comme sur le telephone (Carte en haut, Commandes puis Discussion plus bas)
+DECL = {'carte': 0x1000, 'mode_carte': 0, 'menu': 0x800, 'discussion': 0x400}          # (mode_carte : pas de touche du jeu, le bouton change la vue de la carte ouverte)
+ICONE = {'carte': 3, 'mode_carte': 19, 'menu': 4, 'discussion': 15}
+LIBELLE = {'carte': 'Carte', 'mode_carte': 'Mode de la carte', 'menu': 'Commandes', 'discussion': 'Discussion'}
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
 
 # ---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
@@ -70,21 +70,23 @@ def cadre(x, y, w, h, k, eclaire=0.0, fond=None, opacite=None):
     _melange(); t.blit(int(round(x)), int(round(y)))
 
 
-def plaque(x, y, w, h, k, choisi=False):
-    """Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair, degrade gris, coins arrondis. Choisi : plus clair (comme un bouton du jeu enfonce), sans autre marque."""
+def plaque(x, y, w, h, k, choisi=False, contour=None):
+    """Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair, degrade gris, coins arrondis. Choisi : plus clair (comme un bouton du jeu enfonce), sans autre marque.
+    `contour` (r, g, b) : encadrement de cette couleur, plus epais que la bordure (selection a la souris)."""
     w, h = int(round(w)), int(round(h))
     if w < 4 or h < 4: return
     def fab():
-        d = _distance(w, h, 6.0 * k); bw = max(1.5, 1.6 * k); t = (np.mgrid[0:h, 0:w][0] + 0.5) / h      # t : 0 en haut, 1 en bas
+        d = _distance(w, h, 6.0 * k); bw = max(1.5, 1.6 * k) if contour is None else max(2.5, 2.8 * k); t = (np.mgrid[0:h, 0:w][0] + 0.5) / h      # t : 0 en haut, 1 en bas
         haut, bas = np.array(PLAQUE_HAUT, np.float32), np.array(PLAQUE_BAS, np.float32)
         a = np.zeros((h, w, 4), np.float32)
         fond = haut[None, None, :] * (1 - t[..., None]) + bas[None, None, :] * t[..., None] + (26.0 if choisi else 0.0)
         c0, c1 = ((228, 230, 226), (150, 152, 147)) if choisi else ((186, 188, 185), (112, 114, 110))
         bord = np.array(c0, np.float32)[None, None, :] * (1 - t[..., None]) + np.array(c1, np.float32)[None, None, :] * t[..., None]
+        if contour is not None: bord = np.zeros_like(bord) + np.array(contour, np.float32)
         dedans = (d >= bw)[..., None]
         a[..., :3] = np.where(dedans, fond, bord); a[..., 3] = 255.0 * np.clip(d + 0.5, 0.0, 1.0)
         return _texture(a)
-    t = _garder(('plaque', w, h, round(k * 100), bool(choisi)), fab)
+    t = _garder(('plaque', w, h, round(k * 100), bool(choisi), contour), fab)
     _melange(); t.blit(int(round(x)), int(round(y)))
 
 
@@ -120,9 +122,10 @@ class Boutons:
         if not J.reg['boutons'] or J.pause.ouvert or J.moteur.etat.effet is not None: return ()
         from moteur import PARTIE_COMBAT
         if J.moteur.etat.partie == PARTIE_COMBAT: return ()
+        if J.carte_ouverte: return ('mode_carte',) if J.carte_deux_vues else ()          # carte ouverte : seul le bouton qui change la vue (comme sur le mobile), s'il y en a deux
         f = J.moteur.drapeaux()
         if (f & (8 | 0x30047)) != 8: return ()
-        return tuple(n for n in NOMS if n != 'carte' or f & 0x20)
+        return tuple(n for n in NOMS if n != 'mode_carte' and (n != 'carte' or f & 0x20))
 
     # ---- souris
     def appuyer(self, x, y, visibles):

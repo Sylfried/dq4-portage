@@ -230,7 +230,7 @@ class Interface:
                         f = self.fen(a[0]); f['act'] = f['vis'] = False
                         if self.obs: self.obs.fermer(a[0])
                     elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
-                        f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['dispo'] = None
+                        f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['dispo'] = None; f['listes'] = {}; f['suite'] = None
                         f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
@@ -245,6 +245,9 @@ class Interface:
                 cle = self.attente.pop(port); txt = ''.join(chr(v & 0xffff) for v in a if v); f['cases'][cle] = txt
                 if self.obs: self.obs.param_str(port, cle[0], cle[1], txt)
                 continue
+            if f.get('suite') is not None:                      # fenetre de carte (type 25) : la liste de nombres qui suit les codes 3 (lieux decouverts) et 5 (voile) du moteur (MenuPort.Receive des fonctions de Make_CityMap), pas une commande
+                f.setdefault('listes', {})[f['suite']] = [v & 0xffff for v in a]; f['suite'] = None
+                continue
             if f['type'] == 31 and f.get('att'):               # plaque de monstre : messages qui suivent un code > 0 (nom, puis [x, y, ...])
                 i, etape = f['att']
                 if etape == 'nom': f['plaq'][i]['nom'] = ''.join(chr(v & 0xffff) for v in a if v); f['att'] = (i, 'prm')
@@ -257,7 +260,7 @@ class Interface:
             if cmd != 7 and not f['act']: f['act'] = True; f['force'] = True       # MenuPortItem.NoticeReceive : premiere commande -> parties activees, dessin force
             if cmd == 11 and len(a) >= 3: self.attente[port] = (a[1], a[2])
             elif cmd == 1:
-                if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}           # fenetre dynamique : contenu neuf
+                if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['listes'] = {}; f['suite'] = None           # fenetre dynamique : contenu neuf
                 self.ordre += 1; f['ordre'] = self.ordre
             elif cmd == 2 and len(a) >= 3: f['grille'] = tuple(a[1:4])                 # setItemMenu : colonnes, lignes, nombre de cases du curseur du moteur
             elif cmd == 6: f['inp'] = True                                              # demande de saisie (a chaque image tant que le menu attend une touche)
@@ -273,6 +276,7 @@ class Interface:
                 if self.obs: self.obs.param_int(port, a[1], a[2], v)
             elif cmd == 12 and len(a) >= 3:
                 f['indic'][a[1]] = a[2]
+                if f['type'] == 25 and a[1] in (3, 5): f['suite'] = a[1]               # ICityMap : code 3 = lieux decouverts (x + 256 y, un par nombre), code 5 = voile (16 nombres : un bit par bloc de 10 x 10 pixels non explore)
                 if f['type'] == 31 and a[1] < 4 and a[2] >= 1:                                  # MonsterNamePlate.ReceiveParameters(code >= 1)
                     f.setdefault('plaq', {})[a[1]] = {'code': a[2]}; f['att'] = (a[1], 'nom')
                 elif f['type'] == 31 and a[1] == 5:                                             # disposition des plaques (nombre de plaques)
@@ -368,6 +372,22 @@ class Moteur:
     def demarrer_ville(self, nom):
         """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')
+
+    # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde
+    VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288))
+
+    def vitesse_heros(self, f):
+        """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi)."""
+        c = self.core
+        if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.export(n), b) for n, b in self.VITESSES_HEROS]
+        for ad, base in self._vit_ad:
+            if ad: c.mem_w(ad, struct.pack('<i', int(round(base * f))))           # (a chaque image : un etat charge remet les valeurs qu'il avait)
+
+    def camera_ville(self):
+        """Camera des villes du moteur d'origine (TownCamera, objet statique) : (limite gauche, limite droite, verrou) ; limite = 0 : rotation libre, < 0 : rotation interdite, > 0 : angle borne (unites de 1 / 4096 de tour) ; verrou : camera verrouillee par un evenement."""
+        c = self.core; ad = c.export('_ZN10TownCamera11m_singletonE')
+        if ad is None: return 0, 0, False
+        lg, ld = struct.unpack('<ii', c.mem(ad + 0x34, 8)); return lg, ld, bool(c.mem(ad + 0x3e, 1)[0])
 
     def drapeaux(self):
         """Global.Flag : premier mot de la sortie du moteur (bit 3 : manette tactile presente ; 4 verrou du joueur, 0x20 carte autorisee, 0x40 interface verrouillee...)."""

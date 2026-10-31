@@ -6,14 +6,14 @@ import pyglet
 TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
     'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
-    'menu': ['RETURN', None], 'discussion': [None, None], 'carte': ['M', None],
+    'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'], 'courir_bascule': [None, None],
-    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None],
+    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
 }
 # libelles des actions (menu Commandes : dans cet ordre, avec les curseurs de vitesse entre elles, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('courir', 'Courir (maintenir)'), ('courir_bascule', 'Courir (appuyer)'),
-           ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
+           ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'), ('modif', 'Touche modificatrice'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE',)                # Echap ouvre le menu : non reattribuable
@@ -35,13 +35,15 @@ DEFAUT = {
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche (0,5 a 2)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage (0,5 a 2)
+    'camera_maj': True,           # Maj + touche de la camera : la camera tourne deux fois plus vite
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu ; 0,5 a 2)
-    'vitesse_course': 2.0,        # multiplicateur de la vitesse quand on court (1 a 2) ; on court tant que la touche « Courir (maintenir) » est tenue ou apres un appui sur « Courir (appuyer) »
+    'vitesse_course': 1.5,        # multiplicateur de la vitesse quand on court (1 a 2) ; on court tant que la touche « Courir (maintenir) » est tenue ou apres un appui sur « Courir (appuyer) »
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
+    'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
     'boutons_pos': {},            # bouton -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
-    'touches_v': 3,               # version des touches par defaut : une liste enregistree plus ancienne est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; une action ajoutee depuis (Courir (appuyer)) prend sa touche par defaut
+    'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), course x1,5 (si elle etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
@@ -72,12 +74,21 @@ class Reglages:
             try:
                 with open(chemin, encoding='utf-8') as f: d = json.load(f)
                 if 'distance_camera' not in d and isinstance(d.get('zoom'), (int, float)) and d['zoom'] > 0: d['distance_camera'] = min(200, max(50, round(10000.0 / d['zoom'])))      # ancien reglage « Zoom » (40 a 400 %) -> distance de la camera
+                v_enreg = d.get('touches_v')
                 for k, x in d.items():
-                    if k == 'touches' and d.get('touches_v') != DEFAUT['touches_v']: continue
+                    if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
                     if k == 'touches' and isinstance(x, dict):
                         for a, ts in x.items():
                             if a in TOUCHES_DEF and isinstance(ts, list): self.v['touches'][a] = (list(ts) + [None, None])[:2]
                     elif k in DEFAUT and k != 'touches' and k != 'taille_degats': self.v[k] = x          # (la taille des nombres de degats n'est plus un reglage : valeur fixe)
+                if v_enreg == 3:                                      # v3 -> v4 : nouvelles valeurs par defaut, sans toucher a ce que le joueur a regle lui-meme
+                    ts = self.v['touches']
+                    if ts['discussion'] == [None, None] and not any(n in (a for l in ts.values() for a in l) for n in ('LALT', 'RALT')): ts['discussion'] = list(TOUCHES_DEF['discussion'])
+                    for a in ('modif',):
+                        for i, n in enumerate(ts[a]):
+                            if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None        # une touche deja prise par une autre action lui reste
+                    if self.v['vitesse_course'] == 2.0: self.v['vitesse_course'] = DEFAUT['vitesse_course']
+                self.v['touches_v'] = DEFAUT['touches_v']
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)

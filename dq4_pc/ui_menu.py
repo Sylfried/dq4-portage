@@ -4,7 +4,7 @@ Le fichier de mise en page (cache/ui_layout.json) decrit, pour chaque type de fe
 materiaux, texte), les elements modifiables (IText / IIcon / IButton / IBar...) et leurs liaisons (id, no) -> element, et l'effet de chaque code
 (deplacement / affichage). Ce module applique les messages du moteur (setItemParam*, setItemCode, curseur) a ces objets et les dessine.
 Repere du jeu : portrait 450 x 800, X vers la droite, Z vers le haut, origine au centre de l'ecran, Y = profondeur (plus grand = devant)."""
-import os, re, json, math
+import os, re, json, math, time
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -115,6 +115,7 @@ class Fenetre:
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
+        self.voile = None; self.symboles = []; self.t_blink = None      # carte du monde : texture du voile des blocs non explores, lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement
 
     # ---- application des messages
     def _ib(self, p):
@@ -379,6 +380,7 @@ class Rendu:
     def __init__(self, ml, feuilles, police):
         self.ml = ml
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
+        self._blanc = None                                  # texture blanche de 1 pixel (carres de couleur unie : lieux de la carte du monde)
         self.tex = {}
         for k, arr in feuilles.items():
             h, w = arr.shape[:2]
@@ -471,6 +473,21 @@ class Rendu:
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
         t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
         vl.draw(gl.GL_TRIANGLES); vl.delete()
+        if getattr(fen, 'voile', None) is not None:                                  # voile : silhouette grisee des terres sur les blocs non explores (meme cadre que le plan)
+            a = np.array([[x0, y0, 0.0, 0.0], [x1, y0, 1.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y0, 0.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y1, 0.0, 1.0]], np.float32)
+            vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
+            t = fen.voile; gl.glBindTexture(t.target, t.id); vl.draw(gl.GL_TRIANGLES); vl.delete()
+        sy = getattr(fen, 'symboles', None)
+        if sy:                                                                        # lieux decouverts (BlinkMapSymbol) : carres rouges de 4 unites dont la transparence va et vient (0,5 par seconde : 1 -> 0 -> 1 en 4 s)
+            if self._blanc is None:
+                self._blanc = pyglet.image.ImageData(1, 1, 'RGBA', b'\xff\xff\xff\xff').get_texture()
+            al = abs(1.0 - ((time.monotonic() - (fen.t_blink or 0.0)) % 4.0) / 2.0); k = 450.0 / 256.0; q = []
+            for xb, yb in sy:
+                a0, b0 = cx + (-225.0 + xb * k) * s, cy + (400.0 - yb * k - 4.0) * s; a1, b1 = a0 + 4.0 * s, b0 + 4.0 * s
+                q += [[a0, b0], [a1, b0], [a1, b1], [a0, b0], [a1, b1], [a0, b1]]
+            q = np.array(q, np.float32); n = len(q)
+            vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', q.ravel()), tex_coords=('f', np.zeros(n * 2, np.float32)), colors=('f', np.tile(np.array([1.0, 0.0, 0.0, al], np.float32), n)))
+            t = self._blanc; gl.glBindTexture(t.target, t.id); vl.draw(gl.GL_TRIANGLES); vl.delete()
 
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
