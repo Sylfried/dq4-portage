@@ -5,12 +5,12 @@ import pyglet
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
     'gauche': ['Q', 'LEFT'], 'droite': ['D', 'RIGHT'], 'haut': ['Z', 'UP'], 'bas': ['S', 'DOWN'],
-    'A': ['M', None], 'B': ['L', None], 'X': ['O', None], 'Y': ['K', None],
-    'start': ['LSHIFT', 'RSHIFT'], 'select': ['LCTRL', 'RCTRL'],
-    'L': ['A', 'I'], 'R': ['E', 'P'],
+    'menu': ['RETURN', None], 'discussion': ['SPACE', None], 'carte': ['M', None],
+    'A': ['E', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'],
+    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'],
 }
-ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'), ('A', 'A : valider, parler'), ('B', 'B : annuler, menu'), ('X', 'X : menu'),
-           ('Y', 'Y (sans effet pour l\'instant)'), ('start', 'Start : menu'), ('select', 'Select (sans effet pour l\'instant)'), ('L', 'L : page précédente'), ('R', 'R : page suivante')]
+ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'), ('menu', 'Menu de commandes (hors combat)'), ('discussion', 'Discussion de groupe'), ('carte', 'Carte'),
+           ('A', 'Parler / examiner / valider'), ('B', 'Annuler'), ('courir', 'Courir (maintenir)'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE', 'F1')           # Echap ouvre le menu, F1 affiche les infos : non reattribuables
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
         'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
@@ -26,6 +26,16 @@ DEFAUT = {
     'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 0.7, 'volume_bruitages': 0.8,
+    'resolution': None,           # taille de la fenetre [largeur, hauteur] (None : 1280 x 720) ; en plein ecran : mode d'affichage choisi
+    'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu)
+    'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche
+    'course': True, 'vitesse_course': 2.0,     # course : touche maintenue (action « courir »), facteur de vitesse
+    'molette_inversee': True,     # sens de la molette dans les menus
+    'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
+    'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
+    'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
+    'boutons_pos': {},            # bouton -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
+    'touches_v': 2,               # version des touches par defaut : une liste enregistree plus ancienne est abandonnee (les touches de la manette DS etaient fausses)
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
@@ -53,6 +63,7 @@ class Reglages:
             try:
                 with open(chemin, encoding='utf-8') as f: d = json.load(f)
                 for k, x in d.items():
+                    if k == 'touches' and d.get('touches_v') != DEFAUT['touches_v']: continue
                     if k == 'touches' and isinstance(x, dict):
                         for a, ts in x.items():
                             if a in TOUCHES_DEF and isinstance(ts, list): self.v['touches'][a] = (list(ts) + [None, None])[:2]

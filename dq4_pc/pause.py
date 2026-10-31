@@ -7,6 +7,7 @@ import pyglet
 from pyglet import gl
 import reglages as RG
 import hd as HD
+import hud_mobile as HM
 
 NB_ETATS = 10
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -18,18 +19,24 @@ MSAA_CHOIX = (0, 2, 4, 8)
 class Pause:
     def __init__(self, jeu):
         self.J = jeu; self.ouvert = False; self.pile = []; self.sel = {}; self.capture = None; self.message = None
-        self.zones = []; self.barres = {}; self.zones_col = 0.0; self.minis = {}; self.rep = None; self.veut_miniature = False; self.miniature_png = b''; self.confirme = None
+        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_col = 0.0; self.minis = {}; self.rep = None; self.veut_miniature = False; self.mini_tex = None; self.confirme = None
+        self.placement = False                            # placement des boutons a l'ecran (grille) a la place du menu
+        self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
 
     # ---- ouverture / fermeture
     def ouvrir(self):
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None
-        self.veut_miniature = True; self.minis = {}; self.rep = None
+        self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.placement = False
         self.J.pause_jeu(True)
 
     def fermer(self):
         if not self.ouvert: return
-        self.ouvert = False; self.capture = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
+        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.placement = False; self.J.reg.enregistrer(); self.J.pause_jeu(False)
+        if self.mini_tex is not None:
+            try: self.mini_tex.delete()
+            except Exception: pass
+            self.mini_tex = None
 
     @property
     def ecran(self): return self.pile[-1]
@@ -50,6 +57,8 @@ class Pause:
                 dict(t='act', l='Sauvegarder un état', ok=self._aller('sauver')),
                 dict(t='act', l='Charger un état', ok=self._aller('charger')),
                 dict(t='act', l='Affichage', ok=self._aller('affichage')),
+                dict(t='act', l='Jeu', ok=self._aller('jeu')),
+                dict(t='act', l='Boutons à l\'écran', ok=self._aller('boutons')),
                 dict(t='act', l='Son', ok=self._aller('son')),
                 dict(t='act', l='Touches', ok=self._aller('touches')),
                 dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'))]
@@ -63,7 +72,18 @@ class Pause:
 
     def _valeurs(self, en): return en['vals']
 
-    def _nom_valeur(self, label, v): return self.noms.get(label, {}).get(v, str(v))
+    def _nom_valeur(self, label, v):
+        n = self.noms.get(label, {}).get(v)
+        if n is not None: return n
+        if isinstance(v, bool): return 'Oui' if v else 'Non'
+        return '%d x %d' % v if isinstance(v, tuple) else str(v)
+
+    def _curs(self, label, get, appliquer, mini, maxi, pas, pas_f, fmt, mult=1.0):
+        """Curseur numerique de `mini` a `maxi` (valeurs arrondies a `pas`, fleches : `pas_f`). Cliquer sur la valeur ou valider permet de la saisir au clavier : `mult` = facteur entre la valeur
+        interne et celle qui est affichee et saisie (100 pour des pourcentages)."""
+        def pose(v): appliquer(min(maxi, max(mini, round(round(v / pas) * pas, 4))))
+        return dict(t='curs', l=label, v=lambda: fmt(get()), frac=lambda: (get() - mini) / (maxi - mini), moins=lambda: pose(get() - pas_f), plus=lambda: pose(get() + pas_f),
+                    fixe=lambda f: pose(mini + f * (maxi - mini)), saisie=lambda x: pose(x / mult), brut=lambda: ('%g' % round(get() * mult, 2)))
 
     noms = {
         'Sprites': {0: 'Originaux (pixels nets)', 1: 'EPX x8', 2: 'Régions lissées', 3: 'Bicubique', 4: 'Pixel perfect'},
@@ -78,39 +98,50 @@ class Pause:
         def set_(k, f=None):
             def s(v):
                 R[k] = v
-                if f: f(v)
-                R.enregistrer()
+                if f: f(v)                 # (les reglages sont enregistres a la fermeture du menu)
             return s
         e = [self._choix('Sprites', list(range(len(HD.MODES) + 1)), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
              self._choix('Échelle pixel perfect (carte)', list(ECHELLES_PP), lambda: R['echelle_pp'], set_('echelle_pp', J.regler_echelle_pp)),
              self._choix('Lissage des textures', [True, False], lambda: J.lissage, set_('lissage', J.regler_lissage)),
-             dict(t='curs', l='Zoom de la carte du monde', v=lambda: '%d %%' % round(J.champ_zoom * 100), frac=lambda: (J.champ_zoom - 0.4) / 3.6,
-                  moins=lambda: set_('zoom_carte', J.regler_zoom)(max(0.4, round(J.champ_zoom - 0.1, 2))), plus=lambda: set_('zoom_carte', J.regler_zoom)(min(4.0, round(J.champ_zoom + 0.1, 2))),
-                  fixe=lambda f: set_('zoom_carte', J.regler_zoom)(round(0.4 + 3.6 * f, 2))),
+             self._curs('Zoom de la carte du monde', lambda: J.champ_zoom, lambda v: (set_('zoom_carte', J.regler_zoom)(v)), 0.4, 4.0, 0.01, 0.1, lambda v: '%d %%' % round(v * 100), 100.0),
+             self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v)))),
+             self._curs('Angle de la caméra des villes', lambda: R['angle_camera'], lambda v: (R.__setitem__('angle_camera', v), J.regler_angle(v)), -20.0, 40.0, 1.0, 1.0, lambda v: '%+d °' % round(v) if round(v) else '0 °', 1.0),
              self._choix('Plein écran', [False, True], lambda: J.est_plein, set_('plein_ecran', J.regler_plein_ecran)),
              self._choix('Anticrénelage (au prochain lancement)', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa')),
              self._choix('Infos à l\'écran (F1)', [False, True], lambda: J.aide, set_('infos', J.regler_infos)),
              dict(t='act', l='Retour', ok=self.retour)]
         return e
 
+    def _e_jeu(self):
+        R = self.J.reg
+        return [self._curs('Vitesse de déplacement', lambda: R['vitesse_marche'], lambda v: R.__setitem__('vitesse_marche', v), 0.5, 3.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0),
+                self._choix('Course (maintenir la touche)', [True, False], lambda: R['course'], lambda v: R.__setitem__('course', v)),
+                self._curs('Vitesse de la course', lambda: R['vitesse_course'], lambda v: R.__setitem__('vitesse_course', v), 1.2, 4.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0),
+                self._curs('Taille des nombres de dégâts', lambda: R['taille_degats'], lambda v: R.__setitem__('taille_degats', v), 0.5, 3.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0),
+                self._choix('Molette des menus : sens inversé', [True, False], lambda: R['molette_inversee'], lambda v: R.__setitem__('molette_inversee', v)),
+                dict(t='act', l='Retour', ok=self.retour)]
+
+    def _e_boutons(self):
+        R = self.J.reg; H = self.J.hud
+        return [self._choix('Boutons à l\'écran (Carte, Commandes, Discussion)', [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
+                self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0),
+                self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),
+                dict(t='act', l='Placer les boutons sur la grille…', ok=lambda: setattr(self, 'placement', True)),
+                dict(t='act', l='Rétablir les positions d\'origine', ok=H.remettre),
+                dict(t='act', l='Retour', ok=self.retour)]
+
     def _e_son(self):
         J, R = self.J, self.J.reg
-        def vol(k, setter):
-            def pas(d):
-                v = min(1.0, max(0.0, round(R[k] + d * 0.1, 2))); R[k] = v; setter(v); R.enregistrer()
-            return pas
-        return [self._choix('Son', [True, False], lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v), R.enregistrer())),
-                dict(t='curs', l='Volume de la musique', v=lambda: '%d %%' % round(R['volume_musique'] * 100), frac=lambda: R['volume_musique'], moins=lambda: vol('volume_musique', J.regler_vol_musique)(-1), plus=lambda: vol('volume_musique', J.regler_vol_musique)(1),
-                     fixe=lambda f: (R.__setitem__('volume_musique', round(f, 2)), J.regler_vol_musique(round(f, 2)), R.enregistrer())),
-                dict(t='curs', l='Volume des bruitages', v=lambda: '%d %%' % round(R['volume_bruitages'] * 100), frac=lambda: R['volume_bruitages'], moins=lambda: vol('volume_bruitages', J.regler_vol_bruitages)(-1), plus=lambda: vol('volume_bruitages', J.regler_vol_bruitages)(1),
-                     fixe=lambda f: (R.__setitem__('volume_bruitages', round(f, 2)), J.regler_vol_bruitages(round(f, 2)), R.enregistrer())),
+        return [self._choix('Son', [True, False], lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v))),
+                self._curs('Volume de la musique', lambda: R['volume_musique'], lambda v: (R.__setitem__('volume_musique', v), J.regler_vol_musique(v)), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0),
+                self._curs('Volume des bruitages', lambda: R['volume_bruitages'], lambda v: (R.__setitem__('volume_bruitages', v), J.regler_vol_bruitages(v)), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0),
                 dict(t='act', l='Retour', ok=self.retour)]
 
     def _e_touches(self):
         R = self.J.reg; e = []
         for act, lib in RG.ACTIONS:
             e.append(dict(t='touche', l=lib, act=act, v=[RG.nom_touche(n) for n in R['touches'][act]]))
-        e.append(dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer(), self._info('Touches par défaut rétablies.'))))
+        e.append(dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer())))
         e.append(dict(t='act', l='Retour', ok=self.retour))
         return e
 
@@ -138,7 +169,7 @@ class Pause:
 
     def _sauver(self, n):
         try:
-            self.J.sauver_etat(n, self.miniature_png)
+            self.J.sauver_etat(n, self.J._png_miniature(self.mini_tex))
             self.minis.pop(n, None); self._info('État enregistré dans l\'emplacement %d.' % n)
         except Exception as ex:
             self._info('Impossible d\'enregistrer l\'état : %r' % (ex,), True)
@@ -154,6 +185,10 @@ class Pause:
         """True si la touche est consommee (le menu est ouvert)."""
         K = pyglet.window.key; R = self.J.reg
         if self.capture is not None: self._capturer(symbol); return True
+        if self.saisie is not None: self._touche_saisie(symbol); return True
+        if self.placement:
+            if symbol in (K.ESCAPE, K.RETURN, K.ENTER, K.SPACE, K.BACKSPACE): self.placement = False; R.enregistrer()
+            return True
         act = R.action_de(symbol)
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
         if symbol == K.F1: self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True
@@ -200,7 +235,7 @@ class Pause:
         en = self._courante()
         if not en or en.get('off'): return
         if en['t'] == 'touche': self.capture = (en['act'], self.sel.get('col', 0)); return
-        if en['t'] == 'curs': en['plus']()
+        if en['t'] == 'curs': self.saisie = [self.sel.get(self.ecran, 0), '']
         elif 'ok' in en: en['ok']()
 
     def _capturer(self, symbol):
@@ -218,25 +253,76 @@ class Pause:
         return None, 0.0
 
     def survol(self, x, y):
-        if self.capture is not None: return
+        if self.capture is not None or self.placement: return
         i, _ = self._zone(x, y)
         if i is not None: self.sel[self.ecran] = i
 
     def clic(self, x, y, bouton):
         M = pyglet.window.mouse
+        if self.placement:
+            if bouton == M.RIGHT: self.placement = False; self.J.reg.enregistrer()
+            else: self.J.hud.prendre(x, y)
+            return
         if self.capture is not None: self.capture = None; return
-        if bouton == M.RIGHT: self.retour(); return
+        if bouton == M.RIGHT:
+            if self.saisie is not None: self.saisie = None
+            else: self.retour()
+            return
         i, f = self._zone(x, y)
+        if self.saisie is not None:                                   # un clic ailleurs que sur la valeur en cours de saisie la valide
+            ligne = self.saisie[0]; zv = self.zones_val.get(ligne)
+            if i == ligne and zv and zv[0] <= x <= zv[1]: return
+            self._fin_saisie(True)
         if i is None: return
         self.sel[self.ecran] = i; en = self._entrees()[i]
         bar = self.barres.get(i)
-        if en['t'] == 'curs' and bar and bar[0] - 6 <= x <= bar[1] + 6: en['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
+        zv = self.zones_val.get(i)
+        if en['t'] == 'curs' and bar and bar[0] - 6 <= x <= bar[1] + 6:       # curseur : le clic maintenu le fait glisser (glisser)
+            self.glisse = i; en['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
+        elif en['t'] == 'curs' and zv and zv[0] - 8 <= x <= zv[1] + 8: self.saisie = [i, '']     # clic sur la valeur : saisie au clavier
         elif en['t'] == 'touche':
             col = 1 if x > self.zones_col else 0; self.sel['col'] = col; self._valider()
         else: self._valider()
 
+    def relache(self, x, y, bouton):
+        self.glisse = None
+        if self.placement: self.J.hud.poser(); self.J.reg.enregistrer()
+
+    def glisser(self, x, y):
+        """Souris deplacee bouton enfonce : le curseur maintenu suit."""
+        if self.placement: self.J.hud.deplacer(x, y); return
+        if self.glisse is None: return
+        bar = self.barres.get(self.glisse); e = self._entrees()
+        if bar is None or self.glisse >= len(e) or e[self.glisse]['t'] != 'curs': self.glisse = None; return
+        e[self.glisse]['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
+
+    def texte(self, t):
+        """Caracteres tapes pendant la saisie d'une valeur."""
+        if self.saisie is None: return
+        for c in t.replace(',', '.'):
+            if (c.isdigit() or (c in '.-' and c not in self.saisie[1])) and len(self.saisie[1]) < 7: self.saisie[1] += c
+
+    def _touche_saisie(self, symbol):
+        K = pyglet.window.key
+        if symbol in (K.RETURN, K.ENTER): self._fin_saisie(True)
+        elif symbol == K.ESCAPE: self._fin_saisie(False)
+        elif symbol == K.BACKSPACE:
+            if self.saisie[1]: self.saisie[1] = self.saisie[1][:-1]
+            else: self._fin_saisie(False)
+
+    def _fin_saisie(self, valide):
+        ligne, txt = self.saisie; self.saisie = None
+        if not valide or txt in ('', '-', '.'): return
+        e = self._entrees()
+        if ligne < len(e) and e[ligne]['t'] == 'curs' and 'saisie' in e[ligne]:
+            try: e[ligne]['saisie'](float(txt))
+            except ValueError: pass
+
     def molette(self, sy):
-        self._bouger(-1 if sy > 0 else 1)
+        if self.placement: return
+        d = -1 if sy > 0 else 1
+        if self.J.reg['molette_inversee']: d = -d
+        self._bouger(d)
 
     # ---- dessin
     def _miniature(self, n):
@@ -256,13 +342,22 @@ class Pause:
 
     def dessiner(self):
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)
+        if self.placement:
+            J.hud.dessiner(HM.NOMS, True)
+            gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            et = J._etiq('Glisse les boutons pour les placer    Échap, Entrée ou clic droit : terminer', 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k
+            r = pyglet.shapes.Rectangle((W - w) / 2, H - 24 * k - h, w, h, color=(0, 0, 0)); r.opacity = 190; r.draw(); et.x = (W - et.content_width) / 2; et.y = H - 24 * k - h + 11 * k; et.draw()
+            return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
         ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'touches': 'Touches', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'jeu': 'Jeu', 'son': 'Son', 'boutons': 'Boutons à l\'écran', 'touches': 'Touches', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
         avec_mini = ecr in ('sauver', 'charger')
-        aide = {'touches': 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer', 'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état'}.get(ecr, '')
+        aide = {'touches': 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer', 'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état',
+                'affichage': 'Curseurs : glisser, ←/→, ou cliquer sur la valeur pour la taper (Entrée valide)', 'son': 'Curseurs : glisser, ←/→, ou cliquer sur la valeur pour la taper (Entrée valide)',
+                'jeu': 'Curseurs : glisser, ←/→, ou cliquer sur la valeur pour la taper (Entrée valide)', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
+        if self.saisie is not None: aide = 'Tape la valeur (Entrée : valider, Échap : annuler)'
         if self.capture is not None:
             act = dict(RG.ACTIONS)[self.capture[0]]; aide = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)' % act
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
@@ -271,10 +366,10 @@ class Pause:
         for x in e:
             if x['t'] == 'choix': vw = max(vw, max(J._etiq('‹  ' + self._nom_valeur(x['l'], v) + '  ›', fs).content_width for v in self._valeurs(x)))
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
-        if ecr in ('affichage', 'son'): pw = max(pw, 52 * k + lw + 40 * k + 200 * k + 20 * k + 90 * k + 30 * k)
+        if ecr in ('affichage', 'son', 'jeu', 'boutons'): pw = max(pw, 52 * k + lw + 40 * k + 200 * k + 20 * k + 90 * k + 30 * k)
         if ecr == 'touches': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
         if ecr in ('sauver', 'charger'): pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
-        pied = (36 * k if aide else 0.0) + (36 * k if msg else 0.0)
+        pied = 36 * k if aide else 0.0                     # (le message d'information est dessine sous le cadre : il ne decale rien)
         hmax = H - 2 * 36 * k; h_titre = 78 * k + (22 * k if ecr == 'touches' else 0.0)
         rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n))); h = min(hmax, h_titre + n * rh + pad / 2 + pied)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
@@ -283,7 +378,7 @@ class Pause:
         e_t = J._etiq(titres.get(ecr, ''), fst, OR); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - 52 * k; e_t.draw()
         visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); debut = 0               # defilement : les lignes qui ne tiennent pas sont decalees pour garder la selection visible
         if n > visibles: debut = min(max(0, i_sel - visibles // 2), n - visibles)
-        self.zones = []; self.barres = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
+        self.zones = []; self.barres = {}; self.zones_val = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
         if ecr == 'touches':
             for c in range(2):
                 eh = J._etiq('Touche %d' % (c + 1), fsp, GRIS); eh.x = c1x + c * 190 * k; eh.y = y1 - h_titre + 6 * k; eh.draw()
@@ -303,7 +398,10 @@ class Pause:
             if en['t'] == 'choix':
                 txt = en['v'](); vl = J._etiq('‹  ' + txt + '  ›' if sel else txt, fs, coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'curs':
-                txt = en['v'](); vl = J._etiq(txt, fs, coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
+                if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
+                else: txt = en['v']()
+                vl = J._etiq(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
+                self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
                 bw = 200 * k; bx1 = x0 + pw - 30 * k - 90 * k - 20 * k; bx0 = bx1 - bw; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
                 fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(70, 82, 82)); fond.draw()
                 rem = pyglet.shapes.Rectangle(bx0, by, bw * max(0.0, min(1.0, en['frac']())), 10 * k, color=(255, 235, 130)); rem.draw()
@@ -325,7 +423,7 @@ class Pause:
         if aide:
             ea = J._etiq(aide, fsp, GRIS); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
         if msg:
-            em = J._etiq(msg, fsp * 1.1, ROUGE if self.message[2] else OR); em.x = x0 + (pw - em.content_width) / 2; em.y = yp; em.draw()
+            em = J._etiq(msg, fsp * 1.1, ROUGE if self.message[2] else OR); em.x = x0 + (pw - em.content_width) / 2; em.y = max(8 * k, y0 - 34 * k); em.draw()
         # miniature de l'etat survole
         if avec_mini:
             mx = x0 + pw + gap; mh = min(h, 270 * k)

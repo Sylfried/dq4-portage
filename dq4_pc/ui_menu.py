@@ -92,6 +92,7 @@ class Fenetre:
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         self.vu = True; self.sel = None; self.ordre = 0
+        self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
 
     # ---- application des messages
     def _ib(self, p):
@@ -124,6 +125,7 @@ class Fenetre:
         if not p: return
         if 'custom' in p:
             cu = p['custom']; pt, ib = self._enrobe(p)
+            if cu.get('cls', '').endswith('ICityMap'): self.nom_carte = s; return                   # fenetre de carte (type 25) : nom de la texture du plan (Menu/map)
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
@@ -392,6 +394,8 @@ class Rendu:
         if not fens: return
         items = []
         for wi, fen in enumerate(fens): items += [(d, wi, o, g, x) for d, o, g, x in self._items(fen)]
+        for fen in fens:
+            if getattr(fen, 'typ', 0) == 25 and fen.carte is not None: self._carte(fen, cx, cy, s, vp)
         items.sort(key=lambda x: x[:3])                      # comme Unity (objets transparents tries par profondeur sur la camera) : profondeur d'abord, puis la fenetre la plus recente devant ; le fond d'une fenetre ne recouvre plus les boutons d'une autre
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
@@ -430,6 +434,16 @@ class Rendu:
                 vider(); lot = None
                 self._texte(fen, nd, cx, cy, s)
         vider()
+
+    def _carte(self, fen, cx, cy, s, vp):
+        """Plan de la fenetre de carte (ICityMap) : texture de 256 x 192 affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
+        gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
+        self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
+        x0, x1, y1, y0 = cx - 225.0 * s, cx + 225.0 * s, cy + 400.0 * s, cy + (400.0 - 337.5) * s
+        a = np.array([[x0, y0, 0, 0], [x1, y0, 1, 0], [x1, y1, 1, 1], [x0, y0, 0, 0], [x1, y1, 1, 1], [x0, y1, 0, 1]], np.float32)
+        vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
+        t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
+        vl.draw(gl.GL_TRIANGLES); vl.delete()
 
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']

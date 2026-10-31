@@ -121,7 +121,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte4_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte5_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -166,6 +166,9 @@ class Donnees:
             cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
+        for o in objs:                                               # coffres : l'origine du modele (charniere) est au bord superieur du coffre, et la carte la place a 0,5 sous le sol ; le jeu la releve de 1 (le coffre posait enfonce d'une unite sous le sol)
+            cg = kids.get(o['mdl'])
+            if cg is not None and 'tbox' in cg.m_Name: o['pos'] = (o['pos'][0], o['pos'][1] + 1.0, o['pos'][2])
         tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}
         pams = fld.pam(raw); plp_obj = {}; pamdef = {}
         for q in fld.plp(raw):                                       # FldObject.set_palette_data : textures de l'objet dont le nom contient celui de la palette
@@ -261,16 +264,16 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte4_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte5_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
-        el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres']]
+        el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', [])]
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_, carte3_ : sans les animations de palette et de sequence), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte4_ : sans les animations de palette et de sequence, coffres enfonces), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-3]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-4]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 
@@ -283,6 +286,7 @@ class Donnees:
             if os.path.exists(fp):
                 try: liste = json.load(open(fp, encoding='utf-8'))
                 except Exception: liste = None
+                if liste is not None and 'plans' not in liste: liste = None            # ancienne liste (sans les plans de la fenetre de carte) : refaite
             if liste is not None:
                 echecs = set(liste.get('echecs', []))
                 if all(os.path.exists(os.path.join(self.cache, f)) or n in echecs for _, n, f in self._elements(liste)): self._purger_anciens(); return       # deja tout pret
@@ -291,7 +295,7 @@ class Donnees:
                     go = self._gos(); tx = self._textures()
                 liste = {'cartes': sorted(n[:-4] for n in go if n.endswith('.fld')),
                          'feuilles': sorted(str(int(n[1:])) for n in tx if re.fullmatch(r'h\d+', n)),
-                         'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'echecs': []}
+                         'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'plans': sorted(n for n in tx if re.fullmatch(r'[a-z]{2}_map\d|dsdq4wmap\d+', n)), 'echecs': []}
             echecs = set(liste.get('echecs', []))
             t_debut = time.time(); n_faits = 0
             self.log('Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...')
@@ -306,7 +310,7 @@ class Donnees:
                 except Exception as ex:
                     echecs.add(n); self.log('Preparation : %s %s ignore (%s)' % (genre, n, str(ex)[:60]))
                 n_faits += 1
-                time.sleep(min(0.4, 2.0 * (time.perf_counter() - t)) + 0.01)          # rythme tranquille : le jeu garde la main
+                time.sleep(min(0.25, 1.0 * (time.perf_counter() - t)) + 0.01)          # rythme tranquille
             liste['echecs'] = sorted(echecs)
             with open(fp + '.tmp', 'w', encoding='utf-8') as fh: json.dump(liste, fh)
             os.replace(fp + '.tmp', fp)
@@ -315,3 +319,12 @@ class Donnees:
             self.liberer()
         except Exception as ex:
             self.log('Preparation du cache interrompue : %s' % ex)
+
+
+if __name__ == '__main__':
+    # Preparation du cache dans un processus a part (lance par la visionneuse, priorite basse) : dans un thread du jeu, les extractions (Python pur) lui prenaient le
+    # verrou de l'interpreteur et saccadaient l'ecran. Fin du processus : quand l'entree standard se ferme (la visionneuse s'est arretee).
+    import sys
+    arret = threading.Event()
+    threading.Thread(target=lambda: (sys.stdin.buffer.read(), arret.set()), daemon=True).start()
+    Donnees(sys.argv[1], sys.argv[2], log=lambda *a: print(*a, flush=True)).preparer(arret)
