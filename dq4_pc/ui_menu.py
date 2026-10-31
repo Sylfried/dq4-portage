@@ -416,8 +416,8 @@ class Rendu:
         if not fens: return
         items = []
         for wi, fen in enumerate(fens): items += [(d, wi, o, g, x) for d, o, g, x in self._items(fen)]
-        for fen in fens:
-            if getattr(fen, 'typ', 0) == 25 and fen.carte is not None: self._carte(fen, cx, cy, s, vp)
+        for wi, fen in enumerate(fens):
+            if getattr(fen, 'typ', 0) in (25, 26) and fen.carte is not None: items.append((1.0, wi, 0, 'c', (fen, None)))         # plan : au-dessus du fond du cadre (profondeur 0), sous le marqueur (12 et plus)
         items.sort(key=lambda x: x[:3])                      # comme Unity (objets transparents tries par profondeur sur la camera) : profondeur d'abord, puis la fenetre la plus recente devant ; le fond d'une fenetre ne recouvre plus les boutons d'une autre
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
@@ -431,7 +431,9 @@ class Rendu:
                 vl.draw(gl.GL_TRIANGLES); vl.delete()
             buf = []
         for _, _, _, g, (fen, nd) in items:
-            if g == 'm':
+            if g == 'c':
+                vider(); lot = None; self._carte(fen, cx, cy, s, vp); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            elif g == 'm':
                 for k, mat in enumerate(nd['mats']):
                     idx = nd['sub'].get(str(k))
                     if not idx: continue
@@ -462,7 +464,8 @@ class Rendu:
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
         x0, x1, y1, y0 = cx - 225.0 * s, cx + 225.0 * s, cy + 400.0 * s, cy + (400.0 - 337.5) * s
-        a = np.array([[x0, y0, 0, 0], [x1, y0, 1, 0], [x1, y1, 1, 1], [x0, y0, 0, 0], [x1, y1, 1, 1], [x0, y1, 0, 1]], np.float32)
+        u0, v0, u1, v1 = getattr(fen, 'carte_uv', None) or (0.0, 0.0, 1.0, 1.0)          # grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
+        a = np.array([[x0, y0, u0, v0], [x1, y0, u1, v0], [x1, y1, u1, v1], [x0, y0, u0, v0], [x1, y1, u1, v1], [x0, y1, u0, v1]], np.float32)
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
         t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
         vl.draw(gl.GL_TRIANGLES); vl.delete()

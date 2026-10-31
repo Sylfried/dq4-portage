@@ -1235,7 +1235,8 @@ class Jeu(pyglet.window.Window):
     def _plan_fenetre(self, fe, f):
         """Fenetre de carte du moteur (type 25) : texture du plan nommee par le moteur et marqueur de position (coordonnees en pixels de la texture de 256 x 192)."""
         nom = f['cases'].get((0, 0))
-        if nom and fe.nom_carte != nom: fe.nom_carte = nom
+        if nom and fe.nom_carte != nom:
+            fe.nom_carte = nom
         if fe.nom_carte and (fe.carte is None or getattr(fe, '_nom_tex', None) != fe.nom_carte):
             t = self.plans.get(fe.nom_carte)
             if t is None:
@@ -1252,6 +1253,28 @@ class Jeu(pyglet.window.Window):
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
             nd['pos'][0] = -225.0 + mx * 450.0 / 256.0 - 12.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0 - 12.0; nd['act'] = True
+
+    def _plan_monde_fenetre(self, fe, f):
+        """Grande carte du monde (type 26, Make_WorldLargeMap) : le moteur envoie le drapeau des pieces du plan (indicateur 0), puis la position du joueur x, y (indicateurs 1 et 2) en pixels d'un plan de
+        1024 x 1024. Le jeu compose le plan (LoadLargeWorldMap : fond + pieces dont le bit est leve dans le drapeau) et n'en montre qu'une fenetre de 256 x 192 pixels centree sur le joueur
+        (decalage de texture x / 1024 - 0,125 ; le marqueur reste au centre de la fenetre)."""
+        flag = f['indic'].get(0, 0) & 0xffff; x, y = f['indic'].get(1), f['indic'].get(2)
+        if getattr(fe, '_flag_plan', None) != flag or fe.carte is None:
+            try: pl = self.donnees.plan_monde()
+            except Exception as ex: pl = None; print('Plan du monde illisible : %r' % (ex,), flush=True)
+            if pl is None: return
+            im = pl['base'].copy()
+            for bit, px, py, a in pl['pieces']:
+                if flag >> bit & 1: im[py:py + a.shape[0], px:px + a.shape[1]] = a
+            rgba = np.dstack([im, np.full(im.shape[:2], 255, np.uint8)])
+            if fe.carte is not None: fe.carte.delete()
+            t = pyglet.image.ImageData(1024, 1024, 'RGBA', np.ascontiguousarray(rgba[::-1]).tobytes(), pitch=4096).get_texture()
+            gl.glBindTexture(t.target, t.id)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
+            fe.carte = t; fe._flag_plan = flag
+        if x is not None and y is not None:
+            fe.carte_uv = ((x - 128) / 1024.0, 1.0 - (y + 96) / 1024.0, (x + 128) / 1024.0, 1.0 - (y - 96) / 1024.0)
 
     def _dessiner_menus(self):
         mo = self.moteur
@@ -1281,6 +1304,7 @@ class Jeu(pyglet.window.Window):
             self.ui_tf = {p: (cx,) + repere(p) for _, p in liste}
             for _, p in liste:
                 if self.ui_g.f[p].typ == 25: self._plan_fenetre(self.ui_g.f[p], mo.ui.f[p])
+                elif self.ui_g.f[p].typ == 26: self._plan_monde_fenetre(self.ui_g.f[p], mo.ui.f[p])
             haut, bas = ([self.ui_msg] if msg else []), {}
             for _, p in liste:
                 fe = self.ui_g.f[p]
@@ -1656,7 +1680,10 @@ class Jeu(pyglet.window.Window):
             if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             a_dessiner.append((slot, f, vl))
-            if cam3d is not None: ombres.append((slot, p, float(s['col'][3])))
+            if s.get('ombre', True):                                                 # paquet 15 : le moteur peut masquer l'ombre d'un personnage (bateaux de la carte du monde...)
+                al = float(s['col'][3]) * float(s.get('ombre_a', 1.0))
+                if cam3d is not None: ombres.append((slot, np.array(s['ombre_pos'], float) if s.get('ombre_sep') and s.get('ombre_pos') else p, al))
+                elif champ: ombres.append((slot, p, al))
         icones = self._icones(e, champ, bataille, dh, cam3d)
         self._dom_lie = None
         self.prog.use()
@@ -1680,7 +1707,9 @@ class Jeu(pyglet.window.Window):
         else:
             self._tracer_decor()
         self.prog['cutoff'] = 0.05
-        if ombres and cam3d is not None and not os.environ.get('DQ_SANS_OMBRE'): self._dessiner_ombres_chara(ombres, cam3d)
+        if ombres and not os.environ.get('DQ_SANS_OMBRE'):
+            if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
+            elif champ: self._dessiner_ombres_champ(ombres, w * CH_PX / 24.0)
         for slot, f, vl in a_dessiner:
             self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
@@ -1701,13 +1730,7 @@ class Jeu(pyglet.window.Window):
     OMBRE_DEMI = (0.347, 0.206); OMBRE_HAUT = 0.0625; OMBRE_DEC = 0.25
 
     def _dessiner_ombres_chara(self, ombres, cam3d):
-        if getattr(self, '_ombre_tex', None) is None:
-            # texture CharaTex/common : ellipse d'alpha 96 / 255 aux bords nets (filtre point) ; ici le meme maximum et la meme taille, mais le bord est adouci (ombres « trop brutes »)
-            n = 64; yy, xx = np.mgrid[0:n, 0:n]; r = np.hypot((xx + 0.5 - n / 2) / (n / 2), (yy + 0.5 - n / 2) / (n / 2)); k = np.clip((r - 0.45) / 0.55, 0.0, 1.0)
-            a = np.zeros((n, n, 4), np.uint8); a[..., 3] = np.round(96 * (1.0 - k * k * (3 - 2 * k))).astype(np.uint8)
-            t = self._tex(a, False)
-            gl.glBindTexture(t.target, t.id); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-            self._ombre_tex = t; self._ombre_vl = {}
+        if getattr(self, '_ombre_tex', None) is None: self._ombre_tex_creer()
         if not self._ombre_tex: return
         r_, u_, f_ = cam3d
         rh = np.array([r_[0], 0.0, r_[2]]); rh /= np.linalg.norm(rh) or 1                 # lacet seul de la camera
@@ -1724,7 +1747,34 @@ class Jeu(pyglet.window.Window):
             if vl is None: vl = self._ombre_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             self._tracer(self._ombre_tex, vl)
-        gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS)
+        gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = 0.05        # (les personnages qui suivent rejettent les pixels transparents : sinon leur panneau entier ecrit la profondeur et masque le compagnon derriere)
+
+    # ombre des personnages sur la carte du monde : Chara.SetFieldMode redimensionne le maillage d'ombre a s_shadowDefScale x 28,8 (ellipse de demi-axes 10 x 5,9 pixels de la carte) et l'incline de 36 degres comme le personnage
+    # (projetee : 5,9 x cos 36 = 4,8) ; Chara.SetFieldPosition la pose au meme point que le personnage (ses pieds). Le moteur masque celle des bateaux (paquet 15).
+    OMBRE_CH = (9.99, 5.93 * math.cos(math.radians(36.0)))
+
+    def _dessiner_ombres_champ(self, ombres, ech):
+        if getattr(self, '_ombre_tex', None) is None: self._ombre_tex_creer()
+        gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL)
+        self.prog['cutoff'] = 0.0; self.prog['net'] = 0.0; self.prog['tsize'] = (64.0, 64.0)
+        rx, rz = self.OMBRE_CH[0] * ech / CH_PX, self.OMBRE_CH[1] * ech / CH_PX
+        for slot, p, alpha in ombres:
+            x, y, z = float(p[0]), 0.03, float(p[2])
+            q = [x - rx, y, z - rz, x + rx, y, z - rz, x + rx, y, z + rz, x - rx, y, z - rz, x + rx, y, z + rz, x - rx, y, z + rz]
+            uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, min(1.0, alpha)] * 6
+            vl = self._ombre_vl.get(slot)
+            if vl is None: vl = self._ombre_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
+            else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
+            self._tracer(self._ombre_tex, vl)
+        gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = 0.05
+
+    def _ombre_tex_creer(self):
+        # texture CharaTex/common : ellipse d'alpha 96 / 255 aux bords nets (filtre point) ; ici le meme maximum et la meme taille, mais le bord est adouci (ombres « trop brutes »)
+        n = 64; yy, xx = np.mgrid[0:n, 0:n]; r = np.hypot((xx + 0.5 - n / 2) / (n / 2), (yy + 0.5 - n / 2) / (n / 2)); k = np.clip((r - 0.45) / 0.55, 0.0, 1.0)
+        a = np.zeros((n, n, 4), np.uint8); a[..., 3] = np.round(96 * (1.0 - k * k * (3 - 2 * k))).astype(np.uint8)
+        t = self._tex(a, False)
+        gl.glBindTexture(t.target, t.id); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        self._ombre_tex = t; self._ombre_vl = {}
 
     def _infos(self):
         """Lignes d'information (F1) : lieu et fenetre, reglages d'affichage, son, performances. Rien n'est modifiable ici : les reglages sont dans le menu Echap."""

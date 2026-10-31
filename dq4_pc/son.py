@@ -83,7 +83,7 @@ SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n
 
 class Son:
     """Lecture : une musique a la fois (avec boucle), des bruitages en parallele. Le decodage se fait en tache de fond."""
-    def __init__(self, apk, cache, log=print, volume_musique=0.7, volume_bruitages=0.8, actif=True):
+    def __init__(self, apk, cache, log=print, volume_musique=1.0, volume_bruitages=1.0, actif=True):
         self.apk, self.cache, self.log = apk, cache, log
         self.vol_m, self.vol_b = volume_musique, volume_bruitages
         self.actif = actif; self.ok = False

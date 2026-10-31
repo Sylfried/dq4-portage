@@ -54,6 +54,7 @@ def appliquer(m, d):
     p = pickle.loads(d['python'])
     old = m.ui.obs
     m.etat = p['etat']; m.ui = p['ui']; m.ui.obs = old
+    if not hasattr(m.ui, 'degats'): m.ui.degats = []              # etat enregistre par une version plus ancienne (avant les nombres de degats)
     m.images = p['images']; m.anims = p['anims']; m.msg_visible = p['msg_visible']; m.fielddata = p['fielddata']; m.fldobj = p['fldobj']
     m._grille = p['grille']; m._grille_img = p['grille_img']; m.msgs_ui = p['msgs_ui']
     m.pk.begin()
