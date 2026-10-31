@@ -7,11 +7,12 @@ TOUCHES_DEF = {
     'gauche': ['Q', 'LEFT'], 'droite': ['D', 'RIGHT'], 'haut': ['Z', 'UP'], 'bas': ['S', 'DOWN'],
     'menu': ['RETURN', None], 'discussion': ['SPACE', None], 'carte': ['M', None],
     'A': ['E', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'],
-    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'],
+    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None],
 }
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'), ('menu', 'Menu de commandes (hors combat)'), ('discussion', 'Discussion de groupe'), ('carte', 'Carte'),
-           ('A', 'Parler / examiner / valider'), ('B', 'Annuler'), ('courir', 'Courir (maintenir)'), ('L', 'Page précédente'), ('R', 'Page suivante')]
-RESERVEES = ('ESCAPE', 'F1')           # Echap ouvre le menu, F1 affiche les infos : non reattribuables
+           ('A', 'Parler / examiner / valider'), ('B', 'Annuler'), ('courir', 'Courir (maintenir)'), ('L', 'Page précédente'), ('R', 'Page suivante'),
+           ('infos', 'Afficher les infos à l\'écran')]
+RESERVEES = ('ESCAPE',)                # Echap ouvre le menu : non reattribuable
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
         'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
         'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
@@ -19,20 +20,18 @@ NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Ma
 
 DEFAUT = {
     'mode_sprites': 4,            # 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect (voir hd.py)
-    'echelle_pp': 0,              # pixel perfect sur la carte du monde : 0 = automatique (selon la taille de la fenetre), sinon 1, 2, 4 ou 8
+    'distance': 1,                # distance d'affichage (carte du monde, villes, donjons, tours) : 1 = vue habituelle, 2 / 4 / 8 = vue plus eloignee (on voit 2 / 4 / 8 fois plus de largeur)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
-    'zoom_carte': 1.0,            # zoom de la carte du monde (1 = heros a la taille des villes)
     'plein_ecran': False,
     'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
-    'resolution': None,           # taille de la fenetre [largeur, hauteur] (None : 1280 x 720) ; en plein ecran : mode d'affichage choisi
+    'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu)
     'course': True, 'vitesse_course': 2.0,     # course : touche maintenue (action « courir »), facteur de vitesse
-    'molette_inversee': True,     # sens de la molette dans les menus
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)

@@ -113,7 +113,7 @@ class Fenetre:
             for e in self.codes.get(5, []):
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
-        self.vu = True; self.sel = None; self.ordre = 0
+        self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
 
     # ---- application des messages
@@ -268,13 +268,13 @@ class Fenetre:
             nc, nt = self.N[d['cadre']], self.N[d['texte']]
             nc['pos'] = [x, nc['pos'][1], z]; off = nc.get('off_texte', [0, 0, 0]); nt['pos'] = [x + off[0], nt['pos'][1], z + off[2]]
 
-    def boutons(self):
-        """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface."""
+    def boutons(self, ident=False):
+        """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface ; ident : l'identifiant de l'element s'ajoute en fin de tuple."""
         out = []
         for nd in self.N.values():
             if not nd['pad'] or nd['buttonId'] is None or not nd['vtx'] or nd['etat'] == 2 or not self.visible(nd['id']): continue
             xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
-            out.append((nd['buttonId'], nd['pad'], min(xs), min(zs), max(xs), max(zs), nd['pos'][1]))
+            out.append((nd['buttonId'], nd['pad'], min(xs), min(zs), max(xs), max(zs), nd['pos'][1]) + ((nd['id'],) if ident else ()))
         return out
 
     def bas(self):
@@ -300,7 +300,7 @@ class FenetreMessage:
     """Fenetre de message du jeu (MenuMessage) : cadre (frameData) + canevas de texte dessine par le moteur + curseur de fin de page.
     Le canevas est une texture 512 x 512 qui boucle ; le defilement `[3, y]` decale l'origine verticale de ses UV de (y & 0x1ff) / 512."""
     def __init__(self, ml):
-        self.ml = ml; self.d = ml.message; self.vu = True; self.sel = None; self.ordre = 0
+        self.ml = ml; self.d = ml.message; self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.type = -1; self.y = 0; self.feed = False; self.N = {}
         self.regler(0, 0, False)
 
@@ -441,7 +441,8 @@ class Rendu:
                     if sh not in self.tex: continue
                     col = list(mat.get('color') or (1, 1, 1, 1)); mode = 0; off = (0.0, 0.0)
                     if k == 0 and nd['buttonId'] is not None and nd['buttonId'] >= 0 and 'part' in mat and mat['part'] == 7:
-                        etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId']) else nd['etat']
+                        if fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
+                        else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId']) else nd['etat']
                         if etat == 1 or etat == 4: off = self.ml.pousse
                         if etat == 2: col[3] = 0.0
                         if etat == 3: mode = 1
