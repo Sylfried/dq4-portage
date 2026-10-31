@@ -1,4 +1,4 @@
-"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, touches, quitter.
+"""Menu Echap : reprendre, etats instantanes (savestates), jeu (affichage, son, commandes, interface), quitter.
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit = retour, molette). Les reglages sont enregistres dans reglages.json."""
@@ -17,7 +17,7 @@ JAUNE = OR[:3]
 FOND_DQ = (0, 0, 0); BORDS_DQ = ((138, 138, 138), (205, 205, 205), (255, 255, 255), (132, 132, 132), (41, 41, 41))        # fond noir ; traits du cadre de l'exterieur vers l'interieur
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
-ECHELLES_PP = (0, 1, 2, 4, 8)
+DISTANCES = (1, 2, 4, 8)
 MSAA_CHOIX = (0, 2, 4, 8)
 
 
@@ -25,7 +25,7 @@ class Pause:
     def __init__(self, jeu):
         self.J = jeu; self.ouvert = False; self.pile = []; self.sel = {}; self.capture = None; self.message = None
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_col = 0.0; self.minis = {}; self.rep = None; self.veut_miniature = False; self.mini_tex = None; self.confirme = None
-        self.placement = False                            # placement des boutons a l'ecran (grille) a la place du menu
+        self.cadre_panneau = None                          # (x0, y0, x1, y1) du cadre dessine a la derniere image (placement des boutons : un clic hors du cadre saisit un bouton)
         self.zones_def = {}                                # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs
         self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
         self.deroule = None; self.zones_pop = []          # liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
@@ -47,12 +47,12 @@ class Pause:
     def ouvrir(self):
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None
-        self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.placement = False; self.deroule = None
+        self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
         self.J.pause_jeu(True)
 
     def fermer(self):
         if not self.ouvert: return
-        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.placement = False; self.deroule = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
+        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.deroule = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
         if self.mini_tex is not None:
             try: self.mini_tex.delete()
             except Exception: pass
@@ -62,6 +62,7 @@ class Pause:
     def ecran(self): return self.pile[-1]
 
     def retour(self):
+        if self.ecran == 'placement': self.J.reg.enregistrer()                # fin du placement des boutons
         if len(self.pile) > 1: self.pile.pop()
         else: self.fermer()
 
@@ -76,16 +77,12 @@ class Pause:
         return [dict(t='act', l='Reprendre', ok=self.fermer),
                 dict(t='act', l='Sauvegarder un état', ok=self._aller('sauver')),
                 dict(t='act', l='Charger un état', ok=self._aller('charger')),
-                dict(t='act', l='Affichage', ok=self._aller('affichage')),
                 dict(t='act', l='Jeu', ok=self._aller('jeu')),
-                dict(t='act', l='Boutons à l\'écran', ok=self._aller('boutons')),
-                dict(t='act', l='Son', ok=self._aller('son')),
-                dict(t='act', l='Touches', ok=self._aller('touches')),
                 dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'))]
 
-    def _choix(self, label, valeurs, get, set_, off=False):
+    def _choix(self, label, valeurs, get, set_, off=False, note=None):
         """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
-        (valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante)."""
+        (valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante). `note` : fonction donnant un texte rouge affiche sous la valeur (ou '')."""
         sw = len(valeurs) == 2 and all(isinstance(v, bool) for v in valeurs)
         def pas(d):
             i = (valeurs.index(get()) + d) % len(valeurs) if get() in valeurs else 0
@@ -94,7 +91,7 @@ class Pause:
             if get() != x: set_(x)
         if sw: moins, plus, ok = (lambda: fixer(False)), (lambda: fixer(True)), (lambda: set_(not get()))
         else: moins, plus, ok = (lambda: pas(-1)), (lambda: pas(1)), (lambda: pas(1))
-        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw)
+        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw, note=note)
 
     def _valeurs(self, en): return en['vals']
 
@@ -114,11 +111,9 @@ class Pause:
         return d
 
     noms = {
-        'Sprites': {0: 'Originaux (pixels nets)', 1: 'EPX x8', 2: 'Régions lissées', 3: 'Bicubique', 4: 'Pixel perfect'},
-        'Échelle pixel perfect (carte)': {0: 'Automatique', 1: 'x1', 2: 'x2', 4: 'x4', 8: 'x8'},
-        'Lissage des textures': {True: 'Oui', False: 'Non'}, 'Plein écran': {True: 'Oui', False: 'Non'},
-        'Anticrénelage (au prochain lancement)': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
-        'Infos à l\'écran (F1)': {True: 'Oui', False: 'Non'}, 'Son': {True: 'Oui', False: 'Non'},
+        'Shader': {0: 'Originaux (pixels nets)', 1: 'EPX x8', 2: 'Régions lissées', 3: 'Bicubique', 4: 'Pixel perfect'},
+        "Distance d'affichage": {1: 'x1', 2: 'x2', 4: 'x4', 8: 'x8'},
+        'Anticrénelage': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
     }
 
     def _e_affichage(self):
@@ -128,18 +123,15 @@ class Pause:
                 R[k] = v
                 if f: f(v)                 # (les reglages sont enregistres a la fermeture du menu)
             return s
-        e = [self._choix('Sprites', list(range(len(HD.MODES) + 1)), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
-             self._choix('Échelle pixel perfect (carte)', list(ECHELLES_PP), lambda: R['echelle_pp'], set_('echelle_pp', J.regler_echelle_pp)),
-             self._choix('Lissage des textures', [True, False], lambda: J.lissage, set_('lissage', J.regler_lissage)),
-             self._curs('Zoom de la carte du monde', lambda: J.champ_zoom, lambda v: (set_('zoom_carte', J.regler_zoom)(v)), 0.4, 4.0, 0.01, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['zoom_carte']),
-             self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v)))),
-             self._curs('Angle de la caméra des villes', lambda: R['angle_camera'], lambda v: (R.__setitem__('angle_camera', v), J.regler_angle(v)), -20.0, 40.0, 1.0, 1.0, lambda v: '%+d °' % round(v) if round(v) else '0 °', 1.0, defaut=RG.DEFAUT['angle_camera']),
-             self._curs('Vignettage (bords assombris)', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
-             self._choix('Plein écran', [False, True], lambda: J.est_plein, set_('plein_ecran', J.regler_plein_ecran)),
-             self._choix('Anticrénelage (au prochain lancement)', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa')),
-             self._choix('Infos à l\'écran (F1)', [False, True], lambda: J.aide, set_('infos', J.regler_infos)),
-             dict(t='act', l='Retour', ok=self.retour)]
-        return e
+        return [self._choix('Plein écran', [False, True], lambda: J.est_plein, set_('plein_ecran', J.regler_plein_ecran)),
+                self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v)))),
+                self._choix('Shader', list(range(len(HD.MODES) + 1)), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
+                self._choix('Lissage des textures', [True, False], lambda: J.lissage, set_('lissage', J.regler_lissage)),
+                self._choix("Distance d'affichage", list(DISTANCES), lambda: J.distance, set_('distance', J.regler_distance)),
+                self._curs('Angle de la caméra', lambda: R['angle_camera'], lambda v: (R.__setitem__('angle_camera', v), J.regler_angle(v)), -20.0, 40.0, 1.0, 1.0, lambda v: '%+d °' % round(v) if round(v) else '0 °', 1.0, defaut=RG.DEFAUT['angle_camera']),
+                self._curs('Vignettage (bords assombris)', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
+                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else ''),
+                dict(t='act', l='Retour', ok=self.retour)]
 
     def _e_jeu(self):
         R = self.J.reg
@@ -148,17 +140,24 @@ class Pause:
                 self._choix('Course (maintenir la touche)', [True, False], lambda: R['course'], lambda v: R.__setitem__('course', v)),
                 self._curs('Vitesse de la course', lambda: R['vitesse_course'], lambda v: R.__setitem__('vitesse_course', v), 1.2, 4.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_course']),
                 self._curs('Taille des nombres de dégâts', lambda: R['taille_degats'], lambda v: R.__setitem__('taille_degats', v), 0.5, 3.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['taille_degats']),
-                self._choix('Molette des menus : sens inversé', [True, False], lambda: R['molette_inversee'], lambda v: R.__setitem__('molette_inversee', v)),
+                dict(t='act', l='Affichage', ok=self._aller('affichage')),
+                dict(t='act', l='Son', ok=self._aller('son')),
+                dict(t='act', l='Commandes', ok=self._aller('commandes')),
                 dict(t='act', l='Retour', ok=self.retour)]
 
-    def _e_boutons(self):
-        R = self.J.reg; H = self.J.hud
-        return [self._choix('Boutons à l\'écran (Carte, Commandes, Discussion)', [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
-                self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']),
-                self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),
-                dict(t='act', l='Placer les boutons sur la grille…', ok=lambda: setattr(self, 'placement', True)),
-                dict(t='act', l='Rétablir les positions d\'origine', ok=H.remettre),
+    def _e_interface(self):
+        R = self.J.reg
+        return [self._choix("Afficher les boutons à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
+                dict(t='act', l="Changer le dispositionnement de l'interface", ok=self._aller('placement')),
                 dict(t='act', l='Retour', ok=self.retour)]
+
+    def _e_placement(self):
+        """Panneau en bas de l'ecran pendant le placement des boutons (les boutons sont glisses a la souris, sur la grille)."""
+        R = self.J.reg; H = self.J.hud
+        return [self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']),
+                self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),
+                dict(t='act', l="Rétablir les positions d'origine", ok=H.remettre),
+                dict(t='act', l='Terminer', ok=self.retour)]
 
     def _e_son(self):
         J, R = self.J, self.J.reg
@@ -167,8 +166,8 @@ class Pause:
                 self._curs('Volume des bruitages', lambda: R['volume_bruitages'], lambda v: (R.__setitem__('volume_bruitages', v), J.regler_vol_bruitages(v)), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['volume_bruitages']),
                 dict(t='act', l='Retour', ok=self.retour)]
 
-    def _e_touches(self):
-        R = self.J.reg; e = []
+    def _e_commandes(self):
+        R = self.J.reg; e = [dict(t='act', l='Interface', ok=self._aller('interface'))]
         for act, lib in RG.ACTIONS:
             e.append(dict(t='touche', l=lib, act=act, v=[RG.nom_touche(n) for n in R['touches'][act]]))
         e.append(dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer())))
@@ -227,13 +226,10 @@ class Pause:
         K = pyglet.window.key; R = self.J.reg
         if self.capture is not None: self._capturer(symbol); return True
         if self.saisie is not None: self._touche_saisie(symbol); return True
-        if self.placement:
-            if symbol in (K.ESCAPE, K.RETURN, K.ENTER, K.SPACE, K.BACKSPACE): self.placement = False; R.enregistrer()
-            return True
         act = R.action_de(symbol)
         if self.deroule is not None: self._touche_liste(symbol, act); return True
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
-        if symbol == K.F1: self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True
+        if act == 'infos': self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True          # (la touche des infos a l'ecran se regle dans Commandes)
         if symbol == K.DELETE: self._defaut(); return True
         if symbol in (K.UP,) or act == 'haut': self._bouger(-1); self._repeter(symbol, 'v', -1)
         elif symbol in (K.DOWN,) or act == 'bas': self._bouger(1); self._repeter(symbol, 'v', 1)
@@ -337,7 +333,7 @@ class Pause:
         return None, 0.0
 
     def survol(self, x, y):
-        if self.capture is not None or self.placement: return
+        if self.capture is not None: return
         if self.deroule is not None:
             j = self._zone_liste(x, y)
             if j is not None: self.deroule[1] = j
@@ -347,10 +343,6 @@ class Pause:
 
     def clic(self, x, y, bouton):
         M = pyglet.window.mouse
-        if self.placement:
-            if bouton == M.RIGHT: self.placement = False; self.J.reg.enregistrer()
-            else: self.J.hud.prendre(x, y)
-            return
         if self.capture is not None: self.capture = None; return
         if self.deroule is not None:                                  # liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
             j = self._zone_liste(x, y) if bouton != M.RIGHT else None
@@ -362,6 +354,10 @@ class Pause:
             else: self.retour()
             return
         i, f = self._zone(x, y)
+        if self.ecran == 'placement' and i is None and self.saisie is None:       # placement : hors du panneau, un clic saisit un bouton de l'ecran
+            c = self.cadre_panneau
+            if not (c and c[0] <= x <= c[2] and c[1] <= y <= c[3]): self.J.hud.prendre(x, y)
+            return
         if self.saisie is not None:                                   # un clic ailleurs que sur la valeur en cours de saisie la valide
             ligne = self.saisie[0]; zv = self.zones_val.get(ligne)
             if i == ligne and zv and zv[0] <= x <= zv[1]: return
@@ -381,12 +377,13 @@ class Pause:
 
     def relache(self, x, y, bouton):
         self.glisse = None
-        if self.placement: self.J.hud.poser(); self.J.reg.enregistrer()
+        if self.ecran == 'placement' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
 
     def glisser(self, x, y):
         """Souris deplacee bouton enfonce : le curseur maintenu suit."""
-        if self.placement: self.J.hud.deplacer(x, y); return
-        if self.glisse is None: return
+        if self.glisse is None:
+            if self.ecran == 'placement': self.J.hud.deplacer(x, y)
+            return
         bar = self.barres.get(self.glisse); e = self._entrees()
         if bar is None or self.glisse >= len(e) or e[self.glisse]['t'] != 'curs': self.glisse = None; return
         e[self.glisse]['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
@@ -414,10 +411,7 @@ class Pause:
             except ValueError: pass
 
     def molette(self, sy):
-        if self.placement: return
-        d = -1 if sy > 0 else 1
-        if self.J.reg['molette_inversee']: d = -d
-        self._bouger(d)
+        self._bouger(1 if sy > 0 else -1)                                    # (sens inverse : molette vers le haut = ligne suivante)
 
     # ---- dessin
     @staticmethod
@@ -473,24 +467,23 @@ class Pause:
 
     def dessiner(self):
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)
-        if self.placement:
-            J.hud.dessiner(HM.NOMS, True)
-            gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-            et = self._et('Glisse les boutons pour les placer    Échap, Entrée ou clic droit : terminer', 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k
-            r = pyglet.shapes.Rectangle((W - w) / 2, H - 24 * k - h, w, h, color=(0, 0, 0)); r.opacity = 190; r.draw(); et.x = (W - et.content_width) / 2; et.y = H - 24 * k - h + 11 * k; et.draw()
-            return
+        placement = self.ecran == 'placement'
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-        voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
+        if placement: J.hud.dessiner(HM.NOMS, True)                          # placement : les boutons de l'ecran, bien visibles (ni voile ni cadre central), et le panneau en bas
+        else:
+            voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
         t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
         ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'jeu': 'Jeu', 'son': 'Son', 'boutons': 'Boutons à l\'écran', 'touches': 'Touches', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'jeu': 'Jeu', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'placement': "Disposition de l'interface", 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
         avec_mini = ecr in ('sauver', 'charger')
-        aide = {'touches': 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer', 'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état',
-                'affichage': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut', 'son': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut',
-                'jeu': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
+        curs_aide = 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut'
+        aide = {'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'affichage': curs_aide, 'son': curs_aide, 'jeu': curs_aide,
+                'interface': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)',
+                'placement': 'Glisse les boutons pour les placer    Échap ou clic droit : terminer'}.get(ecr, '')
         en_sel = e[i_sel] if e else None
-        if en_sel and en_sel['t'] == 'choix':
+        if en_sel and en_sel['t'] == 'touche': aide = 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer'
+        elif en_sel and en_sel['t'] == 'choix' and not placement:
             aide = 'Entrée ou clic : activer / désactiver    ←  : Non    →  : Oui' if en_sel.get('sw') else 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
         if self.deroule is not None: aide = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'
         if self.saisie is not None: aide = 'Tape la valeur (Entrée : valider, Échap : annuler)'
@@ -504,37 +497,48 @@ class Pause:
                 tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
-        if ecr in ('affichage', 'son', 'jeu', 'boutons'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
-        if ecr == 'touches': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
+        if ecr in ('affichage', 'son', 'jeu', 'placement'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
+        if ecr == 'commandes': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
         if ecr in ('sauver', 'charger'): pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         pied = 36 * k if aide else 0.0                     # (le message d'information est dessine sous le cadre : il ne decale rien)
-        hmax = H - 2 * 36 * k; h_titre = 78 * k + (22 * k if ecr == 'touches' else 0.0)
-        rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n))); h = min(hmax, h_titre + n * rh + pad / 2 + pied)
+        hmax = H - 2 * 36 * k; h_titre = 78 * k + (22 * k if ecr == 'commandes' else 0.0)
+        if placement: h_titre = 64 * k
+        rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n)))
+        if placement: rh = 38 * k                                                  # panneau compact
+        h = min(hmax, h_titre + n * rh + pad / 2 + pied)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h) / 2; y0 = y1 - h
+        if placement: y0 = 22 * k; y1 = y0 + h                                      # panneau colle en bas de l'ecran
+        self.cadre_panneau = (x0, y0, x0 + pw, y1) if placement else None
         self._cadre(x0, y0, pw, h, k)
-        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - 52 * k; e_t.draw()
+        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if placement else 52) * k; e_t.draw()
         visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); debut = 0               # defilement : les lignes qui ne tiennent pas sont decalees pour garder la selection visible
         if n > visibles: debut = min(max(0, i_sel - visibles // 2), n - visibles)
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_pop = []; lignes = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
-        if ecr == 'touches':
+        if ecr == 'commandes':
             for c in range(2):
                 eh = self._et('Touche %d' % (c + 1), fsp, GRIS); eh.x = c1x + c * 190 * k; eh.y = y1 - h_titre + 6 * k; eh.draw()
         y = y1 - h_titre
         for idx in range(debut, min(n, debut + visibles)):
             en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
+            note = en['note']() if en.get('note') else ''
+            dec = max(0.0, min(8 * k, (rh - 36 * k) * 0.6)) if note else 0.0                  # note rouge sous la valeur : la ligne monte un peu pour lui laisser la place
             if sel:
-                tri = pyglet.shapes.Triangle(x0 + 22 * k, ybas + rh / 2 + 9 * k, x0 + 22 * k, ybas + rh / 2 - 9 * k, x0 + 22 * k + 15 * k, ybas + rh / 2, color=JAUNE); tri.draw()
+                cy = ybas + rh / 2 + dec
+                tri = pyglet.shapes.Triangle(x0 + 22 * k, cy + 9 * k, x0 + 22 * k, cy - 9 * k, x0 + 22 * k + 15 * k, cy, color=JAUNE); tri.draw()
             coul = GRIS if en.get('off') else BLANC
             base = ybas + (rh - fs * 1.33) / 2 + 5 * k
             if en['t'] == 'sep': coul = OR
             lx = x0 + 52 * k
             if en['t'] == 'slot':
                 nu = self._et('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
+            base += dec
             lab = self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
+            if note:
+                en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = x0 + pw - 30 * k - en_.content_width; en_.y = ybas + 3 * k; en_.draw()
             if en['t'] == 'choix' and en.get('liste'):                                        # liste deroulante : valeur courante et petite fleche vers le bas
                 vl = self._et(en['v'](), fs, coul); vl.x = x0 + pw - 30 * k - 24 * k - vl.content_width; vl.y = base; vl.draw()
-                fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2
+                fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2 + dec
                 pyglet.shapes.Triangle(fx - 7 * k, fy + 4 * k, fx + 7 * k, fy + 4 * k, fx, fy - 5 * k, color=OR[:3] if sel else coul[:3]).draw()
                 self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
             elif en['t'] == 'choix':                                                          # interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur

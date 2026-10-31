@@ -53,6 +53,26 @@ MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets 
 # Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/notes-technique-portage-dq4.md) :
 ASPECT_PORTRAIT = 0.5625      # SceneCamera.ASPECT_DEF : l'original est concu pour un ecran portrait 450 x 800 ; Unity fixe le champ de vision HORIZONTAL (fov x 4/3) et en deduit la hauteur
 RESOLUTIONS = ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160))
+MARGE_FENETRE = 100           # pixels a 100 % : barre de titre, bordures et barre des taches autour de la zone de dessin
+
+
+def zone_utile():
+    """(largeur, hauteur) maximales d'une zone de dessin qui tient sur l'ecran principal avec sa barre de titre et la barre des taches ; None si l'ecran est inconnu."""
+    try:
+        ec = pyglet.display.get_display().get_default_screen()
+        try: k = max(1.0, float(ec.get_dpi()) / 96.0)
+        except Exception: k = 1.0
+        return int(ec.width - 16 * k), int(ec.height - MARGE_FENETRE * k)
+    except Exception: return None
+
+
+def ajuster_taille(w, h):
+    """Ramene une taille de fenetre trop grande pour l'ecran a la plus grande taille de meme forme qui tient : Windows reduit alors la fenetre sans prevenir et le dessin gardait la taille demandee (scene zoomee, en partie hors de la fenetre)."""
+    zu = zone_utile()
+    if zu is None or (w <= zu[0] and h <= zu[1]): return int(w), int(h)
+    k = min(zu[0] / float(w), zu[1] / float(h)); nw, nh = max(320, int(w * k)), max(180, int(h * k))
+    print('Fenêtre %d x %d trop grande pour l\'écran : %d x %d' % (w, h, nw, nh), flush=True)
+    return nw, nh
 FOV_VILLE_DEF = 9.5           # fov nominal du mode 0 (terrain) tant que le moteur n'en envoie pas (paquet 11)
 VILLE_NEAR, VILLE_FAR = 5.0, 100.0
 DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
@@ -76,6 +96,7 @@ HEROS_FRAC = SPRITE_H * SPRITE_ECHELLE / (2.0 * (39.55 - DIST_ADJ_VILLE) * math.
 CH_VUE_HAUT = 32.0 / CH_PX * CH_ECHELLE / HEROS_FRAC                         # carte du monde : tuiles visibles en hauteur (~ 20) ; en portrait l'original en montre 28,4 en hauteur et 16 en largeur
 CH_GOUT = 2                                                                 # carte du monde : gouttiere (pixels repetes) autour de chaque tuile de 16 px dans l'atlas copie : aucun debordement d'une tuile sur sa voisine au filtrage
 CH_CASE = 16 + 2 * CH_GOUT
+CH_INCLINAISON_MAX = 20.0                                                   # carte du monde : inclinaison maximale de la vue (degres, angle de camera negatif)
 PP_ECHELLES = (1, 2, 4, 8)                                                  # pixel perfect : pixels d'ecran par pixel de la carte
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
 
@@ -120,6 +141,7 @@ class Jeu(pyglet.window.Window):
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
         self.msaa = 0
+        if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
         for ms in ((args.msaa, 0) if args.msaa else (0,)):       # anticrenelage materiel si la carte le permet
             try:
                 cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3, sample_buffers=1 if ms else 0, samples=ms)
@@ -134,13 +156,13 @@ class Jeu(pyglet.window.Window):
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
-        self.champ_zoom = float(args.carte_zoom); self.pp_auto = not self.reg['echelle_pp']; self.pp_k = self._k_auto() if self.pp_auto else int(self.reg['echelle_pp']); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
+        self.distance = self._distance_valide(self.reg['distance']); self.champ_zoom = float(args.carte_zoom); self.pp_auto = True; self.pp_k = self._k_auto(); self._vue_champ = None       # distance d'affichage (menu Echap) ; carte du monde : zoom de la molette (non enregistre) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
+        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a gauche + cadre noir translucide
-        self.t_demarrage = time.time(); self.etiq_conseil = pyglet.text.Label('Échap : menu    F1 : infos', font_name=POLICES, font_size=11, color=(255, 255, 255, 200), x=10, y=8, anchor_x='left', anchor_y='bottom')
+        self.t_demarrage = time.time(); self.etiq_conseil = pyglet.text.Label(self._texte_conseil(), font_name=POLICES, font_size=11, color=(255, 255, 255, 200), x=10, y=8, anchor_x='left', anchor_y='bottom')
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
@@ -282,20 +304,24 @@ class Jeu(pyglet.window.Window):
 
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
-        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) / zoom."""
+        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) x distance d'affichage / zoom.
+        Option « Angle de la camera » : un angle negatif incline la vue (jusqu'a 20 degres, camera abaissee vers le sud) ; un angle positif, deja vue de dessus, ne change rien."""
         cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0))
         if self.mode == MODE_PP:       # pixel perfect : k pixels d'ecran par pixel de la carte (entier), camera sur un pixel de la carte, heros a sa taille exacte (24 x 32)
             k = self._k_pp(); cx, cz = round(cx) / CH_PX, round(cz) / CH_PX
             dh = self.height / (2.0 * k * CH_PX); dl = self.width / (2.0 * k * CH_PX); ech = 1.0
         else:
-            cx, cz = cx / CH_PX, cz / CH_PX; dh = CH_VUE_HAUT / 2 / self.champ_zoom; dl = dh * aspect; ech = CH_ECHELLE
-        self._vue_champ = (cx, cz, dl, dh)
-        M = np.zeros((4, 4)); M[0, 0] = 1 / dl; M[0, 3] = -cx / dl; M[1, 2] = -1 / dh; M[1, 3] = cz / dh; M[2, 1] = -1 / 100.0; M[3, 3] = 1.0
+            cx, cz = cx / CH_PX, cz / CH_PX; dh = CH_VUE_HAUT / 2 / self.champ_zoom * self.distance; dl = dh * aspect; ech = CH_ECHELLE
+        al = math.radians(min(CH_INCLINAISON_MAX, max(0.0, -self.angle_cam))); ca, sa = math.cos(al), math.sin(al)      # inclinaison : le sol est raccourci par cos(al), on en montre donc 1/cos(al) de plus en hauteur
+        self._vue_champ = (cx, cz, dl, dh / ca)
+        M = np.zeros((4, 4)); M[0, 0] = 1 / dl; M[0, 3] = -cx / dl
+        M[1, 1] = sa / dh; M[1, 2] = -ca / dh; M[1, 3] = ca * cz / dh                       # ecran y = (hauteur x sin - (z - cz) x cos) / dh
+        M[2, 1] = -ca / 100.0; M[2, 2] = -sa / 100.0; M[2, 3] = sa * cz / 100.0; M[3, 3] = 1.0       # profondeur le long de l'axe de la camera (au centre : celle de la vue de dessus)
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
     def _k_auto(self):
-        """Echelle pixel perfect de depart : x1, x2, x4 ou x8, la plus proche (a l'echelle logarithmique) de la hauteur voulue (CH_VUE_HAUT tuiles x zoom)."""
-        ideal = max(1e-3, self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom)
+        """Echelle pixel perfect automatique : x1, x2, x4 ou x8, la plus proche (a l'echelle logarithmique) de la hauteur voulue (CH_VUE_HAUT tuiles x distance d'affichage / zoom)."""
+        ideal = max(1e-3, self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom / self.distance)
         return min(PP_ECHELLES, key=lambda k: abs(math.log(k / ideal)))
 
     def _k_pp(self):
@@ -416,8 +442,8 @@ class Jeu(pyglet.window.Window):
         if self.moteur.etat.partie == MO.PARTIE_CHAMP and sy:
             if self.mode == MODE_PP:     # un cran = l'echelle suivante (x1, x2, x4, x8)
                 k0 = self._k_pp(); self.pp_auto = False
-                self.pp_k = PP_ECHELLES[min(len(PP_ECHELLES) - 1, max(0, PP_ECHELLES.index(k0) + (1 if sy > 0 else -1)))]; self.reg['echelle_pp'] = self.pp_k
-            else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy))); self.reg['zoom_carte'] = round(self.champ_zoom, 2)
+                self.pp_k = PP_ECHELLES[min(len(PP_ECHELLES) - 1, max(0, PP_ECHELLES.index(k0) + (1 if sy > 0 else -1)))]
+            else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
         """Menu Echap : un curseur maintenu suit la souris."""
@@ -447,12 +473,12 @@ class Jeu(pyglet.window.Window):
         super().on_close()
 
     def on_key_press(self, symbol, modifiers):
-        """Seules touches fixes : Echap (menu) et F1 (infos). Les touches de jeu sont celles du menu Touches (pad) ; le menu ouvert recupere toutes les touches."""
+        """Seule touche fixe : Echap (menu). Les autres sont celles du menu Commandes (pad, infos a l'ecran) ; le menu ouvert recupere toutes les touches."""
         K = pyglet.window.key
         if not self._pret: return pyglet.event.EVENT_HANDLED
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
         if symbol == K.ESCAPE: self.pause.ouvrir(); return pyglet.event.EVENT_HANDLED
-        if symbol == K.F1: self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
+        if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if modifiers & K.MOD_CTRL or self.touches[K.LCTRL] or self.touches[K.RCTRL]:
@@ -484,9 +510,21 @@ class Jeu(pyglet.window.Window):
     # ---- reglages appliques depuis le menu Echap
     def regler_mode(self, m): self.mode = int(m)
 
-    def regler_echelle_pp(self, k):
-        self.pp_auto = not k
-        if k: self.pp_k = int(k)
+    @staticmethod
+    def _distance_valide(d):
+        """Distance d'affichage : 1 (vue habituelle), 2, 4 ou 8 (plus loin)."""
+        try: d = int(d)
+        except (TypeError, ValueError): return 1
+        return d if d in PP_ECHELLES else 1
+
+    def regler_distance(self, d):
+        """Menu Echap : la distance reprend la main sur la molette de la carte du monde (echelle automatique, zoom 100 %)."""
+        self.distance = self._distance_valide(d); self.pp_auto = True; self.champ_zoom = 1.0
+
+    def _texte_conseil(self):
+        """Rappel affiche un instant au demarrage : le menu et la touche des infos a l'ecran."""
+        noms = [n for n in self.reg['touches']['infos'] if n]
+        return 'Échap : menu' + ('    %s : infos' % RG.nom_touche(noms[0]) if noms else '')
 
     def regler_lissage(self, oui):
         self.lissage = bool(oui)
@@ -494,23 +532,22 @@ class Jeu(pyglet.window.Window):
         for r in self.decor_hd.values():
             for t in r.values(): self._filtrer(t, self.lissage)
 
-    def regler_zoom(self, z):
-        self.champ_zoom = float(z); self.pp_auto = True; self.reg['echelle_pp'] = 0         # le curseur reprend la main sur l'echelle pixel perfect (sinon il ne changeait plus rien apres un coup de molette)
-
     def regler_angle(self, a): self.angle_cam = float(a)
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
     def resolutions(self):
-        """Tailles proposees (16/9, 720p a 4K) ; la taille actuelle s'y ajoute si elle est libre ; triees par largeur puis hauteur."""
+        """Tailles proposees (16/9, 720p a 4K) qui tiennent sur l'ecran ; la taille actuelle s'y ajoute si elle est libre ; triees par largeur puis hauteur."""
         liste = list(RESOLUTIONS); cur = self.resolution_courante()
+        lim = (self.screen.width, self.screen.height) if self.est_plein else zone_utile()
+        if lim: liste = [r for r in liste if r[0] <= lim[0] and r[1] <= lim[1]]
         if cur not in liste: liste.append(cur)
         return sorted(liste)                # par largeur, puis par hauteur
 
     def resolution_courante(self): return (int(self.width), int(self.height))
 
     def regler_resolution(self, v):
-        """Fenetre : change la taille ; plein ecran : choisit le mode d'affichage correspondant s'il existe."""
+        """Fenetre : change la taille (ramenee a l'ecran si elle est trop grande) ; plein ecran : choisit le mode d'affichage correspondant s'il existe."""
         w, h = int(v[0]), int(v[1])
         if self.est_plein:
             try:
@@ -518,7 +555,25 @@ class Jeu(pyglet.window.Window):
                 if modes: self.set_fullscreen(True, screen=self.screen, mode=max(modes, key=lambda m: m.rate))
             except Exception as ex: print('resolution plein ecran impossible :', ex, flush=True)
         else:
-            self.taille_fenetre = (w, h); self.set_size(w, h)
+            w, h = ajuster_taille(w, h)
+            self.taille_fenetre = (w, h); self.set_size(w, h); self._verifier_taille_reelle()
+
+    def _verifier_taille_reelle(self):
+        """Windows : compare la zone de dessin donnee par le systeme a celle que pyglet croit avoir et la lui redonne si elles different (fenetre reduite par Windows : sinon le dessin est trop grand et la scene semble zoomee jusqu'au premier redimensionnement)."""
+        if sys.platform != 'win32' or self.est_plein: return
+        try:
+            import ctypes
+            from ctypes import wintypes
+            r = wintypes.RECT()
+            if not ctypes.windll.user32.GetClientRect(self._hwnd, ctypes.byref(r)): return
+            w, h = r.right - r.left, r.bottom - r.top
+            if w <= 0 or h <= 0 or (w, h) == (self._width, self._height): return
+            print('Fenêtre : zone de dessin %d x %d corrigée (le système donne %d x %d)' % (self._width, self._height, w, h), flush=True)
+            self._width, self._height = w, h
+            self._update_view_location(w, h)
+            self.dispatch_event('_on_internal_resize', w, h)
+        except Exception as ex: print('vérification de la taille impossible :', ex, flush=True)
+
     def regler_infos(self, oui): self.aide = bool(oui)
 
     def regler_plein_ecran(self, oui):
@@ -541,7 +596,7 @@ class Jeu(pyglet.window.Window):
         self.son.mettre_en_pause(oui)
         self.acc = 0.0; self.t_boucle = None
         if not oui:
-            self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}; self.survol = None; self.appui = None
+            self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}; self.survol = None; self.appui = None; self.survol_nd = None
 
     def quitter(self):
         self.close(); pyglet.app.exit()
@@ -588,7 +643,7 @@ class Jeu(pyglet.window.Window):
         viewer = ET.appliquer(mo, d)
         self.ui_g_reset()
         self.carte_nom = None; self.champ_cle = None; self.prec = None; self.canevas_cle = None; self.msg_cle = None
-        self.pad_prec = 0; self.rep = {}; self.menu_relacher = None; self.survol = None; self.appui = None; self.cur_local = {}; self.effet_ref = None; self.effet_tex_prete = False
+        self.pad_prec = 0; self.rep = {}; self.menu_relacher = None; self.survol = None; self.appui = None; self.survol_nd = None; self.cur_local = {}; self.effet_ref = None; self.effet_tex_prete = False
         self.acc = 0.0; self.t_boucle = None
         self.n_combat = 0 if mo.etat.partie != MO.PARTIE_COMBAT else self.n_combat
         e = mo.etat
@@ -653,6 +708,7 @@ class Jeu(pyglet.window.Window):
         if not e.cam_libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0: th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)
+        th_v *= self.distance                                              # option « Distance d'affichage » : x2, x4, x8 = champ 2, 4, 8 fois plus large (villes, grottes, tours...)
         if self.bornes_x is not None:
             # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
             fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
@@ -1010,6 +1066,7 @@ class Jeu(pyglet.window.Window):
         Menu a curseur du moteur (message 2 : colonnes x lignes, ex. Oui / Non) : les touches lui sont transmises, il deplace son curseur (messages 4) et valide ;
         gauche/droite sur une seule colonne = precedent/suivant. Menu tactile (boutons sans curseur du moteur) : curseur local deplace d'apres la position des boutons, A = toucher."""
         mo = self.moteur; f = mo.ui.f[port]
+        if decl: self.survol_nd = None                                # une touche : le curseur reprend la main (rangee entiere en surbrillance)
         dirs = ((MO.HAUT, 2), (MO.BAS, 1), (MO.GAUCHE, 8), (MO.DROITE, 4))
         fe = self.ui_g.f.get(port) if self.ui_g else None
         z = {b: ((x0 + x1) / 2, (z0 + z1) / 2) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}
@@ -1103,11 +1160,11 @@ class Jeu(pyglet.window.Window):
         return (CB_MSG_BAS if combat else MSG_BAS) - b
 
     def _zones(self, port):
-        """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1)] en pixels."""
+        """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1, profondeur, identifiant de l'element)] en pixels."""
         fe = self.ui_g.f.get(port) if self.ui_g else None
         if not fe: return []
         cx, cy, ech = self.ui_tf.get(port) or self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
-        return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr) for b, pad, x0, z0, x1, z1, pr in fe.boutons()]
+        return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr, nid) for b, pad, x0, z0, x1, z1, pr, nid in fe.boutons(True)]
 
     def _tex_icone(self, ident):
         """Texture de l'icone `ident` (case 32 x 32 de la feuille MenuTexture, numerotee de gauche a droite et de haut en bas ; Riseup.SetTexture -> UV 1/32) ; None si la feuille est absente."""
@@ -1152,11 +1209,11 @@ class Jeu(pyglet.window.Window):
         return r
 
     def _bouton_sous(self, port, x, y):
-        """Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur) ou None."""
-        h = [(pr, b, pad) for b, pad, x0, y0, x1, y1, pr in self._zones(port) if x0 <= x <= x1 and y0 <= y <= y1]
+        """Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur, identifiant de l'element) ou None."""
+        h = [(pr, b, pad, nid) for b, pad, x0, y0, x1, y1, pr, nid in self._zones(port) if x0 <= x <= x1 and y0 <= y <= y1]
         if not h: return None
-        pr, b, pad = max(h, key=lambda t: t[0])
-        return b, pad, pr
+        pr, b, pad, nid = max(h, key=lambda t: t[0])
+        return b, pad, pr, nid
 
     def on_mouse_press(self, x, y, bouton, modifiers):
         """Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler."""
@@ -1174,7 +1231,7 @@ class Jeu(pyglet.window.Window):
             if h and h[0] == -1 and h[1] == 0x400: self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
-            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
+            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.appui_nd = h[3]; self.son.jouer_se(SE_BOUTON); return
         if mo.msg_visible: self.clic_a = True                                      # toucher le message = page suivante
 
     def on_mouse_motion(self, x, y, dx, dy):
@@ -1185,10 +1242,12 @@ class Jeu(pyglet.window.Window):
         if not self.ui_rendu or self.appui: return
         mo = self.moteur
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and h[0] >= 0]
-        if not touches: self.survol = None; return
-        _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]
+        if not touches: self.survol = None; self.survol_nd = None; return
+        _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]; self.survol_nd = (port, h[3])
         if f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
         elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
+
+    def on_mouse_leave(self, x, y): self.survol_nd = None
 
     def _survol_pas(self):
         """Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis)."""
@@ -1343,6 +1402,7 @@ class Jeu(pyglet.window.Window):
             for _, p in liste:
                 fe = self.ui_g.f[p]
                 fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
+                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p and p == actif else None)       # souris : l'element pointe seul
                 if p in self.ui_suit: haut.append(fe)
                 else: bas.setdefault(self.ui_tf[p][1], []).append(fe)
             if haut: self.ui_rendu.dessiner(haut, cx, repere('msg')[0] + dz * s, s, (self.width, self.height))
@@ -1545,6 +1605,8 @@ class Jeu(pyglet.window.Window):
         return sauve
 
     def on_draw(self):
+        self._nb_dessins = getattr(self, '_nb_dessins', 0) + 1
+        if self._nb_dessins <= 90 or self._nb_dessins % 120 == 0: self._verifier_taille_reelle()
         sauve = self._interpoler()
         try: self._dessiner()
         finally:
@@ -1827,8 +1889,8 @@ class Jeu(pyglet.window.Window):
         nom_mode = HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect' + (' x%d%s' % (self._k_pp(), ' (auto)' if self.pp_auto else '') if champ else '')
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
         self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
-        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Zoom de la carte : %d %%\nSon : %s (musique %d %%, bruitages %d %%)' % (
-            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', round(self.champ_zoom * 100),
+        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance d\'affichage : x%d\nSon : %s (musique %d %%, bruitages %d %%)' % (
+            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', self.distance,
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
 
     def _dessiner_aide(self):
@@ -1897,10 +1959,9 @@ def main():
     reg = RG.Reglages(a.reglages)
     if a.hd is None: a.hd = reg['mode_sprites']
     else: reg['mode_sprites'] = a.hd
-    if a.carte_zoom is None: a.carte_zoom = reg['zoom_carte']
-    else: reg['zoom_carte'] = a.carte_zoom
+    if a.carte_zoom is None: a.carte_zoom = 1.0
     if a.msaa is None: a.msaa = reg['msaa']
-    rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1280, 720)
+    rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1920, 1080)
     if a.largeur is None: a.largeur = int(rs[0]) if a.hauteur is None else int(round(a.hauteur * 16 / 9))
     if a.hauteur is None: a.hauteur = int(rs[1]) if a.largeur == int(rs[0]) else int(round(a.largeur * 9 / 16))
     if a.volume_musique is None: a.volume_musique = reg['volume_musique']
