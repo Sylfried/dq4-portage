@@ -41,6 +41,7 @@ VILLE_NEAR, VILLE_FAR = 5.0, 100.0
 DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
 BAS_DEF = 0.2                 # SceneCamera.s_lookDownAdjust (.cctor) : la camera releve son tangage de 0,2 degre
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
+UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portrait d'origine remplit exactement la hauteur de la fenetre) ; reduit a 1 si un groupe de fenetres ne tient plus a l'ecran
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 CH_VUE_HAUT = 256.0 * 800.0 / 450.0 / CH_PX                                 # Field.Init : camera ORTHOGRAPHIQUE vue de dessus, orthographicSize = 128 / (largeur / hauteur), soit 256 px (16 tuiles) en largeur ; en portrait 450 x 800 cela fait 28,4 tuiles en hauteur, qu'on garde en 16/9
@@ -97,7 +98,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
+        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.aide = True; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'aide en haut a gauche + cadre noir translucide
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -515,7 +516,7 @@ class Jeu(pyglet.window.Window):
         """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat."""
         M = getattr(self, '_M_combat', None); e = self.moteur.etat
         if M is None: return None
-        ech = self.height / 800.0; cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
+        ech = self.height / 800.0 * self.ui_k; cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
         xs = []
         for i in range(32):
             if not (masque >> i) & 1: continue
@@ -647,9 +648,9 @@ class Jeu(pyglet.window.Window):
     def _marge_aide(self):
         """Largeur disponible pour les lignes d'aide : la marge a gauche de la colonne d'interface (portrait 450 x 800 centre), pour ne pas cacher les fenetres du jeu."""
         if self.ui_rendu and self.args.ui_pos == 'centre':
-            return int(max(260, (self.width - 450 * self.height / 800.0) / 2 - 16))
+            return int(max(260, (self.width - 450 * self.height / 800.0 * UI_ZOOM) / 2 - 16))
         if self.ui_rendu and self.args.ui_pos == 'droite':
-            return int(max(260, self.width - 450 * self.height / 800.0 - 16))
+            return int(max(260, self.width - 450 * self.height / 800.0 * UI_ZOOM - 16))
         return int(max(260, self.width - 20))
 
     def _curseur(self, port):
@@ -660,8 +661,27 @@ class Jeu(pyglet.window.Window):
 
     def _ui_repere(self):
         """Colonne d'interface du jeu (portrait 450 x 800 centre, hauteur de la fenetre) : (x du centre, y du centre, pixels par unite)."""
-        ech = self.height / 800.0
+        ech = self.height / 800.0 * self.ui_k
         return {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2), self.height / 2.0, ech
+
+    def _ui_echelle(self, intervalles):
+        """Agrandissement des fenetres : intervalles [(bas, haut)] en unites d'interface -> (k, mode de chaque groupe).
+        Les fenetres proches (moins de 60 unites) forment un groupe ; un groupe du bas (resp. du haut, resp. du milieu) est agrandi autour du bord bas
+        (haut, centre) de l'ecran, pour rester colle a ce bord. k = UI_ZOOM, reduit (jusqu'a 1) tant qu'un groupe sort de l'ecran ou en recouvre un autre."""
+        H = float(self.height); ech = H / 800.0
+        gr = []
+        for lo, hi in sorted(intervalles):
+            if gr and lo - gr[-1][1] < 60.0: gr[-1][1] = max(gr[-1][1], hi)
+            else: gr.append([lo, hi])
+        modes = ['bas' if (lo + hi) / 2 < -100 else 'haut' if (lo + hi) / 2 > 100 else 'centre' for lo, hi in gr]
+        def y(z, mode, s): return (z + 400.0) * s if mode == 'bas' else H - (400.0 - z) * s if mode == 'haut' else H / 2 + z * s
+        kmax = min(UI_ZOOM, self.width / (450.0 * ech))
+        k = kmax
+        while k > 1.0:
+            s = ech * k; iv = [(y(lo, m, s), y(hi, m, s)) for (lo, hi), m in zip(gr, modes)]
+            if all(a >= -0.5 and b <= H + 0.5 for a, b in iv) and all(iv[i + 1][0] - iv[i][1] >= 8.0 for i in range(len(iv) - 1) if iv[i + 1][0] >= iv[i][0]): break
+            k -= 0.01
+        return max(k, 1.0), gr, modes
 
     def _dz_message(self, ports):
         """Fenetre de message du terrain : l'original la pose au-dessus de la zone des menus du bas (portrait) ; en 16/9 on la descend en bas de l'ecran,
@@ -676,7 +696,7 @@ class Jeu(pyglet.window.Window):
         """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1)] en pixels."""
         fe = self.ui_g.f.get(port) if self.ui_g else None
         if not fe: return []
-        cx, cy, ech = self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
+        cx, cy, ech = self.ui_tf.get(port) or self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
         return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr) for b, pad, x0, z0, x1, z1, pr in fe.boutons()]
 
     def _tex_icone(self, ident):
@@ -772,17 +792,31 @@ class Jeu(pyglet.window.Window):
                 self._ui_etat = etat; print('UI image %d actif=%s : %s' % (self.n, actif, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in etat)), flush=True)
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
-            cx, cy, ech = self._ui_repere()
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
             self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if dz else set()      # le Oui/Non (type 1) suit la fenetre de message
-            haut, bas = ([self.ui_msg] if msg else []), []
+            ivs = {}
+            for _, p in liste:
+                e = self.ui_g.f[p].etendue()
+                if e: ivs[p] = (e[0] + (dz if p in self.ui_suit else 0.0), e[1] + (dz if p in self.ui_suit else 0.0))
+            if msg:
+                e = self.ui_msg.etendue()
+                if e: ivs['msg'] = (e[0] + dz, e[1] + dz)
+            k, gr, modes = self._ui_echelle(list(ivs.values())); self.ui_k = k
+            H = float(self.height); s = H / 800.0 * k; cx = self._ui_repere()[0]
+            def repere(cle):                                  # (cy, echelle) du groupe de fenetres qui contient cette fenetre
+                if cle not in ivs: return 400.0 * s, s
+                lo, hi = ivs[cle]; i = next((j for j, g in enumerate(gr) if g[0] - 1e-6 <= lo and hi <= g[1] + 1e-6), 0); m = modes[i] if modes else 'bas'
+                return (400.0 * s if m == 'bas' else H - 400.0 * s if m == 'haut' else H / 2), s
+            self.ui_tf = {p: (cx,) + repere(p) for _, p in liste}
+            haut, bas = ([self.ui_msg] if msg else []), {}
             for _, p in liste:
                 fe = self.ui_g.f[p]
                 fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
-                (haut if p in self.ui_suit else bas).append(fe)
-            if haut: self.ui_rendu.dessiner(haut, cx, cy + dz * ech, ech, (self.width, self.height))
-            if bas: self.ui_rendu.dessiner(bas, cx, cy, ech, (self.width, self.height))
+                if p in self.ui_suit: haut.append(fe)
+                else: bas.setdefault(self.ui_tf[p][1], []).append(fe)
+            if haut: self.ui_rendu.dessiner(haut, cx, repere('msg')[0] + dz * s, s, (self.width, self.height))
+            for cy, fens_g in bas.items(): self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
         ech = self.height / 720.0; W, H = self.width, self.height

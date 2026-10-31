@@ -254,6 +254,11 @@ class Fenetre:
         zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
         return min(zs) if zs else 0.0
 
+    def etendue(self):
+        """(bas, haut) en unites d'interface des parties visibles de la fenetre, ou None si rien n'est dessine."""
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        return (min(zs), max(zs)) if zs else None
+
     def visible(self, nid):
         while nid is not None:
             nd = self.N.get(nid)
@@ -296,6 +301,10 @@ class FenetreMessage:
     def visible(self, nid):
         nd = self.N.get(nid)
         return bool(nd and nd['act'])
+
+    def etendue(self):
+        c = self.N.get('cadre')
+        return (c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx'])) if c and c['vtx'] else None
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas du cadre."""
@@ -378,7 +387,8 @@ class Rendu:
         """fens : liste de Fenetre ; (cx, cy) = pixel du centre de l'ecran du jeu ; s = pixels par unite ; vp = (largeur, hauteur) de la fenetre."""
         if not fens: return
         items = []
-        for fen in fens: items += self._items(fen)          # fenetres empilees dans l'ordre d'ouverture ; profondeur propre a chaque fenetre
+        for wi, fen in enumerate(fens): items += [(d, wi, o, g, x) for d, o, g, x in self._items(fen)]
+        items.sort(key=lambda x: x[:3])                      # comme Unity (objets transparents tries par profondeur sur la camera) : profondeur d'abord, puis la fenetre la plus recente devant ; le fond d'une fenetre ne recouvre plus les boutons d'une autre
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
         lot = None; buf = []
@@ -390,7 +400,7 @@ class Rendu:
                 gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(lot[0].target, lot[0].id); self.prog['mode'] = lot[1]
                 vl.draw(gl.GL_TRIANGLES); vl.delete()
             buf = []
-        for _, _, g, (fen, nd) in items:
+        for _, _, _, g, (fen, nd) in items:
             if g == 'm':
                 for k, mat in enumerate(nd['mats']):
                     idx = nd['sub'].get(str(k))
@@ -425,7 +435,7 @@ class Rendu:
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         row = t['anchor'] // 3; col = t['anchor'] % 3
         hb = N * pas                                                    # hauteur du bloc de texte
-        haut = zp + hb / 2 if row == 1 else zp                             # les ancrages « bas » se comportent comme les ancrages « haut » (verifie sur la mise en page : le texte reste dans son cadre)
+        haut = zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0)       # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
         base0 = haut - asc
         px = max(6, int(round(emy * s)))
         def teinte(i):
