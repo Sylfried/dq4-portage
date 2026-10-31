@@ -4,6 +4,7 @@ import json, struct, sys
 import scene as S, runall2 as R, menusys as M
 T = S.T
 # Color.cyan / Color.green : proprietes natives d'Unity (absentes de l'emulation) -> valeurs standard d'Unity
+GENERATION = 2      # numero de version de la mise en page : 2 = langue reglee (GetLangages) ; lancer_dq4.bat refait un fichier de generation plus ancienne
 COULEURS_UNITY = {5: [0.0, 1.0, 1.0, 1.0], 6: [0.0, 1.0, 0.0, 1.0]}
 
 
@@ -21,7 +22,7 @@ def entete():
     sz, line, dy, hiro, nameb = struct.unpack('<5f', bytes(T.uc.mem_read(st + 8, 20)))
     k = M.klass_of(T, 'MenuParts.IButton'); T.run(0xd04310)
     pu = struct.unpack('<2f', bytes(T.uc.mem_read(T.u(k + 0xb8, 8), 8)))
-    return dict(info=infos, colors=colors, lang=dict(size=sz, line=line, dy=dy, hiro=hiro, nameBase=nameb), pushed=list(pu), W=450, nTypes=len(R.tbl))
+    return dict(info=infos, colors=colors, lang=dict(size=sz, line=line, dy=dy, hiro=hiro, nameBase=nameb), pushed=list(pu), W=450, nTypes=len(R.tbl), gen=GENERATION)
 
 
 if __name__ == '__main__':

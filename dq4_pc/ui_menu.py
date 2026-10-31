@@ -87,6 +87,10 @@ class Fenetre:
                 if e['kind'] == 'func':
                     for nid, dd in ((e.get('fx') or {}).get('-1') or {}).get('d', {}).items():
                         if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
+        if self.t.get('name', '').startswith('Make_NameButton'):       # liste de 6 boutons mais le moteur n'en pilote que 5 (codes 0 a 4) : le 6e (en bas, sous « Sauvegarde rapide ») reste cache tant qu'aucun code ne le montre
+            for e in self.codes.get(5, []):
+                for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
+                    if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         self.vu = True; self.sel = None; self.ordre = 0
 
     # ---- application des messages
