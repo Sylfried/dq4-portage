@@ -149,7 +149,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.prepa_arret = threading.Event(); self.prepa_proc = None
-        self.hud = HM.Boutons(self); self.hud_decl = 0; self.nb_degats = []; self._nb_tex = None
+        self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_ouverte = False; self.nb_degats = []; self._nb_tex = None
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
@@ -555,7 +555,7 @@ class Jeu(pyglet.window.Window):
     def _etat_complet(self):
         """Etat instantane du moteur + de la visionneuse (objets animes de la carte compris)."""
         viewer = {'objets_etat': self.objets.etat if self.objets is not None else None, 'objets_auto': self.objets.auto if self.objets is not None else None,
-                  'palettes': self.palettes.etat() if self.palettes is not None else None, 'carte_nom': self.carte_nom, 'motif_n': self.motif_n, 'motif_acc': self.motif_acc.copy()}
+                  'palettes': self.palettes.etat() if self.palettes is not None else None, 'carte_nom': self.carte_nom, 'motif_n': self.motif_n, 'motif_acc': self.motif_acc.copy(), 'musique': self.son.etat_bgm()}
         return ET.instantane(self.moteur, viewer)
 
     def sauver_etat(self, n, miniature_png=b''):
@@ -598,8 +598,7 @@ class Jeu(pyglet.window.Window):
             self.objets.sale = set(); self.objets.sale_uv = set(); self.objets.sale_col = set()
         if viewer and viewer.get('palettes') and self.palettes is not None: self.palettes.regler(viewer['palettes'])
         for sp in list(e.sprites.values()): self._feuille(sp['id'] - 4096 if (e.partie == MO.PARTIE_CHAMP and sp['id'] >= 4096) else sp['id'], self.mode)
-        self.son.arreter_bgm()
-        if e.musique is not None: self.son.jouer_bgm(e.musique)
+        self.son.restaurer_bgm(viewer.get('musique') if viewer else None, e.musique)         # la musique repart du moment enregistre
         e.sons = []
 
     def toast(self, texte, duree=1.8):
@@ -1124,6 +1123,13 @@ class Jeu(pyglet.window.Window):
             out.append((tex, vl))
         return out
 
+    def _carte_ports(self):
+        """Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte."""
+        r = {}
+        for p, f in self.moteur.ui.f.items():
+            if p >= 12 and f.get('act') and f.get('type') in (22, 23, 25, 26): r[22 if f['type'] == 23 else f['type']] = p
+        return r
+
     def _bouton_sous(self, port, x, y):
         """Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur) ou None."""
         h = [(pr, b, pad) for b, pad, x0, y0, x1, y1, pr in self._zones(port) if x0 <= x <= x1 and y0 <= y <= y1]
@@ -1141,6 +1147,10 @@ class Jeu(pyglet.window.Window):
             vis = self.hud.visibles()
             if vis and self.hud.appuyer(x, y, vis): self.son.jouer_se(SE_BOUTON); return                  # boutons a l'ecran (Carte, Commandes, Discussion)
         if bouton != M.LEFT or not self.ui_rendu: return
+        cp = self._carte_ports()
+        if 22 in cp:                                                               # bouton retour de la carte (touche de manette 0x400, sans numero) : ferme la carte au relachement
+            h = self._bouton_sous(cp[22], x, y)
+            if h and h[0] == -1 and h[1] == 0x400: self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
             _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
@@ -1181,6 +1191,9 @@ class Jeu(pyglet.window.Window):
         if bouton != pyglet.window.mouse.LEFT or not self.appui: return
         port, b, pad = self.appui; self.appui = None
         h = self._bouton_sous(port, x, y)
+        if b == -1 and pad == 0x400:                       # bouton retour : MenuPortItem.Update ajoute 0x400 aux touches du jeu (le moteur ferme la carte) au lieu d'envoyer un message au port
+            if h and h[0] == b: self.hud_decl = BTN_DISCUSSION
+            return
         if h and h[0] == b and port in self.moteur.menus_saisie():
             self.moteur.envoyer_menu(port, 1, b, pad); self.menu_relacher = port
             f = self.moteur.ui.f.get(port)
@@ -1548,7 +1561,15 @@ class Jeu(pyglet.window.Window):
         mo = self.moteur
         if self.menu_relacher is not None:                 # fin de l'appui OK / Annuler envoye au menu
             mo.envoyer_menu(self.menu_relacher, 1, -1, 0); self.menu_relacher = None
-        port = mo.menu_actif()
+        carte = self._carte_ports() if not mo.msg_visible else {}
+        if bool(carte) != self.carte_ouverte: self.carte_ouverte = bool(carte); self.carte_vue = 1           # carte ouverte : premiere version
+        if carte:
+            # Touche Carte : 1re fois la premiere version, 2e fois l'autre version (haut de la manette sur la fenetre du plan : FieldImageMap::execute), 3e fois ferme (bouton retour : 0x400, comme MenuPortItem.Update d'Unity) ;
+            # Annuler ou le bouton retour ferment aussi. Le curseur et les fleches ne servent pas ici.
+            if fr['carte'] and 25 in carte and 26 in carte and self.carte_vue == 1:
+                mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 2; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
+            elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+        port = None if carte else mo.menu_actif()
         if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None      # critere memoire seul : le message d'abord
         if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
@@ -1651,6 +1672,10 @@ class Jeu(pyglet.window.Window):
             w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
         a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
+        rang = {}
+        if champ:       # carte du monde : sprites a plat, tous a la meme hauteur ; le jeu les superpose par la hauteur z que le moteur envoie (3e valeur de la position), puis le plus au sud passe devant (un equipier au sud du heros est devant lui), puis l'emplacement le plus recent
+            vus = [(float(s['pos'][2]) if len(s['pos']) > 2 else 0.0, float(s['pos'][1]), sl) for sl, s in e.sprites.items() if s['pos'] is not None]
+            rang = {sl: i for i, (_, _, sl) in enumerate(sorted(vus))}
         for slot, s in sorted(e.sprites.items()):
             if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
@@ -1663,7 +1688,7 @@ class Jeu(pyglet.window.Window):
                 v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
             else:
                 u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
-            p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 - slot * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
+            p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 + rang.get(slot, 0) * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
             if cam3d is not None:
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer

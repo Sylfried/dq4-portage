@@ -12,6 +12,7 @@ import hud_mobile as HM
 NB_ETATS = 10
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 OR = (255, 235, 130, 255); BLANC = (255, 255, 255, 255); GRIS = (150, 160, 160, 255); ROUGE = (255, 150, 140, 255)
+FOND_DQ = (7, 11, 65); BORDS_DQ = ((211, 212, 221), (126, 128, 156), (46, 49, 94))        # fenetres des menus du jeu : fond bleu nuit, liseré clair en trois traits
 ECHELLES_PP = (0, 1, 2, 4, 8)
 MSAA_CHOIX = (0, 2, 4, 8)
 
@@ -23,17 +24,18 @@ class Pause:
         self.placement = False                            # placement des boutons a l'ecran (grille) a la place du menu
         self.zones_def = {}                                # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs
         self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
+        self.deroule = None; self.zones_pop = []          # liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
 
     # ---- ouverture / fermeture
     def ouvrir(self):
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None
-        self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.placement = False
+        self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.placement = False; self.deroule = None
         self.J.pause_jeu(True)
 
     def fermer(self):
         if not self.ouvert: return
-        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.placement = False; self.J.reg.enregistrer(); self.J.pause_jeu(False)
+        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.placement = False; self.deroule = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
         if self.mini_tex is not None:
             try: self.mini_tex.delete()
             except Exception: pass
@@ -65,11 +67,12 @@ class Pause:
                 dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'))]
 
     def _choix(self, label, valeurs, get, set_, off=False):
-        """Entree a valeurs en liste : gauche / droite (ou valider) passent a la precedente / suivante."""
+        """Entree a valeurs en liste : gauche / droite passent a la precedente / suivante ; valider bascule (Oui / Non) ou ouvre la liste deroulante (3 valeurs ou plus)."""
         def pas(d):
             i = (valeurs.index(get()) + d) % len(valeurs) if get() in valeurs else 0
             set_(valeurs[i])
-        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=lambda: pas(-1), plus=lambda: pas(1), ok=lambda: pas(1), off=off)
+        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=lambda: pas(-1), plus=lambda: pas(1), ok=lambda: pas(1), off=off,
+                    get=get, set=set_, liste=len(valeurs) > 2)           # plus de deux valeurs : liste deroulante (Oui / Non : on bascule directement)
 
     def _valeurs(self, en): return en['vals']
 
@@ -193,6 +196,7 @@ class Pause:
             if symbol in (K.ESCAPE, K.RETURN, K.ENTER, K.SPACE, K.BACKSPACE): self.placement = False; R.enregistrer()
             return True
         act = R.action_de(symbol)
+        if self.deroule is not None: self._touche_liste(symbol, act); return True
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
         if symbol == K.F1: self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True
         if symbol == K.DELETE: self._defaut(); return True
@@ -213,7 +217,36 @@ class Pause:
             if sens == 'v': self._bouger(d)
             else: self._regler(d)
 
+    # ---- liste deroulante
+    def _ouvrir_liste(self):
+        i = self.sel.get(self.ecran, 0); en = self._entrees()[i]; cur = en['get']()
+        self.deroule = [i, en['vals'].index(cur) if cur in en['vals'] else 0]
+
+    def _fin_liste(self, valide):
+        d, self.deroule = self.deroule, None
+        if not valide or d is None: return
+        e = self._entrees()
+        if d[0] < len(e) and e[d[0]]['t'] == 'choix': e[d[0]]['set'](e[d[0]]['vals'][d[1]])
+
+    def _bouger_liste(self, d):
+        e = self._entrees()
+        if self.deroule[0] >= len(e) or e[self.deroule[0]]['t'] != 'choix': self.deroule = None; return
+        n = len(e[self.deroule[0]]['vals']); self.deroule[1] = (self.deroule[1] + d) % n
+
+    def _touche_liste(self, symbol, act):
+        K = pyglet.window.key
+        if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self._fin_liste(False)
+        elif symbol == K.UP or act == 'haut': self._bouger_liste(-1); self.rep = (symbol, time.time(), time.time(), 'v', -1)
+        elif symbol == K.DOWN or act == 'bas': self._bouger_liste(1); self.rep = (symbol, time.time(), time.time(), 'v', 1)
+        elif symbol in (K.RETURN, K.ENTER, K.SPACE) or act == 'A': self._fin_liste(True)
+
+    def _zone_liste(self, x, y):
+        for (x0, y0, x1, y1, j) in self.zones_pop:
+            if x0 <= x <= x1 and y0 <= y <= y1: return j
+        return None
+
     def _bouger(self, d):
+        if self.deroule is not None: self._bouger_liste(d); return
         e = self._entrees(); n = len(e)
         if not n: return
         i = self.sel.get(self.ecran, 0)
@@ -229,6 +262,7 @@ class Pause:
         return e[i] if e else None
 
     def _regler(self, d):
+        if self.deroule is not None: return
         en = self._courante()
         if not en: return
         if en['t'] in ('choix', 'curs'): (en['moins'] if d < 0 else en['plus'])()
@@ -245,6 +279,7 @@ class Pause:
         if not en or en.get('off'): return
         if en['t'] == 'touche': self.capture = (en['act'], self.sel.get('col', 0)); return
         if en['t'] == 'curs': self.saisie = [self.sel.get(self.ecran, 0), '']
+        elif en['t'] == 'choix' and en.get('liste'): self._ouvrir_liste()
         elif 'ok' in en: en['ok']()
 
     def _capturer(self, symbol):
@@ -263,6 +298,10 @@ class Pause:
 
     def survol(self, x, y):
         if self.capture is not None or self.placement: return
+        if self.deroule is not None:
+            j = self._zone_liste(x, y)
+            if j is not None: self.deroule[1] = j
+            return
         i, _ = self._zone(x, y)
         if i is not None: self.sel[self.ecran] = i
 
@@ -273,6 +312,11 @@ class Pause:
             else: self.J.hud.prendre(x, y)
             return
         if self.capture is not None: self.capture = None; return
+        if self.deroule is not None:                                  # liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
+            j = self._zone_liste(x, y) if bouton != M.RIGHT else None
+            if j is not None: self.deroule[1] = j; self._fin_liste(True)
+            else: self.deroule = None
+            return
         if bouton == M.RIGHT:
             if self.saisie is not None: self.saisie = None
             else: self.retour()
@@ -336,6 +380,14 @@ class Pause:
         self._bouger(d)
 
     # ---- dessin
+    @staticmethod
+    def _cadre(x, y, w, h, k, opacite=250):
+        """Fenetre a la maniere des menus du jeu (MenuParts) : liseré clair en trois traits (1,4 px a 720 p), fond bleu nuit."""
+        b = max(1, int(round(1.4 * k)))
+        for i, c in enumerate(BORDS_DQ):
+            r = pyglet.shapes.Rectangle(x + i * b, y + i * b, w - 2 * i * b, h - 2 * i * b, color=c); r.opacity = opacite; r.draw()
+        r = pyglet.shapes.Rectangle(x + 3 * b, y + 3 * b, w - 6 * b, h - 6 * b, color=FOND_DQ); r.opacity = opacite; r.draw()
+
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
         """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
         self.zones_def[idx] = (x - 3 * k, y - 3 * k, x + c + 3 * k, y + c + 3 * k)
@@ -380,6 +432,9 @@ class Pause:
         aide = {'touches': 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer', 'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état',
                 'affichage': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'son': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut',
                 'jeu': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
+        en_sel = e[i_sel] if e else None
+        if en_sel and en_sel['t'] == 'choix' and en_sel.get('liste'): aide = 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
+        if self.deroule is not None: aide = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'
         if self.saisie is not None: aide = 'Tape la valeur (Entrée : valider, Échap : annuler)'
         if self.capture is not None:
             act = dict(RG.ACTIONS)[self.capture[0]]; aide = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)' % act
@@ -387,7 +442,7 @@ class Pause:
         # largeur : le plus long libelle + la place des valeurs / curseurs / colonnes de touches
         lw = max([J._etiq(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
         for x in e:
-            if x['t'] == 'choix': vw = max(vw, max(J._etiq('‹  ' + self._nom_valeur(x['l'], v) + '  ›', fs).content_width for v in self._valeurs(x)))
+            if x['t'] == 'choix': vw = max(vw, max(J._etiq(self._nom_valeur(x['l'], v) if x.get('liste') else '‹  ' + self._nom_valeur(x['l'], v) + '  ›', fs).content_width for v in self._valeurs(x)) + (24 * k if x.get('liste') else 0.0))
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
         if ecr in ('affichage', 'son', 'jeu', 'boutons'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
         if ecr == 'touches': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
@@ -397,39 +452,44 @@ class Pause:
         rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n))); h = min(hmax, h_titre + n * rh + pad / 2 + pied)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h) / 2; y0 = y1 - h
-        cadre = pyglet.shapes.BorderedRectangle(x0, y0, pw, h, border=max(2, int(3 * k)), color=(6, 22, 24), border_color=(240, 240, 240)); cadre.opacity = 238; cadre.draw()
+        self._cadre(x0, y0, pw, h, k)
         e_t = J._etiq(titres.get(ecr, ''), fst, OR); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - 52 * k; e_t.draw()
         visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); debut = 0               # defilement : les lignes qui ne tiennent pas sont decalees pour garder la selection visible
         if n > visibles: debut = min(max(0, i_sel - visibles // 2), n - visibles)
-        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
+        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_pop = []; lignes = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
         if ecr == 'touches':
             for c in range(2):
                 eh = J._etiq('Touche %d' % (c + 1), fsp, GRIS); eh.x = c1x + c * 190 * k; eh.y = y1 - h_titre + 6 * k; eh.draw()
         y = y1 - h_titre
         for idx in range(debut, min(n, debut + visibles)):
-            en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'
+            en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
             if sel:
-                bar = pyglet.shapes.Rectangle(x0 + 12 * k, ybas + 3 * k, pw - 24 * k, rh - 6 * k, color=(255, 255, 255)); bar.opacity = 46; bar.draw()
                 tri = pyglet.shapes.Triangle(x0 + 22 * k, ybas + rh / 2 + 9 * k, x0 + 22 * k, ybas + rh / 2 - 9 * k, x0 + 22 * k + 15 * k, ybas + rh / 2, color=(255, 235, 130)); tri.draw()
-            coul = GRIS if en.get('off') else (OR if sel else BLANC)
+            coul = GRIS if en.get('off') else BLANC
             base = ybas + (rh - fs * 1.33) / 2 + 5 * k
             if en['t'] == 'sep': coul = OR
             lx = x0 + 52 * k
             if en['t'] == 'slot':
                 nu = J._etiq('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
             lab = J._etiq(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
-            if en['t'] == 'choix':
+            if en['t'] == 'choix' and en.get('liste'):                                        # liste deroulante : valeur courante et petite fleche vers le bas
+                vl = J._etiq(en['v'](), fs, coul); vl.x = x0 + pw - 30 * k - 24 * k - vl.content_width; vl.y = base; vl.draw()
+                fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2
+                pyglet.shapes.Triangle(fx - 7 * k, fy + 4 * k, fx + 7 * k, fy + 4 * k, fx, fy - 5 * k, color=OR[:3] if sel else coul[:3]).draw()
+                self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
+            elif en['t'] == 'choix':
                 txt = en['v'](); vl = J._etiq('‹  ' + txt + '  ›' if sel else txt, fs, coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'curs':
                 if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
                 else: txt = en['v']()
-                vl = J._etiq(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
-                self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
-                bw = 200 * k; bx1 = x0 + pw - 30 * k - 90 * k - 20 * k; bx0 = bx1 - bw; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
+                dr = x0 + pw - 30 * k - 40 * k                                                # bord droit de la valeur : le bouton « valeur par defaut » est a sa droite
+                vl = J._etiq(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = dr - vl.content_width; vl.y = base; vl.draw()
+                self.zones_val[idx] = (vl.x - 10 * k, dr + 10 * k)
+                bw = 200 * k; bx1 = dr - 90 * k - 20 * k; bx0 = bx1 - bw; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
                 fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(70, 82, 82)); fond.draw()
                 rem = pyglet.shapes.Rectangle(bx0, by, bw * max(0.0, min(1.0, en['frac']())), 10 * k, color=(255, 235, 130)); rem.draw()
                 cur = pyglet.shapes.Rectangle(bx0 + bw * max(0.0, min(1.0, en['frac']())) - 3 * k, by - 4 * k, 6 * k, 18 * k, color=(255, 255, 255)); cur.draw()
-                if 'defaut' in en: self._bouton_defaut(idx, bx0 - 16 * k - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
+                if 'defaut' in en: self._bouton_defaut(idx, x0 + pw - 30 * k - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             elif en['t'] == 'slot':
                 if en['v']: vl = J._etiq(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'touche':
@@ -451,7 +511,7 @@ class Pause:
         # miniature de l'etat survole
         if avec_mini:
             mx = x0 + pw + gap; mh = min(h, 270 * k)
-            c2 = pyglet.shapes.BorderedRectangle(mx, y1 - h, wmini, h, border=max(2, int(3 * k)), color=(6, 22, 24), border_color=(240, 240, 240)); c2.opacity = 238; c2.draw()
+            self._cadre(mx, y1 - h, wmini, h, k)
             if e and e[i_sel]['t'] == 'slot':
                 n_e = e[i_sel]['n']; t = self._miniature(n_e); inf = J.infos_etat(n_e)
                 if t is not None:
@@ -464,3 +524,26 @@ class Pause:
                         el = J._etiq(ligne, fsp * 1.1, BLANC if j == 0 else GRIS); el.x = mx + 20 * k; el.y = y1 - 40 * k - h_i - 34 * k - j * 30 * k; el.draw()
                 else:
                     el = J._etiq('Emplacement vide' if not inf else 'Pas de miniature', fs, GRIS); el.x = mx + (wmini - el.content_width) / 2; el.y = y1 - h / 2; el.draw()
+        if self.deroule is not None and self.deroule[0] in lignes and self.deroule[0] < n and e[self.deroule[0]]['t'] == 'choix':
+            self._dessiner_liste(e[self.deroule[0]], lignes[self.deroule[0]], x0 + pw - 24 * k, k, fs)
+
+    def _dessiner_liste(self, en, ligne, xd, k, fs):
+        """Liste deroulante d'un choix : sous la ligne (au-dessus s'il n'y a pas la place), valeur courante en or, curseur en triangle comme dans les menus du jeu."""
+        J = self.J; vals = en['vals']; noms = [self._nom_valeur(en['l'], v) for v in vals]; cur = self.deroule[1]; H = J.height
+        ih = 36 * k; nvis = max(1, min(len(vals), 8, int((H - 40 * k) // ih)))
+        w = max(max(J._etiq(t, fs).content_width for t in noms) + 90 * k, 240 * k); h = nvis * ih + 20 * k
+        ybas, ytop = ligne; y1 = ybas - 4 * k; y0 = y1 - h
+        if y0 < 8 * k: y1 = ytop + 4 * k; y0 = y1 - h
+        if y0 < 8 * k: y0 = 8 * k; y1 = y0 + h
+        x1 = xd; x0 = x1 - w
+        self._cadre(x0, y0, w, h, k)
+        top = max(0, min(cur - nvis // 2, len(vals) - nvis))
+        self.zones_pop = []; y = y1 - 10 * k
+        for j in range(top, top + nvis):
+            yb = y - ih; courant = vals[j] == en['get']()
+            if j == cur:
+                pyglet.shapes.Triangle(x0 + 16 * k, yb + ih / 2 + 8 * k, x0 + 16 * k, yb + ih / 2 - 8 * k, x0 + 16 * k + 13 * k, yb + ih / 2, color=OR[:3]).draw()
+            et = J._etiq(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
+            self.zones_pop.append((x0 + 6 * k, yb, x1 - 6 * k, y, j)); y -= ih
+        if top > 0: pyglet.shapes.Triangle(x1 - 22 * k, y1 - 8 * k, x1 - 10 * k, y1 - 8 * k, x1 - 16 * k, y1 - 1 * k, color=GRIS[:3]).draw()
+        if top + nvis < len(vals): pyglet.shapes.Triangle(x1 - 22 * k, y0 + 8 * k, x1 - 10 * k, y0 + 8 * k, x1 - 16 * k, y0 + 1 * k, color=GRIS[:3]).draw()
