@@ -63,9 +63,9 @@ if not exist ".venv\sound_ok.txt" (
 )
 
 rem --- 2b. fenetres de menu d'origine : mise en page lue dans le code du jeu (une seule fois, si le dump du code existe)
-rem     un ancien fichier sans la fenetre de message est refait
+rem     un ancien fichier (sans la fenetre de message, ou d'avant le reglage de la langue : textes mal places) est refait
 if exist "cache\ui_layout.json" (
-  ".venv\Scripts\python.exe" -c "import json,sys; sys.exit(0 if 'message' in json.load(open('cache/ui_layout.json', encoding='utf-8')) else 1)" >nul 2>nul
+  ".venv\Scripts\python.exe" -c "import json,sys; d=json.load(open('cache/ui_layout.json', encoding='utf-8')); sys.exit(0 if 'message' in d and d['header'].get('gen', 1) >= 2 else 1)" >nul 2>nul
   if errorlevel 1 del "cache\ui_layout.json"
 )
 if not exist "cache\ui_layout.json" (

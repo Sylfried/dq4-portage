@@ -57,6 +57,8 @@ DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres Lo
 BAS_DEF = 0.2                 # SceneCamera.s_lookDownAdjust (.cctor) : la camera releve son tangage de 0,2 degre
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portrait d'origine remplit exactement la hauteur de la fenetre) ; reduit a 1 si un groupe de fenetres ne tient plus a l'ecran
+CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas du cadre principal des menus de commandes (Combattre / Attaquer...)
+CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
@@ -932,10 +934,11 @@ class Jeu(pyglet.window.Window):
         """Fenetre de message du terrain : l'original la pose au-dessus de la zone des menus du bas (portrait) ; en 16/9 on la descend en bas de l'ecran,
         sauf si une autre fenetre occupe le bas (elle resterait dessous)."""
         m = self.ui_msg
-        if self.args.msg_origine or not m or m.type != 0: return 0.0
+        combat = self.moteur.etat.partie == MO.PARTIE_COMBAT          # combat : le message se pose au meme endroit que le menu de commandes (meme bord bas, meme echelle)
+        if self.args.msg_origine or not m or (m.type != 0 and not combat): return 0.0
         b = m.bas()
         if any(self.ui_g.f[p].typ != 1 and self.ui_g.f[p].bas() < b - 2 for p in ports): return 0.0
-        return MSG_BAS - b
+        return (CB_MSG_BAS if combat else MSG_BAS) - b
 
     def _zones(self, port):
         """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1)] en pixels."""
@@ -1049,7 +1052,7 @@ class Jeu(pyglet.window.Window):
             if msg:
                 e = self.ui_msg.etendue()
                 if e: ivs['msg'] = (e[0] + dz, e[1] + dz)
-            k, gr, modes = self._ui_echelle(list(ivs.values())); self.ui_k = k
+            k, gr, modes = self._ui_echelle(list(ivs.values()) + ([CB_ZONE_MENUS] if self.moteur.etat.partie == MO.PARTIE_COMBAT else [])); self.ui_k = k       # combat : echelle constante (la zone des menus de commandes compte toujours), sinon les fenetres changent de taille a chaque message
             H = float(self.height); s = H / 800.0 * k; cx = self._ui_repere()[0]
             def repere(cle):                                  # (cy, echelle) du groupe de fenetres qui contient cette fenetre
                 if cle not in ivs: return 400.0 * s, s

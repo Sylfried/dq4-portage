@@ -41,7 +41,17 @@ def system_init(T, frame_path=FRAME, lang=1):
     # langue : GetLangages.m_langagesNumber (0 = ja, 1 = en : la langue que le patch français remplace) -> MenuParts.LangParam.Apply
     sl = T.u(st + 0x20, 8)
     T.run(0xcfd5e8, [sl + 0x20 + 0x18 * lang])
+    regler_langue(T, lang)
     return n
+
+
+def regler_langue(T, lang=1):
+    """GetLangages.m_langagesNumber / LangJapanese : lus par une soixantaine de fonctions du menu (tailles, decalages des textes, variantes japonaises...).
+    Sans cela l'emulation prenait des branches « autre langue » et les etiquettes des boutons se retrouvaient 20 unites trop bas."""
+    klass_of(T, 'GetLangages')
+    sg = R.statics(T, 'GetLangages')
+    if not sg: print('GetLangages : statiques introuvables'); return
+    T.w(sg + 0, lang, 4); T.w(sg + 4, 1 if lang == 0 else 0, 1)
 
 def make_message(T, port=0):
     """Construit la fenêtre de message (MenuMessage..ctor) : plusieurs fenêtres se placent par rapport à elle (MenuMessage.m_window)."""
