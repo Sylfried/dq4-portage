@@ -13,6 +13,7 @@ NB_ETATS = 10
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 OR = (255, 235, 130, 255); BLANC = (255, 255, 255, 255); GRIS = (150, 160, 160, 255); ROUGE = (255, 150, 140, 255)
 FOND_DQ = (7, 11, 65); BORDS_DQ = ((211, 212, 221), (126, 128, 156), (46, 49, 94))        # fenetres des menus du jeu : fond bleu nuit, liseré clair en trois traits
+LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 ECHELLES_PP = (0, 1, 2, 4, 8)
 MSAA_CHOIX = (0, 2, 4, 8)
 
@@ -25,6 +26,8 @@ class Pause:
         self.zones_def = {}                                # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs
         self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
         self.deroule = None; self.zones_pop = []          # liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
+        self.pos_sw = {}; self.t_sw = time.time(); self.dt_sw = 0.0         # interrupteurs : position du bouton (0 = Non, 1 = Oui) par libelle, pour l'animation
+        self.rep_pos = None                               # (ecran, ligne) sur lesquels la repetition d'une touche maintenue a commence
 
     # ---- ouverture / fermeture
     def ouvrir(self):
@@ -67,12 +70,17 @@ class Pause:
                 dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'))]
 
     def _choix(self, label, valeurs, get, set_, off=False):
-        """Entree a valeurs en liste : gauche / droite passent a la precedente / suivante ; valider bascule (Oui / Non) ou ouvre la liste deroulante (3 valeurs ou plus)."""
+        """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
+        (valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante)."""
+        sw = len(valeurs) == 2 and all(isinstance(v, bool) for v in valeurs)
         def pas(d):
             i = (valeurs.index(get()) + d) % len(valeurs) if get() in valeurs else 0
             set_(valeurs[i])
-        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=lambda: pas(-1), plus=lambda: pas(1), ok=lambda: pas(1), off=off,
-                    get=get, set=set_, liste=len(valeurs) > 2)           # plus de deux valeurs : liste deroulante (Oui / Non : on bascule directement)
+        def fixer(x):
+            if get() != x: set_(x)
+        if sw: moins, plus, ok = (lambda: fixer(False)), (lambda: fixer(True)), (lambda: set_(not get()))
+        else: moins, plus, ok = (lambda: pas(-1)), (lambda: pas(1)), (lambda: pas(1))
+        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw)
 
     def _valeurs(self, en): return en['vals']
 
@@ -200,18 +208,23 @@ class Pause:
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
         if symbol == K.F1: self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True
         if symbol == K.DELETE: self._defaut(); return True
-        if symbol in (K.UP,) or act == 'haut': self._bouger(-1); self.rep = (symbol, time.time(), time.time(), 'v', -1)
-        elif symbol in (K.DOWN,) or act == 'bas': self._bouger(1); self.rep = (symbol, time.time(), time.time(), 'v', 1)
-        elif symbol in (K.LEFT,) or act == 'gauche': self._regler(-1); self.rep = (symbol, time.time(), time.time(), 'h', -1)
-        elif symbol in (K.RIGHT,) or act == 'droite': self._regler(1); self.rep = (symbol, time.time(), time.time(), 'h', 1)
+        if symbol in (K.UP,) or act == 'haut': self._bouger(-1); self._repeter(symbol, 'v', -1)
+        elif symbol in (K.DOWN,) or act == 'bas': self._bouger(1); self._repeter(symbol, 'v', 1)
+        elif symbol in (K.LEFT,) or act == 'gauche': self._regler(-1); self._repeter(symbol, 'h', -1)
+        elif symbol in (K.RIGHT,) or act == 'droite': self._regler(1); self._repeter(symbol, 'h', 1)
         elif symbol in (K.RETURN, K.ENTER, K.SPACE) or act == 'A': self._valider()
         return True
+
+    def _repeter(self, symbol, sens, d):
+        """Une direction est enfoncee : elle se repetera (maj) tant qu'elle est maintenue, sur la ligne et l'ecran ou elle a commence."""
+        t = time.time(); self.rep = (symbol, t, t, sens, d); self.rep_pos = (self.ecran, self.sel.get(self.ecran, 0))
 
     def maj(self):
         """Repetition des directions maintenues (appelee a chaque image)."""
         if not self.rep: return
         sym, t0, tl, sens, d = self.rep; t = time.time()
         if not self.J.touches[sym]: self.rep = None; return
+        if sens == 'h' and self.rep_pos != (self.ecran, self.sel.get(self.ecran, 0)): self.rep = None; return       # la selection a change (souris, autre ecran) : la repetition s'arrete, elle ne doit jamais toucher un autre reglage
         if t - t0 > DELAI_REPETITION and t - tl > PAS_REPETITION:
             self.rep = (sym, t0, t, sens, d)
             if sens == 'v': self._bouger(d)
@@ -236,8 +249,8 @@ class Pause:
     def _touche_liste(self, symbol, act):
         K = pyglet.window.key
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self._fin_liste(False)
-        elif symbol == K.UP or act == 'haut': self._bouger_liste(-1); self.rep = (symbol, time.time(), time.time(), 'v', -1)
-        elif symbol == K.DOWN or act == 'bas': self._bouger_liste(1); self.rep = (symbol, time.time(), time.time(), 'v', 1)
+        elif symbol == K.UP or act == 'haut': self._bouger_liste(-1); self._repeter(symbol, 'v', -1)
+        elif symbol == K.DOWN or act == 'bas': self._bouger_liste(1); self._repeter(symbol, 'v', 1)
         elif symbol in (K.RETURN, K.ENTER, K.SPACE) or act == 'A': self._fin_liste(True)
 
     def _zone_liste(self, x, y):
@@ -400,6 +413,22 @@ class Pause:
         h = c * 0.2
         pyglet.shapes.Triangle(ex + h * math.cos(tg), ey + h * math.sin(tg), ex + h * math.cos(tg + 2.4), ey + h * math.sin(tg + 2.4), ex + h * math.cos(tg - 2.4), ey + h * math.sin(tg - 2.4), color=coul[:3]).draw()
 
+    @staticmethod
+    def _pilule(x, yc, w, h, couleur):
+        """Rectangle a bouts ronds, centre verticalement en yc."""
+        r = h / 2
+        for sh in (pyglet.shapes.Rectangle(x + r, yc - r, w - 2 * r, h, color=couleur), pyglet.shapes.Circle(x + r, yc, r, segments=24, color=couleur), pyglet.shapes.Circle(x + w - r, yc, r, segments=24, color=couleur)): sh.draw()
+
+    def _interrupteur(self, cle, x, yc, actif, sel, grise, k):
+        """Interrupteur coulissant (piste arrondie, bouton rond) : or quand c'est active, gris sinon ; le bouton glisse d'une position a l'autre (animation courte) ; contour or s'il est selectionne."""
+        cible = 1.0 if actif else 0.0; p = self.pos_sw.get(cle, cible)                   # premiere apparition : pas d'animation
+        p = cible if abs(cible - p) < 0.02 else p + (cible - p) * min(1.0, self.dt_sw * 16.0); self.pos_sw[cle] = p
+        w, h = LARG_SW * k, HAUT_SW * k; r = h / 2
+        piste = (55, 60, 60) if grise else tuple(int(a + (b - a) * p) for a, b in zip((62, 72, 74), (214, 188, 70)))
+        if sel and not grise: e = max(1.5, 2 * k); self._pilule(x - e, yc, w + 2 * e, h + 2 * e, (255, 235, 130))
+        self._pilule(x, yc, w, h, piste)
+        pyglet.shapes.Circle(x + r + (w - 2 * r) * p, yc, r - 3 * k, segments=24, color=(150, 160, 160) if grise else (255, 255, 255)).draw()
+
     def _miniature(self, n):
         """Texture de la miniature d'un etat (None s'il n'y en a pas)."""
         if n in self.minis: return self.minis[n]
@@ -425,6 +454,7 @@ class Pause:
             return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
+        t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
         ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'jeu': 'Jeu', 'son': 'Son', 'boutons': 'Boutons à l\'écran', 'touches': 'Touches', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
@@ -433,7 +463,8 @@ class Pause:
                 'affichage': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'son': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut',
                 'jeu': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
         en_sel = e[i_sel] if e else None
-        if en_sel and en_sel['t'] == 'choix' and en_sel.get('liste'): aide = 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
+        if en_sel and en_sel['t'] == 'choix':
+            aide = 'Entrée ou clic : activer / désactiver    ←  : Non    →  : Oui' if en_sel.get('sw') else 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
         if self.deroule is not None: aide = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'
         if self.saisie is not None: aide = 'Tape la valeur (Entrée : valider, Échap : annuler)'
         if self.capture is not None:
@@ -442,7 +473,9 @@ class Pause:
         # largeur : le plus long libelle + la place des valeurs / curseurs / colonnes de touches
         lw = max([J._etiq(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
         for x in e:
-            if x['t'] == 'choix': vw = max(vw, max(J._etiq(self._nom_valeur(x['l'], v) if x.get('liste') else '‹  ' + self._nom_valeur(x['l'], v) + '  ›', fs).content_width for v in self._valeurs(x)) + (24 * k if x.get('liste') else 0.0))
+            if x['t'] == 'choix':
+                tw = max(J._etiq(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
+                vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
         if ecr in ('affichage', 'son', 'jeu', 'boutons'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
         if ecr == 'touches': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
@@ -477,8 +510,11 @@ class Pause:
                 fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2
                 pyglet.shapes.Triangle(fx - 7 * k, fy + 4 * k, fx + 7 * k, fy + 4 * k, fx, fy - 5 * k, color=OR[:3] if sel else coul[:3]).draw()
                 self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
-            elif en['t'] == 'choix':
-                txt = en['v'](); vl = J._etiq('‹  ' + txt + '  ›' if sel else txt, fs, coul); vl.x = x0 + pw - 30 * k - vl.content_width; vl.y = base; vl.draw()
+            elif en['t'] == 'choix':                                                          # interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur
+                sw_x = x0 + pw - 30 * k - LARG_SW * k; actif = bool(en['get']())
+                vl = J._etiq(en['v'](), fs, coul if not actif or en.get('off') else OR); vl.x = sw_x - 14 * k - vl.content_width; vl.y = base; vl.draw()
+                self._interrupteur(en['l'], sw_x, ybas + rh / 2, actif, sel, en.get('off'), k)
+                self.zones_val[idx] = (vl.x - 10 * k, sw_x + LARG_SW * k + 10 * k)
             elif en['t'] == 'curs':
                 if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
                 else: txt = en['v']()

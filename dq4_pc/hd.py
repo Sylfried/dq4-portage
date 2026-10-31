@@ -67,11 +67,11 @@ def agrandir_case(case, passes=3):
     return agrandir_epx(case, passes)
 
 
-def agrandir_feuille(arr, larg, haut, colonnes, lignes, algo=None, gout=4):
-    """Feuille de sprites -> (atlas HD, case_l, case_h) ; la case (col, ligne) commence à
+def agrandir_feuille(arr, larg, haut, colonnes, lignes, algo=None, gout=4, facteur=FACTEUR):
+    """Feuille de sprites -> (atlas HD, case_l, case_h) ; `facteur` = 1 pour les feuilles d'origine (gouttière seule) ; la case (col, ligne) commence à
     (col*(case_l+2*gout)+gout, ligne*(case_h+2*gout)+gout) dans l'atlas (origine en haut à gauche)."""
     algo = algo or agrandir_epx
-    cl, ch = larg * FACTEUR, haut * FACTEUR
+    cl, ch = larg * facteur, haut * facteur
     pl, ph = cl + 2 * gout, ch + 2 * gout
     atlas = np.zeros((lignes * ph, colonnes * pl, 4), np.uint8)
     for r in range(lignes):
