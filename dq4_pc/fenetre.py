@@ -87,6 +87,7 @@ CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
              12: (0, 448, 32, 46), 13: (64, 448, 26, 28), 14: (128, 448, 41, 39), 15: (224, 448, 27, 42), 16: (288, 448, 48, 48), 17: (384, 448, 40, 32),
              19: (544, 448, 64, 58), 20: (640, 448, 41, 39)}   # icones de lieux de la carte du monde (FieldSymbol.s_symbols : 21 rectangles ; le 18 est vide dans l'atlas)
+GOUT_ORIG = 2                 # feuilles d'origine : gouttiere de 2 px (bords repetes) autour de chaque case, comme les feuilles HD : le filtrage n'attrape plus un bout de la case voisine
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 ACT_FRONTS = ('menu', 'discussion', 'carte', 'L', 'R')       # actions dont on detecte l'appui (front montant)
@@ -243,7 +244,8 @@ class Jeu(pyglet.window.Window):
         arr = self.donnees.feuille(ident); r = False
         if arr is not None:
             nl = 8 if arr[4 * SPRITE_H:5 * SPRITE_H, :72, 3].any() else 4
-            r = dict(t=self._tex(arr, False), tw=arr.shape[1], th=arr.shape[0], nl=nl, hd=False, arr=arr)
+            atlas, _, _ = HD.agrandir_feuille(arr, SPRITE_L, SPRITE_H, 3, nl, lambda c: HD._dilater(c, 2), GOUT_ORIG, 1)         # pixels transparents = couleur du bord voisin : plus de liseré sombre au filtrage
+            r = dict(t=self._tex(atlas, False), tw=atlas.shape[1], th=atlas.shape[0], nl=nl, hd=False, cl=SPRITE_L, ch=SPRITE_H, g=GOUT_ORIG, arr=arr)
         self.sprite_tex[cle] = r
         return r
 
@@ -274,7 +276,7 @@ class Jeu(pyglet.window.Window):
         try: atlas, cl, ch = fut.result()
         except Exception as ex:
             print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
-        r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, hd=True)
+        r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
         return r
 
     def _camera_champ(self, e, aspect):
@@ -497,10 +499,10 @@ class Jeu(pyglet.window.Window):
     def regler_angle(self, a): self.angle_cam = float(a)
 
     def resolutions(self):
-        """Tailles proposees (16/9, 720p a 4K) ; la taille actuelle s'y ajoute si elle est libre."""
+        """Tailles proposees (16/9, 720p a 4K) ; la taille actuelle s'y ajoute si elle est libre ; triees par largeur puis hauteur."""
         liste = list(RESOLUTIONS); cur = self.resolution_courante()
         if cur not in liste: liste.append(cur)
-        return liste
+        return sorted(liste)                # par largeur, puis par hauteur
 
     def resolution_courante(self): return (int(self.width), int(self.height))
 
@@ -826,10 +828,11 @@ class Jeu(pyglet.window.Window):
             for t in self.decor_hd.pop(next(iter(self.decor_hd))).values(): t.delete()
         return r
 
-    def _tracer_decor(self):
+    def _tracer_decor(self, net=False):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
         lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
+        net_o = 1.0 if (net and r is None and self.lissage and not os.environ.get('DQ_DECOR_FLOU')) else 0.0           # villes et donjons en « Originaux » / pixel perfect : texels nets, seule la frontiere entre deux texels est adoucie (comme les sprites) ; en combat, peintures etirees : lissage normal
         est_tr = lambda k: isinstance(k, tuple) and k[0] == 'tr'
         opaques = [x for x in self.carte_vl if not est_tr(x[2])]
         transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
@@ -840,7 +843,7 @@ class Jeu(pyglet.window.Window):
             for tex, vl, key in liste:
                 pg = self.pam_gl.get(key)
                 t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
-                self.prog['net'] = 0.0
+                self.prog['net'] = net_o if (r is None or key not in r) else 0.0
                 self.prog['tsize'] = (float(t.width), float(t.height))
                 self._tracer(t, vl)
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
@@ -1682,12 +1685,9 @@ class Jeu(pyglet.window.Window):
             if not f: continue
             tw, th, nl = f['tw'], f['th'], f['nl']
             col, row = s['pose'] % 3, s['dir'] % nl
-            if f['hd']:     # case (col, row) de l'atlas HD, marges exclues
-                pl, ph, g = f['cl'] + 2 * HD_GOUTTIERE, f['ch'] + 2 * HD_GOUTTIERE, HD_GOUTTIERE
-                u0, u1 = (col * pl + g) / tw, (col * pl + g + f['cl']) / tw
-                v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
-            else:
-                u0, u1 = col * SPRITE_L / tw, (col + 1) * SPRITE_L / tw; v1, v0 = 1 - row * SPRITE_H / th, 1 - (row + 1) * SPRITE_H / th
+            pl, ph, g = f['cl'] + 2 * f['g'], f['ch'] + 2 * f['g'], f['g']          # case (col, row) de l'atlas (origine ou HD), gouttieres exclues
+            u0, u1 = (col * pl + g) / tw, (col * pl + g + f['cl']) / tw
+            v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
             p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 + rang.get(slot, 0) * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
             if cam3d is not None:
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
@@ -1730,7 +1730,7 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            self._tracer_decor()
+            self._tracer_decor(True)
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)

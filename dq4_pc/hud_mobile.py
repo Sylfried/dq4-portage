@@ -19,7 +19,7 @@ LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones da
 
 class Boutons:
     def __init__(self, jeu):
-        self.J = jeu; self.spr = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
+        self.J = jeu; self.spr = {}; self.orig = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
         self.pose_prise = None                  # (nom, decalage x, decalage y) pendant un deplacement
 
     # ---- geometrie
@@ -85,18 +85,30 @@ class Boutons:
     def remettre(self): self.J.reg['boutons_pos'] = {}
 
     # ---- dessin
-    def _sprite(self, nom):
-        s = self.spr.get(nom)
-        if s is None:
+    def _icone(self, nom):
+        """Icone d'origine 32 x 32 (RGBA), couleur des pixels transparents propagee d'un pixel (pas de liseré sombre quand le filtre melange les bords)."""
+        a = self.orig.get(nom)
+        if a is None:
             from PIL import Image
+            import hd as HD
             f = os.path.join(self.J.args.cache, 'ui_MenuTexture.png')
             try: im = Image.open(f).convert('RGBA'); n = ICONE[nom]; a = np.array(im.crop((n * 32, LIGNE_ICONES, n * 32 + 32, LIGNE_ICONES + 32)))
             except Exception: a = np.zeros((32, 32, 4), np.uint8); a[..., 3] = 120
-            img = pyglet.image.ImageData(32, 32, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=128)
+            a = self.orig[nom] = HD._dilater(a, 1)
+        return a
+
+    def _sprite(self, nom, c):
+        """Sprite de l'icone pour un bouton de c pixels de cote. L'icone est d'abord agrandie par un entier n (plus proche voisin : chaque pixel d'origine devient un bloc net), puis
+        reduite au pixels exacts par le filtre lineaire : les pixels restent francs, seule la frontiere entre deux pixels est adoucie (un agrandissement lineaire direct de 32 a 72 px les ecrasait)."""
+        n = max(1, int(np.ceil(c / 32.0 - 1e-6)))
+        s = self.spr.get((nom, n))
+        if s is None:
+            a = np.repeat(np.repeat(self._icone(nom), n, axis=0), n, axis=1); t_ = 32 * n
+            img = pyglet.image.ImageData(t_, t_, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=t_ * 4)
             t = img.get_texture(); gl.glBindTexture(t.target, t.id)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-            s = self.spr[nom] = pyglet.sprite.Sprite(t)
-        return s
+            s = self.spr[(nom, n)] = pyglet.sprite.Sprite(t)
+        return s, n
 
     def dessiner(self, visibles, edition=False):
         if not visibles and not edition: return
@@ -110,8 +122,8 @@ class Boutons:
                 l = pyglet.shapes.Line(0, j * H / LIGNES, W, j * H / LIGNES, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
         for nom in NOMS:
             if nom not in visibles and not edition: continue
-            x, y, c = self.rect(nom); s = self._sprite(nom)
-            s.update(x=x, y=y, scale=c / 32.0)
+            x, y, c = self.rect(nom); s, n = self._sprite(nom, c)
+            s.update(x=x, y=y, scale=c / (32.0 * n))
             actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
             s.color = (170, 170, 170) if actif else (255, 255, 255); s.opacity = 255 if edition else 225
             s.draw()
