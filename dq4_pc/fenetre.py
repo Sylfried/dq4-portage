@@ -55,6 +55,12 @@ SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portrait d'origine remplit exactement la hauteur de la fenetre) ; reduit a 1 si un groupe de fenetres ne tient plus a l'ecran
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
+# animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
+CH_MOTIF_FIN = np.array([326, 403, 940, 1195, 1260, 1713])                  # fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
+CH_MOTIF_NUM = np.array([0, 1, 2, 0, 3, 4, 0])                              # motif de chaque plage (0 = tuile fixe) ; la derniere valeur sert au-dela de la derniere plage
+CH_MOTIF_PAS = (0, 76, 4, 64, 4)                                            # decalage ajoute a chaque pas, par motif (Field.m_patternInfo.acc)
+CH_MOTIF_LIM = (0, 608, 96, 512, 96)                                        # le decalage retombe a 0 des qu'il atteint cette limite (.limit)
+CH_MOTIF_PERIODE = 17
 CH_VUE_HAUT = 256.0 * 800.0 / 450.0 / CH_PX                                 # Field.Init : camera ORTHOGRAPHIQUE vue de dessus, orthographicSize = 128 / (largeur / hauteur), soit 256 px (16 tuiles) en largeur ; en portrait 450 x 800 cela fait 28,4 tuiles en hauteur, qu'on garde en 16/9
 CH_ECHELLE = 51.84 * 0.48 / 24                                              # Chara.SetFieldMode : echelle 28,8 x 1,8 = 51,84 sur un maillage de 0,48 x 0,64 : le heros fait ~24,9 x 33,2 px (1,04 x la feuille 24 x 32), a plat sur la carte
 
@@ -107,6 +113,7 @@ class Jeu(pyglet.window.Window):
         self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = True; self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
         self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_ico = None
+        self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None; self.champ_ins = 0.0       # eau animee de la carte du monde
         self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
@@ -270,7 +277,7 @@ class Jeu(pyglet.window.Window):
         else:
             t = np.array(ch['tuiles'], np.int32)
         cle = (ch['x0'], ch['y0'], ch['cols'], hash(t.tobytes()), self.mode == MODE_PP)
-        if cle == self.champ_cle: return
+        if cle == self.champ_cle: self._rafraichir_motifs(); return
         self.champ_cle = cle
         if self.champ_tex is None:
             arr = self.donnees.texture('field')
@@ -281,19 +288,39 @@ class Jeu(pyglet.window.Window):
         cols = ch['cols']; lignes = len(t) // cols
         g = t[:lignes * cols].reshape(lignes, cols)
         X, Z = np.meshgrid(np.arange(cols) + ch['x0'], np.arange(lignes) + ch['y0'])
-        u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
-        ins = 0.0 if self.mode == MODE_PP else 0.3 / (CH_ATLAS * CH_PX)       # pixel perfect : echelle entiere et plus proche voisin, les centres des pixels d'ecran ne tombent jamais sur un bord de texel ; sinon recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
-        u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
-        e_ = 0.0
+        self.champ_ins = 0.0 if self.mode == MODE_PP else 0.3 / (CH_ATLAS * CH_PX)       # pixel perfect : echelle entiere et plus proche voisin, les centres des pixels d'ecran ne tombent jamais sur un bord de texel ; sinon recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
+        self.champ_g = g; self.champ_pat = CH_MOTIF_NUM[np.searchsorted(CH_MOTIF_FIN, g, side='right')]; self.champ_acc_vu = tuple(self.motif_acc)
         def coins(a, b): return np.stack([a, b], -1)
         # sommets : NO, NE, SE, SO
         P = np.stack([np.stack([X, np.zeros_like(X), Z], -1), np.stack([X + 1, np.zeros_like(X), Z], -1),
                       np.stack([X + 1, np.zeros_like(X), Z + 1], -1), np.stack([X, np.zeros_like(X), Z + 1], -1)], 2).astype(np.float32)   # (l, c, 4, 3)
-        U = np.stack([coins(u0, v0), coins(u0 + d, v0), coins(u0 + d, v0 + d), coins(u0, v0 + d)], 2).astype(np.float32)               # (l, c, 4, 2) ; les tuiles sont stockees tete en bas
         idx = [0, 1, 2, 0, 2, 3]
-        pos = P[:, :, idx, :].reshape(-1, 3); uv = U[:, :, idx, :].reshape(-1, 2)
+        pos = P[:, :, idx, :].reshape(-1, 3); uv = self._uv_tuiles(g + self.motif_acc[self.champ_pat])
         if self.champ_vl is not None: self.champ_vl.delete()
         self.champ_vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', pos.ravel()), tex_coords=('f', uv.ravel()), colors=('f', np.ones(len(pos) * 4, np.float32)))
+
+    def _uv_tuiles(self, g):
+        """Coordonnees de texture (6 sommets par tuile, a plat) de la grille de numeros de tuile `g` ; les tuiles sont stockees tete en bas dans l'atlas."""
+        u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
+        ins = self.champ_ins; u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
+        U = np.stack([np.stack([u0, v0], -1), np.stack([u0 + d, v0], -1), np.stack([u0 + d, v0 + d], -1), np.stack([u0, v0 + d], -1)], 2).astype(np.float32)      # (l, c, 4, 2)
+        return U[:, :, [0, 1, 2, 0, 2, 3], :].reshape(-1, 2).ravel()
+
+    def _avancer_motifs(self):
+        """Une image du jeu sur la carte du monde (NativeManager.Update -> Field.UpdatePattern) : toutes les 17 images, le decalage de chaque motif avance d'un pas, puis retombe a 0 a sa limite."""
+        self.motif_n += 1
+        if self.motif_n < CH_MOTIF_PERIODE: return
+        self.motif_n = 0
+        for i in range(1, len(CH_MOTIF_PAS)):
+            v = int(self.motif_acc[i]) + CH_MOTIF_PAS[i]
+            self.motif_acc[i] = v if v < CH_MOTIF_LIM[i] else 0
+
+    def _rafraichir_motifs(self):
+        """Met a jour sur place les coordonnees de texture des tuiles animees quand un motif a change de pas."""
+        acc = tuple(self.motif_acc)
+        if acc == self.champ_acc_vu or self.champ_vl is None or self.champ_pat is None: return
+        self.champ_acc_vu = acc
+        if self.champ_pat.any(): self.champ_vl.tex_coords[:] = self._uv_tuiles(self.champ_g + self.motif_acc[self.champ_pat])
 
     def _tracer_champ(self, e):
         if self.champ_vl is None or self.champ_tex is None: return
@@ -984,6 +1011,7 @@ class Jeu(pyglet.window.Window):
             p &= ~(MO.A | MO.B)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        if mo.etat.partie == MO.PARTIE_CHAMP and mo.etat.champ is not None: self._avancer_motifs()
         self.son.image = self.n
         if mo.etat.sons: self.son.evenements(mo.etat.sons); mo.etat.sons = []
         self.son.tick()
