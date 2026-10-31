@@ -335,6 +335,12 @@ class Moteur:
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
+        self._ecart_f = 1.0                      # facteur de vitesse du heros que les compagnons compensent (1 = d'origine)
+        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : n = nombre d'images d'historique entre deux compagnons (8, ou 10 dans certaines salles)
+            f = self._ecart_f
+            if f > 1.05: uc.reg_write(c.XREG[1], max(2, int(round((uc.reg_read(c.XREG[1]) & 0xffffffff) / f))))
+        haa = c.export('_ZN15TownPartyAction11AdjustArrayEi')
+        if haa: c.uc.hook_add(unicorn.UC_HOOK_CODE, _aa, None, haa, haa)
         self._creer_canevas()
 
     def _elargir_symboles(self):
@@ -376,9 +382,10 @@ class Moteur:
     # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde
     VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288))
 
-    def vitesse_heros(self, f):
-        """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi)."""
-        c = self.core
+    def vitesse_heros(self, f, compagnons=False):
+        """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi).
+        compagnons : en ville les compagnons suivent la trace du heros a un nombre fixe d'images (8) derriere lui, donc leur ecart grandit avec la vitesse ; vrai = cet ecart est divise par f pour garder la distance d'origine (essai : non verifie avec un groupe complet)."""
+        c = self.core; self._ecart_f = float(f) if compagnons else 1.0
         if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.export(n), b) for n, b in self.VITESSES_HEROS]
         for ad, base in self._vit_ad:
             if ad: c.mem_w(ad, struct.pack('<i', int(round(base * f))))           # (a chaque image : un etat charge remet les valeurs qu'il avait)

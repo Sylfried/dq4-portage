@@ -90,6 +90,15 @@ def plaque(x, y, w, h, k, choisi=False, contour=None):
     _melange(); t.blit(int(round(x)), int(round(y)))
 
 
+def tracer_grille(W, H):
+    """Grille de placement de l'ecran (COLS x LIGNES cases) : traits blancs translucides."""
+    gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+    for i in range(COLS + 1):
+        l = pyglet.shapes.Line(i * W / COLS, 0, i * W / COLS, H, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
+    for j in range(LIGNES + 1):
+        l = pyglet.shapes.Line(0, j * H / LIGNES, W, j * H / LIGNES, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
+
+
 class Boutons:
     def __init__(self, jeu):
         self.J = jeu; self.spr = {}; self.orig = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
@@ -184,16 +193,13 @@ class Boutons:
             s = self.spr[(nom, n)] = pyglet.sprite.Sprite(t)
         return s, n
 
-    def dessiner(self, visibles, edition=False):
+    def dessiner(self, visibles, edition=False, grille=True):
         if not visibles and not edition: return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         W, H = self.J.width, self.J.height
-        if edition:                                              # grille et consignes
+        if edition:                                              # voile sombre et grille (facultative)
             fond = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); fond.opacity = 110; fond.draw()
-            for i in range(COLS + 1):
-                l = pyglet.shapes.Line(i * W / COLS, 0, i * W / COLS, H, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
-            for j in range(LIGNES + 1):
-                l = pyglet.shapes.Line(0, j * H / LIGNES, W, j * H / LIGNES, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
+            if grille: tracer_grille(W, H)
         for nom in NOMS:
             if nom not in visibles and not edition: continue
             x, y, c = self.rect(nom); actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)

@@ -99,7 +99,7 @@ CH_CASE = 16 + 2 * CH_GOUT
 ZOOM_MIN, ZOOM_MAX = 0.5, 2.0                                               # zoom interne (1 = vue habituelle) ; reglage « Distance camera » du menu Echap et molette : 200 % (loin) a 50 % (pres)
 CAM_LACET_VIT, CAM_TANGAGE_VIT = 100.0, 45.0                                # fleches : tourner la camera (degres / s), relever ou abaisser son angle (degres / s)
 CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # angle de camera (0 = comme le jeu)
-CAM_ACCEL = 2.0                                                              # Maj + touche de la camera : rotation / inclinaison deux fois plus rapides
+CAM_CENTRE_MAX = 60.0                                                        # camera centree sur le heros : ecart maximal (unites) entre la cible du jeu et le heros pour corriger (au-dela, c'est une scene : le jeu garde la camera)
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
@@ -161,7 +161,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.cam_accel_appui = False; self.cam_dec = [0.0, 0.0]; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
@@ -471,7 +471,10 @@ class Jeu(pyglet.window.Window):
             else: self.pause.ouvrir()
             return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
-        if self.reg.action_de(symbol) == 'courir_bascule': self.course_appui = not self.course_appui; self.toast('Course : ' + ('activée' if self.course_appui else 'désactivée')); return pyglet.event.EVENT_HANDLED       # « Courir (appuyer) » : un appui active la course, le suivant la coupe
+        acts = self.reg.actions_de(symbol); bascule = False
+        if 'courir_bascule' in acts: self.course_appui = not self.course_appui; self.toast('Course : ' + ('activée' if self.course_appui else 'désactivée')); bascule = True       # « Courir (appuyer) » : un appui active la course, le suivant la coupe
+        if 'cam_accel_bascule' in acts: self.cam_accel_appui = not self.cam_accel_appui; self.toast('Caméra rapide : ' + ('activée' if self.cam_accel_appui else 'désactivée')); bascule = True       # « Accélérer la caméra (appuyer) » : idem pour la camera
+        if bascule: return pyglet.event.EVENT_HANDLED
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if self._tenue('modif'):
@@ -711,7 +714,17 @@ class Jeu(pyglet.window.Window):
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0: th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)
         th_v /= self.zoom                                                  # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...)
-        if self.bornes_x is not None:
+        centre = bool(self.reg['camera_centree'])
+        dec = (0.0, 0.0)
+        if centre and not e.cam_libre:                                    # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart, sauf quand le jeu vise ailleurs (scene : cible loin du heros)
+            sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
+            if hp is not None and math.hypot(hp[0] - cib[0], hp[2] - cib[2]) <= CAM_CENTRE_MAX: dec = (hp[0] - cib[0], hp[2] - cib[2])
+        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
+        a = 1.0 - math.exp(-14.0 * dt)                                    # l'ecart se resorbe en douceur (passage d'une scene a la main du joueur)
+        self.cam_dec = [c + (d - c) * a for c, d in zip(self.cam_dec, dec)]
+        if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
+            pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
+        if self.bornes_x is not None and not centre:
             # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ
             fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
             if abs(fv[2]) > 0.95:
@@ -1451,6 +1464,7 @@ class Jeu(pyglet.window.Window):
             fe.carte_uv = ((x - 128) / 1024.0, 1.0 - (y + 96) / 1024.0, (x + 128) / 1024.0, 1.0 - (y - 96) / 1024.0)
 
     def _dessiner_menus(self):
+        if self.pause.ouvert and self.pause.ecran == 'interface': return       # editeur d'interface : seul l'element choisi est montre (par le menu Echap), pas les fenetres du jeu
         mo = self.moteur
         actif = mo.menu_actif()
         if os.environ.get('DQ_UIDBG'):                      # (test) etat des fenetres a chaque changement : port, type, visible, fenetre d'origine ou menu simple
@@ -1649,12 +1663,12 @@ class Jeu(pyglet.window.Window):
         if not ville or self.cam_bloquee:                                                                          # carte du monde, ou lieu ou le jeu interdit de tourner la camera : les touches de la camera ne font rien
             for ax in self.cam_axe.values(): ax[0] = False; ax[1] = bool(g or d or h or b)
             return
-        K = pyglet.window.key; maj = self.reg['camera_maj'] and (self.touches[K.LSHIFT] or self.touches[K.RSHIFT])
+        acc = self._tenue('cam_accel') or self.cam_accel_appui                                                    # camera acceleree : touche tenue ou bascule (comme la course)
         if self._tenue('modif') and (g or d or h or b):                                                            # touche modificatrice + touche de la camera : retour animé a la vue d'origine, dans toutes les directions (les touches tenues ensuite ne font plus rien)
             for ax in self.cam_axe.values(): ax[0] = True; ax[1] = True
             sl = sa = 0
         else: sl = self._etat_axe('lacet', g, d); sa = self._etat_axe('angle', b, h)
-        vit_m = vit * (CAM_ACCEL if maj else 1.0)                                                                  # Maj : rotation et inclinaison a la main plus rapides (le recentrage garde sa vitesse)
+        vit_m = vit * (float(self.reg['accel_camera']) if acc else 1.0)                                            # acceleration : rotation et inclinaison a la main plus rapides (le recentrage garde sa vitesse)
         if sl:
             self.lacet = (self.lacet + sl * CAM_LACET_VIT * vit_m * dt + 180.0) % 360.0 - 180.0
             if self.cam_limite is not None: self.lacet = max(-self.cam_limite, min(self.cam_limite, self.lacet))
@@ -1689,7 +1703,7 @@ class Jeu(pyglet.window.Window):
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse()
-        h = min(f, 2.0); self.moteur.vitesse_heros(h); f /= h           # le heros seul va plus vite (ses variables de vitesse) : les PNJ gardent leur vitesse et leurs animations ; au-dela de x2 (risque de traverser les murs) le reste passe par des pas de moteur en plus
+        h = min(f, 2.0); self.moteur.vitesse_heros(h, bool(self.reg['compagnons_distance'])); f /= h           # le heros seul va plus vite (ses variables de vitesse) : les PNJ gardent leur vitesse et leurs animations ; au-dela de x2 (risque de traverser les murs) le reste passe par des pas de moteur en plus
         self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
         n = 0; nmax = 3 * max(1, math.ceil(f))
         while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
@@ -1865,7 +1879,7 @@ class Jeu(pyglet.window.Window):
         if self.args.shots_combat and self.n_combat in self.args.shots_combat and self.args.shot:       # (test) captures intermediaires pendant un combat
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot.replace('.png', '_%d.png' % self.n_combat))
-            print('combat', self.n_combat, 'engine image', self.moteur.images, [(k, len(m['v']), m['pos']) for k, m in sorted(self.moteur.etat.maillages.items())], flush=True)
+            print('combat', self.n_combat, 'engine image', self.moteur.images, 'type msg', getattr(self.ui_msg, 'type', None), [(k, len(m['v']), m['pos']) for k, m in sorted(self.moteur.etat.maillages.items())], flush=True)
         if self.args.shot and (self.n >= self.args.images or (self.args.images_combat and self.n_combat >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)

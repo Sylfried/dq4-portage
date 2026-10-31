@@ -63,6 +63,22 @@ def trois_lignes(t1, t0):
     return t
 
 
+def texte_plein(t):
+    """Types de message de combat 2 et 3 (messages des actions) : la mise en page d'origine dessine leur canevas de texte a 90 % (`scale` 0,9 : 490 pixels du canevas dans 441 unites), ce qui rend le texte
+    plus petit que dans les dialogues du terrain et le message de debut de combat. On agrandit toute la fenetre (cadre, canevas, curseur de fin de page) de 1 / scale autour de son coin bas gauche, puis on la recentre :
+    le texte a la taille des autres dialogues, avec autant de signes par ligne que dans l'original (bord bas inchange)."""
+    import copy
+    f = 1.0 / (t.get('scale') or 1.0)
+    if abs(f - 1.0) < 1e-6: return t
+    t = copy.deepcopy(t)
+    for v in t['frame_mesh']['vtx']: v[0] *= f; v[1] *= f
+    for v in t['canvas']['vtx']: v[0] *= f; v[2] *= f
+    fl = t['feed_local']; t['feed_local'] = [fl[0] * f, fl[1], fl[2] * f]
+    w0 = max(v[0] for v in t['frame_mesh']['vtx']) / f; w1 = w0 * f                  # largeur du cadre avant / apres
+    t['win'] = [t['win'][0] - (w1 - w0) / 2, t['win'][1], t['win'][2]]
+    return t
+
+
 class MiseEnPage:
     """cache/ui_layout.json : {'header': {...}, 'types': {numero: {...}}} ; cadres : maillages des fenetres (frameData)"""
     def __init__(self, chemin, cadres=None):
@@ -70,6 +86,7 @@ class MiseEnPage:
         self.hdr = d['header']; self.types = d['types']; self.message = d.get('message')       # message : fenetre de dialogue (MenuMessage), absente des anciens fichiers
         if self.message:                                                 # combat (type 1) : 3 lignes comme le terrain ; le cadre d'origine (4 lignes) reste en type 4, pour les messages qui en ont quatre
             ts = self.message['types']; ts.append(ts[1]); ts[1] = trois_lignes(ts[1], ts[0])
+            for i in (2, 3): ts[i] = texte_plein(ts[i])                          # messages d'action du combat : texte de la meme taille que dans les dialogues
         self.infos = self.hdr['info']; self.couleurs = [tuple(c) for c in self.hdr['colors']]
         self.pousse = tuple(self.hdr['pushed'])
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
