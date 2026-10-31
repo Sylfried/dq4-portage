@@ -138,7 +138,7 @@ class Jeu(pyglet.window.Window):
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
-        self.angle_cam = float(self.reg['angle_camera']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
+        self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a gauche + cadre noir translucide
         self.t_demarrage = time.time(); self.etiq_conseil = pyglet.text.Label('Échap : menu    F1 : infos', font_name=POLICES, font_size=11, color=(255, 255, 255, 200), x=10, y=8, anchor_x='left', anchor_y='bottom')
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -243,6 +243,7 @@ class Jeu(pyglet.window.Window):
         if cle in self.sprite_tex: return self.sprite_tex[cle]
         arr = self.donnees.feuille(ident); r = False
         if arr is not None:
+            arr = HD.nettoyer_feuille(arr)[0]                      # heros : plus de halo violet semi-transparent
             nl = 8 if arr[4 * SPRITE_H:5 * SPRITE_H, :72, 3].any() else 4
             atlas, _, _ = HD.agrandir_feuille(arr, SPRITE_L, SPRITE_H, 3, nl, lambda c: HD._dilater(c, 2), GOUT_ORIG, 1)         # pixels transparents = couleur du bord voisin : plus de liseré sombre au filtrage
             r = dict(t=self._tex(atlas, False), tw=atlas.shape[1], th=atlas.shape[0], nl=nl, hd=False, cl=SPRITE_L, ch=SPRITE_H, g=GOUT_ORIG, arr=arr)
@@ -476,8 +477,8 @@ class Jeu(pyglet.window.Window):
     @staticmethod
     def _num_etat(symbol):
         K = pyglet.window.key
-        chiffres = {K._1: 1, K._2: 2, K._3: 3, K._4: 4, K._5: 5, K._6: 6, K._7: 7, K._8: 8, K._9: 9, K._0: 10,
-                    K.NUM_1: 1, K.NUM_2: 2, K.NUM_3: 3, K.NUM_4: 4, K.NUM_5: 5, K.NUM_6: 6, K.NUM_7: 7, K.NUM_8: 8, K.NUM_9: 9, K.NUM_0: 10}
+        chiffres = {K._1: 1, K._2: 2, K._3: 3, K._4: 4, K._5: 5, K._6: 6, K._7: 7, K._8: 8, K._9: 9,
+                    K.NUM_1: 1, K.NUM_2: 2, K.NUM_3: 3, K.NUM_4: 4, K.NUM_5: 5, K.NUM_6: 6, K.NUM_7: 7, K.NUM_8: 8, K.NUM_9: 9}
         return chiffres.get(symbol)
 
     # ---- reglages appliques depuis le menu Echap
@@ -497,6 +498,8 @@ class Jeu(pyglet.window.Window):
         self.champ_zoom = float(z); self.pp_auto = True; self.reg['echelle_pp'] = 0         # le curseur reprend la main sur l'echelle pixel perfect (sinon il ne changeait plus rien apres un coup de molette)
 
     def regler_angle(self, a): self.angle_cam = float(a)
+
+    def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
     def resolutions(self):
         """Tailles proposees (16/9, 720p a 4K) ; la taille actuelle s'y ajoute si elle est libre ; triees par largeur puis hauteur."""
@@ -949,6 +952,20 @@ class Jeu(pyglet.window.Window):
         vl.draw(gl.GL_TRIANGLES)
         self.prog_effet.stop()
 
+    def _dessiner_vignette(self):
+        """Assombrit les bords de l'image de jeu (reglage Vignettage), sous le fondu et l'interface : degrade radial elliptique (centre intact jusqu'a 45 % du rayon, bords en noir
+        d'opacite = reglage). Texture 512 x 288 etiree sur la fenetre (filtre lineaire), creee une fois."""
+        v = float(self.reg['vignette'])
+        if v <= 0.005: return
+        t = getattr(self, '_vign_tex', None)
+        if t is None:
+            n, m = 512, 288; yy, xx = np.mgrid[0:m, 0:n]; r = np.hypot((xx + 0.5) / n * 2 - 1, (yy + 0.5) / m * 2 - 1)
+            k = np.clip((r - 0.45) / (1.3 - 0.45), 0.0, 1.0); k = k * k * (3 - 2 * k)
+            a = np.zeros((m, n, 4), np.uint8); a[..., 3] = np.round(255 * k).astype(np.uint8)
+            t = self._vign_tex = self._tex(a, False)
+        gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        sp = pyglet.sprite.Sprite(t, x=0, y=0); sp.scale_x = self.width / t.width; sp.scale_y = self.height / t.height; sp.opacity = int(round(255 * min(1.0, v))); sp.draw()
+
     def _dessiner_fondu(self):
         """Plan de fondu d'ecran (Fade.FadePlane) : derriere l'interface (messages, menus), devant la scene."""
         fd = self.moteur.etat.fondu
@@ -1028,12 +1045,13 @@ class Jeu(pyglet.window.Window):
             tour = [(b, abs(c[0] - x) * 100.0 - (c[1] - y) * sens) for b, c in z.items() if b != cur and abs(c[0] - x) < 12.0]
         return min(tour, key=lambda t: t[1])[0] if tour else cur
 
-    def _etiq(self, texte, taille, couleur=(255, 255, 255, 255)):
-        k = (texte, round(taille, 1), couleur)
+    def _etiq(self, texte, taille, couleur=(255, 255, 255, 255), polices=()):
+        """Etiquette de texte (mise en cache) ; `polices` : familles essayees avant les polices du systeme (police du jeu pour le menu Echap)."""
+        k = (texte, round(taille, 1), couleur, polices)
         l = self.etiq_menu.get(k)
         if l is None:
             if len(self.etiq_menu) > 400: self.etiq_menu.clear()
-            l = self.etiq_menu[k] = pyglet.text.Label(texte, font_name=POLICES, font_size=taille, color=couleur, anchor_x='left', anchor_y='baseline')
+            l = self.etiq_menu[k] = pyglet.text.Label(texte, font_name=tuple(polices) + POLICES, font_size=taille, color=couleur, anchor_x='left', anchor_y='baseline')
         return l
 
     def _marge_aide(self):
@@ -1742,6 +1760,7 @@ class Jeu(pyglet.window.Window):
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
+        if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
         self._dessiner_fondu(); self._dessiner_degats(e)
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1

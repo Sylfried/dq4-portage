@@ -9,11 +9,14 @@ import reglages as RG
 import hd as HD
 import hud_mobile as HM
 
-NB_ETATS = 10
+NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
-OR = (255, 235, 130, 255); BLANC = (255, 255, 255, 255); GRIS = (150, 160, 160, 255); ROUGE = (255, 150, 140, 255)
-FOND_DQ = (7, 11, 65); BORDS_DQ = ((211, 212, 221), (126, 128, 156), (46, 49, 94))        # fenetres des menus du jeu : fond bleu nuit, liseré clair en trois traits
+# Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres des menus du jeu mobile : fond noir, cadre en cinq traits gris / blanc (mesure sur la fenetre de message)
+OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
+JAUNE = OR[:3]
+FOND_DQ = (0, 0, 0); BORDS_DQ = ((138, 138, 138), (205, 205, 205), (255, 255, 255), (132, 132, 132), (41, 41, 41))        # fond noir ; traits du cadre de l'exterieur vers l'interieur
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
+TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 ECHELLES_PP = (0, 1, 2, 4, 8)
 MSAA_CHOIX = (0, 2, 4, 8)
 
@@ -27,7 +30,18 @@ class Pause:
         self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
         self.deroule = None; self.zones_pop = []          # liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
         self.pos_sw = {}; self.t_sw = time.time(); self.dt_sw = 0.0         # interrupteurs : position du bouton (0 = Non, 1 = Oui) par libelle, pour l'animation
+        self._pol = None                                  # familles de la police du jeu (None : pas encore cherchee)
         self.rep_pos = None                               # (ecran, ligne) sur lesquels la repetition d'une touche maintenue a commence
+
+    def _et(self, texte, taille, couleur=BLANC):
+        """Etiquette en police du jeu (GMaruGoPro-M, cache/ui_font.otf, enregistree au premier appel) ; a defaut, les polices du systeme."""
+        if self._pol is None:
+            self._pol = ()
+            f = os.path.join(self.J.args.cache, 'ui_font.otf')
+            if os.path.exists(f):
+                try: pyglet.font.add_file(f); self._pol = ('FOT-GMaruGo Pro', 'FOT-GMaruGo Pro M', 'GMaruGoPro-M')
+                except Exception as ex: print('police du jeu non chargee :', ex, flush=True)
+        return self.J._etiq(texte, taille * (1.0 if not self._pol else TAILLE_JEU), couleur, self._pol)
 
     # ---- ouverture / fermeture
     def ouvrir(self):
@@ -120,6 +134,7 @@ class Pause:
              self._curs('Zoom de la carte du monde', lambda: J.champ_zoom, lambda v: (set_('zoom_carte', J.regler_zoom)(v)), 0.4, 4.0, 0.01, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['zoom_carte']),
              self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v)))),
              self._curs('Angle de la caméra des villes', lambda: R['angle_camera'], lambda v: (R.__setitem__('angle_camera', v), J.regler_angle(v)), -20.0, 40.0, 1.0, 1.0, lambda v: '%+d °' % round(v) if round(v) else '0 °', 1.0, defaut=RG.DEFAUT['angle_camera']),
+             self._curs('Vignettage (bords assombris)', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
              self._choix('Plein écran', [False, True], lambda: J.est_plein, set_('plein_ecran', J.regler_plein_ecran)),
              self._choix('Anticrénelage (au prochain lancement)', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa')),
              self._choix('Infos à l\'écran (F1)', [False, True], lambda: J.aide, set_('infos', J.regler_infos)),
@@ -129,6 +144,7 @@ class Pause:
     def _e_jeu(self):
         R = self.J.reg
         return [self._curs('Vitesse de déplacement', lambda: R['vitesse_marche'], lambda v: R.__setitem__('vitesse_marche', v), 0.5, 3.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_marche']),
+                self._curs('Vitesse des transitions entre cartes', lambda: R['vitesse_fondu'], lambda v: (R.__setitem__('vitesse_fondu', v), self.J.regler_fondu(v)), 1.0, 4.0, 0.05, 0.25, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_fondu']),
                 self._choix('Course (maintenir la touche)', [True, False], lambda: R['course'], lambda v: R.__setitem__('course', v)),
                 self._curs('Vitesse de la course', lambda: R['vitesse_course'], lambda v: R.__setitem__('vitesse_course', v), 1.2, 4.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_course']),
                 self._curs('Taille des nombres de dégâts', lambda: R['taille_degats'], lambda v: R.__setitem__('taille_degats', v), 0.5, 3.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['taille_degats']),
@@ -161,11 +177,22 @@ class Pause:
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)
 
+    @staticmethod
+    def _date_fr(date):
+        """'2026-10-31 19:21:05' -> '31/10/2026  19:21:05' (nom d'un etat : sa date et son heure d'enregistrement)."""
+        try: return time.strftime('%d/%m/%Y  %H:%M:%S', time.strptime(date, '%Y-%m-%d %H:%M:%S'))
+        except Exception: return ''
+
+    @staticmethod
+    def _lieu_lisible(inf):
+        """Lieu de l'etat seulement s'il parle a un joueur (le nom technique d'une carte, comme « mak1f1 », n'est pas montre)."""
+        return inf.get('lieu', '') if inf.get('lieu') in ('Carte du monde', 'Combat') else ''
+
     def _e_etats(self, ecriture):
         e = []
         for n in range(1, NB_ETATS + 1):
             inf = self.J.infos_etat(n)
-            if inf: lib = inf[0].get('lieu', '?'); val = inf[0].get('date', '')[5:16].replace('-', '/', 1) if inf[0].get('date') else ''
+            if inf: lib = self._date_fr(inf[0].get('date')) or 'Sans date'; val = self._lieu_lisible(inf[0])
             else: lib = '— vide —'; val = ''
             if ecriture: e.append(dict(t='slot', l=lib, v=val, n=n, off=False, ok=(lambda n=n: self._sauver(n))))
             else: e.append(dict(t='slot', l=lib, v=val, n=n, off=inf is None, ok=(lambda n=n: self._charger(n))))
@@ -395,16 +422,16 @@ class Pause:
     # ---- dessin
     @staticmethod
     def _cadre(x, y, w, h, k, opacite=250):
-        """Fenetre a la maniere des menus du jeu (MenuParts) : liseré clair en trois traits (1,4 px a 720 p), fond bleu nuit."""
-        b = max(1, int(round(1.4 * k)))
+        """Fenetre a la maniere des menus du jeu mobile : fond noir, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce) de 1 px a 720 p."""
+        b = max(1, int(round(1.25 * k))); n = len(BORDS_DQ)
         for i, c in enumerate(BORDS_DQ):
             r = pyglet.shapes.Rectangle(x + i * b, y + i * b, w - 2 * i * b, h - 2 * i * b, color=c); r.opacity = opacite; r.draw()
-        r = pyglet.shapes.Rectangle(x + 3 * b, y + 3 * b, w - 6 * b, h - 6 * b, color=FOND_DQ); r.opacity = opacite; r.draw()
+        r = pyglet.shapes.Rectangle(x + n * b, y + n * b, w - 2 * n * b, h - 2 * n * b, color=FOND_DQ); r.opacity = opacite; r.draw()
 
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
         """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
         self.zones_def[idx] = (x - 3 * k, y - 3 * k, x + c + 3 * k, y + c + 3 * k)
-        coul = (95, 105, 105) if est_defaut else (255, 235, 130)
+        coul = (90, 90, 90) if est_defaut else JAUNE
         r = pyglet.shapes.BorderedRectangle(x, y, c, c, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=coul[:3]); r.opacity = 30 if est_defaut else 70; r.draw()
         cx, cy, ra = x + c / 2, y + c / 2, c * 0.28; t0, t1 = math.radians(55), math.radians(55 + 270)
         pts = [(cx + ra * math.cos(t0 + (t1 - t0) * i / 14), cy + ra * math.sin(t0 + (t1 - t0) * i / 14)) for i in range(15)]
@@ -424,10 +451,10 @@ class Pause:
         cible = 1.0 if actif else 0.0; p = self.pos_sw.get(cle, cible)                   # premiere apparition : pas d'animation
         p = cible if abs(cible - p) < 0.02 else p + (cible - p) * min(1.0, self.dt_sw * 16.0); self.pos_sw[cle] = p
         w, h = LARG_SW * k, HAUT_SW * k; r = h / 2
-        piste = (55, 60, 60) if grise else tuple(int(a + (b - a) * p) for a, b in zip((62, 72, 74), (214, 188, 70)))
-        if sel and not grise: e = max(1.5, 2 * k); self._pilule(x - e, yc, w + 2 * e, h + 2 * e, (255, 235, 130))
+        piste = (50, 50, 50) if grise else tuple(int(a + (b - a) * p) for a, b in zip((62, 62, 62), (225, 207, 3)))
+        if sel and not grise: e = max(1.5, 2 * k); self._pilule(x - e, yc, w + 2 * e, h + 2 * e, JAUNE)
         self._pilule(x, yc, w, h, piste)
-        pyglet.shapes.Circle(x + r + (w - 2 * r) * p, yc, r - 3 * k, segments=24, color=(150, 160, 160) if grise else (255, 255, 255)).draw()
+        pyglet.shapes.Circle(x + r + (w - 2 * r) * p, yc, r - 3 * k, segments=24, color=(128, 128, 128) if grise else (255, 255, 255)).draw()
 
     def _miniature(self, n):
         """Texture de la miniature d'un etat (None s'il n'y en a pas)."""
@@ -449,7 +476,7 @@ class Pause:
         if self.placement:
             J.hud.dessiner(HM.NOMS, True)
             gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-            et = J._etiq('Glisse les boutons pour les placer    Échap, Entrée ou clic droit : terminer', 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k
+            et = self._et('Glisse les boutons pour les placer    Échap, Entrée ou clic droit : terminer', 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k
             r = pyglet.shapes.Rectangle((W - w) / 2, H - 24 * k - h, w, h, color=(0, 0, 0)); r.opacity = 190; r.draw(); et.x = (W - et.content_width) / 2; et.y = H - 24 * k - h + 11 * k; et.draw()
             return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -460,8 +487,8 @@ class Pause:
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'jeu': 'Jeu', 'son': 'Son', 'boutons': 'Boutons à l\'écran', 'touches': 'Touches', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
         avec_mini = ecr in ('sauver', 'charger')
         aide = {'touches': 'Entrée : changer la touche    ←/→ : colonne    Suppr : effacer', 'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état',
-                'affichage': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'son': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut',
-                'jeu': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; ↺ ou Suppr : valeur par défaut', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
+                'affichage': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut', 'son': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut',
+                'jeu': 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut', 'boutons': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)'}.get(ecr, '')
         en_sel = e[i_sel] if e else None
         if en_sel and en_sel['t'] == 'choix':
             aide = 'Entrée ou clic : activer / désactiver    ←  : Non    →  : Oui' if en_sel.get('sw') else 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
@@ -471,10 +498,10 @@ class Pause:
             act = dict(RG.ACTIONS)[self.capture[0]]; aide = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)' % act
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # largeur : le plus long libelle + la place des valeurs / curseurs / colonnes de touches
-        lw = max([J._etiq(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
+        lw = max([self._et(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
         for x in e:
             if x['t'] == 'choix':
-                tw = max(J._etiq(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
+                tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
         if ecr in ('affichage', 'son', 'jeu', 'boutons'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
@@ -486,64 +513,64 @@ class Pause:
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h) / 2; y0 = y1 - h
         self._cadre(x0, y0, pw, h, k)
-        e_t = J._etiq(titres.get(ecr, ''), fst, OR); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - 52 * k; e_t.draw()
+        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - 52 * k; e_t.draw()
         visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); debut = 0               # defilement : les lignes qui ne tiennent pas sont decalees pour garder la selection visible
         if n > visibles: debut = min(max(0, i_sel - visibles // 2), n - visibles)
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_pop = []; lignes = {}; c1x = x0 + pw - 30 * k - 2 * 190 * k; self.zones_col = c1x + 190 * k - 8 * k
         if ecr == 'touches':
             for c in range(2):
-                eh = J._etiq('Touche %d' % (c + 1), fsp, GRIS); eh.x = c1x + c * 190 * k; eh.y = y1 - h_titre + 6 * k; eh.draw()
+                eh = self._et('Touche %d' % (c + 1), fsp, GRIS); eh.x = c1x + c * 190 * k; eh.y = y1 - h_titre + 6 * k; eh.draw()
         y = y1 - h_titre
         for idx in range(debut, min(n, debut + visibles)):
             en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
             if sel:
-                tri = pyglet.shapes.Triangle(x0 + 22 * k, ybas + rh / 2 + 9 * k, x0 + 22 * k, ybas + rh / 2 - 9 * k, x0 + 22 * k + 15 * k, ybas + rh / 2, color=(255, 235, 130)); tri.draw()
+                tri = pyglet.shapes.Triangle(x0 + 22 * k, ybas + rh / 2 + 9 * k, x0 + 22 * k, ybas + rh / 2 - 9 * k, x0 + 22 * k + 15 * k, ybas + rh / 2, color=JAUNE); tri.draw()
             coul = GRIS if en.get('off') else BLANC
             base = ybas + (rh - fs * 1.33) / 2 + 5 * k
             if en['t'] == 'sep': coul = OR
             lx = x0 + 52 * k
             if en['t'] == 'slot':
-                nu = J._etiq('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
-            lab = J._etiq(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
+                nu = self._et('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
+            lab = self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
             if en['t'] == 'choix' and en.get('liste'):                                        # liste deroulante : valeur courante et petite fleche vers le bas
-                vl = J._etiq(en['v'](), fs, coul); vl.x = x0 + pw - 30 * k - 24 * k - vl.content_width; vl.y = base; vl.draw()
+                vl = self._et(en['v'](), fs, coul); vl.x = x0 + pw - 30 * k - 24 * k - vl.content_width; vl.y = base; vl.draw()
                 fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2
                 pyglet.shapes.Triangle(fx - 7 * k, fy + 4 * k, fx + 7 * k, fy + 4 * k, fx, fy - 5 * k, color=OR[:3] if sel else coul[:3]).draw()
                 self.zones_val[idx] = (vl.x - 10 * k, x0 + pw - 30 * k + 10 * k)
             elif en['t'] == 'choix':                                                          # interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur
                 sw_x = x0 + pw - 30 * k - LARG_SW * k; actif = bool(en['get']())
-                vl = J._etiq(en['v'](), fs, coul if not actif or en.get('off') else OR); vl.x = sw_x - 14 * k - vl.content_width; vl.y = base; vl.draw()
+                vl = self._et(en['v'](), fs, coul if not actif or en.get('off') else OR); vl.x = sw_x - 14 * k - vl.content_width; vl.y = base; vl.draw()
                 self._interrupteur(en['l'], sw_x, ybas + rh / 2, actif, sel, en.get('off'), k)
                 self.zones_val[idx] = (vl.x - 10 * k, sw_x + LARG_SW * k + 10 * k)
             elif en['t'] == 'curs':
                 if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
                 else: txt = en['v']()
                 dr = x0 + pw - 30 * k - 40 * k                                                # bord droit de la valeur : le bouton « valeur par defaut » est a sa droite
-                vl = J._etiq(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = dr - vl.content_width; vl.y = base; vl.draw()
+                vl = self._et(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = dr - vl.content_width; vl.y = base; vl.draw()
                 self.zones_val[idx] = (vl.x - 10 * k, dr + 10 * k)
                 bw = 200 * k; bx1 = dr - 90 * k - 20 * k; bx0 = bx1 - bw; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
-                fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(70, 82, 82)); fond.draw()
-                rem = pyglet.shapes.Rectangle(bx0, by, bw * max(0.0, min(1.0, en['frac']())), 10 * k, color=(255, 235, 130)); rem.draw()
+                fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(70, 70, 70)); fond.draw()
+                rem = pyglet.shapes.Rectangle(bx0, by, bw * max(0.0, min(1.0, en['frac']())), 10 * k, color=JAUNE); rem.draw()
                 cur = pyglet.shapes.Rectangle(bx0 + bw * max(0.0, min(1.0, en['frac']())) - 3 * k, by - 4 * k, 6 * k, 18 * k, color=(255, 255, 255)); cur.draw()
                 if 'defaut' in en: self._bouton_defaut(idx, x0 + pw - 30 * k - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             elif en['t'] == 'slot':
-                if en['v']: vl = J._etiq(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - vl.content_width; vl.y = base; vl.draw()
+                if en['v']: vl = self._et(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'touche':
                 for c in range(2):
                     txt = en['v'][c]; actif = sel and self.sel.get('col', 0) == c
                     if self.capture is not None and self.capture == (en['act'], c): txt = '…'
                     cx = c1x + c * 190 * k
                     if actif:
-                        r = pyglet.shapes.BorderedRectangle(cx - 8 * k, ybas + 6 * k, 180 * k, rh - 12 * k, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=(255, 235, 130)); r.opacity = 60; r.draw()
-                    vl = J._etiq(txt, fs * 0.92, OR if actif else (BLANC if en['v'][c] != RG.nom_touche(None) else GRIS)); vl.x = cx; vl.y = base; vl.draw()
+                        r = pyglet.shapes.BorderedRectangle(cx - 8 * k, ybas + 6 * k, 180 * k, rh - 12 * k, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=JAUNE); r.opacity = 60; r.draw()
+                    vl = self._et(txt, fs * 0.92, OR if actif else (BLANC if en['v'][c] != RG.nom_touche(None) else GRIS)); vl.x = cx; vl.y = base; vl.draw()
             self.zones.append((x0 + 12 * k, ybas + 3 * k, x0 + pw - 12 * k, ytop - 3 * k, idx))
             y -= rh
         # pied du cadre : message d'information puis aide
         yp = y0 + 12 * k
         if aide:
-            ea = J._etiq(aide, fsp, GRIS); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
+            ea = self._et(aide, fsp, AIDE); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
         if msg:
-            em = J._etiq(msg, fsp * 1.1, ROUGE if self.message[2] else OR); em.x = x0 + (pw - em.content_width) / 2; em.y = max(8 * k, y0 - 34 * k); em.draw()
+            em = self._et(msg, fsp * 1.1, ROUGE if self.message[2] else OR); em.x = x0 + (pw - em.content_width) / 2; em.y = max(8 * k, y0 - 34 * k); em.draw()
         # miniature de l'etat survole
         if avec_mini:
             mx = x0 + pw + gap; mh = min(h, 270 * k)
@@ -555,11 +582,11 @@ class Pause:
                     spr = pyglet.sprite.Sprite(t, x=mx + 20 * k, y=y1 - 40 * k - h_i); spr.scale_x = w_i / t.width; spr.scale_y = h_i / t.height; spr.draw()
                     liste = []
                     if inf:
-                        liste = [inf[0].get('lieu', ''), inf[0].get('date', ''), 'Image du moteur %s' % inf[0].get('images', '')]
+                        liste = [self._date_fr(inf[0].get('date')) or 'Sans date', self._lieu_lisible(inf[0]), 'Image du moteur %s' % inf[0].get('images', '')]
                     for j, ligne in enumerate(liste):
-                        el = J._etiq(ligne, fsp * 1.1, BLANC if j == 0 else GRIS); el.x = mx + 20 * k; el.y = y1 - 40 * k - h_i - 34 * k - j * 30 * k; el.draw()
+                        el = self._et(ligne, fsp * 1.1, BLANC if j == 0 else GRIS); el.x = mx + 20 * k; el.y = y1 - 40 * k - h_i - 34 * k - j * 30 * k; el.draw()
                 else:
-                    el = J._etiq('Emplacement vide' if not inf else 'Pas de miniature', fs, GRIS); el.x = mx + (wmini - el.content_width) / 2; el.y = y1 - h / 2; el.draw()
+                    el = self._et('Emplacement vide' if not inf else 'Pas de miniature', fs, GRIS); el.x = mx + (wmini - el.content_width) / 2; el.y = y1 - h / 2; el.draw()
         if self.deroule is not None and self.deroule[0] in lignes and self.deroule[0] < n and e[self.deroule[0]]['t'] == 'choix':
             self._dessiner_liste(e[self.deroule[0]], lignes[self.deroule[0]], x0 + pw - 24 * k, k, fs)
 
@@ -567,7 +594,7 @@ class Pause:
         """Liste deroulante d'un choix : sous la ligne (au-dessus s'il n'y a pas la place), valeur courante en or, curseur en triangle comme dans les menus du jeu."""
         J = self.J; vals = en['vals']; noms = [self._nom_valeur(en['l'], v) for v in vals]; cur = self.deroule[1]; H = J.height
         ih = 36 * k; nvis = max(1, min(len(vals), 8, int((H - 40 * k) // ih)))
-        w = max(max(J._etiq(t, fs).content_width for t in noms) + 90 * k, 240 * k); h = nvis * ih + 20 * k
+        w = max(max(self._et(t, fs).content_width for t in noms) + 90 * k, 240 * k); h = nvis * ih + 20 * k
         ybas, ytop = ligne; y1 = ybas - 4 * k; y0 = y1 - h
         if y0 < 8 * k: y1 = ytop + 4 * k; y0 = y1 - h
         if y0 < 8 * k: y0 = 8 * k; y1 = y0 + h
@@ -579,7 +606,7 @@ class Pause:
             yb = y - ih; courant = vals[j] == en['get']()
             if j == cur:
                 pyglet.shapes.Triangle(x0 + 16 * k, yb + ih / 2 + 8 * k, x0 + 16 * k, yb + ih / 2 - 8 * k, x0 + 16 * k + 13 * k, yb + ih / 2, color=OR[:3]).draw()
-            et = J._etiq(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
+            et = self._et(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
             self.zones_pop.append((x0 + 6 * k, yb, x1 - 6 * k, y, j)); y -= ih
         if top > 0: pyglet.shapes.Triangle(x1 - 22 * k, y1 - 8 * k, x1 - 10 * k, y1 - 8 * k, x1 - 16 * k, y1 - 1 * k, color=GRIS[:3]).draw()
         if top + nvis < len(vals): pyglet.shapes.Triangle(x1 - 22 * k, y0 + 8 * k, x1 - 10 * k, y0 + 8 * k, x1 - 16 * k, y0 + 1 * k, color=GRIS[:3]).draw()

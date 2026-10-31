@@ -58,6 +58,7 @@ class CoreJeu(T.Core):
 
 class Etat:
     """Ce que Unity saurait a l'ecran : decode des paquets du moteur."""
+    vitesse_fondu = 1.0                        # reglage du joueur : les fondus au noir durent 1 / vitesse_fondu de leur duree d'origine
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
         self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
@@ -168,6 +169,7 @@ class Etat:
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
         entree = le plan repart de l'opacite 1 vers 0. Duree <= 1 image : immediat."""
         d = v & 0x7ff; fd = self.fondu; fd['noir'] = 0
+        if d > 1 and not v & (0x800 | 0x2000) and Etat.vitesse_fondu > 1.0: d = max(1, int(round(d / Etat.vitesse_fondu)))       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions »
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
