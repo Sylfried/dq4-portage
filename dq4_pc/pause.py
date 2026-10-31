@@ -2,6 +2,7 @@
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
+Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, la ligne est encadree de jaune.
 Les reglages sont enregistres dans reglages.json. Fenetres noires, curseur dore et bouton retour : ceux des menus du jeu (feuilles MenuTexture et Button)."""
 import math, os, time
 import numpy as np
@@ -16,7 +17,7 @@ DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 # Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
 JAUNE = OR[:3]; CLAIR = (236, 236, 232)
-NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, opaque
+NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_FOND)
 LARG_CELLULE, ECART_CELLULES = 150.0, 10.0       # menu Commandes : largeur d'une case de touche et ecart entre les deux (a 900 px de haut, multiplies par k)
 LARG_BARRE = 12.0                                 # barre de defilement
 CURSEUR = (194, 297, 238, 328)                    # curseur dore des menus du jeu dans la feuille MenuTexture (x0, y0, x1, y1)
@@ -25,6 +26,21 @@ ICONE_RETOUR = (352, 224, 384, 256)               # icone du bouton retour du je
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
+# noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable) dans l'editeur d'interface ; les autres gardent leur nom d'origine
+NOMS_FENETRES = {'YesNo': 'Oui / Non', 'Money': 'Argent', 'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Pageing': 'Pages',
+                 'MagicInfo': 'Infos des sorts', 'NameButton': 'Menu rapide', 'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'BCInfo': 'Infos du bonus', 'Chapter': 'Titre du chapitre',
+                 'Status': 'Statut du personnage', 'OperationItemList': "Actions sur les objets", 'Senreki': 'Journal de bord', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Bouton d'ordre de l'équipe",
+                 'MapButton': 'Bouton de la carte', 'ShopMap': 'Plan de la boutique', 'CityMap': 'Plan de la ville', 'WorldLargeMap': 'Grande carte du monde', 'Config': 'Options', 'MonsterEncyclopedia': 'Bestiaire',
+                 'BattleUpStatus': 'Combat : gains', 'BattleRoot': 'Combat : menu principal', 'BattleAction': 'Combat : actions', 'BattleTarget': 'Combat : cibles', 'BattleGo': 'Combat : en avant',
+                 'BattleIM': 'Combat : ordres', 'BattleInfo': "Combat : infos de l'équipe", 'BattleEnemyTarget': 'Combat : cible ennemie', 'BattlePartyTarget': 'Combat : cible alliée',
+                 'BattleChangeButton': 'Combat : changement', 'BattleChangeInfo': 'Combat : infos du changement', 'Casino_CoinShop': 'Casino : jetons', 'Casino_GiftList': 'Casino : cadeaux',
+                 'Casino_GiftTarget': 'Casino : destinataire', 'Casino_Slot': 'Casino : machine à sous', 'Casino_Poker': 'Casino : poker', 'Casino_FightStadiumBet': 'Casino : pari du stade',
+                 'Casino_FightStadiumSelect': 'Casino : choix du stade', 'Casino_FightStadiumCoin': 'Casino : jetons du stade', 'StartMenuFirst': 'Menu de démarrage', 'StartMenuSecond': 'Menu de démarrage (suite)',
+                 'StartMenuSelect': 'Menu de démarrage : choix', 'StartNameEntry': 'Saisie du nom', 'SaveOverwrite': 'Confirmation de sauvegarde', 'ShopRoot': 'Boutique : menu', 'ShopBuy': 'Boutique : achat',
+                 'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait',
+                 'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services', 'Chapter2Status': 'Chapitre 2 : statut', 'TorunekoMiseban': 'Boutique de Torneko', 'NENE_ItemView': "Aperçu d'objet",
+                 'FightStadiumAbort': 'Stade : abandon', 'ViewVolumeDecision': 'Volume : validation', 'PortalButton': 'Bouton du portail', 'NetworkRoot': 'Réseau : menu', 'NetworkCODE': 'Réseau : code', 'NetworkITEM': 'Réseau : objet'}
+SANS_EDITION = ('BattleHoppingNumber', 'MonsterName')   # (suivent les monstres a l'ecran : on ne les deplace pas)
 
 
 class Pause:
@@ -41,6 +57,8 @@ class Pause:
         self.debut = {}; self.vu_sel = {}; self.barre = None; self.glisse_barre = None      # defilement : premiere ligne visible par ecran, derniere selection vue (la vue la suit quand elle change), barre dessinee, prise du curseur de la barre
         self.zone_ret = None; self.sur_ret = False; self.zones_eff = {}                      # bouton retour (x0, y0, x1, y1), pointeur dessus ; (ligne, colonne) -> croix « effacer la touche »
         self._pil = {}; self._img = {}                    # feuilles du jeu (PIL) et textures des sprites du menu
+        self.mode_souris = False; self.pos_souris = None   # selection a la souris (encadrement jaune) ou au clavier (curseur dore) ; derniere position du pointeur
+        self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
 
     def _et(self, texte, taille, couleur=BLANC):
         """Etiquette en police du jeu (GMaruGoPro-M, cache/ui_font.otf, enregistree au premier appel) ; a defaut, les polices du systeme."""
@@ -89,10 +107,10 @@ class Pause:
         """Les formes de pyglet coupent le melange alpha a la fin de leur dessin : on le remet avant une texture."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
-    def _curseur(self, x, yc, haut, anime=True):
-        """Curseur dore des menus du jeu (pointe vers la droite), de `haut` pixels de haut, a gauche en x, centre verticalement en yc ; il oscille doucement de gauche a droite."""
+    def _curseur(self, x, yc, haut):
+        """Curseur dore des menus du jeu (pointe vers la droite), de `haut` pixels de haut, a gauche en x, centre verticalement en yc ; il reste fixe."""
         t = self._tex_decoupe('curseur', 'ui_MenuTexture.png', CURSEUR)
-        dx = 2.0 * haut / 24.0 * (math.sin(time.time() * 7.0) + 1.0) / 2.0 if anime else 0.0
+        dx = 0.0
         if t is None:
             pyglet.shapes.Triangle(x, yc + haut / 2, x, yc - haut / 2, x + haut * 0.7, yc, color=JAUNE).draw(); return
         e = haut / float(CURSEUR[3] - CURSEUR[1]); self._melange(); t.blit(x + dx, yc - haut / 2, width=(CURSEUR[2] - CURSEUR[0]) * e, height=haut)
@@ -121,6 +139,7 @@ class Pause:
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
+        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None
         self.J.pause_jeu(True)
 
     def fermer(self):
@@ -135,7 +154,7 @@ class Pause:
     def ecran(self): return self.pile[-1]
 
     def retour(self):
-        if self.ecran == 'placement': self.J.reg.enregistrer()                # fin du placement des boutons
+        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None                # fin de l'edition de l'interface
         if len(self.pile) > 1: self.pile.pop()
         else: self.fermer()
 
@@ -174,6 +193,7 @@ class Pause:
     def _valeurs(self, en): return en['vals']
 
     def _nom_valeur(self, label, v):
+        if label == 'Interface à modifier': return self.nom_cible(v)
         n = self.noms.get(label, {}).get(v)
         if n is not None: return n
         if isinstance(v, bool): return 'Oui' if v else 'Non'
@@ -208,18 +228,47 @@ class Pause:
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
                 self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else '')]
 
-    def _e_interface(self):
-        R = self.J.reg
-        return [self._choix("Afficher les boutons à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
-                dict(t='act', l="Changer le dispositionnement de l'interface", ok=self._aller('placement'), sous=True)]
+    # ---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et toutes les fenetres du jeu (taille, position)
+    def cibles(self):
+        """Elements modifiables : boutons de l'ecran, dialogues, puis chaque fenetre du jeu par son nom (les fenetres qui n'ont qu'un nom d'origine en dernier)."""
+        noms = self.J.noms_fenetres()
+        return ['boutons', 'msg'] + sorted((n for n in noms if n not in SANS_EDITION), key=lambda n: (n not in NOMS_FENETRES, NOMS_FENETRES.get(n, n).lower()))
 
-    def _e_placement(self):
-        """Panneau en bas de l'ecran pendant le placement des boutons (les boutons sont glisses a la souris, sur la grille)."""
-        R = self.J.reg; H = self.J.hud
-        return [self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']),
-                self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),
-                dict(t='act', l="Rétablir les positions d'origine", ok=H.remettre),
-                dict(t='act', l='Terminer', ok=self.retour)]
+    def nom_cible(self, c):
+        return {'boutons': "Boutons de l'écran", 'msg': 'Dialogues (messages)'}.get(c) or NOMS_FENETRES.get(c, c)
+
+    def _ov(self):
+        """[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu)."""
+        return self.J.reg['interface_fenetres'].get(self.cible) or [1.0, 0.0, 0.0]
+
+    def _poser_ov(self, i, v):
+        d = dict(self.J.reg['interface_fenetres']); o = list(self._ov()); o[i] = v
+        if abs(o[0] - 1.0) < 1e-6 and abs(o[1]) < 1e-6 and abs(o[2]) < 1e-6: d.pop(self.cible, None)
+        else: d[self.cible] = [round(o[0], 4), round(o[1], 4), round(o[2], 4)]
+        self.J.reg['interface_fenetres'] = d
+
+    def _e_interface(self):
+        R = self.J.reg; H = self.J.hud; c = self.cible
+        e = [self._choix("Afficher l'interface à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
+             self._choix('Interface à modifier', self.cibles(), lambda: self.cible, lambda v: setattr(self, 'cible', v))]
+        if c == 'boutons':
+            e += [self._curs('Taille', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']),
+                  self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),
+                  dict(t='act', l="Rétablir les positions d'origine", ok=H.remettre)]
+        else:
+            e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=1.0),
+                  self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0),
+                  self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0),
+                  dict(t='act', l='Rétablir cette interface', ok=lambda: self._rien_ov())]
+        e.append(dict(t='act', l='Rétablir toute l\'interface', ok=self._tout_remettre))
+        e.append(dict(t='act', l='Terminer', ok=self.retour))
+        return e
+
+    def _rien_ov(self):
+        d = dict(self.J.reg['interface_fenetres']); d.pop(self.cible, None); self.J.reg['interface_fenetres'] = d
+
+    def _tout_remettre(self):
+        self.J.reg['interface_fenetres'] = {}; self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']
 
     def _e_son(self):
         J, R = self.J, self.J.reg
@@ -236,17 +285,20 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Interface, deplacements (touches puis vitesse), course, camera, actions du jeu, retablissement des touches."""
+        """Interface (bouton fixe en haut), deplacements (touches puis vitesse), course, camera, actions du jeu, retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, mini, maxi, f=None):
             return self._curs(lib, lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
-        return [dict(t='act', l='Interface', ok=self._aller('interface'), sous=True),
+        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
+        return [dict(t='act', l='Interface', ok=self._aller('interface'), sous=True, fixe=True),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 vit('Vitesse de déplacement', 'vitesse_marche', 0.5, 2.0),
                 T('courir'), T('courir_bascule'),
                 vit('Multiplicateur de la course', 'vitesse_course', 1.0, 2.0),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
                 vit('Vitesse de la caméra', 'vitesse_camera', 0.5, 2.0),
+                self._choix('Maj : caméra plus rapide', [True, False], lambda: R['camera_maj'], lambda v: R.__setitem__('camera_maj', v)),
+                modif,
                 vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('infos'),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
@@ -300,6 +352,7 @@ class Pause:
     def touche(self, symbol, modifiers=0):
         """True si la touche est consommee (le menu est ouvert)."""
         K = pyglet.window.key; R = self.J.reg
+        self.mode_souris = False                                  # une touche : retour a la selection au clavier (curseur dore)
         if self.capture is not None: self._capturer(symbol); return True
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
@@ -351,6 +404,8 @@ class Pause:
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self._fin_liste(False)
         elif symbol == K.UP or act == 'haut': self._bouger_liste(-1); self._repeter(symbol, 'v', -1)
         elif symbol == K.DOWN or act == 'bas': self._bouger_liste(1); self._repeter(symbol, 'v', 1)
+        elif symbol == K.PAGEUP: self._bouger_liste(-7)
+        elif symbol == K.PAGEDOWN: self._bouger_liste(7)
         elif symbol in (K.RETURN, K.ENTER, K.SPACE) or act == 'A': self._fin_liste(True)
 
     def _zone_liste(self, x, y):
@@ -417,6 +472,9 @@ class Pause:
         return None, 0.0
 
     def survol(self, x, y):
+        p = self.pos_souris; self.pos_souris = (x, y)
+        if p is None or abs(x - p[0]) + abs(y - p[1]) < 3: return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
+        self.mode_souris = True
         if self.capture is not None: return
         if self.deroule is not None:
             j = self._zone_liste(x, y)
@@ -434,7 +492,7 @@ class Pause:
     def _fixer_vue(self, deb):
         """Premiere ligne visible de l'ecran courant (la selection ne change pas : la vue ne revient pas dessus tant qu'elle ne bouge pas)."""
         b = self.barre
-        if b: self.debut[self.ecran] = max(0, min(int(deb), b['n'] - b['vis']))
+        if b: self.debut[self.ecran] = max(b['base'], min(int(deb), b['base'] + b['n'] - b['vis']))
 
     def _clic_barre(self, x, y):
         """Clic sur la barre de defilement : fleches (une ligne), curseur (prise pour le glisser), fond de barre (une page)."""
@@ -449,10 +507,11 @@ class Pause:
         b = self.barre
         if not b: self.glisse_barre = None; return
         libre = b['ptop'] - b['pbot'] - b['th']
-        if libre > 0: self._fixer_vue(round(max(0.0, min(1.0, (b['ptop'] - (y + self.glisse_barre)) / libre)) * (b['n'] - b['vis'])))
+        if libre > 0: self._fixer_vue(b['base'] + round(max(0.0, min(1.0, (b['ptop'] - (y + self.glisse_barre)) / libre)) * (b['n'] - b['vis'])))
 
     def clic(self, x, y, bouton):
         M = pyglet.window.mouse
+        self.mode_souris = True; self.pos_souris = (x, y)
         if self.capture is not None: self.capture = None; return
         if self.deroule is not None:                                  # liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
             j = self._zone_liste(x, y) if bouton != M.RIGHT else None
@@ -465,9 +524,11 @@ class Pause:
             return
         if self.zone_ret and self._dans(self.zone_ret, x, y): self.saisie = None; self.retour(); return          # bouton retour (en bas a droite de la fenetre)
         i, f = self._zone(x, y)
-        if self.ecran == 'placement' and i is None and self.saisie is None:       # placement : hors du panneau, un clic saisit un bouton de l'ecran
+        if self.ecran == 'interface' and i is None and self.saisie is None:       # editeur : hors du panneau, un clic saisit l'element choisi (un bouton de l'ecran, ou la fenetre montree en apercu)
             c = self.cadre_panneau
-            if not (c and c[0] <= x <= c[2] and c[1] <= y <= c[3]): self.J.hud.prendre(x, y)
+            if not (c and c[0] <= x <= c[2] and c[1] <= y <= c[3]):
+                if self.cible == 'boutons': self.J.hud.prendre(x, y)
+                else: self.drag = (x, y, list(self._ov()))
             return
         if self.saisie is not None:                                   # un clic ailleurs que sur la valeur en cours de saisie la valide
             ligne = self.saisie[0]; zv = self.zones_val.get(ligne)
@@ -493,13 +554,18 @@ class Pause:
 
     def relache(self, x, y, bouton):
         self.glisse = None; self.glisse_barre = None
-        if self.ecran == 'placement' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
+        if self.ecran == 'interface' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
+        if self.drag is not None: self.drag = None; self.J.reg.enregistrer()
 
     def glisser(self, x, y):
         """Souris deplacee bouton enfonce : le curseur maintenu (ou celui de la barre de defilement) suit."""
         if self.glisse_barre is not None: self._glisser_barre(y); return
         if self.glisse is None:
-            if self.ecran == 'placement': self.J.hud.deplacer(x, y)
+            if self.ecran == 'interface':
+                if self.drag is not None:                              # fenetre du jeu : elle suit le pointeur (decalage en fraction de l'ecran)
+                    x0, y0, o = self.drag; W, H = self.J.width, self.J.height
+                    self._poser_ov(1, max(-0.5, min(0.5, o[1] + (x - x0) / W))); self._poser_ov(2, max(-0.5, min(0.5, o[2] + (y - y0) / H)))
+                else: self.J.hud.deplacer(x, y)
             return
         bar = self.barres.get(self.glisse); e = self._entrees()
         if bar is None or self.glisse >= len(e) or e[self.glisse]['t'] != 'curs': self.glisse = None; return
@@ -535,8 +601,8 @@ class Pause:
     # ---- dessin
     @staticmethod
     def _cadre(x, y, w, h, k):
-        """Fenetre a la maniere des menus du jeu mobile : fond noir opaque, cadre blanc en cinq traits, coins arrondis et transparents (hud_mobile.cadre)."""
-        HM.cadre(x, y, w, h, k, fond=NOIR, opacite=1.0)
+        """Fenetre a la maniere des menus du jeu mobile : fond noir de meme opacite que les autres menus, cadre blanc en cinq traits, coins arrondis et transparents (hud_mobile.cadre)."""
+        HM.cadre(x, y, w, h, k, fond=NOIR, opacite=HM.OPACITE_FOND)
 
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
         """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
@@ -581,7 +647,7 @@ class Pause:
         self.minis[n] = t
         return t
 
-    def _barre_defilement(self, x1, ptop, pbot, n, vis, deb, k, actif):
+    def _barre_defilement(self, x1, ptop, pbot, n, vis, deb, k, actif, base=0):
         """Barre de defilement a droite de la liste : fleche haut, piste, curseur, fleche bas (haut de la liste en ptop, bas en pbot). Enregistre self.barre pour les clics."""
         w = LARG_BARRE * k; x0 = x1 - w; fl = 14 * k; th0, th1 = ptop - fl - 2 * k, pbot + fl + 2 * k          # piste entre les deux fleches
         piste = pyglet.shapes.Rectangle(x0, th1, w, th0 - th1, color=(34, 36, 42)); piste.draw()
@@ -590,7 +656,7 @@ class Pause:
         coul = CLAIR if n > vis else GRIS[:3]
         pyglet.shapes.Triangle(x0 + 1.5 * k, ptop - fl + 3 * k, x1 - 1.5 * k, ptop - fl + 3 * k, (x0 + x1) / 2, ptop - 2 * k, color=coul).draw()
         pyglet.shapes.Triangle(x0 + 1.5 * k, pbot + fl - 3 * k, x1 - 1.5 * k, pbot + fl - 3 * k, (x0 + x1) / 2, pbot + 2 * k, color=coul).draw()
-        self.barre = dict(x0=x0 - 3 * k, x1=x1 + 3 * k, y0=pbot, y1=ptop, ptop=th0, pbot=th1, th=th, pouce=(hau - th, hau), n=n, vis=vis)
+        self.barre = dict(x0=x0 - 3 * k, x1=x1 + 3 * k, y0=pbot, y1=ptop, ptop=th0, pbot=th1, th=th, pouce=(hau - th, hau), n=n, vis=vis, base=base)
 
     def _croix(self, x, y, c):
         """Croix rouge du jeu (effacer une touche), de c pixels, coin bas gauche en (x, y)."""
@@ -603,93 +669,120 @@ class Pause:
         for a, b in (((x - 4 * k, yc + 8 * k), (x + 4 * k, yc)), ((x + 4 * k, yc), (x - 4 * k, yc - 8 * k))):
             pyglet.shapes.Line(a[0], a[1], b[0], b[1], thickness=max(2.0, 2.6 * k), color=(255, 255, 255)).draw()
 
+    def _ajuster(self, texte, taille, couleur, maxw):
+        """Etiquette de `texte` qui tient dans `maxw` pixels (la taille diminue au besoin)."""
+        et = self._et(texte, taille, couleur)
+        if et.content_width > maxw > 0: et = self._et(texte, taille * maxw / et.content_width, couleur)
+        return et
+
+    def _apercu(self):
+        """Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran."""
+        J = self.J; self.rect_apercu = None
+        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS, True); return
+        voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
+        J.hud.dessiner(tuple(n for n in HM.NOMS if n != 'mode_carte') if J.reg['boutons'] else (), False)           # (le bouton « mode de la carte » n'existe que carte ouverte)
+        self.rect_apercu = J.apercu_interface(self.cible)
+
     def dessiner(self):
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)
-        placement = self.ecran == 'placement'
+        editeur = self.ecran == 'interface'
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-        if placement: J.hud.dessiner(HM.NOMS, True)                          # placement : les boutons de l'ecran, bien visibles (ni voile ni cadre central), et le panneau en bas
+        if editeur: self._apercu()
         else:
             voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
         t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
         ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
+        n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'placement': "Disposition de l'interface", 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
         avec_mini = ecr in ('sauver', 'charger')
         curs_aide = 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut'
         aide_touche = 'Entrée : changer la touche    ←/→ : case    Suppr : effacer    Début ou bouton rond : touche d\'origine'
         aide_sw = 'Entrée ou clic : activer / désactiver    ←  : Non    →  : Oui'; aide_liste = 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
-        aide = {'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'affichage': curs_aide, 'son': curs_aide, 'commandes': curs_aide,
-                'interface': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)',
-                'placement': 'Glisse les boutons pour les placer    Échap ou clic droit : terminer'}.get(ecr, '')
+        aide_liste_ouverte = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'; aide_saisie = 'Tape la valeur (Entrée : valider, Échap : annuler)'
+        aide_capture = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)'
+        aide_edit = "Glisse l'élément choisi pour le placer    Échap ou clic droit : terminer"
+        aide = {'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'affichage': curs_aide, 'son': curs_aide, 'commandes': curs_aide, 'interface': aide_edit}.get(ecr, '')
         aide_ecran = aide; en_sel = e[i_sel] if e else None
-        if en_sel and en_sel['t'] == 'touche': aide = aide_touche
-        elif en_sel and en_sel['t'] == 'choix' and not placement: aide = aide_sw if en_sel.get('sw') else aide_liste
-        if self.deroule is not None: aide = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'
-        if self.saisie is not None: aide = 'Tape la valeur (Entrée : valider, Échap : annuler)'
-        if self.capture is not None:
-            act = dict(RG.ACTIONS)[self.capture[0]]; aide = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)' % act
+        if en_sel and en_sel['t'] == 'touche': aide = en_sel.get('aide') or aide_touche
+        elif en_sel and en_sel['t'] == 'choix': aide = aide_sw if en_sel.get('sw') else aide_liste
+        if self.deroule is not None: aide = aide_liste_ouverte
+        if self.saisie is not None: aide = aide_saisie
+        if self.capture is not None: aide = aide_capture % dict(RG.ACTIONS)[self.capture[0]]
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
-        # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite)
-        avec_ret = not placement
+        # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
+        avec_ret = not editeur
         kb = 1.1 * k; bw, bh = 64 * kb, 55.5 * kb; marge_ret = bh + 10 * k if avec_ret else 0.0
         pied = 36 * k if aide else 0.0                     # (le message d'information est dessine au-dessus du cadre : il ne decale rien)
         hmax = H - 2 * 36 * k - marge_ret; h_titre = 78 * k + (22 * k if ecr == 'commandes' else 0.0)
-        if placement: h_titre = 64 * k
+        if editeur: h_titre = 64 * k
         rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n)))
-        if placement: rh = 38 * k                                                  # panneau compact
+        if editeur: rh = 38 * k                                                    # panneau compact
+        elif ecr == 'commandes': rh = 46 * k                                       # lignes hautes : les cases de touches ne touchent pas les bords (la liste defile)
         fs = min(fs, rh * 0.5)                                                     # lignes serrees : texte plus petit, pour qu'il tienne dans le bouton
-        h = min(hmax, h_titre + n * rh + pad / 2 + pied)
-        visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); barre = n > visibles
+        h_titre += n_f * rh
+        n_s = n - n_f
+        h = min(hmax, h_titre + n_s * rh + pad / 2 + pied)
+        visibles = max(1, int((h - h_titre - pad / 2 - pied) / rh + 0.02)); barre = n_s > visibles
         if barre: h = h_titre + visibles * rh + pad / 2 + pied                     # (la fenetre se referme sur la derniere ligne visible)
-        gut = 22 * k if barre else 0.0; rdr = 30 * k + gut                         # marge droite du contenu des lignes
+        rdr = 56 * k                                                               # marge droite du contenu des lignes (boutons : 42 px de marge a gauche comme a droite ; la barre de defilement est dans la marge)
         # largeur : le plus long libelle + la place des valeurs / curseurs / cases de touches
         lw = max([self._et(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
         for x in e:
             if x['t'] == 'choix':
-                tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
+                tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in x['vals'])
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
-        if ecr in ('affichage', 'son', 'commandes', 'placement'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
+        if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         if ecr in ('sauver', 'charger'): pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         kinds = {x['t'] for x in e}; cand = [aide_ecran] if aide_ecran else []
-        if ecr in ('affichage', 'son', 'commandes'): cand.append(curs_aide)
-        if 'touche' in kinds: cand.append(aide_touche)
-        if 'choix' in kinds and not placement: cand += [x for x, ok in ((aide_sw, any(x.get('sw') for x in e if x['t'] == 'choix')), (aide_liste, any(x.get('liste') for x in e if x['t'] == 'choix'))) if ok]
+        if ecr in ('affichage', 'son', 'commandes', 'interface'): cand.append(curs_aide)
+        if 'touche' in kinds: cand += [aide_touche, aide_capture % max((l for _, l in RG.ACTIONS), key=len)] + [x['aide'] for x in e if x.get('aide')]
+        if 'choix' in kinds: cand += [x for x, ok in ((aide_sw, any(x.get('sw') for x in e if x['t'] == 'choix')), (aide_liste, any(x.get('liste') for x in e if x['t'] == 'choix'))) if ok] + [aide_liste_ouverte]
+        if 'curs' in kinds: cand.append(aide_saisie)
         pw = max([pw] + [self._et(a, fsp, AIDE).content_width + 40 * k for a in cand])           # (l'aide ne depasse jamais la fenetre, quelle que soit la ligne choisie)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
-        if placement: y0 = 22 * k; y1 = y0 + h                                      # panneau colle en bas de l'ecran
-        self.cadre_panneau = (x0, y0, x0 + pw, y1) if placement else None
+        if editeur:                                                                 # panneau colle en bas de l'ecran, ou en haut quand la fenetre montree est dans la moitie basse
+            r = self.rect_apercu
+            if r and (r[1] + r[3]) / 2 < H / 2: y1 = H - 22 * k; y0 = y1 - h
+            else: y0 = 22 * k; y1 = y0 + h
+        self.cadre_panneau = (x0, y0, x0 + pw, y1) if editeur else None
         self._cadre(x0, y0, pw, h, k)
-        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if placement else 52) * k; e_t.draw()
+        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if editeur else 52) * k; e_t.draw()
         # vue : la selection reste visible quand elle change ; sinon la vue ne bouge que par la barre ou la molette
-        deb = self.debut.get(ecr, 0)
+        deb = self.debut.get(ecr, n_f)
         if self.vu_sel.get(ecr) != i_sel:
-            if i_sel < deb: deb = i_sel
-            elif i_sel >= deb + visibles: deb = i_sel - visibles + 1
+            if i_sel >= n_f:
+                if i_sel < deb: deb = i_sel
+                elif i_sel >= deb + visibles: deb = i_sel - visibles + 1
             self.vu_sel[ecr] = i_sel
-        debut = self.debut[ecr] = max(0, min(deb, max(0, n - visibles)))
+        debut = self.debut[ecr] = max(n_f, min(deb, max(n_f, n - visibles)))
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_eff = {}; self.zones_pop = []; lignes = {}; self.barre = None
         xr = x0 + pw - rdr                                                        # bord droit du contenu des lignes
         cx2 = xr - 40 * k - LARG_CELLULE * k; cx1 = cx2 - ECART_CELLULES * k - LARG_CELLULE * k; self.zones_col = cx2 - ECART_CELLULES * k / 2
-        plw = pw - 58 * k - gut                                                   # largeur des boutons (fond des lignes)
+        plx = x0 + 42 * k; plw = pw - 84 * k                                      # boutons : meme marge a gauche et a droite
         if ecr == 'commandes':
             for c, cx in enumerate((cx1, cx2)):
                 eh = self._et('Touche %d' % (c + 1), fsp, GRIS); eh.x = cx + (LARG_CELLULE * k - eh.content_width) / 2; eh.y = y1 - h_titre + 6 * k; eh.draw()
-        y = y1 - h_titre
-        for idx in range(debut, min(n, debut + visibles)):
-            en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
+        pos = []
+        if n_f: pos.append((0, y1 - 66 * k))
+        yy = y1 - h_titre
+        for idx in range(debut, min(n, debut + visibles)): pos.append((idx, yy)); yy -= rh
+        mouse = self.mode_souris
+        for idx, ytop in pos:
+            en = e[idx]; ybas = ytop - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
             note = en['note']() if en.get('note') else ''
             dec = max(0.0, min(8 * k, (rh - 36 * k) * 0.6)) if note else 0.0                  # note rouge sous la valeur : la ligne monte un peu pour lui laisser la place
-            if en['t'] != 'sep': HM.plaque(x0 + 42 * k, ybas + 3 * k, plw, rh - 6 * k, k, sel)       # fond du bouton, comme ceux du menu des commandes du jeu mobile (la selection l'eclaircit)
-            if sel: self._curseur(x0 + 6 * k, ybas + rh / 2 + dec, min(rh * 0.6, 26 * k))             # curseur dore des menus du jeu
+            if en['t'] != 'sep': HM.plaque(plx, ybas + 3 * k, plw, rh - 6 * k, k, sel, JAUNE if sel and mouse else None)       # fond du bouton, comme ceux du menu des commandes du jeu mobile (la selection l'eclaircit ; a la souris : encadrement jaune)
+            if sel and not mouse: self._curseur(x0 + 6 * k, ybas + rh / 2 + dec, min(rh * 0.6, 26 * k))             # curseur dore des menus du jeu (selection au clavier)
             coul = GRIS if en.get('off') else BLANC
             base = ybas + rh / 2 - 0.45 * fs                                                  # texte centre dans le bouton
             lx = x0 + 52 * k
             if en['t'] == 'sep':                                                              # intertitre : au centre de la fenetre
                 et = self._et(en['l'], fs, OR); et.x = x0 + (pw - et.content_width) / 2; et.y = base; et.draw()
-                self.zones.append((x0 + 12 * k, ybas + 3 * k, x0 + pw - 12 * k - gut, ytop - 3 * k, idx)); y -= rh
+                self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))
                 continue
             if en['t'] == 'slot':
                 nu = self._et('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
@@ -706,7 +799,7 @@ class Pause:
             elif en['t'] == 'choix':                                                          # interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur
                 sw_x = xr - LARG_SW * k; actif = bool(en['get']())
                 vl = self._et(en['v'](), fs, coul if not actif or en.get('off') else OR); vl.x = sw_x - 14 * k - vl.content_width; vl.y = base; vl.draw()
-                self._interrupteur(en['l'], sw_x, ybas + rh / 2, actif, sel, en.get('off'), k)
+                self._interrupteur(en['l'], sw_x, ybas + rh / 2, actif, sel and not mouse, en.get('off'), k)
                 self.zones_val[idx] = (vl.x - 10 * k, sw_x + LARG_SW * k + 10 * k)
             elif en['t'] == 'curs':
                 if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
@@ -720,29 +813,28 @@ class Pause:
                 cur = pyglet.shapes.Rectangle(bx0 + bw_ * max(0.0, min(1.0, en['frac']())) - 3 * k, by - 4 * k, 6 * k, 18 * k, color=(255, 255, 255)); cur.draw()
                 if 'defaut' in en: self._bouton_defaut(idx, xr - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             elif en['t'] == 'slot':
-                if en['v']: vl = self._et(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - gut - vl.content_width; vl.y = base; vl.draw()
+                if en['v']: vl = self._et(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - 42 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'touche':
                 for c, cx in enumerate((cx1, cx2)):
                     txt = en['v'][c]; actif = sel and self.sel.get('col', 0) == c; vide = txt == RG.nom_touche(None)
                     if self.capture is not None and self.capture == (en['act'], c): txt = '…'
-                    HM.cadre(cx, ybas + 6 * k, LARG_CELLULE * k, rh - 12 * k, k * 0.5, 0.5 if actif else 0.0, fond=NOIR, opacite=0.75)          # case de la touche (plus claire quand elle est choisie)
+                    HM.cadre(cx, ybas + 9 * k, LARG_CELLULE * k, rh - 18 * k, k * 0.5, 0.5 if actif else 0.0, fond=NOIR, opacite=0.75)          # case de la touche (plus claire quand elle est choisie), a distance des bords du bouton
                     zone_t = LARG_CELLULE * k - (0 if vide else 20 * k); fz = fs * 0.8
                     vl = self._et(txt, fz, OR if actif else (GRIS if vide else BLANC))
                     if vl.content_width > zone_t - 8 * k: vl = self._et(txt, fz * (zone_t - 8 * k) / vl.content_width, OR if actif else BLANC)
                     vl.x = cx + (zone_t - vl.content_width) / 2; vl.y = ybas + rh / 2 - 0.45 * fz + dec; vl.draw()
                     if not vide and self.capture != (en['act'], c):
                         cc = 12 * k; cxx = cx + LARG_CELLULE * k - cc - 8 * k; self._croix(cxx, ybas + rh / 2 - cc * 0.45 + dec, cc)
-                        self.zones_eff[(idx, c)] = (cxx - 4 * k, ybas + 6 * k, cx + LARG_CELLULE * k, ybas + rh - 6 * k)
+                        self.zones_eff[(idx, c)] = (cxx - 4 * k, ybas + 9 * k, cx + LARG_CELLULE * k, ybas + rh - 9 * k)
                 self._bouton_defaut(idx, xr - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
-            self.zones.append((x0 + 12 * k, ybas + 3 * k, x0 + pw - 12 * k - gut, ytop - 3 * k, idx))
-            y -= rh
-        if barre: self._barre_defilement(x0 + pw - 14 * k, y1 - h_titre, y1 - h_titre - visibles * rh, n, visibles, debut, k, self.glisse_barre is not None)
-        # pied du cadre : aide (centree)
+            self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))
+        if barre: self._barre_defilement(x0 + pw - 14 * k, y1 - h_titre, y1 - h_titre - visibles * rh, n_s, visibles, debut - n_f, k, self.glisse_barre is not None, n_f)
+        # pied du cadre : aide (centree, toujours dans le cadre)
         yp = y0 + 12 * k
         if aide:
-            ea = self._et(aide, fsp, AIDE); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
+            ea = self._ajuster(aide, fsp, AIDE, pw - 24 * k); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
         if msg:
-            em = self._et(msg, fsp * 1.1, ROUGE if self.message[2] else OR); em.x = x0 + (pw - em.content_width) / 2; em.y = min(H - 24 * k, y1 + 12 * k); em.draw()
+            em = self._ajuster(msg, fsp * 1.1, ROUGE if self.message[2] else OR, W - 24 * k); em.x = min(max(12 * k, x0 + (pw - em.content_width) / 2), W - em.content_width - 12 * k); em.y = min(H - 24 * k, y1 + 12 * k); em.draw()
         # bouton retour, en bas a droite de la fenetre
         self.zone_ret = None
         if avec_ret:
@@ -781,7 +873,9 @@ class Pause:
         self.zones_pop = []; y = y1 - 10 * k
         for j in range(top, top + nvis):
             yb = y - ih; courant = vals[j] == en['get']()
-            if j == cur: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)
+            if j == cur:
+                if self.mode_souris: HM.plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k, ih - 4 * k, k * 0.8, True, JAUNE)
+                else: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)
             et = self._et(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
             self.zones_pop.append((x0 + 6 * k, yb, x1 - 6 * k, y, j)); y -= ih
         if top > 0: pyglet.shapes.Triangle(x1 - 22 * k, y1 - 8 * k, x1 - 10 * k, y1 - 8 * k, x1 - 16 * k, y1 - 1 * k, color=GRIS[:3]).draw()
