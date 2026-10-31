@@ -8,7 +8,13 @@ Reproduit cote Python ce que fait la couche Unity du jeu (FldObject) a partir de
   * paquet 7 (cmd_fld_on_off) : objet | drapeau << 16 -> GameObject.SetActive(drapeau == 0) ;
   * paquet 2 (cmd_fld_alpha) : objet | niveau (0..31) << 16 ; niveau 0 = invisible ;
   * paquets 3 et 4 (cmd_fld_pos, cmd_fld_rot) : nouvelle position / rotation de l'objet.
-Les temps sont en soixantiemes de seconde dans les donnees ; FldObject.Update avance de 2 par image du jeu (30 images/s)."""
+Les temps sont en soixantiemes de seconde dans les donnees ; FldObject.Update avance de 2 par image du jeu (30 images/s).
+
+Animations jouees en continu, sans ordre du moteur (FldObject.update_seq / update_pmv / update_plp) :
+  * sequence de maillages (FMAP : seq_obj_id -> entree de FSEQ) : eau qui coule, lampes qui vacillent... Le maillage est interpole d'une image a l'autre
+    (sommets, UV et couleurs : FldObject.seq_build_mesh) ; l'entree donne le delai de depart, le delai entre deux tours et le nombre de tours (-1 : sans fin) ;
+  * mouvement (FMAP : pmv_id -> FPMV) : objets qui tournent, balancent...
+  * palettes animees (FPLP / FPAM) : la texture d'une surface (eau scintillante, marais, sol qui fait mal) change d'image en image (classe PalettesCarte)."""
 import numpy as np
 from donnees import euler_mat
 
@@ -34,15 +40,60 @@ class ObjetsCarte:
         for (i, m) in self.var: self.var_de.setdefault(i, []).append(m)
         for pl in (v['plages'] for v in self.var.values()):                        # variantes cachees tant qu'aucune animation ne les demande
             for key, d, n in pl: self.cur[key][d:d + n] = 0.0
-        self.etat = {}; self.sale = set(); self._inv = {}
+        self.imgobj = c.get('imgobj', {})                                            # objet -> images (positions, UV, couleurs) de sa sequence de maillages, par sous-maillage
+        self.uv0 = {k: g[1] for k, g in c['groupes'].items()}; self.col0 = {k: g[2] for k, g in c['groupes'].items()}
+        self.cur_uv = {}; self.cur_col = {}                                          # UV et couleurs affichees : copies creees a la demande (groupes dont l'une ou l'autre change)
+        self.sale_uv = set(); self.sale_col = set()
+        self.etat = {}; self.sale = set(); self._inv = {}; self.auto = {}
+        self._o64 = {}; self._cles = {}; self._emat = {}                              # caches : position/rotation/echelle d'origine, cles des mouvements en tableaux, matrices de rotation
+        self._semer()
 
     def reinit(self):
         """Nouveau chargement de la meme carte : tous les objets reprennent leur etat d'origine."""
         self.etat = {}
         for k in self.cur: self.cur[k][:] = self.orig[k]
+        for k in self.cur_uv: self.cur_uv[k][:] = self.uv0[k]
+        for k in self.cur_col: self.cur_col[k][:] = self.col0[k]
         for pl in (v['plages'] for v in self.var.values()):
             for key, d, n in pl: self.cur[key][d:d + n] = 0.0
-        self.sale = set(self.cur)
+        self.sale = set(self.cur); self.sale_uv = set(self.cur_uv); self.sale_col = set(self.cur_col)
+        self._semer()
+
+    def _semer(self):
+        """Animations de depart : sequences de maillages et mouvements des objets qui en ont une en continu (FMAP seq_obj_id / pmv_id)."""
+        self.auto = {}
+        for i, o in enumerate(self.objs):
+            if not self.valide(i): continue
+            a = None; so = o.get('seqobj', -1)
+            if 0 <= so < len(self.seqent) and i in self.imgobj:
+                e = self.seqent[so]
+                if 0 <= e[1] < len(self.seqs) and e[7] != 0 and self.seqs[e[1]]['keys'] and self.seqs[e[1]]['fin'] > 0:     # nombre de tours d'origine 0 : jamais lancee d'elle-meme
+                    sq = self.seqs[e[1]]; a = dict(seq=sq, mot=None, delai=e[3], rdelai=e[4], rep=e[5], fin=sq['fin'])
+            pm = o.get('pmv', -1)
+            if 0 <= pm < len(self.mots) and self.mots[pm]['keys'] and self.mots[pm]['repeat'] != 0 and self.mots[pm]['fin'] > 0:
+                mo = self.mots[pm]
+                if a is None: a = dict(seq=None, mot=mo, delai=mo['delai'], rdelai=mo['rdelai'], rep=mo['repeat'], fin=mo['fin'])
+                else: a['mot'] = mo
+            if a is None: continue
+            a['temps'] = 0; a['fini'] = False; self.auto[i] = a
+            st = self._st(i); st['seq'] = a['seq']; st['mot'] = a['mot']; self._poser(i)
+
+    def restaurer(self, etat, auto=None):
+        """Remet les objets dans un etat enregistre (etats instantanes) ; `auto` absent (ancien format) : animations en continu reprises au depart."""
+        self.etat = etat
+        if auto is not None: self.auto = auto
+        for i, a in self.auto.items():
+            st = self._st(i); st['seq'] = a['seq']; st['mot'] = a['mot']
+        for i in list(self.etat): self._poser(i)
+        self.sale |= set(self.cur); self.sale_uv |= set(self.cur_uv); self.sale_col |= set(self.cur_col)
+
+    def uv(self, key): return self.cur_uv.get(key, self.uv0[key])
+
+    def col(self, key): return self.cur_col.get(key, self.col0[key])
+
+    def _tableau(self, tab, orig, key):
+        if key not in tab: tab[key] = orig[key].copy()
+        return tab[key]
 
     # ---- commandes du moteur
     def _st(self, i):
@@ -55,7 +106,7 @@ class ObjetsCarte:
     def anim_commune(self, i, no):
         if not self.valide(i): return
         o = self.objs[i]; st = self._st(i)
-        st['mot'] = st['seq'] = None; st['temps'] = 0; st['fini'] = False
+        self.auto.pop(i, None); st['mot'] = st['seq'] = None; st['temps'] = 0; st['fini'] = False
         if no <= 0: st['mdl'] = o['mdl']
         else:
             tab = self.tabs[o['canim']] if 0 <= o['canim'] < len(self.tabs) else []
@@ -90,7 +141,20 @@ class ObjetsCarte:
     # ---- images
     def tick(self):
         """Une image du jeu : avance les mouvements et les sequences en cours. -> ensemble des groupes modifies depuis le dernier appel."""
+        for i, a in self.auto.items():                      # animations en continu : delai de depart, tours, delai entre deux tours (FldObject.fld_motion_update)
+            if a['fini'] or i not in self.etat: continue
+            if a['delai'] >= 1: a['delai'] -= PAS; a['temps'] = 0
+            else:
+                a['temps'] += PAS
+                if a['temps'] > a['fin']:
+                    reste = a['temps'] - a['fin']
+                    if a['rep'] >= 1: a['rep'] -= 1
+                    if a['rep'] == 0: a['temps'] = a['fin']; a['fini'] = True
+                    else: a['temps'] = reste
+                    a['delai'] = a['rdelai']
+            self.etat[i]['temps'] = a['temps']; self._poser(i)
         for i, st in self.etat.items():
+            if i in self.auto: continue
             mv = [x for x in (st['mot'], st['seq']) if x]
             if not mv or st.get('fini'): continue
             st['temps'] += PAS
@@ -99,6 +163,26 @@ class ObjetsCarte:
             if all(st['temps'] >= x['fin'] and x['repeat'] != -1 for x in mv): st['fini'] = True
             self._poser(i)
         s = self.sale; self.sale = set(); return s
+
+    def _origine(self, i):
+        r = self._o64.get(i)
+        if r is None:
+            o = self.objs[i]; r = self._o64[i] = (np.array(o['pos'], np.float64), np.array(o['rot'], np.float64), np.array(o['scl'], np.float64))
+        return r
+
+    def _cles_mot(self, mot):
+        """Positions, rotations et echelles des cles d'un mouvement, en tableaux (n, 3)."""
+        r = self._cles.get(id(mot))
+        if r is None or r[0] is not mot:                                           # (l'identite est verifiee : un numero libere pourrait etre reutilise)
+            ks = mot['keys']; r = self._cles[id(mot)] = (mot,) + tuple(np.array([k[j] for k in ks], np.float64) for j in (1, 2, 3))
+        return r[1:]
+
+    def _rot(self, rot):
+        k = (float(rot[0]), float(rot[1]), float(rot[2])); m = self._emat.get(k)
+        if m is None:
+            if len(self._emat) > 20000: self._emat.clear()
+            m = self._emat[k] = euler_mat(*k)
+        return m
 
     def _matrice(self, i):
         if i not in self._inv:
@@ -110,35 +194,70 @@ class ObjetsCarte:
 
     def _poser(self, i):
         o = self.objs[i]; st = self._st(i)
-        base = [(None, self.plages.get(i, []), None)]
+        base = [(None, self.plages.get(i, []), self.imgobj.get(i))]
         for m in self.var_de.get(i, []): base.append((m, self.var[(i, m)]['plages'], self.var[(i, m)]['images']))
-        pos = np.array(o['pos'], np.float64); rot = np.array(o['rot'], np.float64); scl = np.array(o['scl'], np.float64)
+        pos0, rot0, scl0 = self._origine(i); pos, rot, scl = pos0, rot0, scl0
         if st['pos'] is not None: pos = np.array(st['pos'], np.float64)
         if st['rot'] is not None: rot = np.array([st['rot'][0], st['rot'][1], 0.0], np.float64)
         mot = st['mot']; t = st['temps']
         if mot is not None and mot['keys']:
-            a, b, f = _interp(mot['keys'], t); ka, kb = mot['keys'][a], mot['keys'][b]
-            lerp = lambda u, v: np.array(u, np.float64) * (1 - f) + np.array(v, np.float64) * f
-            pos = pos + lerp(ka[1], kb[1]); rot = rot + lerp(ka[2], kb[2]); scl = scl * lerp(ka[3], kb[3])
-        pos0 = np.array(o['pos'], np.float64); A = self._matrice(i)
-        B = euler_mat(*rot) @ np.diag(scl)
-        T = B @ A                                          # monde d'origine -> monde actuel : (v - pos0) -> T, puis + pos
-        identite = st['mdl'] == o['mdl'] and st['pos'] is None and st['rot'] is None and mot is None and st['seq'] is None
-        cache = {}
+            a, b, f = _interp(mot['keys'], t); cp, cr, cs = self._cles_mot(mot)
+            pos = pos + (cp[a] if a == b or f == 0.0 else cp[a] * (1 - f) + cp[b] * f)
+            rot = rot + (cr[a] if a == b or f == 0.0 else cr[a] * (1 - f) + cr[b] * f)
+            scl = scl * (cs[a] if a == b or f == 0.0 else cs[a] * (1 - f) + cs[b] * f)
+        identite = st['pos'] is None and st['rot'] is None and mot is None             # le modele reste a sa place d'origine
+        if not identite:
+            T = self._rot(rot) @ (scl[:, None] * self._matrice(i))                       # monde d'origine -> monde actuel : (v - pos0) -> T, puis + pos  (= R . diag(scl) . inv(R0 . diag(scl0)))
         for m, plages, images in base:
             vivant = (m is None and st['mdl'] == o['mdl']) or (m is not None and st['mdl'] == m)
             vivant = vivant and not st['off'] and st['alpha'] > 0
             for k, (key, d, n) in enumerate(plages):
+                img = images[k] if images else None
                 if not vivant: v = np.zeros((n, 3), np.float32)
                 else:
-                    src = self.orig[key][d:d + n] if m is None else self._src_var(i, m, key, d, n, k, images, st)
-                    v = src if identite and m is None else ((src.astype(np.float64) - pos0) @ T.T + pos).astype(np.float32)
+                    src, uv, col = self._src_seq(key, d, n, img, st)
+                    v = src if identite else ((src.astype(np.float64) - pos0) @ T.T + pos).astype(np.float32)
+                    if img is not None:                                                  # UV et couleurs qui changent d'une image a l'autre de la sequence
+                        if img['uv'] is not None: self._tableau(self.cur_uv, self.uv0, key)[d:d + n] = self.uv0[key][d:d + n] if uv is None else uv; self.sale_uv.add(key)
+                        if img['col'] is not None: self._tableau(self.cur_col, self.col0, key)[d:d + n] = self.col0[key][d:d + n] if col is None else col; self.sale_col.add(key)
                 self.cur[key][d:d + n] = v; self.sale.add(key)
 
-    def _src_var(self, i, m, key, d, n, k, images, st):
-        """Sommets d'une variante de modele : d'origine, ou deformes par la sequence de maillages en cours (image courante entre deux cles)."""
-        seq = st['seq']; img = images[k] if images else None
-        if seq is None or img is None or not seq['keys']: return self.orig[key][d:d + n]
-        a, b, f = _interp(seq['keys'], st['temps'])
-        va = min(max(seq['keys'][a][1], 0), len(img) - 1); vb = min(max(seq['keys'][b][1], 0), len(img) - 1)
-        return img[va] * (1 - f) + img[vb] * f
+    def _src_seq(self, key, d, n, img, st):
+        """(sommets, UV, couleurs) d'un sous-maillage : d'origine (UV et couleurs None), ou interpoles par la sequence de maillages en cours (FldObject.seq_build_mesh : entre les images
+        des deux cles autour de l'image courante ; la valeur d'une cle est le numero de l'enfant du modele)."""
+        seq = st['seq']
+        if seq is None or img is None or not seq['keys']: return self.orig[key][d:d + n], None, None
+        a, b, f = _interp(seq['keys'], st['temps']); n_img = len(img['pos'])
+        va = min(max(seq['keys'][a][1], 0), n_img - 1); vb = min(max(seq['keys'][b][1], 0), n_img - 1)
+        mix = lambda x: None if x is None else (x[va] if va == vb or f == 0.0 else x[va] * (1 - f) + x[vb] * f)
+        return mix(img['pos']), mix(img['uv']), mix(img['col'])
+
+
+class PalettesCarte:
+    """Palettes animees de la carte (FldObject.update_plp) : chaque animation (FPAM) enchaine ses cles ; la duree d'une cle est en 1/60 s, comptee par pas de 2 par image du jeu.
+    Les surfaces concernees (groupes de texture 'pam', voir Donnees.carte) prennent la texture de la cle courante. Animation liee a un evenement (numero >= 1) : image 0 tant que l'evenement n'est pas en cours."""
+
+    def __init__(self, c):
+        self.defs = c.get('pamdef', {})
+        self.pams = [{'frame': p['frame'], 'cle': p['cle'], 'durees': p['durees']} for p in c.get('pam', [])]
+
+    def tick(self):
+        """Une image du jeu."""
+        for p in self.pams:
+            d = p['durees']
+            if not d: continue
+            p['frame'] += PAS
+            if p['frame'] - d[min(p['cle'], len(d) - 1)] >= 0:
+                p['frame'] -= d[min(p['cle'], len(d) - 1)]; p['cle'] = 0 if len(d) <= p['cle'] + 1 else p['cle'] + 1
+
+    def image(self, key, evenement=0):
+        """Numero de l'image (texture) courante du groupe `key`."""
+        dd = self.defs[key]
+        if dd['evenement'] >= 1 and dd['evenement'] != evenement: return 0
+        p = self.pams[dd['pam']]
+        return min(max(p['cle'], 0), len(dd['images']) - 1)
+
+    def etat(self): return [(p['frame'], p['cle']) for p in self.pams]
+
+    def regler(self, etat):
+        for p, (f, k) in zip(self.pams, etat): p['frame'] = f; p['cle'] = k
