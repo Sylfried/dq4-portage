@@ -831,12 +831,20 @@ class Jeu(pyglet.window.Window):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
         lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
-        for tex, vl, key in self.carte_vl:
-            pg = self.pam_gl.get(key)
-            t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
-            self.prog['net'] = 0.0
-            self.prog['tsize'] = (float(t.width), float(t.height))
-            self._tracer(t, vl)
+        est_tr = lambda k: isinstance(k, tuple) and k[0] == 'tr'
+        opaques = [x for x in self.carte_vl if not est_tr(x[2])]
+        transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
+        cutoff0 = self.prog['cutoff']
+        for pas, liste in ((0, opaques), (1, transp)):
+            if pas == 1 and liste:
+                gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL); self.prog['cutoff'] = 0.0      # Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
+            for tex, vl, key in liste:
+                pg = self.pam_gl.get(key)
+                t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
+                self.prog['net'] = 0.0
+                self.prog['tsize'] = (float(t.width), float(t.height))
+                self._tracer(t, vl)
+            if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     def _fond_combat(self, c):
@@ -1616,7 +1624,7 @@ class Jeu(pyglet.window.Window):
             dh = np.cross([0, 1, 0], fh); dh /= np.linalg.norm(dh) or 1
             w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
-        a_dessiner = []; pp = self.mode == MODE_PP
+        a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
         for slot, s in sorted(e.sprites.items()):
             if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
@@ -1646,6 +1654,7 @@ class Jeu(pyglet.window.Window):
             if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             a_dessiner.append((slot, f, vl))
+            if cam3d is not None: ombres.append((slot, p, float(s['col'][3])))
         icones = self._icones(e, champ, bataille, dh, cam3d)
         self._dom_lie = None
         self.prog.use()
@@ -1667,6 +1676,7 @@ class Jeu(pyglet.window.Window):
         else:
             self._tracer_decor()
         self.prog['cutoff'] = 0.05
+        if ombres and cam3d is not None and not os.environ.get('DQ_SANS_OMBRE'): self._dessiner_ombres_chara(ombres, cam3d)
         for slot, f, vl in a_dessiner:
             self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
@@ -1679,6 +1689,38 @@ class Jeu(pyglet.window.Window):
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
         self._dessiner_aide()
+
+
+    # ombre des personnages : Chara.s_shadowMesh (carre +-1 en XZ, Y = 0,00625), echelle s_shadowDefScale (0,347 ; 10 ; 0,206), texture CharaTex/common (32 x 32 : ellipse noire d'alpha 96 / 255, filtre point),
+    # shader Custom/CharaShadow (SrcAlpha / OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, file 2999 = avant les personnages), position Chara.SetShadowPosition = pos + rotation du panneau x (0 ; 0 ; 0,25)
+    # (donc decalee de 0,25 le long du rayon de la camera : meme point a l'ecran, mais devant le sol), orientation Euler(0, lacet de la camera, 0) = a plat.
+    OMBRE_DEMI = (0.347, 0.206); OMBRE_HAUT = 0.0625; OMBRE_DEC = 0.25
+
+    def _dessiner_ombres_chara(self, ombres, cam3d):
+        if getattr(self, '_ombre_tex', None) is None:
+            # texture CharaTex/common : ellipse d'alpha 96 / 255 aux bords nets (filtre point) ; ici le meme maximum et la meme taille, mais le bord est adouci (ombres « trop brutes »)
+            n = 64; yy, xx = np.mgrid[0:n, 0:n]; r = np.hypot((xx + 0.5 - n / 2) / (n / 2), (yy + 0.5 - n / 2) / (n / 2)); k = np.clip((r - 0.45) / 0.55, 0.0, 1.0)
+            a = np.zeros((n, n, 4), np.uint8); a[..., 3] = np.round(96 * (1.0 - k * k * (3 - 2 * k))).astype(np.uint8)
+            t = self._tex(a, False)
+            gl.glBindTexture(t.target, t.id); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            self._ombre_tex = t; self._ombre_vl = {}
+        if not self._ombre_tex: return
+        r_, u_, f_ = cam3d
+        rh = np.array([r_[0], 0.0, r_[2]]); rh /= np.linalg.norm(rh) or 1                 # lacet seul de la camera
+        fh = np.array([f_[0], 0.0, f_[2]]); fh /= np.linalg.norm(fh) or 1
+        ex, ez = self.OMBRE_DEMI
+        gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL)
+        self.prog['cutoff'] = 0.0; self.prog['net'] = 0.0; self.prog['tsize'] = (64.0, 64.0)
+        for slot, p, alpha in ombres:
+            c = p - f_ * self.OMBRE_DEC + np.array([0.0, self.OMBRE_HAUT, 0.0])
+            P = [c - rh * ex - fh * ez, c + rh * ex - fh * ez, c + rh * ex + fh * ez, c - rh * ex + fh * ez]
+            q = np.array([P[0], P[1], P[2], P[0], P[2], P[3]], np.float32).ravel().tolist()
+            uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, min(1.0, alpha)] * 6          # _Color.a = SetShadowAlpha (1 par defaut), x alpha du personnage (SetColorWithShadow)
+            vl = self._ombre_vl.get(slot)
+            if vl is None: vl = self._ombre_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
+            else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
+            self._tracer(self._ombre_tex, vl)
+        gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS)
 
     def _infos(self):
         """Lignes d'information (F1) : lieu et fenetre, reglages d'affichage, son, performances. Rien n'est modifiable ici : les reglages sont dans le menu Echap."""
