@@ -130,7 +130,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte7_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte8_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -175,9 +175,8 @@ class Donnees:
             cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
-        for o in objs:                                               # coffres : l'origine du modele (charniere) est au bord superieur du coffre, et la carte la place a 0,5 sous le sol ; le jeu la releve de 1 (le coffre posait enfonce d'une unite sous le sol)
-            cg = kids.get(o['mdl'])
-            if cg is not None and 'tbox' in cg.m_Name: o['pos'] = (o['pos'][0], o['pos'][1] + 1.0, o['pos'][2])
+        for o in objs:                                               # ChunkFile.readPosition (CCEB58) lit x, y, z puis NEGUE y (fneg) : la position d'un objet de la carte est (x, -y, z) ; sans cela les arbres et la ruine des reliefs
+            o['pos'] = (o['pos'][0], -o['pos'][1], o['pos'][2])      # s'enfoncent (y du fichier = -hauteur du relief) ; c'est aussi la raison du « +1 » des coffres (fichier -0,5 -> monde +0,5)
         tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}; tfmt = {}
         pams = fld.pam(raw); plp_obj = {}; pamdef = {}
         for q in fld.plp(raw):                                       # FldObject.set_palette_data : textures de l'objet dont le nom contient celui de la palette
@@ -305,7 +304,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte7_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte8_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))

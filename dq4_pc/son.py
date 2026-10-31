@@ -91,6 +91,7 @@ class Son:
         self.dec = collections.OrderedDict(); self.jobs = {}
         self.bgm = None; self.bgm_id = None; self.bgm_demande = None
         self.reprise = None; self.bgm_fin = None                           # jingle : musique a reprendre, heure de fin du jingle
+        self.bgm_t0 = None; self.bgm_pos0 = 0.0; self.bgm_decalage = 0.0     # heure et position (secondes) du depart de la lecture ; position demandee pour la prochaine musique (chargement d'un etat)
         self.se = []                                                       # [(id, Player)]
         self.bgm_propre = 1.0; self.t_pause = None                          # volume propre a la musique en cours ; heure du debut de la pause (menu Echap)
         self.verrou = threading.Lock(); self.zip = None; self.ogg = False
@@ -202,7 +203,7 @@ class Son:
                 except Exception: pass
         self.se = [x for x in self.se if x[0] != ident]
 
-    def jouer_bgm(self, v):
+    def jouer_bgm(self, v, decalage=0.0):
         if v >= BGM_ARRET:                                         # cmd_bgm : >= 0x4000 = Sound.StopBGM
             self.reprise = None; self.arreter_bgm(); return
         if not self.ogg: return
@@ -210,7 +211,7 @@ class Son:
         if v >= BGM_RELANCE: v -= BGM_RELANCE; reprise = self.bgm_id        # Sound.PlayBGM avec reprise : jingle, puis retour a la musique en cours
         elif v == self.bgm_id and self.bgm is not None: self.reprise = None; return       # deja en cours
         else: self.reprise = None
-        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None
+        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None; self.bgm_decalage = decalage
         self._obtenir('BGM%02d' % v, lambda r, i=v: self._lancer_bgm(i, r))
 
     def _lancer_bgm(self, ident, r):
@@ -218,12 +219,40 @@ class Son:
         try:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'], r['fin'] if r['boucle'] else 0)
+            dec, self.bgm_decalage = self.bgm_decalage, 0.0
+            if dec > 0: src.pos = min(int(dec * r['frequence']), max(0, len(r['pcm']) - 1))              # reprise au moment enregistre (etat charge)
+            depart = src.pos / r['frequence']                                                                # (avant play : le lecteur lit tout de suite quelques secondes d'avance)
             p = self.media.Player(); p.queue(src); p.volume = max(0.0, min(1.0, self.vol_m * r['volume'])); p.play()
             self.bgm = p; self.bgm_propre = r['volume']
+            self.bgm_t0 = self.t_pause if self.t_pause is not None else time.time(); self.bgm_pos0 = depart
             if self.t_pause is not None: p.pause()
-            self.bgm_fin = None if r['boucle'] else time.time() + len(r['pcm']) / r['frequence']       # jingle sans boucle : heure de la reprise de la musique d'avant
+            self.bgm_fin = None if r['boucle'] else self.bgm_t0 + len(r['pcm']) / r['frequence'] - depart       # jingle sans boucle : heure de la reprise de la musique d'avant
         except Exception as e:
             self.log('Son : musique impossible (%r)' % (e,)); self.ok = False
+
+    def position_bgm(self):
+        """Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue."""
+        r = self.dec.get('BGM%02d' % self.bgm_id) if self.bgm_id is not None else None
+        if self.bgm is None or r is None or self.bgm_t0 is None: return None
+        pos = self.bgm_pos0 + ((self.t_pause if self.t_pause is not None else time.time()) - self.bgm_t0)
+        fr = r['frequence']; n = len(r['pcm']) / fr
+        if r['boucle'] and r['fin'] > r['debut']:
+            fin, deb = r['fin'] / fr, r['debut'] / fr
+            if pos >= fin: pos = deb + (pos - fin) % (fin - deb)
+        return min(max(pos, 0.0), max(n - 0.01, 0.0))
+
+    def etat_bgm(self):
+        """Ce qu'il faut pour reprendre la musique au meme moment (etats enregistres) : {'id', 'pos', 'reprise'} ou None."""
+        pos = self.position_bgm()
+        return None if pos is None else {'id': self.bgm_id, 'pos': pos, 'reprise': self.reprise}
+
+    def restaurer_bgm(self, info, defaut=None):
+        """Chargement d'un etat : la musique repart du moment enregistre (sans `info`, ancien etat : depuis le debut de `defaut`, la derniere commande du moteur)."""
+        self.arreter_bgm()
+        if info is None:
+            if defaut is not None: self.jouer_bgm(defaut)
+            return
+        self.jouer_bgm(info['id'], float(info.get('pos') or 0.0)); self.reprise = info.get('reprise')
 
     def arreter_bgm(self):
         self.bgm_demande = None; self.bgm_id = None
@@ -252,6 +281,7 @@ class Son:
                 except Exception: pass
         else:
             d = time.time() - self.t_pause; self.t_pause = None
+            if self.bgm_t0 is not None: self.bgm_t0 += d
             if self.bgm_fin is not None: self.bgm_fin += d
             self.se = [(i, p, fin + d) for i, p, fin in self.se]
             for p in [self.bgm] + [x[1] for x in self.se]:

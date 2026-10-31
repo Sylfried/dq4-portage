@@ -46,7 +46,7 @@ def pmv(raw):
     for o in struct.unpack_from('<%di' % n, raw, p + 12):
         m = _entete_motion(raw, o); keys = []
         for k in range(m['nkey']):
-            v = struct.unpack_from('<i9f', raw, o + 0x20 + 40 * k); keys.append((v[0], v[1:4], v[4:7], v[7:10]))
+            v = struct.unpack_from('<i9f', raw, o + 0x20 + 40 * k); keys.append((v[0], (v[1], -v[2], v[3]), v[4:7], v[7:10]))      # position des cles : readPosition nie y comme pour les objets
         m['keys'] = keys; out.append(m)
     return out
 
