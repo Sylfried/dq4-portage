@@ -1,4 +1,4 @@
-# Visionneuse PC de DQ4 (dq4_pc) : notes (30/10/2026, soir)
+# Visionneuse PC de DQ4 (dq4_pc) : notes (mises à jour le 31/10/2026)
 
 Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur->Unity). Remplace ses sections « Rendu : état » et « Inconnues » pour la visionneuse.
 
@@ -70,6 +70,17 @@ Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur
 
 ## Sprites du terrain (30/10/2026, #40)
 - Sprites cachés / montrés par le moteur (paquet 14) respectés ; fondus d'apparition par la couleur alpha (paquet 13, déjà en place) ; bulles « ! » au-dessus des villageois (paquets 19/20, feuille d'icônes des menus, nécessite `cache\ui_MenuTexture.png`, créé avec les fenêtres d'origine). Ombres sous les personnages, personnages couchés et icônes sur la carte du monde : pas encore.
+
+## Avancées du 31/10/2026 (dépôt `dq4-portage`, PR #1 à #10)
+Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sources classe / méthode, adresses) sont dans `notes-technique-portage-dq4.md`.
+- **Données dans le dépôt (#1)** : les APK et sauvegardes sont lus dans `jeux\DQ4\` du dépôt (`patched_apks`, `saves`) ; plus aucune dépendance aux autres projets.
+- **Villes (#2)** : caméra comme Unity, personnages de face à l'écran, plus de silhouette derrière le décor. **Portes, jarres, tonneaux (#3)** animés comme dans le jeu (paquets 2 à 5 et 7, tables FCAN / FPMV / FSEQ ; `objets_carte.py`).
+- **Carte du monde (#4)** : fenêtre des lieux élargie pour le 16/9 (les sprites apparaissent dès qu'ils sont en partie à l'écran), icônes de lieu 19 et 20. **Eau animée (#9)** : motifs de tuiles de `Field.UpdatePattern`, pas toutes les 17 images (mise à jour sur place des UV).
+- **Menus (#5, #6)** : le survol de la souris sélectionne le bouton comme les flèches ; texte ancré en bas du bouton, tri par profondeur entre fenêtres, interface agrandie de 12 % (`UI_ZOOM`).
+- **Début de combat (#7)** : effet d'écran d'origine (`Capture.BattleEffect` : l'écran se brise en 32 colonnes de morceaux et tombe, puis noir) ; le moteur attend sa fin (bit 1 du mot de drapeaux) ; écran noir jusqu'au chargement du combat (plus de flash de la mauvaise carte). Test : `--shots-effet "1,20,40"`.
+- **Son (#8)** : jingles avec reprise de la musique précédente (`0x1000 | n`), arrêt seulement pour les valeurs >= `0x4000`, 14 bruitages en boucle jusqu'à l'ordre d'arrêt.
+- **Cache et fondus (#10)** : préparation du cache en arrière-plan (cartes, sprites, monstres ; ~340 Mo, une fois, ~2 min ; `--sans-preparation` pour les tests), plus de gel à la première carte inconnue ; le bit 0 du mot de drapeaux (« fondu en cours ») est maintenu jusqu'à la fin du fondu (auberge, titres de chapitre, écran de chargement, menus pendant un fondu).
+- **Reste** : eau et animations de chargement des villes (`seq` / `pmv`, lampes, bateaux), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
 Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
