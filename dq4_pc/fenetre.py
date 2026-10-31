@@ -1,5 +1,5 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
-import os, sys, math, time, argparse, glob, collections
+import os, sys, math, time, argparse, glob, collections, threading
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pyglet
@@ -127,6 +127,9 @@ class Jeu(pyglet.window.Window):
         self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture); self.moteur.duree_anim = self._duree_anim
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
+        self.prepa_arret = threading.Event()
+        if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
+            threading.Thread(target=self.donnees.preparer, args=(self.prepa_arret,), daemon=True, name='preparation-cache').start()
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=not args.sans_son)
         self.son.precharger(SE_COURANTS)
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
@@ -1173,6 +1176,7 @@ def main():
     ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = 1 clic droit, 2 survol sans clic)')
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
+    ap.add_argument('--sans-preparation', action='store_true', help='(test) ne prepare pas le cache des cartes, sprites et monstres en arriere-plan')
     ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
     ap.add_argument('--sans-son', action='store_true', help='coupe le son au depart (touche F8 pour l\'activer en jeu)')
     ap.add_argument('--volume-musique', type=float, default=0.7, help='volume des musiques (0 a 1, multiplie le volume propre a chaque musique)')

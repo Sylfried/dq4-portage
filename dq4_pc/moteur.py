@@ -376,8 +376,9 @@ class Moteur:
         Les fondus d ecran sont rejoues dans Etat (tick_fondu). -> liste de paquets"""
         if decl is None: decl = tenu
         c = self.core
-        w = struct.unpack('<I', c.mem(c.outp, 4))[0]
-        if w & 1: c.mem_w(c.outp, struct.pack('<I', w & ~1))
+        w = struct.unpack('<I', c.mem(c.outp, 4))[0]            # bit 0 : « un fondu est en cours » (Fade.FadePlane.CheckFade : images restantes > 0). Le moteur le leve lui-meme en lancant un fondu (UnitySetFade) puis attend qu'il retombe
+        w2 = (w | 1) if self.etat.fondu['n'] >= 1 else (w & ~1)      # (Global::IsFadeEnd : auberge, titres de chapitre, ecran de chargement, ouverture des menus, sifflet...)
+        if w2 != w: c.mem_w(c.outp, struct.pack('<I', w2))
         self._finir_anims()
         self._effet_combat()
         self.pk.begin()
