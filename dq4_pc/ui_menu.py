@@ -430,6 +430,7 @@ class Rendu:
                 gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(lot[0].target, lot[0].id); self.prog['mode'] = lot[1]
                 vl.draw(gl.GL_TRIANGLES); vl.delete()
             buf = []
+        ok_num = {id(fen): {n.get('buttonId') for n in fen.N.values() if n.get('pad') and not (n['pad'] & 0xA0) and n.get('buttonId') is not None and n.get('vtx')} for fen in fens}       # numeros portes par un bouton de validation (manette 16 / 64)
         for _, _, _, g, (fen, nd) in items:
             if g == 'c':
                 vider(); lot = None; self._carte(fen, cx, cy, s, vp); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -442,7 +443,7 @@ class Rendu:
                     col = list(mat.get('color') or (1, 1, 1, 1)); mode = 0; off = (0.0, 0.0)
                     if k == 0 and nd['buttonId'] is not None and nd['buttonId'] >= 0 and 'part' in mat and mat['part'] == 7:
                         if fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
-                        else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId']) else nd['etat']
+                        else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId'] and not ((nd['pad'] or 0) & 0xA0 and nd['buttonId'] in ok_num[id(fen)])) else nd['etat']       # un bouton d'annulation (manette 32 / 128, ex. « Rien ») qui partage son numero avec un bouton de validation (« Acheter ») ne s'allume pas avec lui
                         if etat == 1 or etat == 4: off = self.ml.pousse
                         if etat == 2: col[3] = 0.0
                         if etat == 3: mode = 1

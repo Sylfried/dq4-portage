@@ -96,10 +96,10 @@ HEROS_FRAC = SPRITE_H * SPRITE_ECHELLE / (2.0 * (39.55 - DIST_ADJ_VILLE) * math.
 CH_VUE_HAUT = 32.0 / CH_PX * CH_ECHELLE / HEROS_FRAC                         # carte du monde : tuiles visibles en hauteur (~ 20) ; en portrait l'original en montre 28,4 en hauteur et 16 en largeur
 CH_GOUT = 2                                                                 # carte du monde : gouttiere (pixels repetes) autour de chaque tuile de 16 px dans l'atlas copie : aucun debordement d'une tuile sur sa voisine au filtrage
 CH_CASE = 16 + 2 * CH_GOUT
-CH_INCLINAISON_MAX = 20.0                                                   # carte du monde : inclinaison maximale de la vue (degres, angle de camera negatif)
-ZOOM_MIN, ZOOM_MAX = 0.4, 4.0                                               # zoom (menu Echap, molette) : 40 % a 400 %
+ZOOM_MIN, ZOOM_MAX = 0.5, 2.0                                               # zoom interne (1 = vue habituelle) ; reglage « Distance camera » du menu Echap et molette : 200 % (loin) a 50 % (pres)
 CAM_LACET_VIT, CAM_TANGAGE_VIT = 100.0, 45.0                                # fleches : tourner la camera (degres / s), relever ou abaisser son angle (degres / s)
 CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # angle de camera (0 = comme le jeu)
+CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
 
@@ -159,8 +159,8 @@ class Jeu(pyglet.window.Window):
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
-        self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else self.reg['zoom'] / 100.0); self._vue_champ = None       # zoom (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = float(os.environ.get('DQ_LACET', '0')); self.t_cam = None; self.cam_reset = [False, False]; self.attente_action = 0; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.attente_action = 0; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
@@ -309,16 +309,15 @@ class Jeu(pyglet.window.Window):
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
         (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) x distance d'affichage / zoom.
-        Option « Angle de la camera » : un angle negatif incline la vue (jusqu'a 20 degres, camera abaissee vers le sud) ; un angle positif, deja vue de dessus, ne change rien."""
+        L'angle et la rotation de la camera (fleches) ne s'appliquent pas ici."""
         cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0))
         dh = CH_VUE_HAUT / 2 / self.zoom; dl = dh * aspect                      # meme champ pour tous les shaders : le zoom ne depend pas du style de rendu
         if self.mode == MODE_PP: cx, cz = round(cx) / CH_PX, round(cz) / CH_PX; ech = 1.0       # pixel perfect : camera sur un pixel de la carte, heros a sa taille exacte (24 x 32 pixels de la carte)
         else: cx, cz = cx / CH_PX, cz / CH_PX; ech = CH_ECHELLE
-        al = math.radians(min(CH_INCLINAISON_MAX, max(0.0, -self.angle_cam))); ca, sa = math.cos(al), math.sin(al)      # inclinaison : le sol est raccourci par cos(al), on en montre donc 1/cos(al) de plus en hauteur
-        self._vue_champ = (cx, cz, dl, dh / ca)
+        self._vue_champ = (cx, cz, dl, dh)                                      # (la camera de la carte du monde ne se regle pas : ni angle ni rotation)
         M = np.zeros((4, 4)); M[0, 0] = 1 / dl; M[0, 3] = -cx / dl
-        M[1, 1] = sa / dh; M[1, 2] = -ca / dh; M[1, 3] = ca * cz / dh                       # ecran y = (hauteur x sin - (z - cz) x cos) / dh
-        M[2, 1] = -ca / 100.0; M[2, 2] = -sa / 100.0; M[2, 3] = sa * cz / 100.0; M[3, 3] = 1.0       # profondeur le long de l'axe de la camera (au centre : celle de la vue de dessus)
+        M[1, 2] = -1 / dh; M[1, 3] = cz / dh                                            # ecran y = -(z - cz) / dh
+        M[2, 1] = -1 / 100.0; M[3, 3] = 1.0                                             # profondeur : la hauteur (vue de dessus)
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
     def _maj_champ(self, e):
@@ -429,7 +428,7 @@ class Jeu(pyglet.window.Window):
             vl.draw(gl.GL_TRIANGLES)
 
     def on_mouse_scroll(self, x, y, sx, sy):
-        """Hors menu et hors combat : molette = zoom (x1,1 par cran, de 40 a 400 %), le meme que celui du menu Echap."""
+        """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.molette(sy); return
         if self.moteur.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and sy and not self.moteur.msg_visible and self.moteur.menu_actif() is None: self.regler_zoom(self.zoom * 1.1 ** sy)
@@ -468,6 +467,7 @@ class Jeu(pyglet.window.Window):
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
         if symbol == K.ESCAPE: self.pause.ouvrir(); return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
+        if self.reg.action_de(symbol) == 'courir_bascule': self.course_appui = not self.course_appui; self.toast('Course : ' + ('activée' if self.course_appui else 'désactivée')); return pyglet.event.EVENT_HANDLED       # « Courir (appuyer) » : un appui active la course, le suivant la coupe
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if modifiers & K.MOD_CTRL or self.touches[K.LCTRL] or self.touches[K.RCTRL]:
@@ -501,14 +501,18 @@ class Jeu(pyglet.window.Window):
 
     @staticmethod
     def _zoom_valide(z):
-        """Zoom (1 = 100 %, vue habituelle) ramene entre 40 et 400 %."""
+        """Zoom (1 = vue habituelle ; distance de la camera = 100 / zoom) ramene entre 0,5 et 2."""
         try: z = float(z)
         except (TypeError, ValueError): return 1.0
         return min(ZOOM_MAX, max(ZOOM_MIN, z))
 
     def regler_zoom(self, z):
-        """Menu Echap ou molette : zoom des villes, donjons, tours et de la carte du monde (enregistre en pourcentage)."""
-        self.zoom = self._zoom_valide(z); self.reg['zoom'] = round(self.zoom * 100)
+        """Molette ou --carte-zoom : zoom des villes, donjons, tours et de la carte du monde (enregistre comme distance de la camera, en pourcentage)."""
+        self.zoom = self._zoom_valide(z); self.reg['distance_camera'] = round(100.0 / self.zoom)
+
+    def regler_distance(self, pourcent):
+        """Menu Echap : distance de la camera en pourcentage (50 = deux fois plus pres, 200 = deux fois plus loin)."""
+        self.regler_zoom(100.0 / max(1.0, float(pourcent)))
 
     def _texte_conseil(self):
         """Rappel affiche un instant au demarrage : le menu et la touche des infos a l'ecran."""
@@ -1232,7 +1236,7 @@ class Jeu(pyglet.window.Window):
         if not self.ui_rendu or self.appui: return
         mo = self.moteur
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and h[0] >= 0]
-        if not touches: self.survol = None; self.survol_nd = None; return
+        if not touches: self.survol = None; return                  # hors d'un bouton : l'element survole en dernier reste seul en surbrillance (le curseur du moteur y est aussi) ; effacé par on_mouse_leave ou une touche
         _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]; self.survol_nd = (port, h[3])
         if f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
         elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
@@ -1392,7 +1396,7 @@ class Jeu(pyglet.window.Window):
             for _, p in liste:
                 fe = self.ui_g.f[p]
                 fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
-                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p and p == actif else None)       # souris : l'element pointe seul
+                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p and p == actif else (-1 if self.survol_nd else None))       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
                 if p in self.ui_suit: haut.append(fe)
                 else: bas.setdefault(self.ui_tf[p][1], []).append(fe)
             if haut: self.ui_rendu.dessiner(haut, cx, repere('msg')[0] + dz * s, s, (self.width, self.height))
@@ -1524,17 +1528,36 @@ class Jeu(pyglet.window.Window):
         if self._tenue('B'): p |= MO.B
         return p
 
+    def _etat_axe(self, cle, moins, plus):
+        """Une paire de fleches opposees : -1 / 0 / +1 = sens demande a la main. Les deux ensemble lancent le recentrage anime (`cam_axe[cle][0]`) ; tant qu'il en reste une enfoncee
+        apres cette pression double, rien ne se passe (le relachement n'est jamais exactement simultane) ; une nouvelle pression seule annule le recentrage."""
+        s = self.cam_axe[cle]
+        if moins and plus: s[0] = True; s[1] = True; return 0
+        if not (moins or plus): s[1] = False; return 0
+        if s[1]: return 0
+        s[0] = False
+        return 1 if plus else -1
+
     def _maj_camera(self):
-        """Fleches sur le terrain (a chaque image affichee) : gauche / droite tournent la camera autour du heros (villes, donjons, tours), haut / bas relevent ou abaissent son angle ;
-        deux directions opposees ensemble la remettent par defaut dans cet axe."""
+        """Fleches sur le terrain (a chaque image affichee) : gauche / droite tournent la camera autour du heros (villes, donjons, tours seulement), haut / bas relevent ou abaissent son angle ;
+        deux fleches opposees ensemble la remettent par defaut par une animation, par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglage « Vitesse de la camera »."""
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_cam is None else min(0.1, t - self.t_cam)); self.t_cam = t
         if not self._terrain_libre(): return
         g, d, h, b = (self._tenue(a) for a in ('cam_gauche', 'cam_droite', 'cam_haut', 'cam_bas'))
-        if g and d: self.lacet = 0.0
-        elif (g or d) and self.moteur.etat.partie == MO.PARTIE_VILLE:
-            self.lacet = (self.lacet + (CAM_LACET_VIT * dt if d else -CAM_LACET_VIT * dt) + 180.0) % 360.0 - 180.0
-        if h and b: a = 0.0
-        else: a = min(CAM_ANGLE_MAX, max(CAM_ANGLE_MIN, self.angle_cam + (CAM_TANGAGE_VIT * dt if h else -CAM_TANGAGE_VIT * dt if b else 0.0)))
+        vit = float(self.reg['vitesse_camera']); ville = self.moteur.etat.partie == MO.PARTIE_VILLE
+        sl = self._etat_axe('lacet', g, d); sa = self._etat_axe('angle', b, h)
+        if not ville: self.cam_axe['lacet'][0] = False; self.cam_axe['angle'][0] = False; return                    # carte du monde : ni rotation ni angle
+        if sl: self.lacet = (self.lacet + sl * CAM_LACET_VIT * vit * dt + 180.0) % 360.0 - 180.0
+        elif self.cam_axe['lacet'][0]:
+            err = -self.lacet; pas = max(CAM_RECENTRE_LACET, abs(err) * 5.0) * vit * dt
+            if abs(err) <= pas: self.lacet = 0.0; self.cam_axe['lacet'][0] = False
+            else: self.lacet += math.copysign(pas, err)
+        a = self.angle_cam
+        if sa: a = min(CAM_ANGLE_MAX, max(CAM_ANGLE_MIN, a + sa * CAM_TANGAGE_VIT * vit * dt))
+        elif self.cam_axe['angle'][0]:
+            pas = max(CAM_RECENTRE_ANGLE, abs(a) * 5.0) * vit * dt
+            if abs(a) <= pas: a = 0.0; self.cam_axe['angle'][0] = False
+            else: a -= math.copysign(pas, a)
         if a != self.angle_cam: self.angle_cam = a; self.reg['angle_camera'] = round(a, 2)
 
     def _fronts(self):
@@ -1567,11 +1590,11 @@ class Jeu(pyglet.window.Window):
         """Vitesse du jeu quand le heros marche (reglages Jeu : vitesse de deplacement, course tant que la touche est tenue). Seulement sur le terrain (ville, donjon, carte du monde),
         direction tenue, sans message ni menu ni combat ni effet d'ecran : tout le terrain va plus vite, l'animation de marche comprise."""
         R = self.reg; mo = self.moteur; e = mo.etat
-        if R['vitesse_marche'] == 1.0 and not (R['course'] and R['vitesse_course'] != 1.0): return 1.0
+        if R['vitesse_marche'] == 1.0 and R['vitesse_course'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
         f = float(R['vitesse_marche'])
-        if R['course'] and self._tenue('courir'): f *= float(R['vitesse_course'])
+        if self._tenue('courir') or self.course_appui: f *= float(R['vitesse_course'])
         return max(0.25, min(8.0, f))
 
     def _touches_test(self):
@@ -1935,8 +1958,8 @@ class Jeu(pyglet.window.Window):
         nom_mode = HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect'
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
         self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
-        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Zoom : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
-            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', round(self.zoom * 100), round(self.lacet), round(self.angle_cam),
+        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
+            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
 
     def _dessiner_aide(self):
@@ -1980,7 +2003,7 @@ def main():
     ap.add_argument('--largeur', type=int, default=None, help='largeur de la fenetre (par defaut : celle du menu Echap, sinon 1280)'); ap.add_argument('--hauteur', type=int, default=None)
     ap.add_argument('--auto-message', type=int, default=0, help='ferme automatiquement le message affiche apres le chargement')
     ap.add_argument('--ui-simple', action='store_true', help='menus simples (zones de texte) au lieu des fenetres d\'origine')
-    ap.add_argument('--carte-zoom', type=float, default=None, help='zoom (1 = 100 %%, de 0,4 a 4) ; par defaut celui du menu Echap')
+    ap.add_argument('--carte-zoom', type=float, default=None, help='zoom (1 = distance 100 %%, de 0,5 = 200 %% a 2 = 50 %%) ; par defaut celui du menu Echap')
     ap.add_argument('--clics', default=None, help='(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = 1 clic droit, 2 survol sans clic)')
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')

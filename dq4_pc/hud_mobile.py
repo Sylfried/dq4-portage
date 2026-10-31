@@ -47,36 +47,45 @@ def _garder(cle, fabrique):
     return t
 
 
-def cadre(x, y, w, h, k, eclaire=0.0):
-    """Fenetre a la maniere des menus du jeu mobile : fond bleu nuit translucide, cadre en cinq traits de 1,25 px a 720 p. `eclaire` (0 a 1) : fond plus clair (bouton enfonce)."""
+def _melange():
+    """Melange alpha de la texture blittee : pyglet.shapes le coupe a la fin de chaque dessin, il faut le remettre avant un blit (sinon coins et fond translucide sortent opaques)."""
+    gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+
+
+def cadre(x, y, w, h, k, eclaire=0.0, fond=None, opacite=None):
+    """Fenetre a la maniere des menus du jeu mobile : fond translucide (bleu nuit par defaut ; `fond` et `opacite` : autre couleur), cadre en cinq traits de 1,25 px a 720 p, coins
+    arrondis (transparents hors du cadre). `eclaire` (0 a 1) : fond plus clair (bouton enfonce)."""
     w, h = int(round(w)), int(round(h))
     if w < 4 or h < 4: return
+    fond = FOND_DQ if fond is None else tuple(fond); opacite = OPACITE_FOND if opacite is None else opacite
     def fab():
         b = max(1.0, 1.25 * k); d = _distance(w, h, 9.0 * k); n = len(BORDS_DQ)
         a = np.zeros((h, w, 4), np.float32); ring = np.clip(np.floor(d / b), 0, n).astype(int)
         for i, c in enumerate(BORDS_DQ): a[ring == i, :3] = c
-        fond = np.array(FOND_DQ, np.float32) * (1 - eclaire) + 90.0 * eclaire
-        a[ring == n, :3] = fond; a[..., 3] = 255.0
-        a[ring == n, 3] = 255.0 * (OPACITE_FOND + (1 - OPACITE_FOND) * eclaire)
+        a[ring == n, :3] = np.array(fond, np.float32) * (1 - eclaire) + 90.0 * eclaire; a[..., 3] = 255.0
+        a[ring == n, 3] = 255.0 * (opacite + (1 - opacite) * eclaire)
         a[..., 3] *= np.clip(d + 0.5, 0.0, 1.0)
         return _texture(a)
-    _garder(('cadre', w, h, round(k * 100), round(eclaire * 10)), fab).blit(int(round(x)), int(round(y)))
+    t = _garder(('cadre', w, h, round(k * 100), round(eclaire * 10), fond, round(opacite * 100)), fab)
+    _melange(); t.blit(int(round(x)), int(round(y)))
 
 
 def plaque(x, y, w, h, k, choisi=False):
-    """Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair (or quand il est choisi), degrade gris, coins arrondis."""
+    """Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair, degrade gris, coins arrondis. Choisi : plus clair (comme un bouton du jeu enfonce), sans autre marque."""
     w, h = int(round(w)), int(round(h))
     if w < 4 or h < 4: return
     def fab():
         d = _distance(w, h, 6.0 * k); bw = max(1.5, 1.6 * k); t = (np.mgrid[0:h, 0:w][0] + 0.5) / h      # t : 0 en haut, 1 en bas
         haut, bas = np.array(PLAQUE_HAUT, np.float32), np.array(PLAQUE_BAS, np.float32)
         a = np.zeros((h, w, 4), np.float32)
-        fond = haut[None, None, :] * (1 - t[..., None]) + bas[None, None, :] * t[..., None] + (22.0 if choisi else 0.0)
-        bord = np.where(choisi, 1.0, 0.0) * np.array([255, 235, 4], np.float32)[None, None, :] + (0.0 if choisi else 1.0) * (np.array([186, 188, 185], np.float32)[None, None, :] * (1 - t[..., None]) + np.array([112, 114, 110], np.float32)[None, None, :] * t[..., None])
+        fond = haut[None, None, :] * (1 - t[..., None]) + bas[None, None, :] * t[..., None] + (26.0 if choisi else 0.0)
+        c0, c1 = ((228, 230, 226), (150, 152, 147)) if choisi else ((186, 188, 185), (112, 114, 110))
+        bord = np.array(c0, np.float32)[None, None, :] * (1 - t[..., None]) + np.array(c1, np.float32)[None, None, :] * t[..., None]
         dedans = (d >= bw)[..., None]
         a[..., :3] = np.where(dedans, fond, bord); a[..., 3] = 255.0 * np.clip(d + 0.5, 0.0, 1.0)
         return _texture(a)
-    _garder(('plaque', w, h, round(k * 100), bool(choisi)), fab).blit(int(round(x)), int(round(y)))
+    t = _garder(('plaque', w, h, round(k * 100), bool(choisi)), fab)
+    _melange(); t.blit(int(round(x)), int(round(y)))
 
 
 class Boutons:
