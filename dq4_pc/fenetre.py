@@ -24,13 +24,14 @@ FRAG = '''#version 330 core
 centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
 uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul;
 void main() {
-    vec2 uv = v_uv;
+    vec2 uv = v_uv; float lod = 0.0;
+    if (net > 0.5) { vec2 p0 = uv * tsize; vec2 dx = dFdx(p0), dy = dFdy(p0); lod = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8))); }      // mipmaps choisies sur l'uv d'origine (l'uv decalee saute d'un texel a l'autre)
     if (net > 1.5) { uv = (floor(uv * tsize) + 0.5) / tsize; }      // pixel perfect : plus proche voisin strict, aucun adoucissement
     else if (net > 0.5) {   // pixel art : on garde des pixels nets, seule la frontiere entre deux pixels est adoucie
-        vec2 p = uv * tsize; vec2 pc = floor(p) + 0.5; vec2 w = max(fwidth(p), vec2(1e-4));
-        uv = (pc + clamp((p - pc) / w, -0.5, 0.5)) / tsize;
+        vec2 p = uv * tsize; vec2 b = floor(p + 0.5); vec2 w = max(fwidth(p), vec2(1e-4));       // b = frontiere de texel la plus proche : le centre du texel reste pur, seule une bande d'un pixel d'ecran autour de la frontiere est melangee
+        uv = (b + clamp((p - b) / w, -0.5, 0.5)) / tsize;
     }
-    vec4 c = texture(tex, uv) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
+    vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
 
 VERT_EFFET = '''#version 330 core
 in vec2 position; in vec2 tex_coords; in vec4 colors;
@@ -66,6 +67,8 @@ CH_ECHELLE = 51.84 * 0.48 / 24                                              # Ch
 # SceneCamera.s_distanceAdjust, champ horizontal fov x 4/3 deduit de l'ecran portrait 450 x 800). HEROS_FRAC = hauteur du panneau du heros / hauteur de la fenetre.
 HEROS_FRAC = SPRITE_H * SPRITE_ECHELLE / (2.0 * (39.55 - DIST_ADJ_VILLE) * math.tan(math.radians(FOV_VILLE_DEF * 4.0 / 3.0) / 2) / ASPECT_PORTRAIT)       # ~ 0,103
 CH_VUE_HAUT = 32.0 / CH_PX * CH_ECHELLE / HEROS_FRAC                         # carte du monde : tuiles visibles en hauteur (~ 20) ; en portrait l'original en montre 28,4 en hauteur et 16 en largeur
+CH_GOUT = 2                                                                 # carte du monde : gouttiere (pixels repetes) autour de chaque tuile de 16 px dans l'atlas copie : aucun debordement d'une tuile sur sa voisine au filtrage
+CH_CASE = 16 + 2 * CH_GOUT
 PP_ECHELLES = (1, 2, 4, 8)                                                  # pixel perfect : pixels d'ecran par pixel de la carte
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
 
@@ -116,10 +119,10 @@ class Jeu(pyglet.window.Window):
         self.args = args
         self._attente('Chargement du moteur...')
         self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = True; self.aniso = self._anisotropie()
-        self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
-        self.champ_cle = None; self.champ_tex = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
-        self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None; self.champ_ins = 0.0       # eau animee de la carte du monde
-        self.champ_zoom = float(args.carte_zoom); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
+        self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None
+        self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
+        self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
+        self.champ_zoom = float(args.carte_zoom); self.pp_k = self._k_auto(); self._vue_champ = None       # carte du monde : zoom (molette de la souris) et zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.survol = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
@@ -210,11 +213,11 @@ class Jeu(pyglet.window.Window):
         return t
 
     def _filtrer(self, t, lisse):
-        """Filtrage d'une texture mipmappee : lisse = mipmaps trilineaires + anisotrope, sinon bilineaire simple."""
+        """Filtrage d'une texture de decor mipmappee (F3) : de loin, toujours mipmaps trilineaires + anisotrope (stable) ; de pres, lisse = bilineaire, sinon plus proche voisin (texels nets)."""
         gl.glBindTexture(t.target, t.id)
-        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR if lisse else gl.GL_LINEAR)
-        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-        if self.aniso > 1.0: gl.glTexParameterf(t.target, 0x84FE, self.aniso if lisse else 1.0)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR if lisse else gl.GL_NEAREST)
+        if self.aniso > 1.0: gl.glTexParameterf(t.target, 0x84FE, self.aniso)
 
     def _feuille_orig(self, ident):
         """Feuille `h<ident>` d'origine (pixels nets) ; False si absente."""
@@ -270,10 +273,14 @@ class Jeu(pyglet.window.Window):
         M = np.zeros((4, 4)); M[0, 0] = 1 / dl; M[0, 3] = -cx / dl; M[1, 2] = -1 / dh; M[1, 3] = cz / dh; M[2, 1] = -1 / 100.0; M[3, 3] = 1.0
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
-    def _k_pp(self):
-        """Pixel perfect : pixels d'ecran par pixel de la carte, parmi x1, x2, x4, x8 (le plus proche, a l'echelle logarithmique, de la hauteur voulue x zoom de la molette)."""
+    def _k_auto(self):
+        """Echelle pixel perfect de depart : x1, x2, x4 ou x8, la plus proche (a l'echelle logarithmique) de la hauteur voulue (CH_VUE_HAUT tuiles x zoom)."""
         ideal = max(1e-3, self.height / (CH_VUE_HAUT * CH_PX) * self.champ_zoom)
         return min(PP_ECHELLES, key=lambda k: abs(math.log(k / ideal)))
+
+    def _k_pp(self):
+        """Pixel perfect : pixels d'ecran par pixel de la carte (x1, x2, x4 ou x8 ; F2 ou molette)."""
+        return self.pp_k
 
     def _maj_champ(self, e):
         """(Re)construit la grille de tuiles quand le moteur en envoie une autre ; l'atlas est la texture Unity `field`."""
@@ -294,12 +301,13 @@ class Jeu(pyglet.window.Window):
         if self.champ_tex is None:
             arr = self.donnees.texture('field')
             if arr is None: return
-            self.champ_tex = self._tex(arr, False)
-            gl.glBindTexture(self.champ_tex.target, self.champ_tex.id)
-            gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(self.champ_tex.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)     # pixels nets
+            t4 = arr[:CH_ATLAS * 16, :CH_ATLAS * 16].reshape(CH_ATLAS, 16, CH_ATLAS, 16, 4).transpose(0, 2, 1, 3, 4)       # (ligne, colonne, y, x, canal) : une tuile de 16 x 16 par case
+            t4 = np.pad(t4, ((0, 0), (0, 0), (CH_GOUT, CH_GOUT), (CH_GOUT, CH_GOUT), (0, 0)), mode='edge')
+            self.champ_tex = self._tex(np.ascontiguousarray(t4.transpose(0, 2, 1, 3, 4).reshape(CH_ATLAS * CH_CASE, CH_ATLAS * CH_CASE, 4)), False)      # atlas des tuiles, avec gouttieres
+            self.champ_tex_ico = self._tex(arr, False)                                                  # atlas d'origine : les icones de lieux y sont des rectangles quelconques
+            self.champ_nearest = None
         cols = ch['cols']; lignes = len(t) // cols
         g = t[:lignes * cols].reshape(lignes, cols)
-        self.champ_ins = 0.0 if self.mode == MODE_PP else 0.3 / (CH_ATLAS * CH_PX)       # pixel perfect : echelle entiere et plus proche voisin, les centres des pixels d'ecran ne tombent jamais sur un bord de texel ; sinon recul de 0,3 texel sur chaque bord : pas de filet clair entre deux tuiles (avec `centroid`, aussi en anticrenelage)
         self.champ_g = g; self.champ_pat = CH_MOTIF_NUM[np.searchsorted(CH_MOTIF_FIN, g, side='right')]; self.champ_acc_vu = tuple(self.motif_acc)
         if self.champ_base is None or self.champ_base[0] != (cols, lignes):        # sommets de la grille a l'origine (NO, NE, SE, SO, deux triangles par tuile), decales ensuite de (x0, y0)
             X, Z = np.meshgrid(np.arange(cols), np.arange(lignes)); O = np.zeros_like(X)
@@ -315,8 +323,8 @@ class Jeu(pyglet.window.Window):
 
     def _uv_tuiles(self, g):
         """Coordonnees de texture (6 sommets par tuile, a plat) de la grille de numeros de tuile `g` ; les tuiles sont stockees tete en bas dans l'atlas."""
-        u0 = (g % CH_ATLAS) / CH_ATLAS; v0 = (g // CH_ATLAS) / CH_ATLAS; d = 1.0 / CH_ATLAS
-        ins = self.champ_ins; u0, v0, d = u0 + ins, v0 + ins, d - 2 * ins
+        aw = float(CH_ATLAS * CH_CASE)                                                  # atlas copie avec une gouttiere de CH_GOUT pixels autour de chaque tuile
+        u0 = ((g % CH_ATLAS) * CH_CASE + CH_GOUT) / aw; v0 = ((g // CH_ATLAS) * CH_CASE + CH_GOUT) / aw; d = 16.0 / aw
         U = np.stack([np.stack([u0, v0], -1), np.stack([u0 + d, v0], -1), np.stack([u0 + d, v0 + d], -1), np.stack([u0, v0 + d], -1)], 2).astype(np.float32)      # (l, c, 4, 2)
         return U[:, :, [0, 1, 2, 0, 2, 3], :].reshape(-1, 2).ravel()
 
@@ -338,8 +346,16 @@ class Jeu(pyglet.window.Window):
 
     def _tracer_champ(self, e):
         if self.champ_vl is None or self.champ_tex is None: return
-        self.prog['cutoff'] = 0.05; self.prog['net'] = 0.0; self.prog['tsize'] = (1024.0, 1024.0)      # net = 0 : le mode « net » vise le bord des texels et, avec GL_NEAREST, pioche la tuile voisine (filets clairs)
+        nearest = self.mode == MODE_PP or not self.lissage          # pixel perfect (echelle entiere) ou lissage coupe (F3) : plus proche voisin ; sinon pixels nets aux frontieres adoucies (comme les sprites d'origine)
+        if self.champ_nearest != nearest:
+            self.champ_nearest = nearest
+            for t in (self.champ_tex, self.champ_tex_ico):
+                gl.glBindTexture(t.target, t.id)
+                gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST if nearest else gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST if nearest else gl.GL_LINEAR)
+        net = 0.0 if nearest else 1.0
+        self.prog['cutoff'] = 0.05; self.prog['net'] = net; self.prog['tsize'] = (float(CH_ATLAS * CH_CASE),) * 2
         self._tracer(self.champ_tex, self.champ_vl)
+        self.prog['tsize'] = (1024.0, 1024.0)
         q, uv, col = [], [], []
         for s in e.symboles.values():                     # icones de lieux : posees a plat (le heros se tient au milieu du bord bas)
             r = CH_ICONES.get(s['genre'])
@@ -357,7 +373,7 @@ class Jeu(pyglet.window.Window):
                 self.champ_ico = (n, self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', pos), tex_coords=('f', tc), colors=('f', cc)))
             else:
                 v = self.champ_ico[1]; v.position[:] = pos; v.tex_coords[:] = tc; v.colors[:] = cc
-            self._tracer(self.champ_tex, self.champ_ico[1])
+            self._tracer(self.champ_tex_ico, self.champ_ico[1])
         self.prog['net'] = 0.0
 
     def _tracer(self, tex, vl):
@@ -377,8 +393,7 @@ class Jeu(pyglet.window.Window):
         """Carte du monde : molette = zoom (x1,1 par cran, de 0,4 a 4)."""
         if self.moteur.etat.partie == MO.PARTIE_CHAMP and sy:
             if self.mode == MODE_PP:     # un cran = l'echelle suivante (x1, x2, x4, x8)
-                i = PP_ECHELLES.index(self._k_pp()) + (1 if sy > 0 else -1); k0 = self.height / (CH_VUE_HAUT * CH_PX)
-                self.champ_zoom = PP_ECHELLES[min(len(PP_ECHELLES) - 1, max(0, i))] / k0
+                self.pp_k = PP_ECHELLES[min(len(PP_ECHELLES) - 1, max(0, PP_ECHELLES.index(self.pp_k) + (1 if sy > 0 else -1)))]
             else: self.champ_zoom = min(4.0, max(0.4, self.champ_zoom * (1.1 ** sy)))
 
     def on_close(self):
@@ -387,7 +402,12 @@ class Jeu(pyglet.window.Window):
     def on_key_press(self, symbol, modifiers):
         K = pyglet.window.key
         if symbol == K.F1: self.aide = not self.aide                           # afficher / masquer les lignes d'aide (haut a gauche)
-        elif symbol == K.F2: self.mode = (self.mode + 1) % (MODE_PP + 1)
+        elif symbol == K.F2:                                                  # style des sprites et des decors ; sur la carte du monde, le pixel perfect passe d'abord par x1, x2, x4, x8
+            champ = self.moteur.etat.partie == MO.PARTIE_CHAMP
+            if self.mode == MODE_PP and champ and self.pp_k != PP_ECHELLES[-1]: self.pp_k = PP_ECHELLES[PP_ECHELLES.index(self.pp_k) + 1]
+            else:
+                self.mode = (self.mode + 1) % (MODE_PP + 1)
+                if self.mode == MODE_PP and champ: self.pp_k = PP_ECHELLES[0]
         elif symbol == K.F4: self.stats = not self.stats
         elif symbol == K.F8:                                                  # son active / coupe
             if self.son.basculer() and self.moteur.etat.musique is not None: self.son.jouer_bgm(self.moteur.etat.musique)
@@ -397,6 +417,8 @@ class Jeu(pyglet.window.Window):
         elif symbol == K.F3:
             self.lissage = not self.lissage
             for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
+            for r in self.decor_hd.values():
+                for t in r.values(): self._filtrer(t, self.lissage)
         else: return super().on_key_press(symbol, modifiers)
 
     # ---- combat : decor + monstres (maillages dynamiques du moteur)
@@ -533,6 +555,7 @@ class Jeu(pyglet.window.Window):
             c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart)
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
@@ -546,6 +569,49 @@ class Jeu(pyglet.window.Window):
         self.carte_nom = nom
         self.fond_decor = self._fond_combat(c) if nom.startswith('btl_') else None
         print('carte %s : %d groupes' % (nom, len(self.carte_vl)), flush=True)
+
+    def _calcul_hd_decor(self, arrs, algo):
+        """(tache de fond) textures de decor agrandies par l'algorithme HD du mode de F2 (x8, plafonne a 4096 px de cote). Le bord est repete en boucle avant l'agrandissement : les textures se raccordent."""
+        out = {}
+        for key, arr in arrs.items():
+            h, w = arr.shape[:2]; passes = 3
+            while passes > 0 and max(h, w) * 2 ** passes > 4096: passes -= 1
+            if passes == 0: out[key] = arr; continue
+            a = np.pad(arr, ((2, 2), (2, 2), (0, 0)), mode='wrap')
+            r = algo(a) if passes == 3 else HD.agrandir_epx(a, passes)
+            f = r.shape[0] // a.shape[0]
+            out[key] = np.ascontiguousarray(r[2 * f:r.shape[0] - 2 * f, 2 * f:r.shape[1] - 2 * f])
+        return out
+
+    def _decor_hd(self):
+        """Textures GL agrandies du decor courant pour le mode de F2 ; None tant que le calcul en tache de fond n'est pas fini (le decor d'origine sert en attendant)."""
+        cle = (self.carte_src, self.mode); r = self.decor_hd.get(cle)
+        if r is not None: return r
+        jc = ('d',) + cle; fut = self.hd_jobs.get(jc)
+        if fut is None:
+            self.hd_jobs[jc] = self.pool.submit(self._calcul_hd_decor, dict(self.decor_arr), HD.MODES[self.mode][2]); return None
+        if not fut.done(): return None
+        del self.hd_jobs[jc]
+        try: arrs = fut.result()
+        except Exception as ex:
+            print('lissage HD du decor impossible (%s) : %s' % (self.carte_src, ex), flush=True); arrs = {}
+        r = self.decor_hd[cle] = {}
+        for k, a in arrs.items():
+            r[k] = t = self._tex(a, True, 99); self._filtrer(t, self.lissage)
+        while len(self.decor_hd) > 8:                                  # on ne garde que les derniers decors agrandis (memoire de la carte graphique)
+            for t in self.decor_hd.pop(next(iter(self.decor_hd))).values(): t.delete()
+        return r
+
+    def _tracer_decor(self):
+        """Decor de la ville ou du combat selon le mode de F2, comme les sprites : originaux = pixels nets aux frontieres adoucies, agrandis = textures HD (algorithme du mode), pixel perfect = plus proche voisin strict."""
+        r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
+        net = 2.0 if self.mode == MODE_PP else (1.0 if self.mode == 0 and self.lissage else 0.0)
+        for tex, vl, key in self.carte_vl:
+            t = r.get(key, tex) if r else tex
+            self.prog['net'] = 0.0 if (r and key in r) else net
+            self.prog['tsize'] = (float(t.width), float(t.height))
+            self._tracer(t, vl)
+        self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     def _fond_combat(self, c):
         """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
@@ -1180,7 +1246,7 @@ class Jeu(pyglet.window.Window):
         if champ: self._tracer_champ(e)
         elif bataille:
             self.prog['mvp'] = tuple(float(x) for x in M_decor.T.ravel())
-            for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
+            self._tracer_decor()
             self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
             gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # shaders DssaMonster* : ZWrite Off, Cull Off, ZTest LEqual
             for tex, tw, th, vl, shader, hd in self._maillages_combat(e):
@@ -1191,7 +1257,7 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            for tex, vl, _cle in self.carte_vl: self._tracer(tex, vl)
+            self._tracer_decor()
         self.prog['cutoff'] = 0.05
         for slot, f, vl in a_dessiner:
             self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
@@ -1202,7 +1268,7 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
-        self.etiq_hd.text = 'F1 : masquer | F2 : sprites = %s | F3 : lissage du decor %s | anticrenelage %s | F4 : stats | F8 : son %s' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect (carte x%d)' % self._k_pp(), 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible')
+        self.etiq_hd.text = 'F1 : masquer | F2 : sprites et decors = %s | F3 : lissage %s | anticrenelage %s | F4 : stats | F8 : son %s' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else ('Pixel perfect x%d (x1 x2 x4 x8 : F2 ou molette)' % self._k_pp() if champ else 'Pixel perfect'), ('oui' if self.lissage else 'non') if self.mode != MODE_PP else 'sans effet en pixel perfect', 'x%d' % self.msaa if self.msaa else 'non', ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._dessiner_fondu()
