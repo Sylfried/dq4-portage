@@ -193,6 +193,7 @@ class Interface:
     def __init__(self):
         self.f = {}; self.attente = {}; self.ordre = 0
         self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page
+        self.degats = []           # nombres de degats a faire sauter sur les monstres : (monstre, hauteur, degats), vides par la visionneuse
         self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
 
     def fen(self, port):
@@ -223,6 +224,12 @@ class Interface:
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
+            if f['type'] == 43:                                 # Make_BattleHoppingNumber : [12, 0, 0] puis [monstre, hauteur, degats] (BattleMenu_setHoppingNumbers)
+                if f.get('dgt'):
+                    f['dgt'] = False
+                    if len(a) >= 3: self.degats.append(tuple(a[:3]))
+                    continue
+                if len(a) >= 3 and a[0] == 12: f['dgt'] = True; continue
             if port in self.attente:                            # texte de la case annoncee
                 cle = self.attente.pop(port); txt = ''.join(chr(v & 0xffff) for v in a if v); f['cases'][cle] = txt
                 if self.obs: self.obs.param_str(port, cle[0], cle[1], txt)
@@ -347,6 +354,14 @@ class Moteur:
         """(essai) force le passage a la carte du monde : Global::startField()."""
         self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
 
+    def demarrer_ville(self, nom):
+        """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
+        self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')
+
+    def drapeaux(self):
+        """Global.Flag : premier mot de la sortie du moteur (bit 3 : manette tactile presente ; 4 verrou du joueur, 0x20 carte autorisee, 0x40 interface verrouillee...)."""
+        return struct.unpack('<I', self.core.mem(self.core.outp, 4))[0]
+
     def _drapeau_effet(self, actif):
         """Bit 1 de Global+0xd8 : Unity (Capture.ScreenEffect) le leve au debut d'un effet d'ecran et l'abaisse a la fin ; le moteur attend qu'il retombe."""
         ad = self.core.outp; v = struct.unpack('<I', self.core.mem(ad, 4))[0]
@@ -383,6 +398,10 @@ class Moteur:
         if w2 != w: c.mem_w(c.outp, struct.pack('<I', w2))
         self._finir_anims()
         self._effet_combat()
+        if os.environ.get('DQ_CALLHOP'):                                       # (test) "image:monstre:hauteur:degats,..." : appelle BattleMenu_setHoppingNumbers comme le moteur apres un coup
+            for spec in os.environ['DQ_CALLHOP'].split(','):
+                im, ch, hh, nn = [int(x) for x in spec.split(':')]
+                if self.images == im: self.ui.image = self.images; c.call(self.E('_Z27BattleMenu_setHoppingNumbersss'), ch, hh, nn, label='hop')
         self.pk.begin()
         r = c.call(self.E('GameUpdate'), tenu, decl, label='GameUpdate')
         if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lignes[-12:]))
