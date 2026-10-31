@@ -9,6 +9,10 @@ PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
+ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
+EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
+EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
+ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
@@ -67,6 +71,8 @@ class Etat:
         self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
         self.fondu = {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
+        self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
+        self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
 
     def appliquer(self, paquets, lire_nom):
@@ -339,6 +345,28 @@ class Moteur:
         """(essai) force le passage a la carte du monde : Global::startField()."""
         self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
 
+    def _drapeau_effet(self, actif):
+        """Bit 1 de Global+0xd8 : Unity (Capture.ScreenEffect) le leve au debut d'un effet d'ecran et l'abaisse a la fin ; le moteur attend qu'il retombe."""
+        ad = self.core.outp; v = struct.unpack('<I', self.core.mem(ad, 4))[0]
+        self.core.mem_w(ad, struct.pack('<I', (v | 2) if actif else (v & ~2)))
+
+    def _debut_effet_combat(self, avant):
+        """Paquet 34 (valeur 4) : l'ecran se brise en morceaux (EFFET_COMBAT_IMAGES images) pendant que le moteur attend ; ensuite l'ecran reste noir jusqu'au chargement de la scene du combat."""
+        if self.etat.effet is not None: return
+        self.etat.effet = {'n': 0}; self._drapeau_effet(True)
+        if self.etat.attente_charge is None: self.etat.attente_charge = {'base': avant, 'n': 0}
+
+    def _effet_combat(self):
+        """Une image du jeu : avance l'effet de debut de combat, abaisse le drapeau a la fin (le moteur reprend a l'image suivante) ; compte l'attente du chargement."""
+        ef = self.etat.effet
+        if ef is not None:
+            ef['n'] += 1
+            if ef['n'] >= EFFET_COMBAT_IMAGES: self._drapeau_effet(False); self.etat.effet = None
+        ac = self.etat.attente_charge
+        if ac is not None:
+            ac['n'] += 1
+            if ac['n'] > ATTENTE_CHARGE_MAX + EFFET_COMBAT_IMAGES: self.etat.attente_charge = None
+
     def _nom_carte(self):
         s = self.core.read_cstr(self.L + NOM_RESSOURCE).decode('latin-1')
         return s.split('/')[-1]
@@ -351,6 +379,7 @@ class Moteur:
         w = struct.unpack('<I', c.mem(c.outp, 4))[0]
         if w & 1: c.mem_w(c.outp, struct.pack('<I', w & ~1))
         self._finir_anims()
+        self._effet_combat()
         self.pk.begin()
         r = c.call(self.E('GameUpdate'), tenu, decl, label='GameUpdate')
         if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lignes[-12:]))
@@ -368,9 +397,17 @@ class Moteur:
             if p[0] == 5 and p[1]:
                 d = self.duree_anim(p[1][0] & 0xffff, (p[1][0] >> 16) & 0xffff) if self.duree_anim else None
                 self.anims.append((self.images + (d or DUREE_ANIM), p[1][0] & 0xffff))
+        avant = self.etat.cartes_chargees
         self.etat.appliquer(pq, self._nom_carte)
+        for t, a, f in pq:
+            if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
+        ac = self.etat.attente_charge
+        if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
         self.etat.tick_fondu()
+        prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
+        if self.etat.partie == PARTIE_COMBAT and prec != PARTIE_COMBAT and self.etat.attente_charge is None and self.etat.cartes_chargees <= avant:
+            self.etat.attente_charge = {'base': avant, 'n': 0}      # combat sans effet d'ecran (scenario...) : la scene d'avant ne doit pas apparaitre avant le chargement de celle du combat
         if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None; self.etat.monde = None
         else: self._lire_monde()
         self.images += 1
