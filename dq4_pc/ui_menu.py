@@ -485,7 +485,12 @@ class Gestionnaire:
             if f.get('type') is None: continue
             self.ouvrir(port, f['type'])
             for (i, no), txt in f['cases'].items(): self.param_str(port, i, no, txt)
+            for (i, no), v in (f.get('ints') or {}).items(): self.param_int(port, i, no, v)
             for i, c in f['indic'].items(): self.code(port, i, c)
+            for i, q in (f.get('plaq') or {}).items():
+                if 'nom' in q and 'prm' in q: self.plaque(port, i, q['nom'], q['prm'], q['code'])
+            if f.get('dispo') is not None: self.disposer(port, f['dispo'])
+            if f.get('cur') is not None: self.selection(port, f['cur'])
     def param_int(self, port, i, no, v):
         f = self.f.get(port)
         if f: f.param_int(i, no, v)
