@@ -7,7 +7,7 @@ Les pixels transparents reprennent la couleur du bord opaque voisin pour éviter
 """
 import numpy as np
 
-VERSION = 2          # a incrementer quand un algorithme change (invalide les caches)
+VERSION = 3          # a incrementer quand un algorithme change (invalide les caches)
 FACTEUR = 8
 
 
@@ -53,6 +53,16 @@ def _x2(a):
 
 
 def _nb_alpha(case): return len(np.unique(case[..., 3]))
+
+
+def nettoyer_feuille(arr, seuil=128):
+    """Feuille de sprites -> (feuille, nettoyee). Les feuilles des heros (h100 a h127) ont un halo d'alpha 1 a 105 de couleur parasite (magenta) autour du corps (alpha 204 a 255) : le jeu
+    d'origine ne le montre pas (rejet des pixels transparents) ; sans ce nettoyage il apparait en liseré violet et le corps, d'alpha 0,8 a 1, laisse voir le decor. Alpha < seuil -> 0,
+    sinon 255. Les feuilles a alpha binaire (PNJ, monstres) sont rendues telles quelles."""
+    al = arr[..., 3]
+    if not ((al > 0) & (al < 255)).any(): return arr, False
+    a = arr.copy(); a[..., 3] = np.where(al >= seuil, 255, 0)
+    return a, True
 
 
 def agrandir_epx(case, passes=3):

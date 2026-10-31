@@ -28,7 +28,9 @@ DEFAUT = {
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
     'resolution': None,           # taille de la fenetre [largeur, hauteur] (None : 1280 x 720) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu)
+    'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche
+    'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu)
     'course': True, 'vitesse_course': 2.0,     # course : touche maintenue (action « courir »), facteur de vitesse
     'molette_inversee': True,     # sens de la molette dans les menus
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
