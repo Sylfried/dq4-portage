@@ -1,4 +1,4 @@
-"""Menu Echap : reprendre, etats instantanes (savestates), jeu (affichage, son, commandes, interface), quitter.
+"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), quitter.
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit = retour, molette). Les reglages sont enregistres dans reglages.json."""
@@ -11,13 +11,11 @@ import hud_mobile as HM
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
-# Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres des menus du jeu mobile : fond noir, cadre en cinq traits gris / blanc (mesure sur la fenetre de message)
+# Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
 JAUNE = OR[:3]
-FOND_DQ = (0, 0, 0); BORDS_DQ = ((138, 138, 138), (205, 205, 205), (255, 255, 255), (132, 132, 132), (41, 41, 41))        # fond noir ; traits du cadre de l'exterieur vers l'interieur
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
-DISTANCES = (1, 2, 4, 8)
 MSAA_CHOIX = (0, 2, 4, 8)
 
 
@@ -77,7 +75,9 @@ class Pause:
         return [dict(t='act', l='Reprendre', ok=self.fermer),
                 dict(t='act', l='Sauvegarder un état', ok=self._aller('sauver')),
                 dict(t='act', l='Charger un état', ok=self._aller('charger')),
-                dict(t='act', l='Jeu', ok=self._aller('jeu')),
+                dict(t='act', l='Affichage', ok=self._aller('affichage')),
+                dict(t='act', l='Son', ok=self._aller('son')),
+                dict(t='act', l='Commandes', ok=self._aller('commandes')),
                 dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'))]
 
     def _choix(self, label, valeurs, get, set_, off=False, note=None):
@@ -112,7 +112,6 @@ class Pause:
 
     noms = {
         'Shader': {0: 'Originaux (pixels nets)', 1: 'EPX x8', 2: 'Régions lissées', 3: 'Bicubique', 4: 'Pixel perfect'},
-        "Distance d'affichage": {1: 'x1', 2: 'x2', 4: 'x4', 8: 'x8'},
         'Anticrénelage': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
     }
 
@@ -127,22 +126,10 @@ class Pause:
                 self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v)))),
                 self._choix('Shader', list(range(len(HD.MODES) + 1)), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
                 self._choix('Lissage des textures', [True, False], lambda: J.lissage, set_('lissage', J.regler_lissage)),
-                self._choix("Distance d'affichage", list(DISTANCES), lambda: J.distance, set_('distance', J.regler_distance)),
-                self._curs('Angle de la caméra', lambda: R['angle_camera'], lambda v: (R.__setitem__('angle_camera', v), J.regler_angle(v)), -20.0, 40.0, 1.0, 1.0, lambda v: '%+d °' % round(v) if round(v) else '0 °', 1.0, defaut=RG.DEFAUT['angle_camera']),
+                self._curs('Zoom', lambda: round(J.zoom * 100), lambda v: J.regler_zoom(v / 100.0), 40.0, 400.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['zoom'])),
                 self._curs('Vignettage (bords assombris)', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
-                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else ''),
-                dict(t='act', l='Retour', ok=self.retour)]
-
-    def _e_jeu(self):
-        R = self.J.reg
-        return [self._curs('Vitesse de déplacement', lambda: R['vitesse_marche'], lambda v: R.__setitem__('vitesse_marche', v), 0.5, 3.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_marche']),
-                self._curs('Vitesse des transitions entre cartes', lambda: R['vitesse_fondu'], lambda v: (R.__setitem__('vitesse_fondu', v), self.J.regler_fondu(v)), 1.0, 4.0, 0.05, 0.25, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_fondu']),
-                self._choix('Course (maintenir la touche)', [True, False], lambda: R['course'], lambda v: R.__setitem__('course', v)),
-                self._curs('Vitesse de la course', lambda: R['vitesse_course'], lambda v: R.__setitem__('vitesse_course', v), 1.2, 4.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_course']),
                 self._curs('Taille des nombres de dégâts', lambda: R['taille_degats'], lambda v: R.__setitem__('taille_degats', v), 0.5, 3.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['taille_degats']),
-                dict(t='act', l='Affichage', ok=self._aller('affichage')),
-                dict(t='act', l='Son', ok=self._aller('son')),
-                dict(t='act', l='Commandes', ok=self._aller('commandes')),
+                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else ''),
                 dict(t='act', l='Retour', ok=self.retour)]
 
     def _e_interface(self):
@@ -167,7 +154,12 @@ class Pause:
                 dict(t='act', l='Retour', ok=self.retour)]
 
     def _e_commandes(self):
-        R = self.J.reg; e = [dict(t='act', l='Interface', ok=self._aller('interface'))]
+        R = self.J.reg
+        e = [self._curs('Vitesse de déplacement', lambda: R['vitesse_marche'], lambda v: R.__setitem__('vitesse_marche', v), 0.5, 3.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_marche']),
+             self._choix('Course (maintenir la touche)', [True, False], lambda: R['course'], lambda v: R.__setitem__('course', v)),
+             self._curs('Vitesse de la course', lambda: R['vitesse_course'], lambda v: R.__setitem__('vitesse_course', v), 1.2, 4.0, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_course']),
+             self._curs('Vitesse des transitions entre cartes', lambda: R['vitesse_fondu'], lambda v: (R.__setitem__('vitesse_fondu', v), self.J.regler_fondu(v)), 1.0, 4.0, 0.05, 0.25, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT['vitesse_fondu']),
+             dict(t='act', l='Interface', ok=self._aller('interface'))]
         for act, lib in RG.ACTIONS:
             e.append(dict(t='touche', l=lib, act=act, v=[RG.nom_touche(n) for n in R['touches'][act]]))
         e.append(dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer())))
@@ -415,12 +407,9 @@ class Pause:
 
     # ---- dessin
     @staticmethod
-    def _cadre(x, y, w, h, k, opacite=250):
-        """Fenetre a la maniere des menus du jeu mobile : fond noir, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce) de 1 px a 720 p."""
-        b = max(1, int(round(1.25 * k))); n = len(BORDS_DQ)
-        for i, c in enumerate(BORDS_DQ):
-            r = pyglet.shapes.Rectangle(x + i * b, y + i * b, w - 2 * i * b, h - 2 * i * b, color=c); r.opacity = opacite; r.draw()
-        r = pyglet.shapes.Rectangle(x + n * b, y + n * b, w - 2 * n * b, h - 2 * n * b, color=FOND_DQ); r.opacity = opacite; r.draw()
+    def _cadre(x, y, w, h, k):
+        """Fenetre a la maniere des menus du jeu mobile : fond bleu nuit translucide, cadre en cinq traits, coins arrondis (hud_mobile.cadre)."""
+        HM.cadre(x, y, w, h, k)
 
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
         """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
@@ -445,7 +434,7 @@ class Pause:
         cible = 1.0 if actif else 0.0; p = self.pos_sw.get(cle, cible)                   # premiere apparition : pas d'animation
         p = cible if abs(cible - p) < 0.02 else p + (cible - p) * min(1.0, self.dt_sw * 16.0); self.pos_sw[cle] = p
         w, h = LARG_SW * k, HAUT_SW * k; r = h / 2
-        piste = (50, 50, 50) if grise else tuple(int(a + (b - a) * p) for a, b in zip((62, 62, 62), (225, 207, 3)))
+        piste = (30, 32, 36) if grise else tuple(int(a + (b - a) * p) for a, b in zip((20, 22, 26), (225, 207, 3)))
         if sel and not grise: e = max(1.5, 2 * k); self._pilule(x - e, yc, w + 2 * e, h + 2 * e, JAUNE)
         self._pilule(x, yc, w, h, piste)
         pyglet.shapes.Circle(x + r + (w - 2 * r) * p, yc, r - 3 * k, segments=24, color=(128, 128, 128) if grise else (255, 255, 255)).draw()
@@ -475,10 +464,10 @@ class Pause:
         t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
         ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'jeu': 'Jeu', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'placement': "Disposition de l'interface", 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'placement': "Disposition de l'interface", 'sauver': 'Sauvegarder un état', 'charger': 'Charger un état', 'quitter': 'Quitter'}
         avec_mini = ecr in ('sauver', 'charger')
         curs_aide = 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut'
-        aide = {'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'affichage': curs_aide, 'son': curs_aide, 'jeu': curs_aide,
+        aide = {'sauver': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'affichage': curs_aide, 'son': curs_aide, 'commandes': curs_aide,
                 'interface': 'Les boutons n\'apparaissent que hors combat, quand le jeu les autorise (comme sur le téléphone)',
                 'placement': 'Glisse les boutons pour les placer    Échap ou clic droit : terminer'}.get(ecr, '')
         en_sel = e[i_sel] if e else None
@@ -497,7 +486,7 @@ class Pause:
                 tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in self._valeurs(x))
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + 30 * k)
-        if ecr in ('affichage', 'son', 'jeu', 'placement'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
+        if ecr in ('affichage', 'son', 'commandes', 'placement'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + 30 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 40 * k + 2 * 190 * k + 30 * k)
         if ecr in ('sauver', 'charger'): pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         pied = 36 * k if aide else 0.0                     # (le message d'information est dessine sous le cadre : il ne decale rien)
@@ -523,6 +512,7 @@ class Pause:
             en = e[idx]; ytop = y; ybas = y - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
             note = en['note']() if en.get('note') else ''
             dec = max(0.0, min(8 * k, (rh - 36 * k) * 0.6)) if note else 0.0                  # note rouge sous la valeur : la ligne monte un peu pour lui laisser la place
+            if en['t'] != 'sep': HM.plaque(x0 + 42 * k, ybas + 3 * k, pw - 58 * k, rh - 6 * k, k, sel)       # fond du bouton, comme ceux du menu des commandes du jeu mobile
             if sel:
                 cy = ybas + rh / 2 + dec
                 tri = pyglet.shapes.Triangle(x0 + 22 * k, cy + 9 * k, x0 + 22 * k, cy - 9 * k, x0 + 22 * k + 15 * k, cy, color=JAUNE); tri.draw()
@@ -535,7 +525,7 @@ class Pause:
             base += dec
             lab = self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
             if note:
-                en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = x0 + pw - 30 * k - en_.content_width; en_.y = ybas + 3 * k; en_.draw()
+                en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = x0 + pw - 30 * k - en_.content_width; en_.y = ybas + 6 * k; en_.draw()
             if en['t'] == 'choix' and en.get('liste'):                                        # liste deroulante : valeur courante et petite fleche vers le bas
                 vl = self._et(en['v'](), fs, coul); vl.x = x0 + pw - 30 * k - 24 * k - vl.content_width; vl.y = base; vl.draw()
                 fx, fy = x0 + pw - 30 * k - 8 * k, ybas + rh / 2 + dec
@@ -553,7 +543,7 @@ class Pause:
                 vl = self._et(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = dr - vl.content_width; vl.y = base; vl.draw()
                 self.zones_val[idx] = (vl.x - 10 * k, dr + 10 * k)
                 bw = 200 * k; bx1 = dr - 90 * k - 20 * k; bx0 = bx1 - bw; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
-                fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(70, 70, 70)); fond.draw()
+                fond = pyglet.shapes.Rectangle(bx0, by, bw, 10 * k, color=(16, 18, 22)); fond.draw()
                 rem = pyglet.shapes.Rectangle(bx0, by, bw * max(0.0, min(1.0, en['frac']())), 10 * k, color=JAUNE); rem.draw()
                 cur = pyglet.shapes.Rectangle(bx0 + bw * max(0.0, min(1.0, en['frac']())) - 3 * k, by - 4 * k, 6 * k, 18 * k, color=(255, 255, 255)); cur.draw()
                 if 'defaut' in en: self._bouton_defaut(idx, x0 + pw - 30 * k - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)

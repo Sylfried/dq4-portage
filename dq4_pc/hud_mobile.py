@@ -16,6 +16,68 @@ ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
 LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion'}
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
 
+# ---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
+# boutons = plaques grises a degrade (claires en haut, sombres en bas), bordure gris clair. Dessines en tableaux (distance au bord) puis gardes en textures : aucun cout par image.
+FOND_DQ = (8, 16, 40); OPACITE_FOND = 0.82
+BORDS_DQ = ((138, 138, 138), (205, 205, 205), (255, 255, 255), (132, 132, 132), (41, 41, 41))       # traits du cadre de l'exterieur vers l'interieur
+PLAQUE_HAUT, PLAQUE_BAS = (86, 87, 85), (34, 37, 31)                                                  # degrade du fond d'une plaque (haut -> bas)
+_textures = {}
+
+
+def _distance(w, h, r):
+    """Distance signee (positive a l'interieur) de chaque pixel au bord d'un rectangle a coins arrondis w x h (rayon r), tableau (h, w)."""
+    yy, xx = np.mgrid[0:h, 0:w]; xx = xx + 0.5; yy = yy + 0.5
+    px = np.abs(xx - w / 2.0) - (w / 2.0 - r); py = np.abs(yy - h / 2.0) - (h / 2.0 - r)
+    return -(np.hypot(np.maximum(px, 0.0), np.maximum(py, 0.0)) + np.minimum(np.maximum(px, py), 0.0) - r)
+
+
+def _texture(a):
+    h, w = a.shape[:2]
+    t = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(np.clip(a, 0, 255).astype(np.uint8)[::-1]).tobytes(), pitch=w * 4).get_texture()
+    gl.glBindTexture(t.target, t.id)
+    gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+    return t
+
+
+def _garder(cle, fabrique):
+    t = _textures.get(cle)
+    if t is None:
+        if len(_textures) > 80: _textures.clear()
+        t = _textures[cle] = fabrique()
+    return t
+
+
+def cadre(x, y, w, h, k, eclaire=0.0):
+    """Fenetre a la maniere des menus du jeu mobile : fond bleu nuit translucide, cadre en cinq traits de 1,25 px a 720 p. `eclaire` (0 a 1) : fond plus clair (bouton enfonce)."""
+    w, h = int(round(w)), int(round(h))
+    if w < 4 or h < 4: return
+    def fab():
+        b = max(1.0, 1.25 * k); d = _distance(w, h, 9.0 * k); n = len(BORDS_DQ)
+        a = np.zeros((h, w, 4), np.float32); ring = np.clip(np.floor(d / b), 0, n).astype(int)
+        for i, c in enumerate(BORDS_DQ): a[ring == i, :3] = c
+        fond = np.array(FOND_DQ, np.float32) * (1 - eclaire) + 90.0 * eclaire
+        a[ring == n, :3] = fond; a[..., 3] = 255.0
+        a[ring == n, 3] = 255.0 * (OPACITE_FOND + (1 - OPACITE_FOND) * eclaire)
+        a[..., 3] *= np.clip(d + 0.5, 0.0, 1.0)
+        return _texture(a)
+    _garder(('cadre', w, h, round(k * 100), round(eclaire * 10)), fab).blit(int(round(x)), int(round(y)))
+
+
+def plaque(x, y, w, h, k, choisi=False):
+    """Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair (or quand il est choisi), degrade gris, coins arrondis."""
+    w, h = int(round(w)), int(round(h))
+    if w < 4 or h < 4: return
+    def fab():
+        d = _distance(w, h, 6.0 * k); bw = max(1.5, 1.6 * k); t = (np.mgrid[0:h, 0:w][0] + 0.5) / h      # t : 0 en haut, 1 en bas
+        haut, bas = np.array(PLAQUE_HAUT, np.float32), np.array(PLAQUE_BAS, np.float32)
+        a = np.zeros((h, w, 4), np.float32)
+        fond = haut[None, None, :] * (1 - t[..., None]) + bas[None, None, :] * t[..., None] + (22.0 if choisi else 0.0)
+        bord = np.where(choisi, 1.0, 0.0) * np.array([255, 235, 4], np.float32)[None, None, :] + (0.0 if choisi else 1.0) * (np.array([186, 188, 185], np.float32)[None, None, :] * (1 - t[..., None]) + np.array([112, 114, 110], np.float32)[None, None, :] * t[..., None])
+        dedans = (d >= bw)[..., None]
+        a[..., :3] = np.where(dedans, fond, bord); a[..., 3] = 255.0 * np.clip(d + 0.5, 0.0, 1.0)
+        return _texture(a)
+    _garder(('plaque', w, h, round(k * 100), bool(choisi)), fab).blit(int(round(x)), int(round(y)))
+
 
 class Boutons:
     def __init__(self, jeu):
@@ -122,10 +184,11 @@ class Boutons:
                 l = pyglet.shapes.Line(0, j * H / LIGNES, W, j * H / LIGNES, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
         for nom in NOMS:
             if nom not in visibles and not edition: continue
-            x, y, c = self.rect(nom); s, n = self._sprite(nom, c)
-            s.update(x=x, y=y, scale=c / (32.0 * n))
-            actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
-            s.color = (170, 170, 170) if actif else (255, 255, 255); s.opacity = 255 if edition else 225
+            x, y, c = self.rect(nom); actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
+            cadre(x, y, c, c, c / 60.0, 0.45 if actif else 0.0)                 # fond du bouton : fenetre bleu nuit a cadre blanc, comme celles du jeu mobile
+            ci = c * 0.80; s, n = self._sprite(nom, ci)
+            s.update(x=x + (c - ci) / 2, y=y + (c - ci) / 2, scale=ci / (32.0 * n))
+            s.color = (170, 170, 170) if actif else (255, 255, 255); s.opacity = 255 if edition else 235
             s.draw()
             if edition:
                 pyglet.shapes.Box(x, y, c, c, thickness=2, color=(255, 235, 130)).draw()

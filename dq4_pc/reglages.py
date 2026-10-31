@@ -4,13 +4,16 @@ import pyglet
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
-    'gauche': ['Q', 'LEFT'], 'droite': ['D', 'RIGHT'], 'haut': ['Z', 'UP'], 'bas': ['S', 'DOWN'],
-    'menu': ['RETURN', None], 'discussion': ['SPACE', None], 'carte': ['M', None],
-    'A': ['E', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'],
+    'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
+    'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
+    'menu': ['RETURN', None], 'discussion': [None, None], 'carte': ['M', None],
+    'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None],
 }
-ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'), ('menu', 'Menu de commandes (hors combat)'), ('discussion', 'Discussion de groupe'), ('carte', 'Carte'),
-           ('A', 'Parler / examiner / valider'), ('B', 'Annuler'), ('courir', 'Courir (maintenir)'), ('L', 'Page précédente'), ('R', 'Page suivante'),
+ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
+           ('cam_gauche', 'Caméra : tourner à gauche'), ('cam_droite', 'Caméra : tourner à droite'), ('cam_haut', 'Caméra : relever l\'angle'), ('cam_bas', 'Caméra : abaisser l\'angle'),
+           ('A', 'Action (parler, examiner, ouvrir, valider)'), ('menu', 'Menu de commandes (valider dans un menu)'), ('B', 'Annuler / retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'),
+           ('courir', 'Courir (maintenir)'), ('L', 'Page précédente'), ('R', 'Page suivante'),
            ('infos', 'Afficher les infos à l\'écran')]
 RESERVEES = ('ESCAPE',)                # Echap ouvre le menu : non reattribuable
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
@@ -20,14 +23,14 @@ NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Ma
 
 DEFAUT = {
     'mode_sprites': 4,            # 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect (voir hd.py)
-    'distance': 1,                # distance d'affichage (carte du monde, villes, donjons, tours) : 1 = vue habituelle, 2 / 4 / 8 = vue plus eloignee (on voit 2 / 4 / 8 fois plus de largeur)
+    'zoom': 100,                  # zoom en pourcentage (40 a 400) : villes, donjons, tours et carte du monde ; 100 = vue habituelle ; ne depend pas du shader
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
     'plein_ecran': False,
     'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
     'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
-    'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu)
+    'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu)
@@ -36,7 +39,7 @@ DEFAUT = {
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
     'boutons_pos': {},            # bouton -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
-    'touches_v': 2,               # version des touches par defaut : une liste enregistree plus ancienne est abandonnee (les touches de la manette DS etaient fausses)
+    'touches_v': 3,               # version des touches par defaut : une liste enregistree plus ancienne est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action)
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
