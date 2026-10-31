@@ -43,11 +43,33 @@ def lire_cadres(chemin):
     return out
 
 
+def trois_lignes(t1, t0):
+    """(correctif propose) type 1 (combat : cadre 188 de haut, canevas 164 = 4 lignes de 34) ramene a la hauteur de la fenetre du terrain (type 0 : cadre 126, 3 lignes) :
+    les deux rangees hautes du cadre et le haut du canevas descendent de dz, le bord bas ne bouge pas ; V du bas du canevas = hauteur / 512 (le haut reste a V = 0)."""
+    import copy
+    t = copy.deepcopy(t1)
+    h1 = max(v[1] for v in t1['frame_mesh']['vtx']) - min(v[1] for v in t1['frame_mesh']['vtx'])
+    h0 = max(v[1] for v in t0['frame_mesh']['vtx']) - min(v[1] for v in t0['frame_mesh']['vtx'])
+    dz = h1 - h0
+    mid = (max(v[1] for v in t1['frame_mesh']['vtx']) + min(v[1] for v in t1['frame_mesh']['vtx'])) / 2
+    for v in t['frame_mesh']['vtx']:
+        if v[1] > mid: v[1] -= dz
+    cv = t['canvas']; zmax = max(v[2] for v in cv['vtx']); zmin = min(v[2] for v in cv['vtx'])
+    for v in cv['vtx']:
+        if v[2] == zmax: v[2] -= dz
+    hv = (zmax - dz - zmin) / 512.0 / (t.get('scale') or 1.0)
+    for u, v in zip(cv['uv'], cv['vtx']):
+        if v[2] == zmin: u[1] = hv
+    return t
+
+
 class MiseEnPage:
     """cache/ui_layout.json : {'header': {...}, 'types': {numero: {...}}} ; cadres : maillages des fenetres (frameData)"""
     def __init__(self, chemin, cadres=None):
         with open(chemin, encoding='utf-8') as f: d = json.load(f)
         self.hdr = d['header']; self.types = d['types']; self.message = d.get('message')       # message : fenetre de dialogue (MenuMessage), absente des anciens fichiers
+        if self.message:                                                 # combat (type 1) : 3 lignes comme le terrain ; le cadre d'origine (4 lignes) reste en type 4, pour les messages qui en ont quatre
+            ts = self.message['types']; ts.append(ts[1]); ts[1] = trois_lignes(ts[1], ts[0])
         self.infos = self.hdr['info']; self.couleurs = [tuple(c) for c in self.hdr['colors']]
         self.pousse = tuple(self.hdr['pushed'])
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []

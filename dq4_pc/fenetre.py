@@ -902,7 +902,9 @@ class Jeu(pyglet.window.Window):
                                 p0 = q
                             g.append((int(s0), int(p0)))
                         print('CANEVAS image %s lignes %s msg %s' % (self.moteur.images, g, self.moteur.ui.msg), flush=True)
-            m = self.moteur.ui.msg; self.ui_msg.regler(m['type'], m['y'], m['feed'])
+            m = self.moteur.ui.msg; typ = m['type']
+            if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
+            self.ui_msg.regler(typ, m['y'], m['feed'])
             return
         a = self.moteur.lire_message()
         if a is None: self.msg_img = None; return
@@ -1666,7 +1668,9 @@ class Jeu(pyglet.window.Window):
             self._tracer_decor()
             self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
             gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)         # shaders DssaMonster* : ZWrite Off, Cull Off, ZTest LEqual
-            for tex, tw, th, vl, shader, hd in self._maillages_combat(e):
+            mons = self._maillages_combat(e)             # reecrit les sommets des monstres/effets (tampons « sales » : pas encore envoyes au GPU)
+            self._dom_lie = None                         # force le rebind + commit() au 1er trace : sinon les monstres sortent avec les donnees de l'image precedente
+            for tex, tw, th, vl, shader, hd in mons:
                 self.prog['net'] = 0.0 if hd else (2.0 if pp else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets
                 if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)                 # DssaCharaTransparent : ZTest Always
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
