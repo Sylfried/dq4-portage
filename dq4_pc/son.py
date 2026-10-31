@@ -92,6 +92,7 @@ class Son:
         self.bgm = None; self.bgm_id = None; self.bgm_demande = None
         self.reprise = None; self.bgm_fin = None                           # jingle : musique a reprendre, heure de fin du jingle
         self.se = []                                                       # [(id, Player)]
+        self.bgm_propre = 1.0; self.t_pause = None                          # volume propre a la musique en cours ; heure du debut de la pause (menu Echap)
         self.verrou = threading.Lock(); self.zip = None; self.ogg = False
         try:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
@@ -218,7 +219,8 @@ class Son:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'], r['fin'] if r['boucle'] else 0)
             p = self.media.Player(); p.queue(src); p.volume = max(0.0, min(1.0, self.vol_m * r['volume'])); p.play()
-            self.bgm = p
+            self.bgm = p; self.bgm_propre = r['volume']
+            if self.t_pause is not None: p.pause()
             self.bgm_fin = None if r['boucle'] else time.time() + len(r['pcm']) / r['frequence']       # jingle sans boucle : heure de la reprise de la musique d'avant
         except Exception as e:
             self.log('Son : musique impossible (%r)' % (e,)); self.ok = False
@@ -229,6 +231,33 @@ class Son:
             try: self.bgm.pause(); self.bgm.delete()
             except Exception: pass
             self.bgm = None
+
+    def regler_volumes(self, musique=None, bruitages=None):
+        """Menu Echap : nouveaux volumes (0 a 1) ; la musique en cours change tout de suite, les bruitages a partir du suivant."""
+        if musique is not None:
+            self.vol_m = float(musique)
+            if self.bgm is not None:
+                try: self.bgm.volume = max(0.0, min(1.0, self.vol_m * self.bgm_propre))
+                except Exception: pass
+        if bruitages is not None: self.vol_b = float(bruitages)
+
+    def mettre_en_pause(self, oui):
+        """Menu Echap ouvert : musique et bruitages en pause ; a la reprise, les echeances (fin d'un jingle, d'un bruitage) sont decalees de la duree de la pause."""
+        if oui == (self.t_pause is not None) or not self.ok: return
+        if oui:
+            self.t_pause = time.time()
+            for p in [self.bgm] + [x[1] for x in self.se]:
+                try:
+                    if p is not None: p.pause()
+                except Exception: pass
+        else:
+            d = time.time() - self.t_pause; self.t_pause = None
+            if self.bgm_fin is not None: self.bgm_fin += d
+            self.se = [(i, p, fin + d) for i, p, fin in self.se]
+            for p in [self.bgm] + [x[1] for x in self.se]:
+                try:
+                    if p is not None: p.play()
+                except Exception: pass
 
     def basculer(self):
         """Touche : son active / coupe."""

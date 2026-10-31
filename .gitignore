@@ -26,3 +26,4 @@ test_faisabilite/
 # --- Sorties de l'extraction IL2CPP (code du jeu, jamais versionne) ---
 il2cpp/
 
+reglages.json

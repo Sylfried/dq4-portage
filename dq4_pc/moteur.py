@@ -218,7 +218,7 @@ class Interface:
                         f = self.fen(a[0]); f['act'] = f['vis'] = False
                         if self.obs: self.obs.fermer(a[0])
                     elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
-                        f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0
+                        f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['dispo'] = None
                         f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
@@ -239,7 +239,7 @@ class Interface:
             if cmd != 7 and not f['act']: f['act'] = True; f['force'] = True       # MenuPortItem.NoticeReceive : premiere commande -> parties activees, dessin force
             if cmd == 11 and len(a) >= 3: self.attente[port] = (a[1], a[2])
             elif cmd == 1:
-                if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0           # fenetre dynamique : contenu neuf
+                if port >= 12: f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}           # fenetre dynamique : contenu neuf
                 self.ordre += 1; f['ordre'] = self.ordre
             elif cmd == 2 and len(a) >= 3: f['grille'] = tuple(a[1:4])                 # setItemMenu : colonnes, lignes, nombre de cases du curseur du moteur
             elif cmd == 6: f['inp'] = True                                              # demande de saisie (a chaque image tant que le menu attend une touche)
@@ -250,13 +250,15 @@ class Interface:
                 f['cur'] = a[1]
                 if self.obs: self.obs.selection(port, a[1])
             elif cmd == 10 and len(a) >= 5:                    # setItemParamInt [id, no, bas, haut] : valeur 32 bits
-                v = (a[3] & 0xffff) | ((a[4] & 0xffff) << 16)
-                if self.obs: self.obs.param_int(port, a[1], a[2], v - (1 << 32) if v & 0x80000000 else v)
+                v = (a[3] & 0xffff) | ((a[4] & 0xffff) << 16); v = v - (1 << 32) if v & 0x80000000 else v
+                f.setdefault('ints', {})[(a[1], a[2])] = v                                   # gardes pour rejouer la fenetre (etats instantanes)
+                if self.obs: self.obs.param_int(port, a[1], a[2], v)
             elif cmd == 12 and len(a) >= 3:
                 f['indic'][a[1]] = a[2]
                 if f['type'] == 31 and a[1] < 4 and a[2] >= 1:                                  # MonsterNamePlate.ReceiveParameters(code >= 1)
                     f.setdefault('plaq', {})[a[1]] = {'code': a[2]}; f['att'] = (a[1], 'nom')
                 elif f['type'] == 31 and a[1] == 5:                                             # disposition des plaques (nombre de plaques)
+                    f['dispo'] = a[2]
                     if self.obs and hasattr(self.obs, 'disposer'): self.obs.disposer(port, a[2])
                 elif self.obs: self.obs.code(port, a[1], a[2])
 
