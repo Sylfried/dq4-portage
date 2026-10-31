@@ -13,6 +13,7 @@ import objets_carte as OC
 import hd as HD
 import ui_menu as UI
 import son as SON
+import effet_combat as EC
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -30,6 +31,16 @@ void main() {
         uv = (pc + clamp((p - pc) / w, -0.5, 0.5)) / tsize;
     }
     vec4 c = texture(tex, uv) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
+
+VERT_EFFET = '''#version 330 core
+in vec2 position; in vec2 tex_coords; in vec4 colors;
+out vec2 v_uv; out vec4 v_col;
+void main() { gl_Position = vec4(position, 0.0, 1.0); v_uv = tex_coords; v_col = colors; }'''
+FRAG_EFFET = '''#version 330 core
+in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
+uniform sampler2D tex; uniform float lum; uniform float flou;
+void main() { vec3 c = texture(tex, v_uv, flou).rgb; fragColor = vec4(c * v_col.rgb * lum, v_col.a * lum); }'''
+EFFET_FLOU = 1.0              # Capture.SetBlur(vrai) pendant l'effet : la capture est adoucie (biais de mipmap)
 
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
@@ -103,6 +114,8 @@ class Jeu(pyglet.window.Window):
         self.aide = True; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'aide en haut a gauche + cadre noir translucide
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
+        self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
+        self.effet_tex = None; self.effet_sim = None; self.effet_vl = None; self.effet_ref = None; self.effet_tex_prete = False      # effet de debut de combat : capture de l'ecran, simulation, sommets
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
         self.moteur = MO.Moteur(args.apk, args.saves_lecture, args.saves_ecriture); self.moteur.duree_anim = self._duree_anim
         self._attente('Chargement de la sauvegarde...')
@@ -558,6 +571,35 @@ class Jeu(pyglet.window.Window):
         gl.glBindTexture(t.target, t.id)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 
+    def _copier_ecran(self):
+        """Copie l'image qui vient d'etre dessinee dans une texture (la capture que l'effet de debut de combat brise en morceaux)."""
+        w, h = self.get_framebuffer_size()
+        if self.effet_tex is not None: self.effet_tex.delete()
+        t = pyglet.image.Texture.create(w, h, internalformat=gl.GL_RGBA8)
+        gl.glBindTexture(t.target, t.id)
+        gl.glCopyTexSubImage2D(t.target, 0, 0, 0, 0, 0, w, h)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+        gl.glGenerateMipmap(t.target)
+        gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        self.effet_tex = t
+        self.effet_sim = EC.EffetTuiles(self.width / max(1, self.height))
+        n = self.effet_sim.rows * EC.COLS * 6
+        if self.effet_vl is not None: self.effet_vl.delete()
+        self.effet_vl = self.prog_effet.vertex_list(n, gl.GL_TRIANGLES, position=('f', self.effet_sim.positions().ravel().tolist()), tex_coords=('f', self.effet_sim.UV.ravel().tolist()), colors=('f', self.effet_sim.couleurs().ravel().tolist()))
+
+    def _dessiner_effet(self, ef):
+        """Effet de debut de combat : fond noir, morceaux de la capture qui tombent (voir effet_combat.py)."""
+        sim = self.effet_sim
+        while sim.images < ef['n'] and not sim.fini: sim.etape()
+        gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+        gl.glViewport(0, 0, *self.get_framebuffer_size())
+        gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        vl = self.effet_vl; vl.position[:] = sim.positions().ravel().tolist(); vl.colors[:] = sim.couleurs().ravel().tolist()
+        self.prog_effet.use(); self.prog_effet['lum'] = float(sim.lum); self.prog_effet['flou'] = EFFET_FLOU
+        gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(self.effet_tex.target, self.effet_tex.id)
+        vl.draw(gl.GL_TRIANGLES)
+        self.prog_effet.stop()
+
     def _dessiner_fondu(self):
         """Plan de fondu d'ecran (Fade.FadePlane) : derriere l'interface (messages, menus), devant la scene."""
         fd = self.moteur.etat.fondu
@@ -950,6 +992,9 @@ class Jeu(pyglet.window.Window):
         self._objets_carte()
         self.n += 1
         self.n_combat = self.n_combat + 1 if self.moteur.etat.partie == MO.PARTIE_COMBAT else 0
+        if self.args.shots_effet and e.effet is not None and e.effet['n'] in self.args.shots_effet and self.args.shot:       # (test) captures pendant l'effet de debut de combat
+            self.dispatch_event('on_draw'); self.flip()
+            pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot.replace('.png', '_e%d.png' % e.effet['n']))
         if self.args.shots_combat and self.n_combat in self.args.shots_combat and self.args.shot:       # (test) captures intermediaires pendant un combat
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot.replace('.png', '_%d.png' % self.n_combat))
@@ -964,6 +1009,10 @@ class Jeu(pyglet.window.Window):
         if self.t_prec is not None: self.ecarts.append(t_debut - self.t_prec)
         self.t_prec = t_debut
         e = self.moteur.etat
+        if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
+        if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); return
+        if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
+            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); return
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
@@ -1053,6 +1102,7 @@ class Jeu(pyglet.window.Window):
         self._dessiner_fondu()
         self._maj_message(); self._dessiner_message(); self._dessiner_menus()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
+        if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
         if self.aide:
             stats = self.stats and bool(self.ecarts)
             if stats:
@@ -1101,6 +1151,7 @@ def main():
     ap.add_argument('--volume-bruitages', type=float, default=0.8, help='volume des bruitages (0 a 1)')
     ap.add_argument('--msaa', type=int, default=4, help='anticrenelage materiel (0 = aucun, 4 = x4)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
+    ap.add_argument('--shots-effet', default=None, help='(test) captures a ces images de l\'effet de debut de combat : "1,10,30,..."')
     ap.add_argument('--shots-combat', default=None, help='(test) captures intermediaires a ces images de combat : "30,60,..."')
     ap.add_argument('--images-combat', type=int, default=0, help='(test) prend la capture N images apres le debut d\'un combat')
     ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image (touche F5 en jeu)')
@@ -1125,6 +1176,7 @@ def main():
                 if n >= i: cur = m
             a.script[n] = cur
     if a.shots_combat: a.shots_combat = set(int(x) for x in a.shots_combat.split(','))
+    if a.shots_effet: a.shots_effet = set(int(x) for x in a.shots_effet.split(','))
     if a.clics: a.clics = [tuple(int(v) for v in c.split(':')) + (0,) * (4 - len(c.split(':'))) for c in a.clics.split(',')]
     if a.script_combat is not None:
         pts = sorted((int(x.split(':')[0]), int(x.split(':')[1], 0)) for x in a.script_combat.split(','))
