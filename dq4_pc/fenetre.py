@@ -603,12 +603,12 @@ class Jeu(pyglet.window.Window):
         return r
 
     def _tracer_decor(self):
-        """Decor de la ville ou du combat selon le mode de F2, comme les sprites : originaux = pixels nets aux frontieres adoucies, agrandis = textures HD (algorithme du mode), pixel perfect = plus proche voisin strict."""
+        """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
+        lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
-        net = 2.0 if self.mode == MODE_PP else (1.0 if self.mode == 0 and self.lissage else 0.0)
         for tex, vl, key in self.carte_vl:
             t = r.get(key, tex) if r else tex
-            self.prog['net'] = 0.0 if (r and key in r) else net
+            self.prog['net'] = 0.0
             self.prog['tsize'] = (float(t.width), float(t.height))
             self._tracer(t, vl)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
@@ -1268,7 +1268,7 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         self.etiquette.text = 'Carte %s | fleches/ZQSD : marcher | Entree : valider/parler | Retour arriere ou X : menu/annuler | Echap : quitter' % ('du monde' if champ else ('Combat ' + str(e.carte) if bataille else e.carte))
         self.etiquette.y = self.height - 10
-        self.etiq_hd.text = 'F1 : masquer | F2 : sprites et decors = %s | F3 : lissage %s | anticrenelage %s | F4 : stats | F8 : son %s' % (HD.MODES[self.mode][0] if self.mode < MODE_PP else ('Pixel perfect x%d (x1 x2 x4 x8 : F2 ou molette)' % self._k_pp() if champ else 'Pixel perfect'), ('oui' if self.lissage else 'non') if self.mode != MODE_PP else 'sans effet en pixel perfect', 'x%d' % self.msaa if self.msaa else 'non', ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible')
+        self.etiq_hd.text = 'F1 : masquer | F2 : sprites%s = %s | F3 : lissage %s | anticrenelage %s | F4 : stats | F8 : son %s' % (' et decors' if 0 < self.mode < MODE_PP else '', HD.MODES[self.mode][0] if self.mode < MODE_PP else ('Pixel perfect x%d (x1 x2 x4 x8 : F2 ou molette)' % self._k_pp() if champ else 'Pixel perfect'), ('oui' if self.lissage else 'non'), 'x%d' % self.msaa if self.msaa else 'non', ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible')
         if bataille: self.etiq_hd.text += ' | combat : F7 miroir %s | F9 parties inversees %s' % ('oui' if self.cb_mx else 'non', 'oui' if self.cb_ordre else 'non')
         self.etiq_hd.y = self.height - 30
         self._dessiner_fondu()
@@ -1323,7 +1323,7 @@ def main():
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--sans-preparation', action='store_true', help='(test) ne prepare pas le cache des cartes, sprites et monstres en arriere-plan')
-    ap.add_argument('--hd', type=int, default=1, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
+    ap.add_argument('--hd', type=int, default=MODE_PP, help='lissage des sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; touche F2 pour changer en jeu')
     ap.add_argument('--sans-son', action='store_true', help='coupe le son au depart (touche F8 pour l\'activer en jeu)')
     ap.add_argument('--volume-musique', type=float, default=0.7, help='volume des musiques (0 a 1, multiplie le volume propre a chaque musique)')
     ap.add_argument('--volume-bruitages', type=float, default=0.8, help='volume des bruitages (0 a 1)')
