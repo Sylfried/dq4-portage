@@ -1,5 +1,5 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
-import os, sys, math, time, argparse, glob, collections, threading
+import os, sys, math, time, argparse, glob, collections, threading, random
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pyglet
@@ -177,7 +177,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.prepa_arret = threading.Event(); self.prepa_proc = None
-        self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_ouverte = False; self.carte_deux_vues = False; self.carte_bascule = False; self.nb_degats = []; self._nb_tex = None
+        self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_liste_vue = False; self.carte_ouverte = False; self.carte_deux_vues = False; self.carte_bascule = False; self.nb_degats = []; self._nb_tex = None
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
@@ -965,6 +965,58 @@ class Jeu(pyglet.window.Window):
             xs.append((((c[0] / c[3]) * 0.5 + 0.5) * self.width - cx) / ech)
         return (min(xs), max(xs)) if xs else None
 
+    H_ECH = 87                                                  # hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limiter_lignes)
+
+    def _fichier_echantillons(self):
+        return os.path.join(os.path.dirname(os.path.abspath(self.args.reglages)), 'echantillons_message.npz')
+
+    def _charger_echantillons(self):
+        if getattr(self, 'echantillons', None) is not None: return
+        self.echantillons = []; self.apercu_msg = None
+        try:
+            d = np.load(self._fichier_echantillons())
+            self.echantillons = [d[k] for k in sorted(d.files)][:12]
+        except Exception: pass
+        self._ech_hash = {hash(x.tobytes()) for x in self.echantillons}
+
+    def _noter_echantillon(self, a, y):
+        """Page de message de 2 ou 3 lignes affichee en entier (curseur de fin de page) : sa zone visible du canevas est gardee (12 au plus, aussi dans echantillons_message.npz) ; l'editeur d'interface en montre un au hasard."""
+        self._charger_echantillons()
+        blk = a[(np.arange(self.H_ECH) + y) % 512].copy()
+        if blk[35:57].max() < 60 or blk[:, 500:].max() > 0: return                    # moins de 2 lignes de texte
+        h = hash(blk.tobytes())
+        if h in self._ech_hash: return
+        self._ech_hash.add(h); self.echantillons.append(blk); del self.echantillons[:-12]
+        try: np.savez_compressed(self._fichier_echantillons(), **{'e%02d' % i: x for i, x in enumerate(self.echantillons)})
+        except Exception as ex: print('echantillons de message non enregistres :', ex, flush=True)
+
+    ESSAIS = (("Bienvenue, voyageur ! Ce village est", "tranquille, mais gare aux monstres", "qui rôdent à la nuit tombée."),          # textes de repli de l'apercu (tant qu'aucune page du jeu n'a ete vue), 3 lignes comme une boite de dialogue
+              ("As-tu croisé un homme à l'allure", "étrange près du puits ? Il a disparu", "ce matin et je suis très inquiet."),
+              ("Le roi attend de bonnes nouvelles.", "Allez, braves aventuriers, et", "revenez-nous sains et saufs !"),
+              ("Cette herbe soigne les petites", "blessures. Garde-la précieusement :", "elle pourrait te sauver la vie."),
+              ("Autrefois, ce village était réputé", "pour ses récoltes. Depuis l'arrivée", "des monstres, personne n'ose sortir."))
+
+    def nouvel_echantillon(self):
+        """L'editeur choisit le message d'essai montre dans la fenetre de dialogue : au hasard parmi ceux deja vus, sinon l'un des textes de repli (ESSAIS)."""
+        self._charger_echantillons(); n = len(self.echantillons)
+        self.apercu_msg = random.randrange(n) if n else -1; self._ech_vu = None; self._essai = random.randrange(len(self.ESSAIS))
+
+    def _canevas_apercu(self):
+        """Canevas 512 x 512 de l'apercu des dialogues : l'echantillon choisi (ou un texte d'essai en police du jeu) range des la 1re rangee."""
+        self._charger_echantillons()
+        if getattr(self, 'apercu_msg', None) is None: self.nouvel_echantillon()
+        cv = np.zeros((512, 512), np.uint8)
+        i = self.apercu_msg
+        if 0 <= i < len(self.echantillons): cv[:self.H_ECH] = self.echantillons[i]
+        else:
+            from PIL import Image, ImageDraw, ImageFont
+            im = Image.new('L', (512, self.H_ECH), 0); dr = ImageDraw.Draw(im)
+            try: f = ImageFont.truetype(os.path.join(self.args.cache, 'ui_font.otf'), 22)
+            except Exception: f = ImageFont.load_default()
+            for j, t in enumerate(self.ESSAIS[getattr(self, '_essai', 0) % len(self.ESSAIS)]): dr.text((4, 7 + 28 * j + 20), t, font=f, fill=255, anchor='ls')
+            cv[:self.H_ECH] = np.asarray(im)
+        return cv
+
     def _maj_message(self):
         """Texte visible du message (canevas du moteur) -> image RGBA blanche dont l'opacite est celle du texte."""
         if self.ui_msg:                                          # fenetre d'origine : tout le canevas (512 x 512, en boucle) + defilement par decalage d'UV
@@ -981,8 +1033,9 @@ class Jeu(pyglet.window.Window):
                                 if q > p0 + 3: g.append((int(s0), int(p0))); s0 = q
                                 p0 = q
                             g.append((int(s0), int(p0)))
-                        print('CANEVAS image %s lignes %s msg %s' % (self.moteur.images, g, self.moteur.ui.msg), flush=True)
+                        print('CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s' % (self.moteur.images, g, self.moteur.ui.msg, self.moteur.params_message()), flush=True)
             m = self.moteur.ui.msg; typ = m['type']
+            if typ == 0 and m['feed'] and a is not None: self._noter_echantillon(a, int(m['y']))
             if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
             self.ui_msg.regler(typ, m['y'], m['feed'])
             return
@@ -1170,6 +1223,12 @@ class Jeu(pyglet.window.Window):
         cy = 400.0 * s2 if mode == 'bas' else (H - 400.0 * s2 if mode == 'haut' else H / 2.0)
         return self._ui_repere()[0] + float(v[1]) * self.width, cy + float(v[2]) * H, s2
 
+    def _canevas_apercu_maj(self, fe):
+        if getattr(self, 'apercu_msg', None) is None: self.nouvel_echantillon()
+        if getattr(self, '_ech_vu', None) != self.apercu_msg:
+            self._ech_vu = self.apercu_msg; self.ui_rendu.maj_canevas(self._canevas_apercu(), 'msg_apercu')
+            fe.regler(0, 0, False)
+
     def apercu_interface(self, cle):
         """Editeur d'interface : apercu de la fenetre `cle` ('msg' = dialogues, sinon nom Make_*) a sa taille et sa place (mise en page d'origine, sans etat de jeu)."""
         if self.ui_rendu is None or self.ui_g is None: return None
@@ -1177,12 +1236,14 @@ class Jeu(pyglet.window.Window):
         fe = self._apercus.get(cle)
         if fe is None:
             if cle == 'msg':
-                fe = UI.FenetreMessage(self.ui_g.ml)
+                fe = UI.FenetreMessage(self.ui_g.ml); fe.regler(0, 0, False); fe.N['canevas']['mats'][0]['sheet'] = 'msg_apercu'          # (texte d'essai : canevas a part, pas celui du moteur)
             else:
                 nums = self.noms_fenetres().get(cle)
                 if not nums: return None
                 fe = UI.Fenetre(self.ui_g.ml, nums[0])
             self._apercus[cle] = fe
+        if cle == 'msg':
+            self._canevas_apercu_maj(fe)
         e = fe.etendue()
         if not e: return None
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
@@ -1268,10 +1329,10 @@ class Jeu(pyglet.window.Window):
         return out
 
     def _carte_ports(self):
-        """Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte."""
+        """Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 24: liste des boutiques de la ville, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte."""
         r = {}; cachees = {}
         for p, f in self.moteur.ui.f.items():
-            if p >= 12 and f.get('type') in (22, 23, 25, 26):
+            if p >= 12 and f.get('type') in (22, 23, 24, 25, 26):
                 t = 22 if f['type'] == 23 else f['type']
                 if f.get('vis'): r[t] = p
                 elif f.get('act'): cachees[t] = p                       # fenetre creee mais pas montree (la 2e vue de la carte, avant qu'on y passe)
@@ -1316,11 +1377,17 @@ class Jeu(pyglet.window.Window):
             self.souris_gel = None
         if not self.ui_rendu or self.appui: return
         mo = self.moteur
-        touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and h[0] >= 0]
+        touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and (h[0] >= 0 or self._est_bouton(port, h[3]))]
         if not touches: self.survol = None; return                  # hors d'un bouton : l'element survole en dernier reste seul en surbrillance (le curseur du moteur y est aussi) ; effacé par on_mouse_leave ou une touche
         _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]; self.survol_nd = (port, h[3])
-        if f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
+        if h[0] < 0: self.survol = None                              # bouton sans numero (retour, fleches de page) : seul l'element est allume, le curseur du menu ne bouge pas
+        elif f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
         elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
+
+    def _est_bouton(self, port, nid):
+        """Vrai si l'element a un dessin de bouton (plaque, partie 7) ou de fleche (partie 10) : le cadre de fenetre qui couvre l'ecran (manette 128) n'en est pas un."""
+        nd = self.ui_g.f[port].N.get(nid) if self.ui_g and port in self.ui_g.f else None
+        return bool(nd) and any(m.get('part') in (7, 10) for m in nd['mats'])
 
     def on_mouse_leave(self, x, y): self.survol_nd = None
 
@@ -1436,7 +1503,7 @@ class Jeu(pyglet.window.Window):
                 gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
                 gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
                 fe.voile = t
-        nd = fe.N.get(1527)                                        # marqueur « vous etes ici » : icone de 24 x 24 centree sur le point (x, y) du plan
+        nd = next((o for o in fe.N.values() if o['mats'] and o['mats'][0].get('part') == 3), None)      # marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
             nd['pos'][0] = -225.0 + mx * 450.0 / 256.0 - 12.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0 - 12.0; nd['act'] = True
@@ -1508,7 +1575,7 @@ class Jeu(pyglet.window.Window):
             for _, p in liste:
                 fe = self.ui_g.f[p]
                 fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
-                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p and p == actif else (-1 if self.survol_nd else None))       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
+                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p else (-1 if self.survol_nd else None))       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
                 if p in self.ui_suit: haut.append(fe)
                 elif p not in perso: bas.setdefault(self.ui_tf[p][1], []).append(fe)
             if haut:
@@ -1703,7 +1770,7 @@ class Jeu(pyglet.window.Window):
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse()
-        h = min(f, 2.0); self.moteur.vitesse_heros(h, bool(self.reg['compagnons_distance'])); f /= h           # le heros seul va plus vite (ses variables de vitesse) : les PNJ gardent leur vitesse et leurs animations ; au-dela de x2 (risque de traverser les murs) le reste passe par des pas de moteur en plus
+        h = min(f, 2.0); self.moteur.vitesse_heros(h); f /= h           # le heros seul va plus vite (ses variables de vitesse) : les PNJ gardent leur vitesse et leurs animations ; au-dela de x2 (risque de traverser les murs) le reste passe par des pas de moteur en plus
         self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
         n = 0; nmax = 3 * max(1, math.ceil(f))
         while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
@@ -1815,7 +1882,7 @@ class Jeu(pyglet.window.Window):
         if self.clic_b: p |= MO.B; self.clic_b = False
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
         fr = self._fronts()
-        if self.moteur.msg_visible and (fr['menu'] or fr['discussion']): p |= MO.A; decl |= MO.A        # Entree et Espace tournent aussi les pages des messages
+        if self.moteur.msg_visible and fr['menu']: p |= MO.A; decl |= MO.A        # Entree et Espace tournent aussi les pages des messages
         for bit in (MO.HAUT, MO.BAS, MO.GAUCHE, MO.DROITE):      # repetition des directions maintenues (curseurs de menu)
             if p & bit:
                 self.rep[bit] = self.rep.get(bit, 0) + 1
@@ -1826,13 +1893,27 @@ class Jeu(pyglet.window.Window):
         if self.menu_relacher is not None:                 # fin de l'appui OK / Annuler envoye au menu
             mo.envoyer_menu(self.menu_relacher, 1, -1, 0); self.menu_relacher = None
         carte = self._carte_ports() if not mo.msg_visible else {}
-        if bool(carte) != self.carte_ouverte: self.carte_ouverte = bool(carte); self.carte_vue = 1           # carte ouverte : premiere version
-        self.carte_deux_vues = 25 in carte and 26 in carte
+        if bool(carte) != self.carte_ouverte: self.carte_ouverte = bool(carte); self.carte_vue = 1; self.carte_liste_vue = False           # carte ouverte : premiere version
+        liste = bool(carte) and 24 in carte and 25 in carte and mo.ui.f.get(carte[24], {}).get('cases') and mo.boutiques()[1] > 0          # ville avec des boutiques : la carte a une 2e vue, la liste des boutiques (type 24)
+        if liste and not self.carte_liste_vue:                      # a l'ouverture de la carte d'une ville : la liste des boutiques d'abord (comme sur le mobile), le plan avec le bouton « mode de la carte »
+            f25 = mo.ui.f.get(carte[25], {})
+            if f25.get('vis') and f25.get('entree') and not self.menu_relacher:
+                mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_liste_vue = True
+        self.carte_deux_vues = (25 in carte and 26 in carte) or bool(liste)
         if carte:
             # Touche Carte : 1re fois la premiere version, 2e fois l'autre version (haut de la manette sur la fenetre du plan : FieldImageMap::execute), 3e fois ferme (bouton retour : 0x400, comme MenuPortItem.Update d'Unity) ;
             # Annuler ou le bouton retour ferment aussi. Le curseur et les fleches ne servent pas ici.
             bascule, self.carte_bascule = self.carte_bascule, False
-            if (fr['carte'] and self.carte_vue == 1 or bascule) and self.carte_deux_vues:           # (le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
+            if liste:                                              # ville : M = boutique suivante (la derniere : ferme), le bouton « mode de la carte » alterne plan / liste
+                en_liste = bool(mo.ui.f.get(carte[24], {}).get('vis'))
+                if bascule: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
+                elif fr['carte'] and not en_liste: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
+                elif fr['carte']:
+                    i, n = mo.boutiques()
+                    if i + 1 < n: mo.envoyer_menu(carte[24], 1, -1, 4); self.menu_relacher = carte[24]; self.son.jouer_se(SE_BOUTON)
+                    else: self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+                elif decl & MO.B: self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+            elif (fr['carte'] and self.carte_vue == 1 or bascule) and self.carte_deux_vues:           # (le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
                 mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
             elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
         port = None if carte else mo.menu_actif()
@@ -1840,7 +1921,7 @@ class Jeu(pyglet.window.Window):
         if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
             f_port = mo.ui.f.get(port)
-            self._saisie_menu(port, decl | (MO.A if fr['menu'] or fr['discussion'] else 0) | (MO.B if fr['carte'] and f_port and f_port.get('type') == 25 else 0) | (MO.GAUCHE if fr['L'] else 0) | (MO.DROITE if fr['R'] else 0))        # L / R = gauche / droite (page precedente / suivante des menus a une colonne)
+            self._saisie_menu(port, decl | (MO.A if fr['menu'] else 0) | (MO.B if fr['carte'] and f_port and f_port.get('type') == 25 else 0) | (MO.GAUCHE if fr['L'] else 0) | (MO.DROITE if fr['R'] else 0))        # L / R = gauche / droite (page precedente / suivante des menus a une colonne)
             p = decl = 0
         elif not mo.msg_visible:
             # sur le terrain : A = parler / examiner, Annuler, X ou Start = ouvrir le menu (le moteur veut ces boutons seuls)

@@ -38,12 +38,10 @@ DEFAUT = {
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche (0,5 a 2)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage (0,5 a 2)
-    'compagnons_distance': False, # (essai) villes : les compagnons gardent leur distance au heros quand il court (l'ecart d'historique est divise par le facteur de vitesse) ; non verifie avec un groupe complet
-    'accel_camera': 2.0,          # multiplicateur de la vitesse de la camera aux fleches quand on l'accelere (1 a 4) ; accelere tant que la touche « Accélérer la caméra (maintenir) » est tenue ou apres un appui sur « (appuyer) »
+    'accel_camera': 1.5,          # multiplicateur de la vitesse de la camera aux fleches quand on l'accelere (1 a 2) ; accelere tant que la touche « Accélérer la caméra (maintenir) » est tenue ou apres un appui sur « (appuyer) »
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu ; 0,5 a 2)
     'vitesse_course': 1.5,        # multiplicateur de la vitesse quand on court (1 a 2) ; on court tant que la touche « Courir (maintenir) » est tenue ou apres un appui sur « Courir (appuyer) »
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
-    'confirmer_suppression': True,  # menu des etats : demander confirmation avant de supprimer un etat
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
@@ -54,7 +52,7 @@ DEFAUT = {
 }
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 4.0), 'vignette': (0.0, 1.0)}      # bornes des curseurs du menu Echap
+BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0)}      # bornes des curseurs du menu Echap
 
 
 def nom_touche(nom):
@@ -94,6 +92,7 @@ class Reglages:
                         for i, n in enumerate(ts[a]):
                             if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None        # une touche deja prise par une autre action lui reste
                     if self.v['vitesse_course'] == 2.0: self.v['vitesse_course'] = DEFAUT['vitesse_course']
+                if d.get('accel_camera') == 2.0: self.v['accel_camera'] = DEFAUT['accel_camera']      # ancienne valeur par defaut (x2) : la nouvelle est x1,5 (plage de 1 a 2)
                 if d.get('camera_maj') is False and 'cam_accel' not in (d.get('touches') or {}): self.v['touches']['cam_accel'] = [None, None]      # ancien reglage « Maj : camera plus rapide » = Non : plus de touche d'acceleration
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
                 for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action (hors partage) l'a prise
