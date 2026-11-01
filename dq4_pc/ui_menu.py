@@ -129,7 +129,14 @@ class Fenetre:
             self.N[n['id']] = dict(id=n['id'], par=n['par'], pos=list(n['pos']), act=n['act'], mats=[dict(x) for x in n.get('mats', [])],
                                    vtx=[list(v) for v in m['vtx']] if m else None, uv=[list(v) for v in m['uv']] if m else None, sub=m['sub'] if m else None,
                                    text=dict(n['text']) if n.get('text') is not None else None, buttonId=(n.get('parts') or {}).get('buttonId'), pad=(n.get('parts') or {}).get('gamepad') or 0, etat=0, tcol=0, tscale=1.0)
-        self.parts = self.t['parts']
+        self.parts = list(self.t['parts']); self.n_parts = len(self.parts)         # copie de la liste : l'eglise (type 66) y ajoute les parties de ses boutons
+        nom = self.t.get('name', '')                                              # types que le portage anime ou complete : le jeu les fait par du code que l'exporteur ne voit pas
+        self.eglise = nom.startswith('Make_ChurchRoot'); self.eg_ids = []; self.txt_eglise = {}      # eglise : elements ajoutes, textes recus avant la creation des boutons
+        self.statut = nom.startswith('Make_BattleUpStatus'); self.secousse = {}; self.t_curseur = None      # plaques des membres en combat : secousses en cours (membre -> etat), debut du clignotement de la fleche
+        self.noms = nom.startswith('Make_MonsterName')                            # plaques de monstres : marques de groupe (decor du combat : elles ne comptent pas dans l'etendue de la fenetre)
+        if self.noms:
+            for nd in self._marques(): nd['marque'] = True
+        self.debut = nom.startswith('Make_StartMenuSelect')                       # menu de depart : cadre choisi par le code 3
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -187,7 +194,8 @@ class Fenetre:
         if not p: return
         if 'custom' in p:
             cu = p['custom']; pt, ib = self._enrobe(p)
-            if cu.get('cls', '').endswith('ICityMap'): self.nom_carte = s; return                   # fenetre de carte (type 25) : nom de la texture du plan (Menu/map)
+            if cu.get('cls', '').endswith('ICityMap'): return                                       # fenetre de carte (type 25) : le nom de la texture du plan (Menu/map) est pose par la visionneuse (nom_carte)
+            if cu.get('cls', '').endswith('StatusIconChanger'): self._icone_etat(i, v); return       # icones d'etat (mort, poison, sort scelle) et couleur du nom
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
@@ -213,6 +221,7 @@ class Fenetre:
         elif k == 'frame': self._cadre(ib, v)
 
     def param_str(self, i, no, s):
+        if self.eglise: self.txt_eglise[(i, no)] = s
         p = self.params.get((i, no))
         if not p: return
         if 'custom' in p:
@@ -241,6 +250,10 @@ class Fenetre:
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
+        if self.eglise and i == 0: self._eglise(c)
+        elif self.statut: self._statut(i, c)
+        elif self.noms and i == 4: self._reset_marques()
+        elif self.debut and i == 3: self._debut(c)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -261,6 +274,138 @@ class Fenetre:
                     if pt:
                         for j, ib in enumerate(pt['ib']):
                             if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    # ---- eglise (type 66, Make_ChurchRoot)
+    # Le jeu fait les boutons dans le code de la fenetre (Sub_ShopButton) : l'exporteur de mise en page n'en voit que le titre et le bouton de sortie (« Rien »). On les refait ici d'apres le code recu du moteur
+    # (0 : cinq boutons, sinon quatre) : (x, z depuis le bas de l'ecran, largeur sans les bordures) ; maillage a neuf decoupes de la plaque de sortie, bouton n = numero n, manette 16 (valider).
+    EGLISE = {True: ((-111.5, 170.75, 177.1), (111.5, 170.75, 177.1), (-145.0, 106.25, 110.0), (0.0, 106.25, 110.0), (145.0, 106.25, 110.0)),
+              False: ((0.0, 170.75, 177.1), (-145.0, 106.25, 110.0), (0.0, 106.25, 110.0), (145.0, 106.25, 110.0))}
+
+    def _eglise(self, c):
+        for n in self.eg_ids: self.N.pop(n, None)
+        self.eg_ids = []; del self.parts[self.n_parts:]
+        tpl = next((n for n in self.N.values() if n['vtx'] and n['mats'] and n['mats'][0].get('part') == 7 and n['buttonId'] is not None), None)      # plaque de bouton existante : la sortie (« Rien », manette 32)
+        et = next((n for n in self.N.values() if tpl and n['par'] == tpl['id'] and n['text'] is not None), None)
+        pt0 = next((pt for pt in self.parts if tpl and pt['node'] == tpl['id']), None)
+        if tpl is None or et is None or pt0 is None: return
+        ax = sorted({abs(v[0]) for v in tpl['vtx']})
+        if len(ax) < 2: return
+        dedans, dehors = ax[-2], ax[-1]; nid = max(self.N) + 1
+        for no, (x, z, larg) in enumerate(self.EGLISE[c == 0]):
+            vtx = [[math.copysign(larg / 2 + (dehors - dedans) if abs(abs(v[0]) - dehors) < 1e-3 else larg / 2, v[0]), v[1]] for v in tpl['vtx']]
+            bid, tid = nid, nid + 1; nid += 2; z -= 400.0
+            self.N[bid] = dict(id=bid, par=tpl['par'], pos=[x, tpl['pos'][1], z], act=True, mats=[dict(m) for m in tpl['mats']], vtx=vtx, uv=[list(u) for u in tpl['uv']], sub=tpl['sub'], text=None, buttonId=no, pad=0x10, etat=0, tcol=0, tscale=1.0)
+            self.N[tid] = dict(id=tid, par=bid, pos=[x + et['pos'][0] - tpl['pos'][0], et['pos'][1], z + et['pos'][2] - tpl['pos'][2]], act=True, mats=[dict(m) for m in et['mats']], vtx=None, uv=None, sub=None, text=dict(et['text']), buttonId=None, pad=0, etat=0, tcol=0, tscale=1.0)
+            self.eg_ids += [bid, tid]
+            self.parts.append(dict(node=bid, ib=[dict(ib, go=tid) if ib['k'] == 'text' else dict(ib) for ib in pt0['ib']]))
+            tb = next((j for j, ib in enumerate(self.parts[-1]['ib']) if ib['k'] == 'text'), None)
+            if tb is None: continue
+            self.params[(no, 0)] = dict(id=no, no=0, parts=len(self.parts) - 1, base=tb)         # remplace les liaisons exportees (parties absentes de la mise en page)
+            if (no, 0) in self.txt_eglise: self.param_str(no, 0, self.txt_eglise[(no, 0)])
+
+    # ---- combat : plaques des membres (type 29, Make_BattleUpStatus)
+    SECOUSSE = ((-6, 6), (6, -6), (6, -6), (-6, 6), (6, 6), (-6, -6), (-6, -6), (6, 6))         # MenuMessage.s_shakeTable : decalage de chaque image, de la derniere (7) a la premiere (0) ; somme nulle
+    CLIGNOTE = 0.7                                                                                # BattleUpCursor.c_waitTime : secondes entre les deux teintes de la fleche
+
+    def _icone(self, pt, ib, no):
+        """IIcon.Change(no) : les quatre UV de l'icone numero `no` de la feuille de l'element."""
+        nd = self.N.get(pt['node'])
+        if nd and nd['uv']:
+            for j, uv in enumerate(uv_icone(self.ml.infos[ib['partsNo']], no, 0)):
+                if ib['vtx'] + j < len(nd['uv']): nd['uv'][ib['vtx'] + j] = list(uv)
+
+    def _racine_membre(self, i):
+        """Noeud de la plaque du membre i (celui que le code -1 cache), ou None."""
+        for e in self.codes.get(i, []):
+            if e['kind'] == 'func' and 'Sub_BattleUpStatus' in (e.get('method') or ''):
+                k = next(iter((((e.get('fx') or {}).get('-1') or {}).get('d') or {})), None)
+                if k is not None and int(k) in self.N: return int(k)
+        return None
+
+    def _statut(self, i, c):
+        """Ids 0 a 3 = plaques : le code 8 lance ShakeFrame (m_shake = 8), le code -1 cache la plaque. Id 5 = fleche du membre qui agit : un code >= 0 l'affiche (SetActive), la deplace et BattleUpCursor.ForceUpdate la remet sur l'icone 2."""
+        if i == 5:
+            if c >= 0: self.t_curseur = time.monotonic(); self._icone_curseur(2, True)
+            return
+        rid = self._racine_membre(i)
+        if rid is None: return
+        if c == 8:
+            sec = self.secousse.get(i)
+            if sec is None:                                   # la plaque entiere se deplace : sa racine, ses textes, sa barre, son visage
+                tous = {rid}; ajout = True
+                while ajout:
+                    ajout = False
+                    for nd in self.N.values():
+                        if nd['par'] in tous and nd['id'] not in tous: tous.add(nd['id']); ajout = True
+                sec = self.secousse[i] = dict(base={n: list(self.N[n]['pos']) for n in tous}, dx=0.0, dz=0.0)
+            sec['m'] = 8
+        elif c < 0: self._fin_secousse(i, False)
+
+    def _fin_secousse(self, i, rouge):
+        """Fin de ShakeFrame : la plaque revient a sa place ; rouge : m_shakeEndCallback = BattleBar.RedApply (la barre rouge rejoint la valeur courante)."""
+        sec = self.secousse.pop(i, None)
+        if sec is None: return
+        for n, b in sec['base'].items():
+            if n in self.N: self.N[n]['pos'][0] = b[0]; self.N[n]['pos'][2] = b[2]
+        if rouge: self.param_str(i, 5, '')
+
+    def _icone_curseur(self, no, montrer=False):
+        """Icone de la fleche de cible (feuille 10) ; montrer : SetActive(true) du code >= 0 (l'exporteur ne le voit pas : le code ne fait que la deplacer, la fleche restait cachee)."""
+        for pt in self.parts:
+            for ib in pt['ib']:
+                if ib['k'] == 'icon' and ib.get('partsNo') == 10:
+                    self._icone(pt, ib, no); self.n_curseur = no
+                    if montrer and pt['node'] in self.N: self.N[pt['node']]['act'] = True
+                    return
+
+    def tick(self, t=None):
+        """Une image du jeu (30 Hz) : secousse des plaques (ShakeFrame.Update : un decalage de la table par image, puis le rouge de la barre) ; la fleche de cible clignote en temps reel (BattleUpCursor.Update)."""
+        for i in list(self.secousse):
+            sec = self.secousse[i]; sec['m'] -= 1
+            dx, dz = self.SECOUSSE[sec['m']]; sec['dx'] += dx; sec['dz'] += dz
+            for n, b in sec['base'].items():
+                if n in self.N: self.N[n]['pos'][0] = b[0] + sec['dx']; self.N[n]['pos'][2] = b[2] + sec['dz']
+            if sec['m'] == 0: self._fin_secousse(i, True)
+        if self.t_curseur is not None:
+            no = 2 + int(((time.monotonic() if t is None else t) - self.t_curseur) / self.CLIGNOTE) % 2
+            if no != getattr(self, 'n_curseur', 2): self._icone_curseur(no)
+
+    # ---- icones d'etat (MenuPortItemTable.StatusIconChanger)
+    def _icone_etat(self, i, v):
+        """StatusIconChanger : v = icone | (couleur << 16). La premiere icone (feuille 13) prend `v & 3` (0 rien, 1 croix = mort, 2 tete de mort = poison), la seconde l'oeil (3) si le bit 2 est leve (sort scelle) ;
+        la couleur (palette de l'en-tete : blanc, jaune = a l'article de la mort, rouge = mort) teinte la matiere de cette feuille. i = rang de la partie qui porte deux icones de la feuille 13."""
+        pts = [pt for pt in self.parts if sum(1 for ib in pt['ib'] if ib['k'] == 'icon' and ib.get('partsNo') == 13) == 2]
+        if not 0 <= i < len(pts): return
+        pt = pts[i]; i1, i2 = [ib for ib in pt['ib'] if ib['k'] == 'icon' and ib.get('partsNo') == 13]
+        self._icone(pt, i1, v & 3); self._icone(pt, i2, ((v >> 2) & 1) * 3)
+        nd = self.N.get(pt['node']); cs = self.ml.couleurs; c = (v >> 16) & 0xffff
+        if nd and c < len(cs):
+            for m in nd['mats']:
+                if m.get('part') == 13: m['color'] = list(cs[c])
+
+    # ---- combat : marques de groupe sous les monstres (MonsterMarkList, type 31)
+    def _marques(self):
+        """Les 12 marques du type 31 : parties d'une seule icone de la feuille 6 (Button), dans l'ordre des parties."""
+        return [self.N[pt['node']] for pt in self.parts if len(pt['ib']) == 1 and pt['ib'][0]['k'] == 'icon' and pt['ib'][0].get('partsNo') == 6 and pt['node'] in self.N]
+
+    def _reset_marques(self):
+        """MonsterMarkList.Reset (code 4) : toutes les marques sont cachees."""
+        for nd in self._marques(): nd['act'] = False
+
+    # ---- menu de depart (type 54, Make_StartMenuSelect)
+    def _debut(self, c):
+        """Code 3 : IFrame.Change(0xDB + code) choisit le cadre (219 : 316 de haut, 220 : 262, 221 : 260) ; code 2 : un seul bouton, plus bas, les deux autres caches."""
+        if not 0 <= c <= 2: return
+        cad = next((ib for pt in self.parts for ib in pt['ib'] if ib['k'] == 'frame'), None)
+        if cad is not None: self._cadre(cad, 0xDB + c)
+        bt = sorted((n for n in self.N.values() if n['buttonId'] is not None and n['buttonId'] >= 0 and n['pad'] == 0x10 and n['mats'] and n['mats'][0].get('part') == 7), key=lambda n: n['buttonId'])
+        if not bt: return
+        for nd in self.N.values():
+            if nd['par'] is not None and '_z0' not in nd: nd['_z0'] = nd['pos'][2]
+        dz = (-266.25 - bt[0]['_z0']) if c == 2 else 0.0                     # le premier bouton (et ses textes) descend a 135,75 du bas de l'ecran
+        for nd in self.N.values():
+            if nd['id'] == bt[0]['id'] or nd['par'] == bt[0]['id']: nd['pos'][2] = nd['_z0'] + dz
+        for nd in bt[1:]: nd['act'] = (c != 2)
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
@@ -340,6 +485,13 @@ class Fenetre:
             d = pl[i]; x = min(max(xs[i], -142.0), 142.0); z = zs[i]
             nc, nt = self.N[d['cadre']], self.N[d['texte']]
             nc['pos'] = [x, nc['pos'][1], z]; off = nc.get('off_texte', [0, 0, 0]); nt['pos'] = [x + off[0], nt['pos'][1], z + off[2]]
+        self._reset_marques(); marques = self._marques(); k = 0
+        for i in lst:                                                       # MonsterMarkList.SetMark : choix de cible (code 2) = une marque de la couleur de la plaque sous chaque monstre du groupe, a x du monstre, z = -64
+            if pl[i]['code'] != 2 or not proj: continue
+            for x in (proj(pl[i]['masque'], True) or []):
+                if k >= len(marques): break
+                nd = marques[k]; k += 1; nd['pos'] = [x, 0.0, -64.0]; nd['act'] = True
+                for j, uv in enumerate(uv_icone(self.ml.infos[6], 5 + i, 0)): nd['uv'][j] = list(uv)
 
     def boutons(self, ident=False):
         """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface ; ident : l'identifiant de l'element s'ajoute en fin de tuple."""
@@ -352,19 +504,19 @@ class Fenetre:
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas des parties visibles de la fenetre."""
-        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']) for v in nd['vtx']]
         return min(zs) if zs else 0.0
 
     def etendue(self):
         """(bas, haut) en unites d'interface des parties visibles de la fenetre, ou None si rien n'est dessine."""
-        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']) for v in nd['vtx']]
         return (min(zs), max(zs)) if zs else None
 
     def rects(self):
         """Rectangles (x0, z0, x1, z1) des elements dessines (visibles, avec maillage) de la fenetre : les cadres et les plaques."""
         out = []
         for nd in self.N.values():
-            if nd['vtx'] and nd['mats'] and self.visible(nd['id']):
+            if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']):
                 xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
                 out.append((min(xs), min(zs), max(xs), max(zs)))
         return out
@@ -736,13 +888,16 @@ class Gestionnaire:
     def selection(self, port, b):
         f = self.f.get(port)
         if f: f.selection(b)
-    proj = None            # appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None (fournie par la visionneuse)
+    proj = None            # appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None ; proj(masque, True) -> la liste des abscisses, une par monstre (fournie par la visionneuse)
     def plaque(self, port, i, nom, prm, code):
         f = self.f.get(port)
         if f: f.plaque(i, nom, prm, code)
     def disposer(self, port, n):
         f = self.f.get(port)
         if f: f.disposer(n, self.proj)
+    def tick(self):
+        """Une image du jeu : animations des fenetres (secousse des plaques de combat, clignotement de la fleche de cible)."""
+        for f in self.f.values(): f.tick()
 
 
 RESSOURCES = {'ui_MenuTexture.png': 'MenuTexture', 'ui_Button.png': 'Button'}

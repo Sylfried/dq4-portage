@@ -1014,8 +1014,8 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('fond de combat non calcule :', ex, flush=True); return None
 
-    def _ui_x_monstres(self, masque):
-        """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat."""
+    def _ui_x_monstres(self, masque, liste=False):
+        """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat. -> (min, max), ou la liste des abscisses (une par monstre) si `liste`."""
         M = getattr(self, '_M_combat', None); e = self.moteur.etat
         if M is None: return None
         ech = self.height / 800.0 * self.ui_k; cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
@@ -1027,6 +1027,7 @@ class Jeu(pyglet.window.Window):
             P = np.array(list(mm['pos']) + [1.0]); c = M @ P
             if c[3] <= 0: continue
             xs.append((((c[0] / c[3]) * 0.5 + 0.5) * self.width - cx) / ech)
+        if liste: return xs
         return (min(xs), max(xs)) if xs else None
 
     H_ECH = 87                                                  # hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limiter_lignes)
@@ -2034,6 +2035,7 @@ class Jeu(pyglet.window.Window):
         for code, *_ in mo.ui.systeme:
             if code == 999: self.pause.ouvrir('quitter')            # MenuPortSendQuit : retour sur le menu de depart = quitter l'application (ApplicationQuit : question Oui / Non)
         mo.ui.systeme = []
+        if self.ui_g: self.ui_g.tick()                     # animations des fenetres d'origine, une fois par image du jeu
         if mo.etat.partie == MO.PARTIE_VILLE:              # TownCamera du jeu : limite negative = rotation interdite dans ce lieu ; verrou = camera tenue par un evenement
             lg, ld, vr = mo.camera_ville(); self.cam_bloquee = lg < 0 or ld < 0 or vr
             self.cam_limite = min(lg, ld) * 360.0 / 4096.0 if lg > 0 and ld > 0 else None          # rotation bornee (ex. 120 degres de chaque cote) ; 0 = libre
