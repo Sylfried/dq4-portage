@@ -7,40 +7,45 @@ TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
     'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
     'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None],
-    'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'courir': ['LSHIFT', 'RSHIFT'], 'courir_bascule': [None, None], 'cam_accel': ['LSHIFT', 'RSHIFT'], 'cam_accel_bascule': [None, None],
+    'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
 }
-# libelles des actions (menu Commandes : dans cet ordre, avec les curseurs de vitesse entre elles, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
+# libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
-           ('courir', 'Courir (maintenir)'), ('courir_bascule', 'Courir (appuyer)'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
-           ('cam_accel', 'Accélérer la caméra (maintenir)'), ('cam_accel_bascule', 'Accélérer la caméra (appuyer)'), ('modif', 'Touche spéciale'),
+           ('accel', "Touche d'accélérateur"), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE',)                # Echap ouvre le menu : non reattribuable
-PARTAGE = ('courir', 'courir_bascule', 'cam_accel', 'cam_accel_bascule')      # actions qui peuvent partager une touche (Maj : courir et accelerer la camera) ; toute autre touche ne sert qu'a une action
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
         'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
         'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
         'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
 
 DEFAUT = {
-    'mode_sprites': 4,            # 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect (voir hd.py)
+    'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
     'plein_ecran': False,
-    'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
+    'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
+    'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
+    'nettete': 0.0,               # 0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
+    'luminosite': 1.0,            # 0,5 a 1,5 : courbe de gamma de la scene (1 = comme le jeu ; plus haut = plus clair)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
+    'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
+    'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
+    'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
+    'defilement_force': False,    # combats : impose le defilement ci-dessous (non : celui de la sauvegarde, regle dans la fenetre Parametres du jeu)
+    'defilement_auto': True, 'defilement_vitesse': 2,       # combats : defilement automatique des messages (non : on passe chaque message a la main) ; vitesse 0 (la plus rapide) a 3 (la plus lente) = attente de 12 / 22 / 32 / 42 images
     'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche (0,5 a 2)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage (0,5 a 2)
-    'accel_camera': 1.5,          # multiplicateur de la vitesse de la camera aux fleches quand on l'accelere (1 a 2) ; accelere tant que la touche « Accélérer la caméra (maintenir) » est tenue ou apres un appui sur « (appuyer) »
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu ; 0,5 a 2)
-    'vitesse_course': 1.5,        # multiplicateur de la vitesse quand on court (1 a 2) ; on court tant que la touche « Courir (maintenir) » est tenue ou apres un appui sur « Courir (appuyer) »
+    'vitesse_accel': 1.5,         # vitesse de l'accelerateur (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course »)
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
@@ -48,12 +53,34 @@ DEFAUT = {
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
     'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
     'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
-    'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), course x1,5 (si elle etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
+    'interface_masquees': [],     # editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
+    'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+# Fenetres du jeu absentes de l'editeur d'interface (pause.py) : lancement du jeu (menu de depart, nom, titre, licence, reseau : gerees a part), sans maillage (rien a regler), sans objet sur PC
+# ou qui suivent les monstres a l'ecran. Leurs reglages enregistres par une ancienne version sont abandonnes au chargement (ils decalaient un texte seul ou une fenetre du lancement).
+FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'StartNameEntry', 'SaveOverwrite', 'TitleTouch', 'PortalButton', 'NetworkRoot', 'NetworkPLST', 'NetworkCODE', 'NetworkITEM',
+                     'ViewVolumeDecision', 'License', 'MagicInfo', 'Config', 'NENE_ItemView', 'MonsterName', 'BattleHoppingNumber')
+
+MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
+MSAA_VALEURS = (0, 2, 4, 8)
+
+
+def mode_sprites_valide(v):
+    """Valeur lue (ancien fichier de reglages, option --hd) -> mode existant : 2 (regions lissees) et 3 (bicubique) sont devenus 1 (EPX x8, le plus proche : meme agrandissement x8 des contours, sans le flou) ; tout le reste -> pixel perfect."""
+    try: v = int(v)
+    except (TypeError, ValueError): return DEFAUT['mode_sprites']
+    if v in (2, 3): return 1
+    return v if v in MODES_SPRITES else DEFAUT['mode_sprites']
+
+
+BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
+BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0), 'defilement_vitesse': (0, 3)})
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force', 'defilement_auto')
+VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 
 
 def nom_touche(nom):
@@ -79,6 +106,13 @@ class Reglages:
             try:
                 with open(chemin, encoding='utf-8') as f: d = json.load(f)
                 if 'distance_camera' not in d and isinstance(d.get('zoom'), (int, float)) and d['zoom'] > 0: d['distance_camera'] = min(200, max(50, round(10000.0 / d['zoom'])))      # ancien reglage « Zoom » (40 a 400 %) -> distance de la camera
+                if 'vitesse_accel' not in d and isinstance(d.get('vitesse_course'), (int, float)) and not isinstance(d.get('vitesse_course'), bool): d['vitesse_accel'] = d['vitesse_course']      # ancien « Multiplicateur de la course » -> vitesse de l'accelerateur (l'ancien multiplicateur de la camera, accel_camera, est abandonne : un seul facteur pour les deux)
+                if isinstance(d.get('touches'), dict) and 'accel' not in d['touches']:       # anciennes touches de course et d'acceleration de la camera -> une seule « Touche d'accélérateur » : « Courir (maintenir) », a defaut les trois autres (« appuyer » n'existe plus)
+                    for ancien in ('courir', 'courir_bascule', 'cam_accel', 'cam_accel_bascule'):
+                        l = d['touches'].get(ancien)
+                        if isinstance(l, list) and any(l): d['touches']['accel'] = l; break
+                    else:
+                        if isinstance(d['touches'].get('courir'), list): d['touches']['accel'] = [None, None]        # le joueur avait vide ces touches : l'accelerateur n'a pas de touche
                 v_enreg = d.get('touches_v')
                 for k, x in d.items():
                     if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
@@ -92,17 +126,23 @@ class Reglages:
                     for a in ('modif',):
                         for i, n in enumerate(ts[a]):
                             if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None        # une touche deja prise par une autre action lui reste
-                    if self.v['vitesse_course'] == 2.0: self.v['vitesse_course'] = DEFAUT['vitesse_course']
-                if d.get('accel_camera') == 2.0: self.v['accel_camera'] = DEFAUT['accel_camera']      # ancienne valeur par defaut (x2) : la nouvelle est x1,5 (plage de 1 a 2)
-                if d.get('camera_maj') is False and 'cam_accel' not in (d.get('touches') or {}): self.v['touches']['cam_accel'] = [None, None]      # ancien reglage « Maj : camera plus rapide » = Non : plus de touche d'acceleration
+                    if self.v['vitesse_accel'] == 2.0: self.v['vitesse_accel'] = DEFAUT['vitesse_accel']
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
-                for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action (hors partage) l'a prise
+                for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise
                     if a in saved: continue
                     ts = self.v['touches']
                     for i, n in enumerate(ts[a]):
-                        if n and any(n in l for b, l in ts.items() if b != a and not (a in PARTAGE and b in PARTAGE)): ts[a][i] = None
+                        if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
-                for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                for k in BOOLEENS_SON_TEXTE:
+                    if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
+                self.v['defilement_vitesse'] = int(round(self.v['defilement_vitesse']))
+                self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
+                fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
+                ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
+                self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}
@@ -130,22 +170,16 @@ class Reglages:
         return c
 
     def action_de(self, symbol):
-        """Action liee a une touche (ou None) ; si la touche sert a plusieurs actions (Maj : courir et accelerer la camera), la premiere de la liste."""
+        """Action liee a une touche (ou None) : une touche ne sert qu'a une action."""
         nom = nom_de(symbol)
         for a, ts in self.v['touches'].items():
             if nom in ts: return a
         return None
 
-    def actions_de(self, symbol):
-        """Toutes les actions liees a une touche."""
-        nom = nom_de(symbol)
-        return [a for a, ts in self.v['touches'].items() if nom in ts]
-
     def lier(self, action, colonne, symbol):
         """Lie une touche a (action, colonne 0/1) ; la touche est retiree de toute autre action. -> nom de l'action qui l'avait, ou None."""
         nom = nom_de(symbol); avait = None
         for a, ts in self.v['touches'].items():
-            if action in PARTAGE and a in PARTAGE: continue                  # courir / accelerer la camera : la touche peut servir aux deux
             for i in range(2):
                 if ts[i] == nom and (a, i) != (action, colonne): ts[i] = None; avait = a
         self.v['touches'][action][colonne] = nom; self.codes_cache = {}
@@ -160,7 +194,6 @@ class Reglages:
         for col, nom in enumerate(TOUCHES_DEF[action]):
             if not nom: continue
             for a, autres in ts.items():
-                if action in PARTAGE and a in PARTAGE: continue
                 for i in range(2):
                     if autres[i] == nom and (a, i) != (action, col): autres[i] = None; perdu.append(a)
             ts[action][col] = nom
