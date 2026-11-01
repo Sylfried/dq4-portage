@@ -84,12 +84,13 @@ class Etat:
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
+        self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
     def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu())
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
@@ -97,7 +98,7 @@ class Etat:
         self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear()
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
@@ -150,6 +151,18 @@ class Etat:
                     self.modeles[a[0]] = a[1]
                     self.mesh_etat[a[0]] = {'shader': 3 if a[1] > 999 else 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}      # MeshChara..ctor : shader 1 (DssaMonster0) sauf id > 999 (DssaCharaTransparent) ; couleur blanche
                 else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None); self.mesh_etat.pop(a[0], None)
+            elif t == 31 and len(a) >= 2:           # cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, tourne de (0, 180, 0), echelle 1
+                if a[1] >= 0: self.fbx[a[0]] = {'id': a[1], 'vis': False, 'pos': (0.0, 0.0, 0.0), 'rot': (0.0, 180.0, 0.0), 'scl': (1.0, 1.0, 1.0), 'col': (1.0, 1.0, 1.0, 1.0), 'anim': []}
+                else: self.fbx.pop(a[0], None)
+            elif t == 32 and a:                     # cmd_fbx : emplacement = v & 0xff ; bits 8-9 : visibilite (bit 8 = visible) ; 10 : forcer l'animation ; 11 : echelle (3 flottants) ; 12 : couleur (4) ; 13 : position (3) ; 14 : rotation, degres (3) ; 15 : animation (un entier : sequence)
+                v = a[0]; m = self.fbx.get(v & 0xff); fl = list(f)
+                if m is not None:
+                    if v & 0x300: m['vis'] = bool(v & 0x100)
+                    if v & 0x800 and len(fl) >= 3: m['scl'] = tuple(fl[:3]); fl = fl[3:]
+                    if v & 0x1000 and len(fl) >= 4: m['col'] = tuple(fl[:4]); fl = fl[4:]
+                    if v & 0x2000 and len(fl) >= 3: m['pos'] = tuple(fl[:3]); fl = fl[3:]
+                    if v & 0x4000 and len(fl) >= 3: m['rot'] = tuple(fl[:3]); fl = fl[3:]
+                    if v & 0x8000 and len(a) >= 2: m['anim'].append((self.image, int(a[1]), bool(v & 0x400)))
             elif t == 23 and len(a) >= 2:           # cmd_mesh_on_off : emplacement, visible
                 if a[0] in self.mesh_etat: self.mesh_etat[a[0]]['vis'] = bool(a[1])
             elif t == 24 and a:                     # cmd_mesh_shader : emplacement | numero de shader << 8 (0 Chara, 1 DssaMonster0, 2 DssaMonster1, 3 DssaCharaTransparent)
@@ -588,6 +601,7 @@ class Moteur:
                 d = self.duree_anim(p[1][0] & 0xffff, (p[1][0] >> 16) & 0xffff) if self.duree_anim else None
                 self.anims.append((self.images + (d or DUREE_ANIM), p[1][0] & 0xffff))
         avant = self.etat.cartes_chargees
+        self.etat.image = self.images
         self.etat.appliquer(pq, self._nom_carte)
         for t, a, f in pq:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)

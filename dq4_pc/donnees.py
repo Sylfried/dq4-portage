@@ -301,6 +301,72 @@ class Donnees:
                 a = np.frombuffer(b, np.uint8).reshape(192, 256, 4).copy(); np.save(f, a); return a
         return None
 
+    # ---- modele 3D anime (FbxObject : Resources « fbx/c<numero> », paquets 31 et 32 du moteur)
+    def modele_fbx(self, no):
+        """Modele « fbx/c%04d » : hierarchie d'os, maillage skinne (un os par sommet, ou jusqu'a 4 avec poids), texture, clips d'animation (courbes de position / rotation / echelle de chaque os) -> dict
+        (voir fbx.ModeleFbx) ; mis en cache sur le disque. L'exception de l'extraction (shader ou composant non gere) est propagee : l'appelant ignore alors le modele."""
+        f = os.path.join(self.cache, 'fbx1_c%04d.pkl' % no)
+        if os.path.exists(f):
+            with open(f, 'rb') as fh: return pickle.load(fh)
+        with self._verrou:
+            if os.path.exists(f):
+                with open(f, 'rb') as fh: return pickle.load(fh)
+            return self._extraire_fbx(no, f)
+
+    def _extraire_fbx(self, no, f):
+        from UnityPy.helpers.MeshHelper import MeshHandler
+        pid = self._gos().get('c%04d' % no)
+        if pid is None: raise KeyError('modele fbx introuvable dans les donnees : c%04d' % no)
+        noms, parent, pos, rot, scl, chemins, t_idx, rendus = [], [], [], [], [], [], {}, []
+
+        def visiter(g, par, chemin):
+            comps = self._components(g); to = comps['Transform']; t = to.read(); i = len(noms)
+            noms.append(g.m_Name); parent.append(par); chemins.append(chemin); t_idx[to.path_id] = i
+            p, q, s = t.m_LocalPosition, t.m_LocalRotation, t.m_LocalScale
+            pos.append((p.x, p.y, p.z)); rot.append((q.x, q.y, q.z, q.w)); scl.append((s.x, s.y, s.z))
+            if 'SkinnedMeshRenderer' in comps: rendus.append(comps['SkinnedMeshRenderer'].read())
+            elif 'MeshRenderer' in comps: raise ValueError('maillage non skinne non gere (%s)' % g.m_Name)
+            for ch in t.m_Children:
+                cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
+                visiter(cg, i, (chemin + '/' if chemin else '') + cg.m_Name)
+        racine = self._objs[pid].read(); comps = self._components(racine)
+        visiter(racine, -1, '')
+        if len(rendus) != 1: raise ValueError('%d maillages skinnes (un seul est gere)' % len(rendus))
+        smr = rendus[0]
+        # materiaux : meme texture et shader « Custom/ImdChara » (couleur du sommet x _Color, fusion alpha, ZWrite on, Cull Back)
+        tex = {}; tnom = {}; tfmt = {}; cles = set()
+        for mref in smr.m_Materials:
+            mat = mref.deref_parse_as_object(); sh = mat.m_Shader.deref_parse_as_object().m_ParsedForm.m_Name
+            if sh != 'Custom/ImdChara': raise ValueError('shader non gere : %s' % sh)
+            cles.add(self._texture(mref, tex, tnom, tfmt)[0])
+        if len(cles) != 1 or None in cles: raise ValueError('textures : %s' % cles)
+        mesh = smr.m_Mesh.deref_parse_as_object(); h = MeshHandler(mesh); h.process()
+        v = np.array(h.m_Vertices, np.float32).reshape(-1, 3); n = len(v)
+        uv = np.array(h.m_UV0, np.float32).reshape(n, -1)[:, :2]
+        bi = np.array(h.m_BoneIndices, np.int64).reshape(n, -1) if h.m_BoneIndices is not None else np.zeros((n, 1), np.int64)
+        bw = np.array(h.m_BoneWeights, np.float32).reshape(n, -1) if h.m_BoneWeights is not None else np.ones((n, 1), np.float32)       # un seul os par sommet : poids 1 (maillage « rigide », cas du dragon)
+        tri = np.concatenate([np.array(t, np.int64).reshape(-1, 3) for t in h.get_triangles()])
+        bind = np.array([[[getattr(b, 'e%d%d' % (r, c)) for c in range(4)] for r in range(4)] for b in mesh.m_BindPose], float)
+        bones = [t_idx[b.path_id] for b in smr.m_Bones]
+        if len(bones) != len(bind): raise ValueError('os (%d) et poses de liaison (%d) differents' % (len(bones), len(bind)))
+        clips = {}
+        for cref in comps['Animation'].read().m_Animations:
+            c = cref.deref_parse_as_object()
+            if getattr(c, 'm_Compressed', False): raise ValueError('animation comprimee non geree (%s)' % c.m_Name)
+            cb = []
+            for genre, liste in (('pos', c.m_PositionCurves), ('rot', c.m_RotationCurves), ('scl', c.m_ScaleCurves)):
+                for q in liste:
+                    if q.path not in chemins: continue
+                    ks = q.curve.m_Curve; dim = 4 if genre == 'rot' else 3
+                    def vec(x): return ([x.x, x.y, x.z] + ([x.w] if dim == 4 else [])) if hasattr(x, 'x') else [float(x)]
+                    cb.append((chemins.index(q.path), genre, [k.time for k in ks], [vec(k.value) for k in ks], [vec(k.inSlope) for k in ks], [vec(k.outSlope) for k in ks]))
+            clips[c.m_Name] = {'dur': max([k[2][-1] for k in cb] or [0.0]), 'wrap': int(c.m_WrapMode), 'courbes': cb}
+        res = {'noms': noms, 'parent': parent, 'pos': pos, 'rot': rot, 'scl': scl, 'v': v, 'uv': uv, 'bi': bi, 'bw': bw, 'tri': tri, 'bind': bind, 'bones': bones,
+               'tex': tex[next(iter(cles))], 'clips': clips, 'shader': 'Custom/ImdChara'}
+        with open(f + '.tmp', 'wb') as fh: pickle.dump(res, fh, protocol=4)
+        os.replace(f + '.tmp', f)
+        return res
+
     # ---- feuille de sprites d'un personnage
     def feuille(self, ident):
         f = os.path.join(self.cache, 'sprite_h%d.npy' % ident)
@@ -325,6 +391,7 @@ class Donnees:
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
+        el.append(('fbx', '1018', 'fbx1_c1018.pkl'))                          # le dragon de l'ecran-titre (FbxObject c1018) ; les autres modeles 3D, s'il y en a, se lisent a la demande
         return el
 
     def _purger_anciens(self):
@@ -365,6 +432,7 @@ class Donnees:
                     if genre == 'carte': self.carte(n, True)
                     elif genre == 'feuille': self.feuille(int(n))
                     elif genre == 'plan_monde': self.plan_monde()
+                    elif genre == 'fbx': self.modele_fbx(int(n))
                     else: self.texture(n)
                 except Exception as ex:
                     echecs.add(n); self.log('Preparation : %s %s ignore (%s)' % (genre, n, str(ex)[:60]))
