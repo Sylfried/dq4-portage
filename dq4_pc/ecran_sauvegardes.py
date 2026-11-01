@@ -5,7 +5,6 @@ Le choix du fichier passe par la boite de dialogue de Windows (tkinter, dans un 
 import os
 import pyglet
 from pyglet import gl
-import hud_mobile as HM
 import sauvegardes as S
 
 CADRE = (-215.0, -215.0, 215.0, 215.0)                 # unites d'interface, origine au centre de la colonne de 450 x 800, Y vers le haut
@@ -155,7 +154,7 @@ class EcranSauvegardes:
         for i, lib in enumerate(BOUTONS):
             xc = (i * 2 - 1) * BTN_X; a, b = U(xc - BTN_L / 2, BTN_Y - BTN_H / 2); w, h = BTN_L * ech, BTN_H * ech
             sel = self.cur == i; sur = souris and self.survol == i; occupe = self.dialogue is not None
-            P._plaque(a, b, w, h, k, sur or (sel and not souris), JAUNE if sur else None)
+            P._plaque(a, b, w, h, k, sur or (sel and not souris))                    # (souris : la plaque sous le pointeur s'assombrit, sans encadre jaune)
             if sel and not souris: P._curseur(a - 24 * ech, b + h / 2, 28 * ech)
             P._melange(); texte(lib, xc, BTN_Y, 20, GRIS if occupe else BLANC)
             zones.append((a, b, a + w, b + h, i))
@@ -167,6 +166,5 @@ class EcranSauvegardes:
         a, b = U(CADRE[2] - RETOUR_L - 14, CADRE[1] + 12); w, h = RETOUR_L * ech, RETOUR_H * ech
         sur = souris and self.survol == I_RETOUR
         P._bouton_retour(a, b, w, h, sur or (self.cur == I_RETOUR and not souris))
-        if sur: HM.contour(a, b, w, h, k, JAUNE)
         if self.cur == I_RETOUR and not souris: P._curseur(a - 24 * ech, b + h / 2, 28 * ech)
         zones.append((a, b, a + w, b + h, I_RETOUR)); self.zones = zones
