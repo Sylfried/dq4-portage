@@ -243,6 +243,7 @@ class Jeu(pyglet.window.Window):
             except BaseException as ex: res['e'] = ex
         fil = threading.Thread(target=charger, daemon=True, name='moteur'); fil.start()
         self.ap_fich = AP.chemins(args.cache)
+        if len(self.ap_fich) < len(AP.RESSOURCES) and not args.sans_preparation: AP.preparer(args.apk, args.cache, log=lambda *a: print(*a, flush=True)); self.ap_fich = AP.chemins(args.cache)      # premiere fois : les images du titre sont extraites avant les logos (le moteur se charge pendant ce temps)
         logos = AP.Logos(self.ap_fich) if self.ap_fich and not args.sans_logos and (args.logos or (not args.shot and not args.slot)) else None
         if logos is not None and not logos.ok: logos = None
         t0 = time.perf_counter(); texte = None
@@ -262,7 +263,6 @@ class Jeu(pyglet.window.Window):
         fil.join()
         if 'e' in res: raise res['e']
         self.moteur = res['m']; self.moteur.duree_anim = self._duree_anim
-        if len(self.ap_fich) < len(AP.RESSOURCES): AP.preparer(args.apk, args.cache, log=lambda *a: print(*a, flush=True)); self.ap_fich = AP.chemins(args.cache)       # premiere fois : les images du titre sont extraites ici (les logos viendront au prochain lancement)
 
     def _attente(self, texte):
         """Ecran noir avec un message : la fenetre reste vivante pendant les chargements."""
