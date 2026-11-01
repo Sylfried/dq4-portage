@@ -26,21 +26,37 @@ ICONE_RETOUR = (352, 224, 384, 256)               # icone du bouton retour du je
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
-# noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable) dans l'editeur d'interface ; les autres gardent leur nom d'origine
-NOMS_FENETRES = {'YesNo': 'Oui / Non', 'Money': 'Argent', 'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Pageing': 'Pages',
-                 'MagicInfo': 'Infos des sorts', 'NameButton': 'Menu rapide', 'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'BCInfo': 'Infos du bonus', 'Chapter': 'Titre du chapitre',
-                 'Status': 'Statut du personnage', 'OperationItemList': "Actions sur les objets", 'Senreki': 'Journal de bord', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Bouton d'ordre de l'équipe",
-                 'MapButton': 'Bouton de la carte', 'ShopMap': 'Plan de la boutique', 'CityMap': 'Plan de la ville', 'WorldLargeMap': 'Grande carte du monde', 'Config': 'Options', 'MonsterEncyclopedia': 'Bestiaire',
-                 'BattleUpStatus': 'Combat : gains', 'BattleRoot': 'Combat : menu principal', 'BattleAction': 'Combat : actions', 'BattleTarget': 'Combat : cibles', 'BattleGo': 'Combat : en avant',
-                 'BattleIM': 'Combat : ordres', 'BattleInfo': "Combat : infos de l'équipe", 'BattleEnemyTarget': 'Combat : cible ennemie', 'BattlePartyTarget': 'Combat : cible alliée',
-                 'BattleChangeButton': 'Combat : changement', 'BattleChangeInfo': 'Combat : infos du changement', 'Casino_CoinShop': 'Casino : jetons', 'Casino_GiftList': 'Casino : cadeaux',
-                 'Casino_GiftTarget': 'Casino : destinataire', 'Casino_Slot': 'Casino : machine à sous', 'Casino_Poker': 'Casino : poker', 'Casino_FightStadiumBet': 'Casino : pari du stade',
-                 'Casino_FightStadiumSelect': 'Casino : choix du stade', 'Casino_FightStadiumCoin': 'Casino : jetons du stade', 'StartMenuFirst': 'Menu de démarrage', 'StartMenuSecond': 'Menu de démarrage (suite)',
-                 'StartMenuSelect': 'Menu de démarrage : choix', 'StartNameEntry': 'Saisie du nom', 'SaveOverwrite': 'Confirmation de sauvegarde', 'ShopRoot': 'Boutique : menu', 'ShopBuy': 'Boutique : achat',
-                 'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait',
-                 'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services', 'Chapter2Status': 'Chapitre 2 : statut', 'TorunekoMiseban': 'Boutique de Torneko', 'NENE_ItemView': "Aperçu d'objet",
-                 'FightStadiumAbort': 'Stade : abandon', 'ViewVolumeDecision': 'Volume : validation', 'PortalButton': 'Bouton du portail', 'NetworkRoot': 'Réseau : menu', 'NetworkCODE': 'Réseau : code', 'NetworkITEM': 'Réseau : objet'}
-SANS_EDITION = ('BattleHoppingNumber', 'MonsterName')   # (suivent les monstres a l'ecran : on ne les deplace pas)
+# editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
+# Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
+NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
+                 'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Money': 'Argent', 'Pageing': 'Flèches de page',
+                 'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'OperationItemList': 'Actions sur les objets',
+                 'Status': 'Statut du personnage', 'Chapter2Status': 'Chapitre 2 : statut', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Ordre de l'équipe : boutons",
+                 'NameButton': 'Divers : liste des boutons', 'BCInfo': 'Sauvegarde rapide', 'Senreki': 'Journal de bord', 'MonsterEncyclopedia': 'Bestiaire',
+                 'CityMap': 'Carte : plan (ville, monde)', 'WorldLargeMap': 'Carte : grande carte du monde', 'MapButton': 'Carte : boutons Mode et retour', 'ShopMap': 'Carte : liste des boutiques',
+                 'BattleUpStatus': "Combat : bandeau de l'équipe", 'BattleRoot': 'Combat : menu principal', 'BattleAction': 'Combat : actions', 'BattleTarget': 'Combat : cibles', 'BattleGo': 'Combat : en avant',
+                 'BattleIM': 'Combat : objets et sorts', 'BattleInfo': "Combat : infos de l'équipe", 'BattleEnemyTarget': 'Combat : cible ennemie', 'BattlePartyTarget': 'Combat : cible alliée',
+                 'BattleChangeButton': 'Combat : changement', 'BattleChangeInfo': 'Combat : infos du changement',
+                 'ShopRoot': 'Boutique : menu', 'ShopBuy': 'Boutique : achat', 'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente',
+                 'TorunekoMiseban': 'Boutique de Torneko', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait', 'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services',
+                 'Casino_CoinShop': 'Casino : jetons', 'Casino_GiftList': 'Casino : cadeaux', 'Casino_GiftTarget': 'Casino : destinataire', 'Casino_Slot': 'Casino : machine à sous', 'Casino_Poker': 'Casino : poker',
+                 'Casino_FightStadiumSelect': 'Casino : choix du stade', 'Casino_FightStadiumBet': 'Casino : pari du stade', 'Casino_FightStadiumCoin': 'Casino : jetons du stade', 'FightStadiumAbort': 'Casino : abandon du stade'}
+GROUPES_INTERFACE = (("Écran tactile", ('boutons',)),
+                     ("Dialogues", ('msg', 'YesNo', 'Chapter')),
+                     ("Menu en jeu", ('RootMenu', 'LeftCharaList', 'TargetCharaList', 'Money', 'Pageing')),
+                     ("Objets", ('ItemList', 'ItemInfo', 'OperationItemList')),
+                     ("Équipe et statut", ('Status', 'Chapter2Status', 'MemberShift', 'MemberShiftButton')),
+                     ("Divers", ('NameButton', 'BCInfo', 'Senreki', 'MonsterEncyclopedia')),
+                     ("Cartes", ('CityMap', 'WorldLargeMap', 'MapButton', 'ShopMap')),
+                     ("Combat", ('BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
+                     ("Boutiques et banque", ('ShopRoot', 'ShopBuy', 'ShopBuyInfo', 'ShopSellItemList', 'ShopSellItemInfo', 'TorunekoMiseban', 'BankDeposit', 'BankDraw')),
+                     ("Églises", ('ChurchRoot', 'ChurchWork')),
+                     ("Casino", ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
+ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
+SANS_EDITION = RG.FENETRES_RETIREES
+DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu (secondes) avant qu'il se deplace ; en dessous, c'est un appui court (replier / deplier)
+DELAI_DOUBLE_CLIC = float(os.environ.get('DQ_DOUBLE_CLIC', '0.40'))        # double clic sur la barre de titre : secondes entre la fin du premier appui et le debut du second
+TOLERANCE_APPUI = 8.0                                           # deplacement (pixels) qui annule un appui long en attente
 
 
 class Pause:
@@ -64,6 +80,8 @@ class Pause:
         self.action_etat = 'creer'; self.etat_suppr = None                                  # menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
         self.barre_liste = None; self.glisse_liste = None; self.liste_top = None; self.liste_cur_vu = None      # liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
         self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
+        self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
+        self.cadre_liste = None; self.pan_dim = None                                    # appui en cours sur la barre de titre {t0, x, y, dx, dy, long, annule, double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
 
     def _et(self, texte, taille, couleur=BLANC):
         """Etiquette en police du jeu (GMaruGoPro-M, cache/ui_font.otf, enregistree au premier appel) ; a defaut, les polices du systeme."""
@@ -144,7 +162,7 @@ class Pause:
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
-        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None
+        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None
         if page: self.pile = [page]; self.sel[page] = 2           # ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
         self.J.pause_jeu(True)
 
@@ -160,7 +178,7 @@ class Pause:
     def ecran(self): return self.pile[-1]
 
     def retour(self):
-        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None                # fin de l'edition de l'interface
+        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None; self.pan_appui = None                # fin de l'edition de l'interface
         if len(self.pile) > 1: self.pile.pop()
         else: self.fermer()
 
@@ -188,6 +206,7 @@ class Pause:
         sw = len(valeurs) == 2 and all(isinstance(v, bool) for v in valeurs)
         def pas(d):
             i = (valeurs.index(get()) + d) % len(valeurs) if get() in valeurs else 0
+            i = self._hors_entete(valeurs, i, d)
             set_(valeurs[i])
         def fixer(x):
             if get() != x: set_(x)
@@ -196,6 +215,19 @@ class Pause:
         return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw, note=note)
 
     def _valeurs(self, en): return en['vals']
+
+    @staticmethod
+    def _entete(v):
+        """Vrai si la valeur d'une liste deroulante est un intertitre de groupe (« #Dialogues »)."""
+        return isinstance(v, str) and v[:1] == ENTETE
+
+    def _hors_entete(self, vals, i, d):
+        """Indice de la premiere valeur qui n'est pas un intertitre, a partir de i dans le sens de d."""
+        n = len(vals)
+        for _ in range(n):
+            if not self._entete(vals[i]): break
+            i = (i + (1 if d >= 0 else -1)) % n
+        return i
 
     def _nom_valeur(self, label, v):
         if label == 'Interface à modifier': return self.nom_cible(v)
@@ -236,14 +268,18 @@ class Pause:
                 self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else ''),
                 dict(t='act', l='Interface', ok=self._aller('interface'), sous=True)]          # (editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
 
-    # ---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et toutes les fenetres du jeu (taille, position)
+    # ---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et fenetres du jeu (taille, position, affichage)
     def cibles(self):
-        """Elements modifiables : boutons de l'ecran, dialogues, puis chaque fenetre du jeu par son nom (les fenetres qui n'ont qu'un nom d'origine en dernier)."""
-        noms = self.J.noms_fenetres()
-        return ['boutons', 'msg'] + sorted((n for n in noms if n not in SANS_EDITION), key=lambda n: (n not in NOMS_FENETRES, NOMS_FENETRES.get(n, n).lower()))
+        """Valeurs de la liste « Interface a modifier » : les elements modifiables par groupe (GROUPES_INTERFACE), chaque groupe precede de son intertitre (« #Dialogues ») ; seules les fenetres du jeu qui ont une mise en page y figurent."""
+        noms = self.J.noms_fenetres(); out = []; vus = set()
+        for titre, ids in GROUPES_INTERFACE:
+            l = [i for i in ids if i in ('boutons', 'msg') or i in noms]; vus.update(ids)
+            if l: out += [ENTETE + titre] + l
+        reste = sorted((n for n in noms if n not in vus and n not in RG.FENETRES_RETIREES), key=lambda n: n.lower())
+        return out + ([ENTETE + 'Autres'] + reste if reste else [])
 
     def nom_cible(self, c):
-        return {'boutons': "Boutons et croix de l'écran", 'msg': 'Dialogues (messages)'}.get(c) or NOMS_FENETRES.get(c, c)
+        return c[len(ENTETE):] if self._entete(c) else NOMS_FENETRES.get(c, c)
 
     def _ov(self):
         """[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu)."""
@@ -260,10 +296,22 @@ class Pause:
         if v != self.cible and v == 'msg': self.J.nouvel_echantillon()
         self.cible = v
 
+    def _visible(self, c):
+        """L'interface c est-elle affichee a l'ecran ? Boutons et croix : reglage 'boutons' ; fenetre du jeu : absente de la liste des interfaces masquees. Chaque interface a son propre reglage."""
+        return bool(self.J.reg['boutons']) if c == 'boutons' else c not in self.J.reg['interface_masquees']
+
+    def _poser_visible(self, c, v):
+        R = self.J.reg
+        if c == 'boutons': R['boutons'] = v; return
+        l = [n for n in R['interface_masquees'] if n != c]
+        if not v: l.append(c)
+        R['interface_masquees'] = l
+
     def _e_interface(self):
-        R = self.J.reg; H = self.J.hud; c = self.cible
-        e = [self._choix("Afficher l'interface à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
-             self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible)]
+        """Page Interface : d'abord l'interface a modifier (liste par groupes), puis son affichage (propre a chaque interface), puis ses reglages."""
+        R = self.J.reg; c = self.cible
+        e = [self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible),
+             self._choix("Afficher cette interface à l'écran", [True, False], lambda: self._visible(self.cible), lambda v: self._poser_visible(self.cible, v))]
         if c == 'boutons':
             e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
             e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v)))
@@ -280,14 +328,16 @@ class Pause:
         return e
 
     def _rien_ov(self):
+        """Fenetre du jeu : taille et position d'origine, et de nouveau affichee (une fenetre masquee par erreur ne doit pas rester introuvable)."""
         d = dict(self.J.reg['interface_fenetres']); d.pop(self.cible, None); self.J.reg['interface_fenetres'] = d
+        self._poser_visible(self.cible, True)
 
     def _remettre_boutons(self):
-        """Boutons et croix de l'ecran : positions et tailles d'origine (l'affichage de la croix reste un choix du joueur)."""
+        """Boutons et croix de l'ecran : positions et tailles d'origine (leur affichage reste un choix du joueur)."""
         self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']; self.J.reg['croix_taille'] = RG.DEFAUT['croix_taille']
 
     def _tout_remettre(self):
-        self.J.reg['interface_fenetres'] = {}; self._remettre_boutons()
+        self.J.reg['interface_fenetres'] = {}; self.J.reg['interface_masquees'] = []; self._remettre_boutons()
 
     def _e_son(self):
         J, R = self.J, self.J.reg
@@ -425,7 +475,9 @@ class Pause:
         t = time.time(); self.rep = (symbol, t, t, sens, d); self.rep_pos = (self.ecran, self.sel.get(self.ecran, 0))
 
     def maj(self):
-        """Repetition des directions maintenues (appelee a chaque image)."""
+        """Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image)."""
+        a = self.pan_appui
+        if a is not None and not (a['long'] or a['annule'] or a['double']) and time.time() - a['t0'] >= DELAI_APPUI_LONG: a['long'] = True
         if not self.rep: return
         sym, t0, tl, sens, d = self.rep; t = time.time()
         if not self.J.touches[sym]: self.rep = None; return
@@ -444,12 +496,12 @@ class Pause:
         d, self.deroule = self.deroule, None
         if not valide or d is None: return
         e = self._entrees()
-        if d[0] < len(e) and e[d[0]]['t'] == 'choix': e[d[0]]['set'](e[d[0]]['vals'][d[1]])
+        if d[0] < len(e) and e[d[0]]['t'] == 'choix' and not self._entete(e[d[0]]['vals'][d[1]]): e[d[0]]['set'](e[d[0]]['vals'][d[1]])
 
     def _bouger_liste(self, d):
         e = self._entrees()
         if self.deroule[0] >= len(e) or e[self.deroule[0]]['t'] != 'choix': self.deroule = None; return
-        n = len(e[self.deroule[0]]['vals']); self.deroule[1] = (self.deroule[1] + d) % n
+        vals = e[self.deroule[0]]['vals']; n = len(vals); self.deroule[1] = self._hors_entete(vals, (self.deroule[1] + d) % n, d)          # (les intertitres de groupe sont sautes)
 
     def _touche_liste(self, symbol, act):
         K = pyglet.window.key
@@ -594,12 +646,14 @@ class Pause:
                     if x0 <= x <= x1 and y0 <= y <= y1: self._valider_popup(i == 0); return
             else: self.popup = None
             return
-        if self.ecran == 'interface' and self.zone_plier and self._dans(self.zone_plier, x, y) and bouton != M.RIGHT: self.plie = not self.plie; return
+        if self.ecran == 'interface' and self.zone_plier and self._dans(self.zone_plier, x, y) and bouton != M.RIGHT: self._appui_barre(x, y); return          # barre de titre du panneau : appui court = replier / deplier, appui long = deplacer, double clic = position d'origine
         if self.deroule is not None:                                  # liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
             b = self.barre_liste
             if bouton != M.RIGHT and b and b['x0'] <= x <= b['x1'] and b['y0'] <= y <= b['y1']: self._clic_barre_liste(x, y); return          # barre de defilement de la liste
             j = self._zone_liste(x, y) if bouton != M.RIGHT else None
+            c = self.cadre_liste
             if j is not None: self.deroule[1] = j; self._fin_liste(True)
+            elif bouton != M.RIGHT and c and c[0] <= x <= c[2] and c[1] <= y <= c[3]: pass          # (clic sur un intertitre ou la marge de la liste : elle reste ouverte)
             else: self.deroule = None
             return
         if bouton == M.RIGHT:
@@ -647,13 +701,33 @@ class Pause:
             return d + best
         return pas(r[0], r[2], W / float(HM.COLS), dx), pas(r[1], r[3], H / float(HM.LIGNES), dy)
 
+    def _appui_barre(self, x, y):
+        """Appui sur la barre de titre du panneau de l'editeur (le geste se joue au relachement et dans maj) : appui court (relache avant DELAI_APPUI_LONG, sans bouger) = replier / deplier ; appui long = le panneau
+        se deplace avec le pointeur (souris ou doigt) ; deuxieme appui court dans DELAI_DOUBLE_CLIC = retour a la position d'origine (les deux pliages s'annulent)."""
+        t = time.time(); c = self.cadre_panneau
+        if not c: return
+        if self.deroule is not None: self.deroule = None
+        if self.saisie is not None: self._fin_saisie(True)
+        if t - self.pan_clic_t < DELAI_DOUBLE_CLIC:
+            self.pan_pos = None; self.pan_clic_t = 0.0
+            self.pan_appui = dict(t0=t, x=x, y=y, dx=0.0, dy=0.0, long=False, annule=False, double=True)
+        else: self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, annule=False, double=False)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
+
     def relache(self, x, y, bouton):
         self.glisse = None; self.glisse_barre = None; self.glisse_liste = None
+        a, self.pan_appui = self.pan_appui, None
+        if a is not None and not (a['long'] or a['annule']):                      # appui court : replier / deplier (deuxieme appui d'un double clic : le pliage du premier est annule)
+            self.plie = not self.plie; self.pan_clic_t = 0.0 if a['double'] else time.time()
         if self.ecran == 'interface' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
         if self.drag is not None: self.drag = None; self.J.reg.enregistrer()
 
     def glisser(self, x, y):
         """Souris deplacee bouton enfonce : le curseur maintenu (ou celui de la barre de defilement) suit."""
+        a = self.pan_appui
+        if a is not None:                                                                    # panneau de l'editeur : il suit le pointeur seulement apres un appui long ; un mouvement avant annule l'appui (ni deplacement ni pliage)
+            if a['long']: self.pan_pos = (x - a['dx'], y - a['dy'])
+            elif not a['annule'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['annule'] = True
+            return
         if self.glisse_liste is not None: self._glisser_barre_liste(y); return
         if self.glisse_barre is not None: self._glisser_barre(y); return
         if self.glisse is None:
@@ -793,13 +867,43 @@ class Pause:
         if et.content_width > maxw > 0: et = self._et(texte, taille * maxw / et.content_width, couleur)
         return et
 
+    def _rects_montres(self):
+        """Rectangles (x0, y0, x1, y1) montres a l'ecran pour l'interface choisie : boutons et croix de l'ecran, ou la fenetre du jeu en apercu."""
+        if self.cible == 'boutons': return [(x, y, x + w, y + h) for x, y, w, h in (self.J.hud.rect(n) for n in HM.NOMS_ED)]
+        return [self.rect_apercu] if self.rect_apercu else []
+
+    def _coin_origine(self, pw, h, W, H, m):
+        """Position d'origine du panneau de l'editeur (coin haut droit) : en haut a droite (les boutons sont a gauche, la croix en bas a droite) ; si cela cache l'interface choisie, le premier des autres coins de l'ecran
+        (haut gauche, bas droite, bas gauche) qui ne la cache pas, sinon celui qui en cache le moins. Calculee sur la taille du panneau deplie (le panneau replie ne change pas de coin)."""
+        pw, h = self.pan_dim or (pw, h); cibles = self._rects_montres(); best = None
+        for x1, y1 in ((W - m, H - m), (pw + m, H - m), (W - m, h + m), (pw + m, h + m)):
+            r = (x1 - pw, y1 - h, x1, y1)
+            sc = sum(max(0.0, min(r[2], q[2]) - max(r[0], q[0])) * max(0.0, min(r[3], q[3]) - max(r[1], q[1])) for q in cibles)
+            if sc <= 0: return x1, y1
+            if best is None or sc < best[0]: best = (sc, x1, y1)
+        return best[1], best[2]
+
+    def _pos_panneau(self, pw, h, W, H, k):
+        """Coin haut gauche (x0, y1) du panneau de l'editeur d'interface : position du joueur (apres un appui long et un glissement, gardee le temps de la session) ou position d'origine (_coin_origine),
+        toujours ramenee dans l'ecran."""
+        x1, y1 = self.pan_pos if self.pan_pos is not None else self._coin_origine(pw, h, W, H, 22 * k)
+        x1 = min(max(x1, pw + 4 * k), W - 4 * k); y1 = min(max(y1, h + 4 * k), H - 4 * k)
+        return x1 - pw, y1
+
     def _apercu(self):
         """Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran."""
         J = self.J; self.rect_apercu = None
-        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS_ED, True, J.reg['grille_edition']); return              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
-        voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
-        if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
-        self.rect_apercu = J.apercu_interface(self.cible)                                                        # seule la fenetre choisie (ni les autres fenetres, ni les boutons)
+        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS_ED, True, J.reg['grille_edition'])              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
+        else:
+            voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
+            if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
+            self.rect_apercu = J.apercu_interface(self.cible)                                                    # seule la fenetre choisie (ni les autres fenetres, ni les boutons)
+        if not self._visible(self.cible):                                                                        # « Afficher cette interface a l'ecran » = Non : l'apercu reste visible pour la placer, mais assombri et marque
+            k = max(0.75, J.height / 900.0)
+            for x0, y0, x1, y1 in self._rects_montres():
+                v = pyglet.shapes.Rectangle(x0, y0, x1 - x0, y1 - y0, color=(0, 0, 0)); v.opacity = 150; v.draw()
+                et = self._ajuster('Masquée', 20 * k, ROUGE, max(x1 - x0, 90 * k)); et.x = (x0 + x1) / 2 - et.content_width / 2; et.y = (y0 + y1) / 2 - et.content_height / 2
+                pastille = pyglet.shapes.Rectangle(et.x - 8 * k, et.y - 4 * k, et.content_width + 16 * k, et.content_height + 8 * k, color=(0, 0, 0)); pastille.opacity = 200; pastille.draw(); et.draw()          # (sur un fond sombre : le texte du message d'essai passe dessous)
 
     def dessiner(self):
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)
@@ -846,13 +950,19 @@ class Pause:
         if ecr == 'etats': pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
-        if editeur:                                                                 # panneau toujours en haut a droite (les boutons sont a gauche, la croix en bas a droite ; replie : la barre de titre seule, pour voir tout l'ecran)
-            if self.plie: pw = max(300 * k, self._et(titres['interface'], fst).content_width + 130 * k)
-            x0 = W - pw - 22 * k; y1 = H - 22 * k; y0 = y1 - h
+        if editeur:                                                                 # replie : la barre de titre seule, pour voir tout l'ecran ; position : celle du joueur apres un deplacement, sinon celle d'origine (voir _pos_panneau)
+            if self.plie and self.pan_dim: pw = self.pan_dim[0]                       # replie : la barre de titre garde la largeur du panneau deplie (elle reste sous le pointeur : appui court puis double clic)
+            elif self.plie: pw = max(300 * k, self._et(titres['interface'], fst).content_width + 130 * k)
+            else: self.pan_dim = (pw, h)
+            x0, y1 = self._pos_panneau(pw, h, W, H, k); y0 = y1 - h
         self.cadre_panneau = (x0, y0, x0 + pw, y1) if editeur else None
         self.zone_plier = (x0, y1 - h_titre, x0 + pw, y1) if editeur else None
-        self._cadre(x0, y0, pw, h, k)
-        e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if editeur else 52) * k; e_t.draw()
+        a_pan = self.pan_appui if editeur else None; leve = bool(a_pan and a_pan['long'])          # appui sur la barre de titre : titre dore ; apres l'appui long, le panneau « se souleve » (cadre agrandi, contour dore)
+        if leve:
+            g = 7 * k; self._cadre(x0 - g, y0 - g, pw + 2 * g, h + 2 * g, k)
+            pyglet.shapes.Box(x0 - g, y0 - g, pw + 2 * g, h + 2 * g, thickness=max(2.0, 3 * k), color=OR[:3]).draw()
+        else: self._cadre(x0, y0, pw, h, k)
+        e_t = self._et(titres.get(ecr, ''), fst, OR if (a_pan and not a_pan['double']) else BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if editeur else 52) * k; e_t.draw()
         if editeur:                                                                 # plier / deplier le panneau : fleche dans la barre de titre (vers le haut = replier, vers le bas = deplier)
             fx, fy = e_t.x + e_t.content_width + 26 * k, y1 - 32 * k                  # (collee au titre : elle le suit quand le panneau change de largeur)
             sur = self.mode_souris and self.pos_souris and self._dans(self.zone_plier, *self.pos_souris)
@@ -867,7 +977,7 @@ class Pause:
                 elif i_sel >= deb + visibles: deb = i_sel - visibles + 1
             self.vu_sel[ecr] = i_sel
         debut = self.debut[ecr] = max(n_f, min(deb, max(n_f, n - visibles)))
-        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_eff = {}; self.zones_pop = []; lignes = {}; self.barre = None; self.barre_liste = None
+        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_eff = {}; self.zones_pop = []; lignes = {}; self.barre = None; self.barre_liste = None; self.cadre_liste = None
         xr = x0 + pw - rdr                                                        # bord droit du contenu des lignes
         cx2 = xr - 40 * k - LARG_CELLULE * k; cx1 = cx2 - ECART_CELLULES * k - LARG_CELLULE * k; self.zones_col = cx2 - ECART_CELLULES * k / 2
         plx = x0 + 42 * k; plw = pw - 84 * k                                      # boutons : meme marge a gauche et a droite
@@ -1003,10 +1113,11 @@ class Pause:
         if self.capture is not None: texte = "Appuie sur la touche pour « %s »   Échap : annuler   Suppr : effacer" % dict(RG.ACTIONS)[self.capture[0]]; ancre = i_sel
         elif self.saisie is not None: texte = 'Tape la valeur   Entrée : valider   Échap : annuler'; ancre = self.saisie[0]
         elif self.deroule is not None: self.tt = None; return
+        elif self.pan_appui is not None: self.tt = None; return                       # (pas d'infobulle pendant un appui sur la barre de titre)
         elif self.zone_plier and self.mode_souris and self.pos_souris and self._dans(self.zone_plier, *self.pos_souris):
             cle = ('plier', 0)
             if self.tt is None or self.tt[0] != cle: self.tt = (cle, time.time())
-            if time.time() - self.tt[1] > 0.4: texte = 'Replier / déplier le panneau (Tab)'
+            if time.time() - self.tt[1] > 0.4: texte = "Appui court : replier / déplier le panneau (Tab)   Appui long : le déplacer   Double clic : le remettre à sa place"
         elif self.mode_souris and self.pos_souris and self.capture is None:
             i, _ = self._zone(*self.pos_souris); cle = (self.ecran, i)
             if i is None or i >= n: self.tt = None; return
@@ -1058,16 +1169,19 @@ class Pause:
         if y0 < 8 * k: y1 = ytop + 4 * k; y0 = y1 - h
         if y0 < 8 * k: y0 = 8 * k; y1 = y0 + h
         x1 = xd; x0 = x1 - w
-        self._cadre(x0, y0, w, h, k)
+        self._cadre(x0, y0, w, h, k); self.cadre_liste = (x0, y0, x1, y1)
         if self.liste_top is None: self.liste_top = max(0, min(cur - nvis // 2, n - nvis)); self.liste_cur_vu = cur
         elif self.liste_cur_vu != cur:                                                         # la valeur surlignee a change : la vue la suit ; sinon seule la barre ou la molette la deplace
-            if cur < self.liste_top: self.liste_top = cur
+            if cur < self.liste_top or (cur - 1 < self.liste_top and cur > 0 and self._entete(vals[cur - 1])): self.liste_top = cur - 1 if cur > 0 and self._entete(vals[cur - 1]) else cur          # (le premier choix d'un groupe montre son intertitre)
             elif cur >= self.liste_top + nvis: self.liste_top = cur - nvis + 1
             self.liste_cur_vu = cur
         top = self.liste_top = max(0, min(self.liste_top, n - nvis))
         self.zones_pop = []; y = y1 - 10 * k
         for j in range(top, top + nvis):
             yb = y - ih; courant = vals[j] == en['get']()
+            if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en or, sans zone de clic
+                et = self._et(noms[j], fs * 0.92, OR); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
+                pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=(120, 110, 40)).draw(); y -= ih; continue
             if j == cur:
                 if self.mode_souris: self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True, JAUNE)
                 else: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)
