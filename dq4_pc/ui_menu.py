@@ -151,7 +151,7 @@ class Fenetre:
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
-        self.voile = None; self.symboles = []; self.t_blink = None      # carte du monde : texture du voile des blocs non explores, lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement
+        self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
 
     # ---- application des messages
     def _ib(self, p):
@@ -324,6 +324,14 @@ class Fenetre:
         zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
         return (min(zs), max(zs)) if zs else None
 
+    def etendue_x(self):
+        """(gauche, droite) en unites d'interface de toutes les parties de la fenetre (visibles ou non : la mise en page ne change pas), ou None : limites dans lesquelles un texte doit tenir. Mis en cache."""
+        c = getattr(self, '_ex_cache', None)
+        if c is None:
+            xs = [nd['pos'][0] + v[0] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
+            c = self._ex_cache = ((min(xs), max(xs)) if xs else None,)
+        return c[0]
+
     def visible(self, nid):
         while nid is not None:
             nd = self.N.get(nid)
@@ -418,7 +426,9 @@ class Rendu:
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self._blanc = None                                  # texture blanche de 1 pixel (carres de couleur unie : lieux de la carte du monde)
         self.tex = {}
+        from hd import _dilater
         for k, arr in feuilles.items():
+            arr = _dilater(arr, 3)                          # pixels transparents = couleur du bord voisin (alpha inchange) : les cases de ces feuilles gardent du blanc / rose sous leurs pixels transparents, que le filtrage lineaire ramenait en liseré clair (« aura ») autour des icones et des portraits
             h, w = arr.shape[:2]
             img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(arr[::-1]).tobytes(), pitch=w * 4)
             t = img.get_texture(); gl.glBindTexture(t.target, t.id)
@@ -502,19 +512,15 @@ class Rendu:
         vider()
 
     def _carte(self, fen, cx, cy, s, vp):
-        """Plan de la fenetre de carte (ICityMap) : texture de 256 x 192 affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
+        """Plan de la fenetre de carte (ICityMap) : texture 4:3 (plan agrandi, voile compris) affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
         x0, x1, y1, y0 = cx - 225.0 * s, cx + 225.0 * s, cy + 400.0 * s, cy + (400.0 - 337.5) * s
         u0, v0, u1, v1 = getattr(fen, 'carte_uv', None) or (0.0, 0.0, 1.0, 1.0)          # grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
         a = np.array([[x0, y0, u0, v0], [x1, y0, u1, v0], [x1, y1, u1, v1], [x0, y0, u0, v0], [x1, y1, u1, v1], [x0, y1, u0, v1]], np.float32)
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
-        t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 3
+        t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = getattr(fen, 'carte_mode', 3)         # plans agrandis (HD, voile compris) : filtrage lineaire ; grande carte du monde : bilineaire net
         vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog['mode'] = 0
-        if getattr(fen, 'voile', None) is not None:                                  # voile : silhouette grisee des terres sur les blocs non explores (meme cadre que le plan)
-            a = np.array([[x0, y0, 0.0, 0.0], [x1, y0, 1.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y0, 0.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y1, 0.0, 1.0]], np.float32)
-            vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
-            t = fen.voile; gl.glBindTexture(t.target, t.id); vl.draw(gl.GL_TRIANGLES); vl.delete()
         sy = getattr(fen, 'symboles', None)
         if sy:                                                                        # lieux decouverts (BlinkMapSymbol) : carres rouges de 4 unites dont la transparence va et vient (0,5 par seconde : 1 -> 0 -> 1 en 4 s)
             if self._blanc is None:
@@ -569,6 +575,11 @@ class Rendu:
         larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
         bl = max(larg) if larg else 0.0
         dispo = self._largeur_plaque(fen, nd, zp)
+        if dispo is None and bl > 0:                                     # hors plaque de bouton : le texte doit tenir dans la largeur de sa fenetre (a partir de son point d'ancrage, avec la meme marge)
+            ex = fen.etendue_x(); xa = nd['pos'][0]
+            if ex and ex[0] <= xa <= ex[1]:
+                dispo = {0: ex[1] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - ex[0] - self.MARGE_PLAQUE}[col]
+                if dispo < 0.4 * bl: dispo = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
         if dispo and bl > dispo:                                         # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
             f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):

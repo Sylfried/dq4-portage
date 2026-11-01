@@ -152,3 +152,43 @@ MODES = [('Originaux (pixels nets)', None, None),
          ('EPX x8', 'epx', agrandir_epx),
          ('Regions lissees', 'reg', agrandir_regions),
          ('Bicubique (doux)', 'bic', lambda c: agrandir_bicubique(c, FACTEUR))]
+
+
+# ---- plans des fenetres de carte (256 x 256 affiches en 4:3) ------------------------------------------------------
+
+def agrandir_plan(a, larg=1024, haut=768, epx=False):
+    """Plan de carte (RGBA 256 x 256, affiche en 4:3) agrandi en Lanczos puis legerement accentue : bien plus net qu'un simple filtrage lineaire de la carte graphique (alpha pre-multiplie).
+    `epx` (plan du monde, dont les terres sont en pixel art sur fond peint) : deux passes EPX arrondissent d'abord les contours des terres."""
+    from PIL import Image, ImageFilter
+    if epx:
+        for _ in range(2): a = _x2(a)
+        im = Image.fromarray(a).filter(ImageFilter.GaussianBlur(1.1))
+        r = np.array(im.resize((larg, haut), Image.LANCZOS))
+    else:
+        r = np.array(Image.fromarray(a).convert('RGBa').resize((larg, haut), Image.LANCZOS).convert('RGBA'))
+    rgb = np.array(Image.fromarray(r[..., :3]).filter(ImageFilter.UnsharpMask(radius=1.6, percent=45, threshold=2)))
+    r[..., :3] = rgb
+    return r
+
+
+def voiler_plan(plan, masque, cle, x0=48, y0=16, bloc=10, f=4):
+    """Pose sur le plan agrandi (1024 x 768) le voile des blocs non explores de la carte du monde. `masque` : silhouette grisee des terres (192 x 256 RGBA, alpha 255 sur la terre, 3 sur la mer),
+    `cle` : 16 entiers, bit leve = bloc de `bloc` x `bloc` pixels non explore (16 x 16 blocs a partir de (x0, y0) dans le plan de 256 x 192). Le jeu pose des blocs carres ; ici la silhouette (contour arrondi)
+    et la limite des blocs sont lissees apres agrandissement, ce qui evite l'effet d'escalier sans changer ce qui est cache."""
+    h, w = masque.shape[:2]
+    R = lambda n, s: _matrice_interp(n, f, s)
+    Ry, Rx = R(h, 4.5), R(w, 4.5)
+    terre = np.clip((masque[..., 3].astype(np.float32) - 3) / 252.0, 0, 1)
+    t_hd = Ry @ terre @ Rx.T
+    alpha_t = np.clip((t_hd - 0.36) * 3.0 + 0.5, 0, 1)          # seuil un peu sous 0,5 : le contour recouvre la frange verte du plan sous la silhouette
+    coul = np.stack([(Ry @ (masque[..., k].astype(np.float32) * terre) @ Rx.T) / np.maximum(t_hd, 1e-3) for k in range(3)], -1)
+    v = np.zeros((h, w), np.float32)
+    for r, m in enumerate(cle[:16]):
+        for c in range(16):
+            if m >> c & 1: v[y0 + bloc * r:y0 + bloc * (r + 1), x0 + bloc * c:x0 + bloc * (c + 1)] = 1.0
+    Ry2, Rx2 = R(h, 5.0), R(w, 5.0)
+    v_hd = np.clip((Ry2 @ v @ Rx2.T - 0.5) * 3.0 + 0.5, 0, 1)
+    a = (alpha_t * v_hd)[..., None]
+    out = plan.copy()
+    out[..., :3] = np.clip(plan[..., :3].astype(np.float32) * (1 - a) + coul * a + 0.5, 0, 255).astype(np.uint8)
+    return out
