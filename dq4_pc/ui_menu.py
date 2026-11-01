@@ -159,6 +159,10 @@ class Fenetre:
         if self.t.get('name', '').startswith('Make_StartMenuSecond'):     # menu de depart : « Sauv. cloud » (bouton 8) absent sur PC (le moteur n'envoie plus son texte, la plaque doit disparaitre aussi)
             for nd in self.N.values():
                 if nd['buttonId'] == 8: nd['act'] = False
+        if nom.startswith('Make_Chapter('):               # titre de chapitre : l'exporteur voit le quad de MenuParts.CreateFromTexture(« Menu/map/hyodai1 », bFitWidth = true, haspect = 1) avec son maillage par defaut (carre de 450) et sans texture (creee par le code)
+            for nd in self.N.values():                  # CreateFromTexture ajuste la largeur (450) et deduit la hauteur de la texture (256 x 128 : 225) : bandeau dore a fond bleu, centre
+                if nd['vtx'] and nd['mats'] and nd['mats'][0].get('sheet') is None:
+                    nd['vtx'] = [[-225.0, 112.5], [225.0, 112.5], [225.0, -112.5], [-225.0, -112.5]]; nd['mats'][0] = dict(nd['mats'][0], sheet='hyodai1', color=[1.0, 1.0, 1.0, 1.0])
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan

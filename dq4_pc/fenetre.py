@@ -228,6 +228,7 @@ class Jeu(pyglet.window.Window):
             from PIL import Image
             ml = UI.MiseEnPage(lay, os.path.join(a.cache, 'ui_frameData.bin'))
             feuilles = {0: np.array(Image.open(os.path.join(a.cache, 'ui_MenuTexture.png')).convert('RGBA')), 1: np.array(Image.open(os.path.join(a.cache, 'ui_Button.png')).convert('RGBA'))}
+            if 'hyodai1' in self.ap_fich: feuilles['hyodai1'] = np.array(Image.open(self.ap_fich['hyodai1']).convert('RGBA'))      # bandeau des titres de chapitre (type 12)
             self.ui_rendu = UI.Rendu(ml, feuilles, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Gestionnaire(ml); self.moteur.ui.obs = self.ui_g; self.ui_g.proj = self._ui_x_monstres; self.ui_g.rejouer(self.moteur.ui)
             if ml.message: self.ui_msg = UI.FenetreMessage(ml)
             print('Menus : mise en page d\'origine chargee (%d types%s).' % (len(ml.types), ', fenetre de message' if self.ui_msg else ''), flush=True)
@@ -1132,9 +1133,10 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         sp = pyglet.sprite.Sprite(t, x=0, y=0); sp.scale_x = self.width / t.width; sp.scale_y = self.height / t.height; sp.opacity = int(round(255 * min(1.0, v))); sp.draw()
 
-    def _dessiner_fondu(self):
-        """Plan de fondu d'ecran (Fade.FadePlane) : derriere l'interface (messages, menus), devant la scene."""
-        fd = self.moteur.etat.fondu
+    def _dessiner_fondu(self, fond=False):
+        """Plans de fondu d'ecran (Fade.FadePlane, bit 14 du paquet 9 = Fade.l_targetLayer) : `fond` = plan « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres et les messages) ;
+        sinon plan « FadeForMenu » (Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris)."""
+        e = self.moteur.etat; fd = e.fondu_fond if fond else e.fondu
         if fd['a'] <= 0.004: return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         r = pyglet.shapes.Rectangle(0, 0, self.width, self.height, color=tuple(int(round(255 * min(max(c, 0.0), 1.0))) for c in fd['col']))
@@ -1621,7 +1623,7 @@ class Jeu(pyglet.window.Window):
                 self._ui_etat = etat; print('UI image %d actif=%s : %s' % (self.n, actif, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in etat)), flush=True)
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
-            if mo.etat.partie == MO.PARTIE_COMBAT and float(mo.etat.fondu['a']) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
+            if mo.etat.partie == MO.PARTIE_COMBAT and max(float(mo.etat.fondu['a']), float(mo.etat.fondu_fond['a'])) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
             fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
             zl = [nd['pos'][2] - self.ui_g.ml.hdr['lang']['dy'] for fe in fens_v if fe.typ == 27 for nd in fe.N.values() if nd['text'] and nd['text'].get('text') and nd['pos'][0] > 0]          # reglage de vitesse / volume : etiquettes du haut et du bas (« Rapide » / « Lent »)
             param = len(zl) < 2 and any(fe.typ == 27 for fe in fens_v)          # liste des Parametres : la fenetre de titre (type 27) n'a pas d'etiquettes de reglage (« Rapide » / « Lent ») et la liste montre ses cinq boutons (« Taille de la croix » n'en a que trois)
@@ -2180,10 +2182,10 @@ class Jeu(pyglet.window.Window):
         if (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
             # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite)
             gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
-            gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu()
+            gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu(True)
             if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
                 self._maj_message(); self._dessiner_message(); self._dessiner_menus()
-            self._dessiner_aide(); return
+            self._dessiner_fondu(); self._dessiner_aide(); return
         if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -2282,8 +2284,8 @@ class Jeu(pyglet.window.Window):
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
-        self._dessiner_fondu(); self._dessiner_degats(e)
-        self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_titre(); self._dessiner_licence()
+        self._dessiner_fondu(True); self._dessiner_degats(e)
+        self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_fondu(); self._dessiner_titre(); self._dessiner_licence()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
         self._dessiner_aide()
