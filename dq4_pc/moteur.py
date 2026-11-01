@@ -240,6 +240,9 @@ class Interface:
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
+            if f.get('ferme'):                                  # MenuPortSystem.internalUpdate (D10A54) : [port, 2] detruit l'element (`s_ports[port] = null`), les messages du port recus ensuite (meme image : les ports 12 a 31 sont lus apres le port 0)
+                self.attente.pop(port, None)                    # n'ont plus de destinataire (`if (item != null) item.NoticeReceive`) ; avant, la fin de la liste des journaux (5, 6, 4) rouvrait la fenetre fermee une image : boite « simple » violette
+                continue
             if f['type'] == 43:                                 # Make_BattleHoppingNumber : [12, 0, 0] puis [monstre, hauteur, degats] (BattleMenu_setHoppingNumbers)
                 if f.get('dgt'):
                     f['dgt'] = False
