@@ -11,6 +11,7 @@ PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
+G_IS_AMAZON = 0x24f684                      # octet g_isAmazon du moteur : a 1, la case « Sauv. cloud » du menu de depart n'existe pas
 EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
 EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
 ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
@@ -205,6 +206,7 @@ class Interface:
         self.f = {}; self.attente = {}; self.ordre = 0
         self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page
         self.degats = []           # nombres de degats a faire sauter sur les monstres : (monstre, hauteur, degats), vides par la visionneuse
+        self.systeme = []          # messages du port 0 adresses a l'hote : (code, arguments...) ; 999 = quitter (MenuPortSendQuit), 6 = portail, 4 / 5 = volumes, 7 = taille du nom, 8 = manette
         self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
 
     def fen(self, port):
@@ -224,6 +226,7 @@ class Interface:
                     elif c == 3: self.msg['y'] = v
                 continue
             if port == 0:
+                if len(a) >= 2 and a[0] == 0: self.systeme.append(tuple(a[1:]))
                 if len(a) >= 2 and 2 <= a[0] < 32:
                     if a[1] == 3: self.fen(a[0])['sv'] = bool(a[2]) if len(a) > 2 else True       # [fenetre, 3, visible] : MenuPort.SetVisible
                     elif a[1] == 2:                                                                # [fenetre, 2] : fermee
@@ -231,7 +234,7 @@ class Interface:
                         if self.obs: self.obs.fermer(a[0])
                     elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
                         f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['dispo'] = None; f['listes'] = {}; f['suite'] = None
-                        f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}
+                        f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}; f['n_codes'] = {}
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
@@ -275,7 +278,7 @@ class Interface:
                 f.setdefault('ints', {})[(a[1], a[2])] = v                                   # gardes pour rejouer la fenetre (etats instantanes)
                 if self.obs: self.obs.param_int(port, a[1], a[2], v)
             elif cmd == 12 and len(a) >= 3:
-                f['indic'][a[1]] = a[2]
+                f['indic'][a[1]] = a[2]; f.setdefault('n_codes', {})[a[1]] = f.get('n_codes', {}).get(a[1], 0) + 1          # nombre de fois que chaque code est arrive (le titre : TapToStart.CountReset = code 0 du port 12)
                 if f['type'] == 25 and a[1] in (3, 5): f['suite'] = a[1]               # ICityMap : code 3 = lieux decouverts (x + 256 y, un par nombre), code 5 = voile (16 nombres : un bit par bloc de 10 x 10 pixels non explore)
                 if f['type'] == 31 and a[1] < 4 and a[2] >= 1:                                  # MonsterNamePlate.ReceiveParameters(code >= 1)
                     f.setdefault('plaq', {})[a[1]] = {'code': a[2]}; f['att'] = (a[1], 'nom')
@@ -312,6 +315,7 @@ class Moteur:
         NB = 0x40000
         c.inp, c.outp, c.outf, c.strb = c.malloc(NB), c.malloc(NB), c.malloc(NB), c.malloc(0x10000)
         c.call(self.E('GameInit'), c.inp, c.outp, c.outf, c.strb)
+        c.mem_w(self.L + G_IS_AMAZON, b'\x01')              # menu de depart : pas de « Sauv. cloud » (Google Play Games / serveur Square Enix absents sur PC) ; l'original retire la meme case pour la version Amazon
         self.pk = PacketLog(c)
         self.etat = Etat()
         self.msgs_ui = []                        # messages moteur -> interface (menus), derniere image
