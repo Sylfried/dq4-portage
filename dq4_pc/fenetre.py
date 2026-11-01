@@ -117,6 +117,7 @@ CAM_SAUT_VILLE = 1.5                                                         # u
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
+BUDGET_PAS_RAPIDES = float(os.environ.get('DQ_BUDGET_PAS', '0.030'))                                                   # duree maximale (s) des pas du moteur dans une meme image affichee quand la marche est acceleree (vitesse de marche x2 a x4, accelerateur) : au-dela, le jeu prend du retard au lieu de figer l'image
 
 CB_FOV_NOM, CB_NEAR, CB_FAR, CB_YOFFSET, CB_ECHELLE_DECOR = 48.0, 0.25, 500.0, 0.04, 6.0      # combat : Global.CameraInitParams[1] du Unity d'origine (champ de vision nominal ; Unity le multiplie par 4/3 et l'applique a l'horizontale d'une vue 4/3)
 _cb = [float(x) for x in os.environ.get('DQ_CB', '0,0').split(',')]
@@ -687,19 +688,16 @@ class Jeu(pyglet.window.Window):
         if cat in ('general', 'effets') and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
         elif cat in ('general', 'interface'): self.son.jouer_se(SE_BOUTON)
 
-    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Texte et defilement)
+    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Vitesse de defilement du texte)
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def defilement_actuel(self):
-        """(defilement automatique, vitesse 0 a 3) en vigueur : ceux du joueur s'ils sont imposes, sinon ceux du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
+        """Cran de « Messages en combat » en vigueur (RG.CRANS_DEFILEMENT : 0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) : celui du joueur s'il est impose, sinon celui du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
         R = self.reg
-        if R['defilement_force']: return R['defilement_auto'], R['defilement_vitesse']
-        code = self.moteur.options_jeu()[2]
-        return code < MO.COMBAT_MANUEL, (code if code < MO.COMBAT_MANUEL else R['defilement_vitesse'])
+        return R['defilement_combat'] if R['defilement_force'] else RG.cran_defilement(self.moteur.options_jeu()[2])
 
-    def regler_defilement(self, auto=None, vitesse=None):
-        a, v = self.defilement_actuel(); R = self.reg
-        R['defilement_auto'] = a if auto is None else bool(auto); R['defilement_vitesse'] = v if vitesse is None else int(vitesse); R['defilement_force'] = True
+    def regler_defilement(self, code):
+        R = self.reg; R['defilement_combat'] = RG.cran_defilement(code); R['defilement_force'] = True
         self.appliquer_defilement()
 
     def retablir_defilement(self):
@@ -707,12 +705,11 @@ class Jeu(pyglet.window.Window):
 
     def appliquer_defilement(self):
         R = self.reg
-        self.moteur.imposer_defilement((R['defilement_vitesse'] if R['defilement_auto'] else MO.COMBAT_MANUEL) if R['defilement_force'] else None)
+        self.moteur.imposer_defilement(R['defilement_combat'] if R['defilement_force'] else None)
 
     def _adopter_defilement(self, code):
         """Le joueur change la vitesse des messages dans la fenetre Parametres du jeu alors que le defilement est impose : ce nouveau choix remplace l'ancien."""
-        R = self.reg; R['defilement_auto'] = code < MO.COMBAT_MANUEL
-        if code < MO.COMBAT_MANUEL: R['defilement_vitesse'] = code
+        self.reg['defilement_combat'] = RG.cran_defilement(code)
         self.appliquer_defilement()
 
     def pause_jeu(self, oui):
@@ -1662,7 +1659,9 @@ class Jeu(pyglet.window.Window):
         nd = self.ui_g.f[port].N.get(nid) if self.ui_g and port in self.ui_g.f else None
         return bool(nd) and any(m.get('part') in (7, 10) for m in nd['mats'])
 
-    def on_mouse_leave(self, x, y): self.survol_nd = None
+    def on_mouse_leave(self, x, y):
+        self.survol_nd = None
+        if self.pause.ouvert: self.pause.sortie()                       # menu Echap : le pointeur a quitte la fenetre, plus rien n'est survole (les plaques se rallument)
 
     def _survol_pas(self):
         """Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis)."""
@@ -2104,10 +2103,11 @@ class Jeu(pyglet.window.Window):
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse()
         self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
-        n = 0; nmax = 3 * max(1, math.ceil(f))
+        n = 0; nmax = 3 * max(1, math.ceil(f)); coupe = False; t_pas = time.perf_counter()
         while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
             self._pas(); self.acc -= PAS_MOTEUR; n += 1
-        if n == nmax: self.acc = 0.0
+            if f > 1.0 and time.perf_counter() - t_pas > BUDGET_PAS_RAPIDES: coupe = True; break      # marche x3, x4 (jusqu'a x8 avec l'accelerateur) : si les pas du moteur ne tiennent pas dans le budget de l'image, le jeu ralentit un peu plutot que de bloquer l'affichage
+        if n == nmax or coupe: self.acc = 0.0
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):

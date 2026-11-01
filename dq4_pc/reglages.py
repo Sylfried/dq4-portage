@@ -38,13 +38,13 @@ DEFAUT = {
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
     'defilement_force': False,    # combats : impose le defilement ci-dessous (non : celui de la sauvegarde, regle dans la fenetre Parametres du jeu)
-    'defilement_auto': True, 'defilement_vitesse': 2,       # combats : defilement automatique des messages (non : on passe chaque message a la main) ; vitesse 0 (la plus rapide) a 3 (la plus lente) = attente de 12 / 22 / 32 / 42 images
+    'defilement_combat': 2,       # combats, « Messages en combat » : OptionStatus.battleSpeed impose si 'defilement_force' ; 0 Rapide (attente de 12 images), 2 Moyen (32 images, la valeur d'origine du jeu), 3 Lent (42 images), 4 Manuel (touche) ; voir CRANS_DEFILEMENT
     'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
-    'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche (0,5 a 2)
-    'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage (0,5 a 2)
-    'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (1 = comme le jeu ; 0,5 a 2)
+    'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
+    'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
+    'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu ; x1 a x4)
     'vitesse_accel': 1.5,         # vitesse de l'accelerateur (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course »)
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
@@ -85,11 +85,32 @@ def mode_sprites_valide(v):
     return v if v in MODES_SPRITES else DEFAUT['mode_sprites']
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_fondu': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
-BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0), 'defilement_vitesse': (0, 3)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force', 'defilement_auto')
+BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force')
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
+VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
+VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
+# « Messages en combat » : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message suivant, 4 = pas
+# d'avance automatique (touche). Le jeu d'origine propose ces cinq crans (« Vitesse texte » 1 a 5) ; la page en garde quatre : Rapide (0), Moyen (2 : la valeur d'origine), Lent (3), Manuel (4). Le cran 1 (22 images) n'a pas de nom : il
+# s'affiche comme Moyen (le plus proche en rapport de durees : 22 / 12 = 1,8 contre 32 / 22 = 1,45), et reste tel quel dans la sauvegarde tant qu'on ne touche pas au reglage.
+CRANS_DEFILEMENT = (0, 2, 3, 4)
+COMBAT_MANUEL = 4
+
+
+def cran_defilement(code):
+    """Valeur de OptionStatus.battleSpeed (0 a 4) -> le cran de CRANS_DEFILEMENT qui la represente (1 -> 2) ; toute autre valeur -> celle d'origine."""
+    try: code = int(code)
+    except (TypeError, ValueError): return DEFAUT['defilement_combat']
+    if code == 1: return 2
+    return code if code in CRANS_DEFILEMENT else DEFAUT['defilement_combat']
+
+
+def cran_x(v, defaut=1.0):
+    """Vitesse lue (ancien curseur de 0,5 a 2 ou valeur absurde) -> le cran x1 a x4 le plus proche (a egalite le plus rapide), jamais moins que x1."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)): return defaut
+    return float(min(VITESSES_X[-1], max(VITESSES_X[0], int(v + 0.5))))
 
 
 def nom_touche(nom):
@@ -122,6 +143,9 @@ class Reglages:
                         if isinstance(l, list) and any(l): d['touches']['accel'] = l; break
                     else:
                         if isinstance(d['touches'].get('courir'), list): d['touches']['accel'] = [None, None]        # le joueur avait vide ces touches : l'accelerateur n'a pas de touche
+                if 'defilement_combat' not in d and ('defilement_auto' in d or 'defilement_vitesse' in d):         # anciens reglages « Defilement automatique » (oui / non) + « Vitesse de defilement » (0 a 3) -> un seul reglage « Messages en combat »
+                    vit = d.get('defilement_vitesse'); vit = 2 if isinstance(vit, bool) or not isinstance(vit, (int, float)) else min(3, max(0, int(round(vit))))
+                    d['defilement_combat'] = COMBAT_MANUEL if d.get('defilement_auto') is False else cran_defilement(vit)
                 v_enreg = d.get('touches_v')
                 for k, x in d.items():
                     if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
@@ -146,7 +170,8 @@ class Reglages:
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
                 for k in BOOLEENS_SON_TEXTE:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
-                self.v['defilement_vitesse'] = int(round(self.v['defilement_vitesse']))
+                self.v['defilement_combat'] = cran_defilement(self.v['defilement_combat']) if isinstance(self.v['defilement_combat'], int) and not isinstance(self.v['defilement_combat'], bool) else DEFAUT['defilement_combat']
+                for k in VITESSES_X_CLES: self.v[k] = cran_x(self.v[k], DEFAUT[k])                       # ancien curseur (0,5 a 2) -> x1 a x4
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []

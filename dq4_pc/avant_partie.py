@@ -249,7 +249,7 @@ class Licence:
             P._plaque(bx0 - 1, hau, bw + 2, th, k * 0.6, self.glisse is not None); self.geom = (by0, bh, th)
         self.zone_barre = (bx0 - 4, by0, bx0 + bw + 4, by0 + bh)
         px0, py0 = U(LI_POLITIQUE[0], LI_POLITIQUE[1]); px1, py1 = U(LI_POLITIQUE[2], LI_POLITIQUE[3])
-        P._plaque(px0, py0, px1 - px0, py1 - py0, k, False, (255, 235, 4) if self.survol == 'politique' else None); P._melange()
+        P._plaque(px0, py0, px1 - px0, py1 - py0, k, self.survol == 'politique'); P._melange()          # (survol : plaque assombrie, sans encadre jaune)
         e2 = P._et('Privacy Policy', 16 * ech * 0.75); e2.x = (px0 + px1) / 2 - e2.content_width / 2; e2.y = (py0 + py1) / 2 - 5 * ech; e2.draw()
         rx0, ry0 = U(LI_RETOUR[0], LI_RETOUR[1]); rx1, ry1 = U(LI_RETOUR[2], LI_RETOUR[3])
         P._bouton_retour(rx0, ry0, rx1 - rx0, ry1 - ry0, self.survol == 'retour')
