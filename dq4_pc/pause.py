@@ -54,9 +54,11 @@ GROUPES_INTERFACE = (("Écran tactile", ('boutons',)),
                      ("Casino", ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
 ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
 SANS_EDITION = RG.FENETRES_RETIREES
-DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu (secondes) avant qu'il se deplace ; en dessous, c'est un appui court (replier / deplier)
+DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu sans bouger (secondes) avant qu'il se souleve ; en dessous, sans bouger, c'est un appui court (replier / deplier)
 DELAI_DOUBLE_CLIC = float(os.environ.get('DQ_DOUBLE_CLIC', '0.40'))        # double clic sur la barre de titre : secondes entre la fin du premier appui et le debut du second
-TOLERANCE_APPUI = 8.0                                           # deplacement (pixels) qui annule un appui long en attente
+TOLERANCE_APPUI = 8.0                                           # deplacement (pixels) du pointeur, depuis le point d'appui sur la barre de titre du panneau, a partir duquel le panneau se deplace (en dessous : appui court)
+CADRE_SELECTION = (255, 235, 130)                               # cadre jaune de l'element choisi dans l'apercu de l'editeur (le meme que celui des boutons de l'ecran : hud_mobile.py)
+MOTS_MASQUE = ('Masquée', 'Masqué')                             # etiquette d'un element masque dans l'apercu de l'editeur : feminin (fenetre, croix), masculin (boutons)
 
 
 class Pause:
@@ -81,7 +83,7 @@ class Pause:
         self.barre_liste = None; self.glisse_liste = None; self.liste_top = None; self.liste_cur_vu = None      # liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
         self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
         self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
-        self.cadre_liste = None; self.pan_dim = None                                    # appui en cours sur la barre de titre {t0, x, y, dx, dy, long, annule, double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
+        self.cadre_liste = None; self.pan_dim = None                                    # appui en cours sur la barre de titre {t0, x, y, dx, dy, long (souleve : suit le pointeur), double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
 
     def _et(self, texte, taille, couleur=BLANC):
         """Etiquette en police du jeu (GMaruGoPro-M, cache/ui_font.otf, enregistree au premier appel) ; a defaut, les polices du systeme."""
@@ -290,11 +292,11 @@ class Pause:
 
     def _ov(self):
         """[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu)."""
-        return self.J.reg['interface_fenetres'].get(self.cible) or [1.0, 0.0, 0.0]
+        return self.J.reg['interface_fenetres'].get(self.cible) or list(RG.FENETRE_DEFAUT)
 
     def _poser_ov(self, i, v):
         d = dict(self.J.reg['interface_fenetres']); o = list(self._ov()); o[i] = v
-        if abs(o[0] - 1.0) < 1e-6 and abs(o[1]) < 1e-6 and abs(o[2]) < 1e-6: d.pop(self.cible, None)
+        if all(abs(a - b) < 1e-6 for a, b in zip(o, RG.FENETRE_DEFAUT)): d.pop(self.cible, None)
         else: d[self.cible] = [round(o[0], 4), round(o[1], 4), round(o[2], 4)]
         self.J.reg['interface_fenetres'] = d
 
@@ -305,11 +307,11 @@ class Pause:
 
     def _visible(self, c):
         """L'interface c est-elle affichee a l'ecran ? Boutons et croix : reglage 'boutons' ; fenetre du jeu : absente de la liste des interfaces masquees. Chaque interface a son propre reglage."""
-        return bool(self.J.reg['boutons']) if c == 'boutons' else c not in self.J.reg['interface_masquees']
+        return bool(self.J.reg['boutons']) if c == RG.CIBLE_ECRAN else c not in self.J.reg['interface_masquees']
 
     def _poser_visible(self, c, v):
         R = self.J.reg
-        if c == 'boutons': R['boutons'] = v; return
+        if c == RG.CIBLE_ECRAN: R['boutons'] = v; return
         l = [n for n in R['interface_masquees'] if n != c]
         if not v: l.append(c)
         R['interface_masquees'] = l
@@ -319,32 +321,31 @@ class Pause:
         R = self.J.reg; c = self.cible
         e = [self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible),
              self._choix("Afficher cette interface à l'écran", [True, False], lambda: self._visible(self.cible), lambda v: self._poser_visible(self.cible, v))]
-        if c == 'boutons':
+        if c == RG.CIBLE_ECRAN:
             e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
             e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v)))
             e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
         else:
-            e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=1.0),
-                  self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0),
-                  self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0)]
+            e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[0]),
+                  self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[1]),
+                  self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[2])]
         e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),            # (pour toutes les interfaces)
-              self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v)),
-              dict(t='act', l='Rétablir cette interface', ok=self._remettre_boutons if c == 'boutons' else self._rien_ov)]            # (meme reinitialisation complete pour tous les types : tailles et positions)
-        e.append(dict(t='act', l='Rétablir toutes les interfaces', ok=self._tout_remettre))
-        e.append(dict(t='act', l='Terminer', ok=self.retour))
+              self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v))]
+        cette = dict(t='act', l='Rétablir cette interface', ok=self._remettre_cette)
+        cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu ne changent pas" if c == RG.CIBLE_ECRAN
+                         else "Remet cette fenêtre comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas")
+        toutes = dict(t='act', l='Rétablir toutes les interfaces', ok=self._tout_remettre, aide="Remet toutes les interfaces comme dans le jeu, ainsi que la grille, l'aimantation et la place de ce panneau")
+        e += [cette, toutes, dict(t='act', l='Terminer', ok=self.retour)]
         return e
 
-    def _rien_ov(self):
-        """Fenetre du jeu : taille et position d'origine, et de nouveau affichee (une fenetre masquee par erreur ne doit pas rester introuvable)."""
-        d = dict(self.J.reg['interface_fenetres']); d.pop(self.cible, None); self.J.reg['interface_fenetres'] = d
-        self._poser_visible(self.cible, True)
-
-    def _remettre_boutons(self):
-        """Boutons et croix de l'ecran : positions et tailles d'origine (leur affichage reste un choix du joueur)."""
-        self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']; self.J.reg['croix_taille'] = RG.DEFAUT['croix_taille']
+    def _remettre_cette(self):
+        """« Rétablir cette interface » : l'interface choisie revient entièrement à son état d'origine (RG.Reglages.remettre_interface : position, taille, affichage et toutes ses options, et elle seule).
+        Rien d'autre à faire : l'aperçu et le jeu relisent les réglages à chaque image."""
+        self.J.reg.remettre_interface(self.cible)
 
     def _tout_remettre(self):
-        self.J.reg['interface_fenetres'] = {}; self.J.reg['interface_masquees'] = []; self._remettre_boutons()
+        """« Rétablir toutes les interfaces » : toutes les interfaces et les options de l'éditeur (grille, aimantation) à leur défaut (RG.Reglages.remettre_interfaces), et le panneau reprend sa place d'origine."""
+        self.J.reg.remettre_interfaces(); self.pan_pos = None
 
     def _poser_son(self, cle, cat=None):
         """Reglage de son (interrupteur ou volume) : enregistre la valeur, l'applique tout de suite aux sons en cours, et pour un volume fait entendre un bruitage d'essai (la musique, elle, joue pendant la page)."""
@@ -532,7 +533,7 @@ class Pause:
         if ecoute != S.ecoute: S.ecouter(ecoute)
         if ecoute: S.tick()
         a = self.pan_appui
-        if a is not None and not (a['long'] or a['annule'] or a['double']) and time.time() - a['t0'] >= DELAI_APPUI_LONG: a['long'] = True
+        if a is not None and not (a['long'] or a['double']) and time.time() - a['t0'] >= DELAI_APPUI_LONG: a['long'] = True          # appui maintenu sans bouger : le panneau se soulève (il suivra le pointeur au premier mouvement)
         if not self.rep: return
         sym, t0, tl, sens, d = self.rep; t = time.time()
         if not self.J.touches[sym]: self.rep = None; return
@@ -757,21 +758,20 @@ class Pause:
         return pas(r[0], r[2], W / float(HM.COLS), dx), pas(r[1], r[3], H / float(HM.LIGNES), dy)
 
     def _appui_barre(self, x, y):
-        """Appui sur la barre de titre du panneau de l'editeur (le geste se joue au relachement et dans maj) : appui court (relache avant DELAI_APPUI_LONG, sans bouger) = replier / deplier ; appui long = le panneau
-        se deplace avec le pointeur (souris ou doigt) ; deuxieme appui court dans DELAI_DOUBLE_CLIC = retour a la position d'origine (les deux pliages s'annulent)."""
+        """Appui sur la barre de titre du panneau de l'editeur (le geste se joue dans glisser, maj et relache) : le panneau suit le pointeur des que celui-ci s'eloigne de plus de TOLERANCE_APPUI du point d'appui (glisser
+        tout de suite, sans attendre) ou apres un appui maintenu DELAI_APPUI_LONG (il se souleve) ; appui court sans bouger = replier / deplier ; deuxieme appui court dans DELAI_DOUBLE_CLIC = retour a la position
+        d'origine (les deux pliages s'annulent)."""
         t = time.time(); c = self.cadre_panneau
         if not c: return
         if self.deroule is not None: self.deroule = None
         if self.saisie is not None: self._fin_saisie(True)
-        if t - self.pan_clic_t < DELAI_DOUBLE_CLIC:
-            self.pan_pos = None; self.pan_clic_t = 0.0
-            self.pan_appui = dict(t0=t, x=x, y=y, dx=0.0, dy=0.0, long=False, annule=False, double=True)
-        else: self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, annule=False, double=False)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
+        self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, double=t - self.pan_clic_t < DELAI_DOUBLE_CLIC)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
 
     def relache(self, x, y, bouton):
         self.glisse = None; self.glisse_barre = None; self.glisse_liste = None
         a, self.pan_appui = self.pan_appui, None
-        if a is not None and not (a['long'] or a['annule']):                      # appui court : replier / deplier (deuxieme appui d'un double clic : le pliage du premier est annule)
+        if a is not None and not a['long']:                                       # appui court (sans mouvement) : replier / deplier ; deuxieme appui d'un double clic : position d'origine, le pliage du premier est annule
+            if a['double']: self.pan_pos = None
             self.plie = not self.plie; self.pan_clic_t = 0.0 if a['double'] else time.time()
         if self.ecran == 'interface' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
         if self.drag is not None: self.drag = None; self.J.reg.enregistrer()
@@ -779,9 +779,9 @@ class Pause:
     def glisser(self, x, y):
         """Souris deplacee bouton enfonce : le curseur maintenu (ou celui de la barre de defilement) suit."""
         a = self.pan_appui
-        if a is not None:                                                                    # panneau de l'editeur : il suit le pointeur seulement apres un appui long ; un mouvement avant annule l'appui (ni deplacement ni pliage)
+        if a is not None:                                                                    # panneau de l'editeur : il suit le pointeur des que celui-ci a quitte le point d'appui (le panneau se souleve, ni pliage ni double clic), ou apres un appui maintenu
+            if not a['long'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['long'] = True; a['double'] = False
             if a['long']: self.pan_pos = (x - a['dx'], y - a['dy'])
-            elif not a['annule'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['annule'] = True
             return
         if self.glisse_liste is not None: self._glisser_barre_liste(y); return
         if self.glisse_barre is not None: self._glisser_barre(y); return
@@ -922,10 +922,21 @@ class Pause:
         if et.content_width > maxw > 0: et = self._et(texte, taille * maxw / et.content_width, couleur)
         return et
 
+    def _elements_apercu(self):
+        """Elements montres a l'ecran pour l'interface choisie (boutons et croix de l'ecran, ou la fenetre du jeu en apercu) : [(x0, y0, x1, y1, masque, masculin)].
+        `masque` : l'element n'est pas dessine en jeu : toute l'interface masquee (« Afficher cette interface a l'ecran » = Non : boutons, croix, fenetre) ou, pour la croix seule, « Afficher la croix » = Non.
+        `masculin` : accord de l'etiquette « Masquée » (boutons : « Masqué »)."""
+        R = self.J.reg
+        if self.cible == RG.CIBLE_ECRAN:
+            tout = not R['boutons']; out = []
+            for n in HM.NOMS_ED:
+                x, y, w, h = self.J.hud.rect(n); out.append((x, y, x + w, y + h, tout or (n == HM.CROIX and not R['croix']), n != HM.CROIX))
+            return out
+        return [tuple(self.rect_apercu) + (not self._visible(self.cible), False)] if self.rect_apercu else []
+
     def _rects_montres(self):
-        """Rectangles (x0, y0, x1, y1) montres a l'ecran pour l'interface choisie : boutons et croix de l'ecran, ou la fenetre du jeu en apercu."""
-        if self.cible == 'boutons': return [(x, y, x + w, y + h) for x, y, w, h in (self.J.hud.rect(n) for n in HM.NOMS_ED)]
-        return [self.rect_apercu] if self.rect_apercu else []
+        """Rectangles (x0, y0, x1, y1) montres a l'ecran pour l'interface choisie (voir _elements_apercu)."""
+        return [e[:4] for e in self._elements_apercu()]
 
     def _coin_origine(self, pw, h, W, H, m):
         """Position d'origine du panneau de l'editeur (coin haut droit) : en haut a droite (les boutons sont a gauche, la croix en bas a droite) ; si cela cache l'interface choisie, le premier des autres coins de l'ecran
@@ -953,12 +964,13 @@ class Pause:
             voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
             if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
             self.rect_apercu = J.apercu_interface(self.cible)                                                    # seule la fenetre choisie (ni les autres fenetres, ni les boutons)
-        if not self._visible(self.cible):                                                                        # « Afficher cette interface a l'ecran » = Non : l'apercu reste visible pour la placer, mais assombri et marque
-            k = max(0.75, J.height / 900.0)
-            for x0, y0, x1, y1 in self._rects_montres():
-                v = pyglet.shapes.Rectangle(x0, y0, x1 - x0, y1 - y0, color=(0, 0, 0)); v.opacity = 150; v.draw()
-                et = self._ajuster('Masquée', 20 * k, ROUGE, max(x1 - x0, 90 * k)); et.x = (x0 + x1) / 2 - et.content_width / 2; et.y = (y0 + y1) / 2 - et.content_height / 2
-                pastille = pyglet.shapes.Rectangle(et.x - 8 * k, et.y - 4 * k, et.content_width + 16 * k, et.content_height + 8 * k, color=(0, 0, 0)); pastille.opacity = 200; pastille.draw(); et.draw()          # (sur un fond sombre : le texte du message d'essai passe dessous)
+        k = max(0.75, J.height / 900.0)
+        for x0, y0, x1, y1, masque, masculin in self._elements_apercu():                                           # element non affiche en jeu (toute l'interface, ou la croix seule) : l'apercu reste visible pour le placer, mais assombri et marque
+            if not masque: continue
+            v = pyglet.shapes.Rectangle(x0, y0, x1 - x0, y1 - y0, color=(0, 0, 0)); v.opacity = 150; v.draw()
+            et = self._ajuster(MOTS_MASQUE[masculin], 20 * k, ROUGE, max(x1 - x0 - 18 * k, 36 * k)); et.x = (x0 + x1) / 2 - et.content_width / 2; et.y = (y0 + y1) / 2 - et.content_height / 2
+            pastille = pyglet.shapes.Rectangle(et.x - 8 * k, et.y - 4 * k, et.content_width + 16 * k, et.content_height + 8 * k, color=(0, 0, 0)); pastille.opacity = 200; pastille.draw(); et.draw()          # (sur un fond sombre : le texte du message d'essai passe dessous)
+            pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=CADRE_SELECTION).draw()                  # le cadre jaune de selection reste aussi net que sur un element affiche (le voile le couvrait)
 
     def dessiner(self):
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)

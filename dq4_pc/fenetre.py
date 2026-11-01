@@ -1496,7 +1496,7 @@ class Jeu(pyglet.window.Window):
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
         k, gr, modes = self._ui_echelle([(e[0] + dz, e[1] + dz)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'
-        v = self.reg['interface_fenetres'].get(cle) or [1.0, 0.0, 0.0]
+        v = self.reg['interface_fenetres'].get(cle) or RG.FENETRE_DEFAUT
         cx, cy, s2 = self._ui_perso(mode, s, v)
         fe.sel = None; fe.sel_nd = None; fe.appui_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
@@ -1511,10 +1511,10 @@ class Jeu(pyglet.window.Window):
         dzm = MSG_BAS - fm.bas(); D = dzm + (em[1] + OUINON_ECART - e[0])
         k, gr, modes = self._ui_echelle([(em[0] + dzm, em[1] + dzm), (e[0] + D, e[1] + D)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'; ov = self.reg['interface_fenetres']
-        cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or [1.0, 0.0, 0.0])
+        cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or RG.FENETRE_DEFAUT)
         fm.sel = None; fm.sel_nd = None; fe.sel = None; fe.sel_nd = None
         self.ui_rendu.dessiner([fm], cxm, cym + dzm * sm, sm, (self.width, self.height))
-        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or [1.0, 0.0, 0.0])
+        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or RG.FENETRE_DEFAUT)
         self.ui_rendu.dessiner([fe], cx, cy, s2, (self.width, self.height))
         x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + e[0] * s2, cy + e[1] * s2
         pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()

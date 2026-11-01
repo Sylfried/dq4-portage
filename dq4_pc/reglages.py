@@ -64,6 +64,15 @@ DEFAUT = {
 FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'StartNameEntry', 'SaveOverwrite', 'TitleTouch', 'PortalButton', 'NetworkRoot', 'NetworkPLST', 'NetworkCODE', 'NetworkITEM',
                      'ViewVolumeDecision', 'License', 'MagicInfo', 'Config', 'NENE_ItemView', 'MonsterName', 'BattleHoppingNumber')
 
+# Editeur d'interface (pause.py : Affichage > Interface) : classement des reglages et remises a zero. Toute cle de DEFAUT qui touche l'interface doit figurer dans l'un de ces trois groupes
+# (outils/test_reglages_interface.py le verifie : une cle ajoutee sans classement fait echouer le test).
+CIBLE_ECRAN = 'boutons'                                    # « Boutons et croix de l'ecran » : l'une des interfaces de l'editeur (les autres : 'msg' et les fenetres du jeu, par leur nom Make_*)
+CLES_ECRAN = ('boutons', 'croix', 'croix_taille', 'boutons_taille', 'boutons_pos')      # reglages de CIBLE_ECRAN : affichage des boutons et de la croix, tailles, positions
+CLES_FENETRES = ('interface_fenetres', 'interface_masquees')                       # reglages par fenetre du jeu (ou 'msg') : taille et position, affichage
+CLES_EDITEUR = ('grille_edition', 'boutons_aimant')                                # options de l'editeur lui-meme, communes a toutes les interfaces : grille affichee, aimantation
+CLES_INTERFACE = CLES_ECRAN + CLES_FENETRES + CLES_EDITEUR
+FENETRE_DEFAUT = (1.0, 0.0, 0.0)                           # fenetre du jeu sans reglage enregistre : taille relative, decalage x, decalage y (fractions de l'ecran)
+
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -151,6 +160,30 @@ class Reglages:
 
     def __setitem__(self, k, x):
         self.v[k] = x; self.codes_cache = {}
+
+    # ---- editeur d'interface : remises a zero (toujours a partir de DEFAUT, jamais de valeurs recopiees)
+    @staticmethod
+    def defaut(cle):
+        """Copie (modifiable) de la valeur par defaut d'un reglage."""
+        return json.loads(json.dumps(DEFAUT[cle]))
+
+    def remettre_interface(self, cible):
+        """« Retablir cette interface » : l'interface `cible` de l'editeur (CIBLE_ECRAN, 'msg' ou nom Make_* d'une fenetre du jeu) revient entierement a son etat d'origine, et elle seule :
+        position, taille, affichage (« Afficher cette interface a l'ecran ») et ses autres options. Boutons et croix de l'ecran : tout CLES_ECRAN (affichage, taille de la croix et des boutons, positions).
+        Fenetre du jeu : son entree de CLES_FENETRES (absente de DEFAUT = taille, position et affichage du jeu). Les options de l'editeur (CLES_EDITEUR) ne bougent pas."""
+        if cible == CIBLE_ECRAN:
+            for k in CLES_ECRAN: self[k] = self.defaut(k)
+            return
+        fen = dict(self['interface_fenetres']); fen.pop(cible, None)
+        if cible in DEFAUT['interface_fenetres']: fen[cible] = self.defaut('interface_fenetres')[cible]
+        self['interface_fenetres'] = fen
+        masquees = [n for n in self['interface_masquees'] if n != cible]
+        if cible in DEFAUT['interface_masquees']: masquees.append(cible)
+        self['interface_masquees'] = masquees
+
+    def remettre_interfaces(self):
+        """« Retablir toutes les interfaces » : toutes les interfaces (CLES_ECRAN et CLES_FENETRES) et les options de l'editeur (CLES_EDITEUR : grille, aimantation) reviennent a DEFAUT."""
+        for k in CLES_INTERFACE: self[k] = self.defaut(k)
 
     def enregistrer(self):
         if not self.chemin: return
