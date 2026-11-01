@@ -136,6 +136,7 @@ class Fenetre:
         self.noms = nom.startswith('Make_MonsterName')                            # plaques de monstres : marques de groupe (decor du combat : elles ne comptent pas dans l'etendue de la fenetre)
         if self.noms:
             for nd in self._marques(): nd['marque'] = True
+        self.debut = nom.startswith('Make_StartMenuSelect')                       # menu de depart : cadre choisi par le code 3
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -249,6 +250,7 @@ class Fenetre:
         if self.eglise and i == 0: self._eglise(c)
         elif self.statut: self._statut(i, c)
         elif self.noms and i == 4: self._reset_marques()
+        elif self.debut and i == 3: self._debut(c)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -386,6 +388,21 @@ class Fenetre:
     def _reset_marques(self):
         """MonsterMarkList.Reset (code 4) : toutes les marques sont cachees."""
         for nd in self._marques(): nd['act'] = False
+
+    # ---- menu de depart (type 54, Make_StartMenuSelect)
+    def _debut(self, c):
+        """Code 3 : IFrame.Change(0xDB + code) choisit le cadre (219 : 316 de haut, 220 : 262, 221 : 260) ; code 2 : un seul bouton, plus bas, les deux autres caches."""
+        if not 0 <= c <= 2: return
+        cad = next((ib for pt in self.parts for ib in pt['ib'] if ib['k'] == 'frame'), None)
+        if cad is not None: self._cadre(cad, 0xDB + c)
+        bt = sorted((n for n in self.N.values() if n['buttonId'] is not None and n['buttonId'] >= 0 and n['pad'] == 0x10 and n['mats'] and n['mats'][0].get('part') == 7), key=lambda n: n['buttonId'])
+        if not bt: return
+        for nd in self.N.values():
+            if nd['par'] is not None and '_z0' not in nd: nd['_z0'] = nd['pos'][2]
+        dz = (-266.25 - bt[0]['_z0']) if c == 2 else 0.0                     # le premier bouton (et ses textes) descend a 135,75 du bas de l'ecran
+        for nd in self.N.values():
+            if nd['id'] == bt[0]['id'] or nd['par'] == bt[0]['id']: nd['pos'][2] = nd['_z0'] + dz
+        for nd in bt[1:]: nd['act'] = (c != 2)
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
