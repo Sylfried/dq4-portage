@@ -40,7 +40,7 @@ NOMS_FENETRES = {'YesNo': 'Oui / Non', 'Money': 'Argent', 'RootMenu': 'Menu prin
                  'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait',
                  'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services', 'Chapter2Status': 'Chapitre 2 : statut', 'TorunekoMiseban': 'Boutique de Torneko', 'NENE_ItemView': "Aperçu d'objet",
                  'FightStadiumAbort': 'Stade : abandon', 'ViewVolumeDecision': 'Volume : validation', 'PortalButton': 'Bouton du portail', 'NetworkRoot': 'Réseau : menu', 'NetworkCODE': 'Réseau : code', 'NetworkITEM': 'Réseau : objet'}
-SANS_EDITION = ('BattleHoppingNumber', 'MonsterName')   # (suivent les monstres a l'ecran : on ne les deplace pas)
+SANS_EDITION = ('BattleHoppingNumber', 'MonsterName', 'Config')   # (les deux premieres suivent les monstres a l'ecran : on ne les deplace pas ; Config = reglages d'origine du jeu, remplaces par le menu Pause : le bouton « Paramètres » ne les ouvre plus)
 
 
 class Pause:

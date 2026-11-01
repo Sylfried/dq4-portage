@@ -87,7 +87,6 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
-TXT_MENU_ECHAP = 'Menu Pause'      # libelle du bouton ajoute dans la fenetre des Parametres (retour au menu Pause, ouvert aussi par Echap)
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
 CH_MOTIF_FIN = np.array([326, 403, 940, 1195, 1260, 1713])                  # fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
@@ -172,7 +171,6 @@ class Jeu(pyglet.window.Window):
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.echap_port = None       # liste des Parametres : port qui porte le bouton « Menu Echap » (ajoute par le portage)
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
@@ -1233,8 +1231,7 @@ class Jeu(pyglet.window.Window):
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
         if decl and os.environ.get('DQ_MENUDBG'): print('MENU curseur local image %d port %d decl %d -> %s ; boutons %s' % (self.n, port, decl, cur, {b: (round(c[0]), round(c[1])) for b, c in z.items()}), flush=True)
-        if decl & MO.A and cur == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.son.jouer_se(SE_BOUTON); self.pause.ouvrir()          # (liste sans curseur du moteur : le bouton « Menu Echap » se choisit comme les autres)
-        elif decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
+        if decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
         elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
         elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
 
@@ -1488,7 +1485,7 @@ class Jeu(pyglet.window.Window):
         if not touches: self.survol = None; return                  # hors d'un bouton : l'element survole en dernier reste seul en surbrillance (le curseur du moteur y est aussi) ; effacé par on_mouse_leave ou une touche
         _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]; self.survol_nd = (port, h[3])
         if h[0] < 0: self.survol = None                              # bouton sans numero (retour, fleches de page) : seul l'element est allume, le curseur du menu ne bouge pas
-        elif f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] and h[0] != UI.Fenetre.BTN_ECHAP else None       # (le bouton « Menu Echap » n'existe pas pour le moteur : pas d'appuis de direction vers lui)
+        elif f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
         elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
 
     def _est_bouton(self, port, nid):
@@ -1528,7 +1525,6 @@ class Jeu(pyglet.window.Window):
         if b == -1 and pad == 2:                           # bouton « mode de la carte » de la fenetre (type 22, icone 19 / 20 / 2 envoyee par le moteur) : haut de la manette = change de vue (traite avec la touche Carte)
             if h and h[0] == b and h[1] == pad: self.carte_bascule = True
             return
-        if h and h[0] == b and b == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.pause.ouvrir(); return          # bouton « Menu Echap » : propre au portage, le moteur n'en sait rien
         if h and h[0] == b and b == BTN_SAUVEGARDES and self._port_depart(port): self._sauv_ouvrir(); return                # bouton « Sauvegardes » du menu de depart (a la place de « Sauv. cloud ») : propre au portage
         if h and h[0] == b and port in self.moteur.menus_saisie():
             self.moteur.envoyer_menu(port, 1, b, pad); self.menu_relacher = port
@@ -1668,15 +1664,8 @@ class Jeu(pyglet.window.Window):
             if mo.etat.partie == MO.PARTIE_COMBAT and max(float(mo.etat.fondu['a']), float(mo.etat.fondu_fond['a'])) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
             if self.sauv is not None: liste = []                                 # ecran Sauvegardes ouvert : le menu de depart est cache (sinon il se devine a travers le cadre translucide)
             fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
-            zl = [nd['pos'][2] - self.ui_g.ml.hdr['lang']['dy'] for fe in fens_v if fe.typ == 27 for nd in fe.N.values() if nd['text'] and nd['text'].get('text') and nd['pos'][0] > 0]          # reglage de vitesse / volume : etiquettes du haut et du bas (« Rapide » / « Lent »)
-            param = len(zl) < 2 and any(fe.typ == 27 for fe in fens_v)          # liste des Parametres : la fenetre de titre (type 27) n'a pas d'etiquettes de reglage (« Rapide » / « Lent ») et la liste montre ses cinq boutons (« Taille de la croix » n'en a que trois)
-            self.echap_port = None
-            for (_, p), fe in zip(liste, fens_v):
+            for fe in fens_v:
                 if fe.typ == 53: fe.centrer_menu()                  # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas)
-                if fe.typ == 8:
-                    if len(zl) >= 2: fe.centrer_liste(max(zl), min(zl))
-                    else: fe.centrer_liste(None, None, 1 if (param and fe.nb_plaques() == 3) else 0)          # « Taille de la croix » (3 plaques) : les boutons montent d'une rangee
-                    if fe.bouton_echap(param and fe.nb_plaques() == 5, TXT_MENU_ECHAP): self.echap_port = p
             cacher = self._boite_fin_combat()
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex and not cacher)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
@@ -2085,6 +2074,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        if mo.demande_pause: mo.demande_pause = False; self.pause.ouvrir()          # bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Moteur._detourner_parametres)
         self._maj_titre()
         for code, *_ in mo.ui.systeme:
             if code == 999: self.pause.ouvrir('quitter')            # MenuPortSendQuit : retour sur le menu de depart = quitter l'application (ApplicationQuit : question Oui / Non)

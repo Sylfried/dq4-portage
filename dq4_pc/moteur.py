@@ -346,6 +346,8 @@ class Moteur:
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
+        self.demande_pause = False               # le joueur a choisi « Paramètres » dans le menu Divers : la visionneuse ouvre son menu Pause (voir _detourner_parametres)
+        self._detourner_parametres()
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
         hfd = c.export('_ZN9FieldData9drawBlockEv')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
@@ -370,6 +372,27 @@ class Moteur:
                 c.mem_w(a + dec, struct.pack('<I', (w & ~(0xfff << 10)) | (1600 << 10)))
         except Exception as ex:
             print('fenetre des lieux non elargie :', ex, flush=True)
+
+    # TownMenu_OPERATION_ROOT::menuUpdate (liste du menu Divers) : « cmp w8, #7 » (0x16ef28) suivi de « b.ne » vers la sortie « bouton inconnu » ; le bouton 7 (« Paramètres ») ferme le menu et ouvre TownMenu_OPERATION_SETTING
+    CMP_PARAMETRES = 0x16ef28
+
+    def patcher_parametres(self):
+        """Le bouton « Paramètres » du menu Divers ouvre le menu Pause de la visionneuse, pas les reglages d'origine du jeu (volumes, vitesse, taille de la croix, retour au titre) : la comparaison du numero du bouton choisi a 7
+        est portee a 4095 (jamais egale : le moteur traite l'appui comme celui d'un bouton inconnu, ne ferme pas le menu Divers et n'entre pas dans l'etat « Parametres »). Sans effet si c'est deja fait ou si le moteur est une autre
+        version. Rappelee apres le chargement d'un etat (etats.appliquer remet l'image d'origine de la bibliotheque)."""
+        c = self.core; ad = c.LIB_BASE + self.CMP_PARAMETRES; w = struct.unpack('<I', c.mem(ad, 4))[0]
+        if w == 0x71001d1f: c.mem_w(ad, struct.pack('<I', (w & ~(0xfff << 10)) | (0xfff << 10)))       # « cmp w8, #7 » -> « cmp w8, #4095 »
+
+    def _detourner_parametres(self):
+        """Patch du bouton « Paramètres » (patcher_parametres) et crochet sur la comparaison : il leve `demande_pause` quand le bouton choisi est le 7 ; la visionneuse n'a plus qu'a ouvrir son menu Pause (Jeu.tick)."""
+        c = self.core
+        try:
+            self.patcher_parametres(); ad = c.LIB_BASE + self.CMP_PARAMETRES
+            def _p(uc, a, sz, u):
+                if uc.reg_read(c.XREG[8]) & 0xffffffff == 7: self.demande_pause = True
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _p, None, ad, ad)
+        except Exception as ex:
+            print('bouton Paramètres non detourne :', ex, flush=True)
 
     def _creer_canevas(self):
         c = self.core
