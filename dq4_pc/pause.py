@@ -197,6 +197,7 @@ class Pause:
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
+                dict(t='act', l='Texte et défilement', ok=self._aller('texte'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
@@ -250,6 +251,8 @@ class Pause:
         'Anticrénelage': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
         'Action': {'creer': 'Créer un état', 'charger': 'Charger un état', 'supprimer': 'Supprimer un état'},
     }
+    noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal (jeu)', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
+    noms['Vitesse de défilement'] = {0: '1 (rapide)', 1: '2', 2: '3', 3: '4 (lent)'}
 
     def _e_affichage(self):
         J, R = self.J, self.J.reg
@@ -339,11 +342,49 @@ class Pause:
     def _tout_remettre(self):
         self.J.reg['interface_fenetres'] = {}; self.J.reg['interface_masquees'] = []; self._remettre_boutons()
 
+    def _poser_son(self, cle, cat=None):
+        """Reglage de son (interrupteur ou volume) : enregistre la valeur, l'applique tout de suite aux sons en cours, et pour un volume fait entendre un bruitage d'essai (la musique, elle, joue pendant la page)."""
+        def poser(v):
+            self.J.reg[cle] = v; self.J.appliquer_mixage()
+            if cat and not isinstance(v, bool): self.J.apercu_son(cat)
+        return poser
+
     def _e_son(self):
+        """Interrupteur general, volume general, puis une section par categorie de sons (son.CATEGORIES) : un interrupteur et un volume chacune."""
         J, R = self.J, self.J.reg
-        return [self._choix('Son', [True, False], lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v))),
-                self._curs('Volume de la musique', lambda: R['volume_musique'], lambda v: (R.__setitem__('volume_musique', v), J.regler_vol_musique(v)), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['volume_musique']),
-                self._curs('Volume des bruitages', lambda: R['volume_bruitages'], lambda v: (R.__setitem__('volume_bruitages', v), J.regler_vol_bruitages(v)), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['volume_bruitages'])]
+        def sw(lib, cle, aide):
+            d = self._choix(lib, [True, False], lambda: R[cle], self._poser_son(cle)); d['aide'] = aide; return d
+        def vol(lib, cle, cat, aide):
+            d = self._curs(lib, lambda: R[cle], self._poser_son(cle, cat), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
+        general = self._choix('Son', [True, False], lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v)))
+        general['aide'] = 'Coupe ou remet tout le son du jeu   Le son reprend ici pour que tu entendes tes réglages ; le jeu, lui, reste en pause'
+        return [dict(t='sep', l='Général'), general,
+                vol('Volume général', 'volume_general', 'general', 'Multiplie tous les autres volumes   Se combine avec le volume réglé dans la fenêtre Paramètres du jeu'),
+                dict(t='sep', l='Musique'),
+                sw('Musique', 'musique_active', 'Musique de fond des cartes, villes et combats   Coupée, elle continue en silence et reprend là où elle en est'),
+                vol('Volume de la musique', 'volume_musique', 'musique', 'La musique en cours change tout de suite'),
+                dict(t='sep', l='Jingles et fanfares'),
+                sw('Jingles et fanfares', 'jingles_actifs', 'Morceaux courts joués une seule fois (le reste de la musique est réglé au-dessus)'),
+                vol('Volume des jingles', 'volume_jingles', 'jingles', 'Se fait entendre à la prochaine fanfare'),
+                dict(t='sep', l='Bruitages'),
+                sw('Bruitages', 'bruitages_actifs', 'Effets sonores du jeu : combats, sorts, objets, pas...   Sans les sons de l\'interface (réglés plus bas)'),
+                vol('Volume des bruitages', 'volume_bruitages', 'effets', 'Un bruitage d\'essai est joué quand tu changes la valeur'),
+                dict(t='sep', l='Interface'),
+                sw('Sons de l\'interface', 'interface_active', 'Bip des pages de message, validation des menus et des boutons'),
+                vol('Volume de l\'interface', 'volume_interface', 'interface', 'Un son de bouton est joué quand tu changes la valeur')]
+
+    def _e_texte(self):
+        """Dialogues : vitesse d'affichage du texte. Combats : defilement automatique des messages (interrupteur) et sa vitesse. Le defilement ne concerne que les combats : dans les dialogues normaux, on passe toujours chaque page a la main."""
+        J, R = self.J, self.J.reg
+        vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()))
+        vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal (jeu) » : comme dans le jeu d\'origine'
+        auto = self._choix('Défilement automatique', [True, False], lambda: J.defilement_actuel()[0], lambda v: J.regler_defilement(auto=v))
+        auto['aide'] = 'Combats seulement : les messages défilent seuls   Désactivé : on passe chaque message à la main (c\'est le 5e cran de « Vitesse texte » dans Divers > Paramètres du jeu)   Les dialogues hors combat ne défilent jamais seuls'
+        vit = self._choix('Vitesse de défilement', [0, 1, 2, 3], lambda: J.defilement_actuel()[1], lambda v: J.regler_defilement(vitesse=v), off=not J.defilement_actuel()[0])
+        vit['aide'] = 'Combats seulement : crans 1 à 4 de « Vitesse texte » dans Divers > Paramètres du jeu (attente de 0,4 / 0,7 / 1,1 / 1,4 s avant le message suivant)   Sans effet quand le défilement automatique est désactivé'
+        retab = dict(t='act', l='Rétablir le réglage du jeu', ok=J.retablir_defilement)
+        retab['aide'] = 'Combats : reprend la vitesse des messages enregistrée dans la sauvegarde (fenêtre Paramètres du jeu)'
+        return [dict(t='sep', l='Dialogues'), vt, dict(t='sep', l='Combats'), auto, vit, retab]
 
     def _touche(self, act):
         """Ligne d'une action au clavier : deux cases (touche principale, secondaire) ; Suppr efface la case choisie, le bouton rond (ou Debut) remet les touches d'origine."""
@@ -482,7 +523,10 @@ class Pause:
         t = time.time(); self.rep = (symbol, t, t, sens, d); self.rep_pos = (self.ecran, self.sel.get(self.ecran, 0))
 
     def maj(self):
-        """Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image)."""
+        """Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image). Page Son : les sons jouent (le jeu est arrete) pour qu'on entende les volumes qu'on regle."""
+        S = self.J.son; ecoute = self.ecran == 'son'
+        if ecoute != S.ecoute: S.ecouter(ecoute)
+        if ecoute: S.tick()
         a = self.pan_appui
         if a is not None and not (a['long'] or a['annule'] or a['double']) and time.time() - a['t0'] >= DELAI_APPUI_LONG: a['long'] = True
         if not self.rep: return
@@ -927,6 +971,7 @@ class Pause:
         n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
+        titres['texte'] = 'Texte et défilement'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -953,6 +998,7 @@ class Pause:
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
+        if ecr in ('texte',): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
@@ -1093,9 +1139,11 @@ class Pause:
         """Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas."""
         t = en['t']
         if t == 'touche': return en.get('aide') or self.AIDE_TOUCHE
-        if t == 'curs': return (en['aide'] + '   ' if en.get('aide') else '') + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
+        sup = en['aide'] + '   ' if en.get('aide') and t != 'act' else ''          # texte propre a la ligne, avant la consigne generale
+        if t == 'curs': return sup + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
         if t == 'choix':
-            return 'Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante'
+            return sup + ('Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante')
+        if t == 'act' and en.get('aide'): return en['aide']
         if t == 'slot': return self.AIDE_ETATS[self.action_etat]
         if self.ecran == 'interface': return "Glisse l'élément choisi pour le placer   Échap ou clic droit : terminer   Tab : replier le panneau"
         return ''
