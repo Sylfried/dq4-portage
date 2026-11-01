@@ -1485,6 +1485,7 @@ class Jeu(pyglet.window.Window):
         li = f.get('listes') or {}                                 # lieux decouverts (code 3 : x + 256 y, un par nombre) et voile des blocs non explores (code 5) envoyes par le moteur
         fe.symboles = [(v & 0xff, v >> 8 & 0xff) for v in li.get(3, ())]
         if fe.symboles and getattr(fe, 't_blink', None) is None: fe.t_blink = time.monotonic()
+        v4 = f['indic'].get(4); fe.special = None if v4 is None else (v4 & 0xff, v4 >> 8 & 0xff)        # code 4 : lieu special (croix rouge), meme codage que les lieux : x + 256 y
         cle = tuple(li[5][:16]) if li.get(5) else None
         if fe.nom_carte and (fe.carte is None or getattr(fe, '_cle_tex', None) != (fe.nom_carte, cle)):
             fe._cle_tex = (fe.nom_carte, cle)
@@ -1507,7 +1508,7 @@ class Jeu(pyglet.window.Window):
         nd = next((o for o in fe.N.values() if o['mats'] and o['mats'][0].get('part') == 3), None)      # marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
-            nd['pos'][0] = -225.0 + mx * 450.0 / 256.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0; nd['act'] = True        # le coin bas gauche de l'icone (la pointe de la plume) est sur la position, comme le noeud d'origine (sommets de (0, 0) a (24, 24))
+            nd['pos'][0] = -223.0 + mx * 1.740234; nd['pos'][2] = 398.0 - my * 1.740234; nd['act'] = True        # AddIcon(Vector3.zero, 31, bInBounds) : le coin bas gauche de l'icone (la pointe de la plume) est sur la position, dans le plan de 450 x 337,5 pose en (2, -2) a l'echelle 0,99 (0,99 x 450 / 256)
 
     def _plan_monde_fenetre(self, fe, f):
         """Grande carte du monde (type 26, Make_WorldLargeMap) : le moteur envoie le drapeau des pieces du plan (indicateur 0), puis la position du joueur x, y (indicateurs 1 et 2) en pixels d'un plan de

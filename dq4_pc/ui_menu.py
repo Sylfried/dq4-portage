@@ -152,6 +152,7 @@ class Fenetre:
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
+        self.special = None                                                # petite carte du monde : lieu special (code 4), (x, y) en pixels du plan de 256 x 192, ou None
 
     # ---- application des messages
     def _ib(self, p):
@@ -621,15 +622,26 @@ class Rendu:
         return True
 
     def _carte(self, fen, cx, cy, s, vp):
-        """Plan de la fenetre de carte (ICityMap) : texture 4:3 (plan agrandi, voile compris) affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
+        """Plan de la fenetre de carte : texture 4:3 (plan agrandi, voile compris). Petite carte (type 25, ICityMap : CreateFromTexture 450 x 337,5 pose en (2, -2) sous le cadre, echelle locale 0,99) : de x = -223 a 222,5,
+        de z = 398 a 63,875 ; grande carte du monde (type 26) : rectangle de 450 x 337,5 de x = -225 a 225 (position d'origine non lue : garde)."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
-        x0, x1, y1, y0 = cx - 225.0 * s, cx + 225.0 * s, cy + 400.0 * s, cy + (400.0 - 337.5) * s
+        if getattr(fen, 'typ', 0) == 25: xa, xb, zh, zb = -223.0, 222.5, 398.0, 398.0 - 334.125
+        else: xa, xb, zh, zb = -225.0, 225.0, 400.0, 400.0 - 337.5
+        x0, x1, y1, y0 = cx + xa * s, cx + xb * s, cy + zh * s, cy + zb * s
         u0, v0, u1, v1 = getattr(fen, 'carte_uv', None) or (0.0, 0.0, 1.0, 1.0)          # grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
         a = np.array([[x0, y0, u0, v0], [x1, y0, u1, v0], [x1, y1, u1, v1], [x0, y0, u0, v0], [x1, y1, u1, v1], [x0, y1, u0, v1]], np.float32)
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
         t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = getattr(fen, 'carte_mode', 3)         # plans agrandis (HD, voile compris) : filtrage lineaire ; grande carte du monde : bilineaire net
         vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog['mode'] = 0
+        sp = getattr(fen, 'special', None)
+        if sp is not None:                                                            # code 4 : lieu special, croix rouge (MenuTexture, feuille 5, case 3 ; AddIcon 1,2 x 16 = 21,6 unites), coin bas gauche en (-227 + x k, 402 - y k) (ancrage suppose comme la plume)
+            info = self.ml.infos[5]; t = self.tex.get(info['tex']); k = 450.0 / 256.0
+            if t is not None:
+                uv = uv_icone(info, 3, 0); xl, yb = cx + (-227.0 + sp[0] * k) * s, cy + (402.0 - sp[1] * k) * s; xr, yt = xl + 21.6 * s, yb + 21.6 * s
+                a = np.array([[xl, yt, *uv[0]], [xr, yt, *uv[1]], [xr, yb, *uv[2]], [xl, yt, *uv[0]], [xr, yb, *uv[2]], [xl, yb, *uv[3]]], np.float32)
+                vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
+                gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0; vl.draw(gl.GL_TRIANGLES); vl.delete()
         sy = getattr(fen, 'symboles', None)
         if sy:                                                                        # lieux decouverts (BlinkMapSymbol) : carres rouges de 4 unites dont la transparence va et vient (0,5 par seconde : 1 -> 0 -> 1 en 4 s)
             if self._blanc is None:
