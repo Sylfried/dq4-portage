@@ -1659,7 +1659,9 @@ class Jeu(pyglet.window.Window):
         nd = self.ui_g.f[port].N.get(nid) if self.ui_g and port in self.ui_g.f else None
         return bool(nd) and any(m.get('part') in (7, 10) for m in nd['mats'])
 
-    def on_mouse_leave(self, x, y): self.survol_nd = None
+    def on_mouse_leave(self, x, y):
+        self.survol_nd = None
+        if self.pause.ouvert: self.pause.sortie()                       # menu Echap : le pointeur a quitte la fenetre, plus rien n'est survole (les plaques se rallument)
 
     def _survol_pas(self):
         """Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis)."""

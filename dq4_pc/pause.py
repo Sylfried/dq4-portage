@@ -677,6 +677,10 @@ class Pause:
         i, _ = self._zone(x, y)
         if i is not None: self.sel[self.ecran] = i
 
+    def sortie(self):
+        """Le pointeur a quitte la fenetre : plus rien n'est survole."""
+        self.pos_souris = None; self.sur_ret = False; self.tt = None
+
     @staticmethod
     def _dans(z, x, y):
         return z[0] <= x <= z[2] and z[1] <= y <= z[3]

@@ -172,6 +172,7 @@ class Survol(unittest.TestCase):
         p.pos_souris = (60, 20); self.assertFalse(p._sur(z))                                # le pointeur sort : la zone se rallume
         p.pos_souris = (20, 20); p.popup = {'titre': 'x', 'sel': 1}; self.assertFalse(p._sur(z)); self.assertTrue(p._pointeur_dans(z))        # sous une fenetre modale : le survol lui appartient
         self.assertFalse(p._pointeur_dans(None))
+        p.popup = None; p.pos_souris = (20, 20); self.assertTrue(p._sur(z)); p.sortie(); self.assertFalse(p._sur(z), 'le pointeur a quitte la fenetre : plus rien n\'est survole')
 
     def test_plus_de_cadre_jaune_dans_le_code_de_la_page(self):
         with open(PA.__file__, encoding='utf-8') as f: src = f.read()
