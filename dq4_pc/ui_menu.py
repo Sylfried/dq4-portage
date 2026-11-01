@@ -132,6 +132,7 @@ class Fenetre:
         self.parts = list(self.t['parts']); self.n_parts = len(self.parts)         # copie de la liste : l'eglise (type 66) y ajoute les parties de ses boutons
         nom = self.t.get('name', '')                                              # types que le portage anime ou complete : le jeu les fait par du code que l'exporteur ne voit pas
         self.eglise = nom.startswith('Make_ChurchRoot'); self.eg_ids = []; self.txt_eglise = {}      # eglise : elements ajoutes, textes recus avant la creation des boutons
+        self.statut = nom.startswith('Make_BattleUpStatus'); self.secousse = {}; self.t_curseur = None      # plaques des membres en combat : secousses en cours (membre -> etat), debut du clignotement de la fleche
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -242,6 +243,7 @@ class Fenetre:
 
     def code(self, i, c):
         if self.eglise and i == 0: self._eglise(c)
+        elif self.statut: self._statut(i, c)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -290,6 +292,73 @@ class Fenetre:
             if tb is None: continue
             self.params[(no, 0)] = dict(id=no, no=0, parts=len(self.parts) - 1, base=tb)         # remplace les liaisons exportees (parties absentes de la mise en page)
             if (no, 0) in self.txt_eglise: self.param_str(no, 0, self.txt_eglise[(no, 0)])
+
+    # ---- combat : plaques des membres (type 29, Make_BattleUpStatus)
+    SECOUSSE = ((-6, 6), (6, -6), (6, -6), (-6, 6), (6, 6), (-6, -6), (-6, -6), (6, 6))         # MenuMessage.s_shakeTable : decalage de chaque image, de la derniere (7) a la premiere (0) ; somme nulle
+    CLIGNOTE = 0.7                                                                                # BattleUpCursor.c_waitTime : secondes entre les deux teintes de la fleche
+
+    def _icone(self, pt, ib, no):
+        """IIcon.Change(no) : les quatre UV de l'icone numero `no` de la feuille de l'element."""
+        nd = self.N.get(pt['node'])
+        if nd and nd['uv']:
+            for j, uv in enumerate(uv_icone(self.ml.infos[ib['partsNo']], no, 0)):
+                if ib['vtx'] + j < len(nd['uv']): nd['uv'][ib['vtx'] + j] = list(uv)
+
+    def _racine_membre(self, i):
+        """Noeud de la plaque du membre i (celui que le code -1 cache), ou None."""
+        for e in self.codes.get(i, []):
+            if e['kind'] == 'func' and 'Sub_BattleUpStatus' in (e.get('method') or ''):
+                k = next(iter((((e.get('fx') or {}).get('-1') or {}).get('d') or {})), None)
+                if k is not None and int(k) in self.N: return int(k)
+        return None
+
+    def _statut(self, i, c):
+        """Ids 0 a 3 = plaques : le code 8 lance ShakeFrame (m_shake = 8), le code -1 cache la plaque. Id 5 = fleche du membre qui agit : un code >= 0 l'affiche (SetActive), la deplace et BattleUpCursor.ForceUpdate la remet sur l'icone 2."""
+        if i == 5:
+            if c >= 0: self.t_curseur = time.monotonic(); self._icone_curseur(2, True)
+            return
+        rid = self._racine_membre(i)
+        if rid is None: return
+        if c == 8:
+            sec = self.secousse.get(i)
+            if sec is None:                                   # la plaque entiere se deplace : sa racine, ses textes, sa barre, son visage
+                tous = {rid}; ajout = True
+                while ajout:
+                    ajout = False
+                    for nd in self.N.values():
+                        if nd['par'] in tous and nd['id'] not in tous: tous.add(nd['id']); ajout = True
+                sec = self.secousse[i] = dict(base={n: list(self.N[n]['pos']) for n in tous}, dx=0.0, dz=0.0)
+            sec['m'] = 8
+        elif c < 0: self._fin_secousse(i, False)
+
+    def _fin_secousse(self, i, rouge):
+        """Fin de ShakeFrame : la plaque revient a sa place ; rouge : m_shakeEndCallback = BattleBar.RedApply (la barre rouge rejoint la valeur courante)."""
+        sec = self.secousse.pop(i, None)
+        if sec is None: return
+        for n, b in sec['base'].items():
+            if n in self.N: self.N[n]['pos'][0] = b[0]; self.N[n]['pos'][2] = b[2]
+        if rouge: self.param_str(i, 5, '')
+
+    def _icone_curseur(self, no, montrer=False):
+        """Icone de la fleche de cible (feuille 10) ; montrer : SetActive(true) du code >= 0 (l'exporteur ne le voit pas : le code ne fait que la deplacer, la fleche restait cachee)."""
+        for pt in self.parts:
+            for ib in pt['ib']:
+                if ib['k'] == 'icon' and ib.get('partsNo') == 10:
+                    self._icone(pt, ib, no); self.n_curseur = no
+                    if montrer and pt['node'] in self.N: self.N[pt['node']]['act'] = True
+                    return
+
+    def tick(self, t=None):
+        """Une image du jeu (30 Hz) : secousse des plaques (ShakeFrame.Update : un decalage de la table par image, puis le rouge de la barre) ; la fleche de cible clignote en temps reel (BattleUpCursor.Update)."""
+        for i in list(self.secousse):
+            sec = self.secousse[i]; sec['m'] -= 1
+            dx, dz = self.SECOUSSE[sec['m']]; sec['dx'] += dx; sec['dz'] += dz
+            for n, b in sec['base'].items():
+                if n in self.N: self.N[n]['pos'][0] = b[0] + sec['dx']; self.N[n]['pos'][2] = b[2] + sec['dz']
+            if sec['m'] == 0: self._fin_secousse(i, True)
+        if self.t_curseur is not None:
+            no = 2 + int(((time.monotonic() if t is None else t) - self.t_curseur) / self.CLIGNOTE) % 2
+            if no != getattr(self, 'n_curseur', 2): self._icone_curseur(no)
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
@@ -772,6 +841,9 @@ class Gestionnaire:
     def disposer(self, port, n):
         f = self.f.get(port)
         if f: f.disposer(n, self.proj)
+    def tick(self):
+        """Une image du jeu : animations des fenetres (secousse des plaques de combat, clignotement de la fleche de cible)."""
+        for f in self.f.values(): f.tick()
 
 
 RESSOURCES = {'ui_MenuTexture.png': 'MenuTexture', 'ui_Button.png': 'Button'}
