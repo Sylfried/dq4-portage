@@ -82,6 +82,7 @@ UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portr
 CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas du cadre principal des menus de commandes (Combattre / Attaquer...)
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
+OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
 CH_MOTIF_FIN = np.array([326, 403, 940, 1195, 1260, 1713])                  # fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
@@ -163,7 +164,7 @@ class Jeu(pyglet.window.Window):
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.cam_accel_appui = False; self.cam_dec = [0.0, 0.0]; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
+        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a gauche + cadre noir translucide
@@ -1106,6 +1107,29 @@ class Jeu(pyglet.window.Window):
             out.append((r, (pre + ' ' + princ).strip(), lab, val, princ.rstrip().endswith('?')))
         return [l for l in out if l[4]] + [l for l in out if not l[4]]
 
+    def _port_clavier(self, port):
+        """Port qui recoit le clavier : celui du menu actif du moteur, sauf si c'est une fenetre a un seul bouton (menu Divers : la saisie va a « Sauvegarde rapide », ouverte en dernier) alors qu'une fenetre
+        visible plus fournie existe (la liste de la page) : c'est elle qu'on parcourt (le toucher agit sur toutes les fenetres)."""
+        if port is None or not self.ui_g: return port
+        mo = self.moteur
+        def n(q):
+            fe = self.ui_g.f.get(q); return sum(1 for b in fe.boutons() if b[1] & 0x10) if fe else 0
+        if n(port) > 1: return port
+        cand = [q for q, f in mo.ui.f.items() if q > 1 and f['vis'] and f['cases'] and q in self.ui_g.f and n(q) > 1]
+        return max(cand, key=lambda q: mo.ui.f[q]['ordre']) if cand else port
+
+    def _port_pour_manette(self, port, pad):
+        """Port qui recoit la touche de manette `pad` (haut 2, bas 1, droite 4, gauche 8, A 16, B 32) : celui du menu actif s'il a un bouton pour elle, sinon la fenetre visible la plus recente qui en a un.
+        Menu Divers : le moteur donne la saisie a la fenetre « Sauvegarde rapide », mais le bouton retour est dans la liste et les fleches de page dans une troisieme fenetre."""
+        mo = self.moteur
+        def a(q):
+            fe = self.ui_g.f.get(q) if self.ui_g else None
+            return bool(fe) and any(b[1] & pad for b in fe.boutons())
+        if a(port): return port
+        for q in sorted((q for q, f in mo.ui.f.items() if q > 1 and f['vis'] and q in self.ui_g.f), key=lambda q: -mo.ui.f[q]['ordre']):
+            if a(q): return q
+        return port
+
     def _saisie_menu(self, port, decl):
         """Touches -> menu actif, comme MenuPort.Send d'Unity : [1, numero de bouton, manette] (manette du jeu : bas 1, haut 2, droite 4, gauche 8, A 16, B 32).
         Menu a curseur du moteur (message 2 : colonnes x lignes, ex. Oui / Non) : les touches lui sont transmises, il deplace son curseur (messages 4) et valide ;
@@ -1121,15 +1145,18 @@ class Jeu(pyglet.window.Window):
                     if bit in (MO.GAUCHE, MO.DROITE) and (f.get('grille') or (1, 1, 1))[0] < 2: pad = 2 if bit == MO.GAUCHE else 1
                     mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; return
             if decl & MO.A: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
-            elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+            elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
             return
         cle = (port, f['ordre']); cur = self.cur_local.get(cle)
         if cur not in z:
             cur = self.cur_local[cle] = f['cur'] if f['cur'] in z else min(z, key=lambda b: (-round(z[b][1]), z[b][0]))       # depart : le bouton en haut a gauche
+        if len({round((x0 + x1) / 20.0) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}) <= 1 and decl & (MO.GAUCHE | MO.DROITE):       # une seule colonne : gauche / droite tournent les pages si une autre fenetre porte les fleches
+            pad = 4 if decl & MO.DROITE else 8; q = self._port_pour_manette(port, pad)
+            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
         if decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
-        elif decl & MO.B: mo.envoyer_menu(port, 1, -1, 0x20); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
 
     @staticmethod
     def _voisin(z, cur, bit):
@@ -1263,7 +1290,7 @@ class Jeu(pyglet.window.Window):
         """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1, profondeur, identifiant de l'element)] en pixels."""
         fe = self.ui_g.f.get(port) if self.ui_g else None
         if not fe: return []
-        cx, cy, ech = self.ui_tf.get(port) or self._ui_repere(); dz = getattr(self, 'ui_dz', 0.0) if port in getattr(self, 'ui_suit', ()) else 0.0
+        cx, cy, ech = self.ui_tf.get(port) or self._ui_repere(); dz = getattr(self, 'ui_dzp', {}).get(port, 0.0)
         return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr, nid) for b, pad, x0, z0, x1, z1, pr, nid in fe.boutons(True)]
 
     def _tex_icone(self, ident):
@@ -1498,20 +1525,30 @@ class Jeu(pyglet.window.Window):
     def _dessiner_menus(self):
         if self.pause.ouvert and self.pause.ecran == 'interface': return       # editeur d'interface : seul l'element choisi est montre (par le menu Echap), pas les fenetres du jeu
         mo = self.moteur
-        actif = mo.menu_actif()
+        actif = self._port_clavier(mo.menu_actif())
         if os.environ.get('DQ_UIDBG'):                      # (test) etat des fenetres a chaque changement : port, type, visible, fenetre d'origine ou menu simple
             etat = tuple(sorted((p, f['type'], f['vis'], p in (self.ui_g.f if self.ui_g else ()), len(f['cases'])) for p, f in mo.ui.f.items() if f['vis'] or f['type'] is not None))
             if etat != getattr(self, '_ui_etat', None):
                 self._ui_etat = etat; print('UI image %d actif=%s : %s' % (self.n, actif, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in etat)), flush=True)
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
+            if mo.etat.partie == MO.PARTIE_COMBAT and float(mo.etat.fondu['a']) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
+            fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
+            zl = [nd['pos'][2] - self.ui_g.ml.hdr['lang']['dy'] for fe in fens_v if fe.typ == 27 for nd in fe.N.values() if nd['text'] and nd['text'].get('text') and nd['pos'][0] > 0]          # reglage de vitesse / volume : etiquettes du haut et du bas (« Rapide » / « Lent »)
+            for fe in fens_v:
+                if fe.typ == 8: fe.centrer_liste(max(zl), min(zl)) if len(zl) >= 2 else fe.centrer_liste(None, None)
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
             self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if dz else set()      # le Oui/Non (type 1) suit la fenetre de message
+            em = self.ui_msg.etendue() if msg else None
+            self.ui_dzp = {}                                  # decalage vertical de chaque fenetre qui suit le message : le meme que lui, plus de quoi coller le Oui/Non au bord haut du message
+            for p in self.ui_suit:
+                e = self.ui_g.f[p].etendue()
+                self.ui_dzp[p] = dz + ((em[1] + OUINON_ECART - e[0]) if (em and e) else 0.0)
             ivs = {}
             for _, p in liste:
                 e = self.ui_g.f[p].etendue()
-                if e: ivs[p] = (e[0] + (dz if p in self.ui_suit else 0.0), e[1] + (dz if p in self.ui_suit else 0.0))
+                if e: ivs[p] = (e[0] + self.ui_dzp.get(p, 0.0), e[1] + self.ui_dzp.get(p, 0.0))
             if msg:
                 e = self.ui_msg.etendue()
                 if e: ivs['msg'] = (e[0] + dz, e[1] + dz)
@@ -1543,9 +1580,10 @@ class Jeu(pyglet.window.Window):
                 fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p else (-1 if self.survol_nd else None))       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
                 if p in self.ui_suit: haut.append(fe)
                 elif p not in perso: bas.setdefault(self.ui_tf[p][1], []).append(fe)
-            if haut:
-                if tf_msg: self.ui_rendu.dessiner(haut, tf_msg[0], tf_msg[1] + dz * tf_msg[2], tf_msg[2], (self.width, self.height))
-                else: self.ui_rendu.dessiner(haut, cx, repere('msg')[0] + dz * s, s, (self.width, self.height))
+            for fe in haut:                                   # le message d'abord, puis chaque fenetre qui le suit (Oui/Non) a son propre decalage
+                dzf = self.ui_dzp.get(next((p for _, p in liste if self.ui_g.f[p] is fe), None), dz)
+                if tf_msg: self.ui_rendu.dessiner([fe], tf_msg[0], tf_msg[1] + dzf * tf_msg[2], tf_msg[2], (self.width, self.height))
+                else: self.ui_rendu.dessiner([fe], cx, repere('msg')[0] + dzf * s, s, (self.width, self.height))
             for cy, fens_g in bas.items(): self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
             for p, tf in perso.items(): self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
@@ -1875,7 +1913,8 @@ class Jeu(pyglet.window.Window):
                 mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
             elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
         port = None if carte else mo.menu_actif()
-        if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None      # critere memoire seul : le message d'abord
+        if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None
+        if port is not None: port = self._port_clavier(port)      # critere memoire seul : le message d'abord
         if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
             f_port = mo.ui.f.get(port)

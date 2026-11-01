@@ -19,6 +19,7 @@ LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones da
 # ---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
 # boutons = plaques grises a degrade (claires en haut, sombres en bas), bordure gris clair. Dessines en tableaux (distance au bord) puis gardes en textures : aucun cout par image.
 FOND_DQ = (8, 16, 40); OPACITE_FOND = 0.82
+OPACITE_JEU = 0.68                                                                                    # fond des fenetres du jeu : noir a 68 % d'opacite (mesure sur les fenetres du terrain, a travers lesquelles on voit le decor)
 BORDS_DQ = ((138, 138, 138), (205, 205, 205), (255, 255, 255), (132, 132, 132), (41, 41, 41))       # traits du cadre de l'exterieur vers l'interieur
 PLAQUE_HAUT, PLAQUE_BAS = (86, 87, 85), (34, 37, 31)                                                  # degrade du fond d'une plaque (haut -> bas)
 _textures = {}
@@ -87,6 +88,19 @@ def plaque(x, y, w, h, k, choisi=False, contour=None):
         a[..., :3] = np.where(dedans, fond, bord); a[..., 3] = 255.0 * np.clip(d + 0.5, 0.0, 1.0)
         return _texture(a)
     t = _garder(('plaque', w, h, round(k * 100), bool(choisi), contour), fab)
+    _melange(); t.blit(int(round(x)), int(round(y)))
+
+
+def contour(x, y, w, h, k, couleur, rayon=6.0):
+    """Encadrement (anneau de 2,8 px a 720 p, coins arrondis, interieur transparent) de la couleur donnee : selection a la souris d'un bouton."""
+    w, h = int(round(w)), int(round(h))
+    if w < 4 or h < 4: return
+    def fab():
+        d = _distance(w, h, rayon * k); bw = max(2.5, 2.8 * k)
+        a = np.zeros((h, w, 4), np.float32); a[..., :3] = np.array(couleur, np.float32)
+        a[..., 3] = 255.0 * np.clip(d + 0.5, 0.0, 1.0) * (1.0 - np.clip(d - bw + 0.5, 0.0, 1.0))
+        return _texture(a)
+    t = _garder(('contour', w, h, round(k * 100), tuple(couleur)), fab)
     _melange(); t.blit(int(round(x)), int(round(y)))
 
 
