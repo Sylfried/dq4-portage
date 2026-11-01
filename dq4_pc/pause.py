@@ -835,7 +835,7 @@ class Pause:
         if barre: h = h_titre + visibles * rh + pad / 2 + pied                     # (la fenetre se referme sur la derniere ligne visible)
         rdr = 56 * k                                                               # marge droite du contenu des lignes (boutons : 42 px de marge a gauche comme a droite ; la barre de defilement est dans la marge)
         # largeur : le plus long libelle + la place des valeurs / curseurs / cases de touches
-        lw = max([self._et(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
+        lw = max([self._et(x['l'], fs).content_width for x in e if not (ecr == 'etats' and x['t'] == 'slot')] + [0.0]); vw = 0.0       # (etats : la date des emplacements ne compte pas, la fenetre garde la meme taille avec ou sans etat enregistre ; la date se reduit au besoin)
         for x in e:
             if x['t'] == 'choix':
                 tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in x['vals'])
@@ -843,7 +843,6 @@ class Pause:
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
-        if ecr == 'etats': pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
         if editeur:                                                                 # panneau toujours en haut a droite (les boutons sont a gauche, la croix en bas a droite ; replie : la barre de titre seule, pour voir tout l'ecran)
@@ -892,10 +891,12 @@ class Pause:
                 et = self._et(en['l'], fs, OR); et.x = x0 + (pw - et.content_width) / 2; et.y = base; et.draw()
                 self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))
                 continue
+            maxw_lab = 0.0                                                                    # largeur permise au libelle (0 : aucune limite)
             if en['t'] == 'slot':
                 nu = self._et('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
+                maxw_lab = x0 + pw - 66 * k - (self._et(en['v'], fsp * 1.2, GRIS).content_width + 12 * k if en['v'] else 0.0) - lx           # (jusqu'au lieu, a droite)
             base += dec
-            lab = self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
+            lab = self._ajuster(en['l'], fs, coul, maxw_lab) if maxw_lab else self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
             if note:
                 en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = xr - en_.content_width; en_.y = ybas + 9 * k; en_.draw()
             if en['t'] == 'act' and en.get('sous'): self._chevron(xr - 6 * k, ybas + rh / 2 + dec, k)
