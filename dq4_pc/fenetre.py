@@ -23,6 +23,7 @@ import saisie_nom as SN
 import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
+import fbx as FX
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -207,6 +208,7 @@ class Jeu(pyglet.window.Window):
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
+        self.fbx_cache = {}; self.fbx_lect = {}           # modeles 3D animes (fbx.py : le dragon du titre) : numero -> {'etat', 'm', ...} ; emplacement -> lecteur d'animation
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
         self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255), multiline=True, width=600)
         self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255), multiline=True, width=600)
@@ -1132,6 +1134,60 @@ class Jeu(pyglet.window.Window):
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
         if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
+
+    # ---- modeles 3D animes (FbxObject d'Unity : paquets 31 et 32 du moteur ; voir fbx.py)
+    TITRE_DRAGON_HAUT = 0.0           # ecran-titre : decalage vertical du dragon (meme unite que TITRE_HAUT) ; 0 = cadrage d'origine du jeu, 0,3 = releve comme le logo (le dragon ne montrerait alors que ses griffes) ; DQ_FBX_DY pour essayer
+
+    def _fbx_pret(self, no):
+        """Modele 3D numero `no` pret a etre dessine ({'m': fbx.ModeleFbx, 'vl', 'tex'...}), None tant qu'il se lit (tache de fond : le cache disque, ou le paquet de donnees la premiere fois) ou s'il n'est pas gere."""
+        r = self.fbx_cache.get(no)
+        if r is None:
+            r = self.fbx_cache[no] = {'etat': 'lecture', 'm': None}
+            def tache():
+                try: r['m'] = FX.ModeleFbx(self.donnees.modele_fbx(no)); r['etat'] = 'lu'
+                except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+            threading.Thread(target=tache, daemon=True).start()
+        if r['etat'] == 'lu':                                       # objets OpenGL : dans le fil du dessin
+            try:
+                m = r['m']; nt = len(m.tri)
+                self.tex_gl[('fbx', no)] = r['tex'] = t = self._tex(m.tex, True, 99); self._filtrer(t, self.lissage)
+                r['uv'] = m.uv[m.tri.ravel()].ravel().astype(np.float32); r['n'] = nt * 3
+                r['vl'] = self.prog.vertex_list(r['n'], gl.GL_TRIANGLES, position=('f', np.zeros(r['n'] * 3, np.float32)), tex_coords=('f', r['uv']), colors=('f', np.ones(r['n'] * 4, np.float32)))
+                r['etat'] = 'pret'
+            except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+        return r if r['etat'] == 'pret' else None
+
+    def _tracer_fbx(self, e):
+        """Modeles 3D de la scene (e.fbx) : pose = position / rotation / echelle du moteur (paquet 32), animation jouee depuis son lancement (images du moteur : 30 Hz, fraction de pas comprise), couleur = Material.color.
+        Shader Custom/ImdChara : couleur du sommet x _Color x texture, fusion alpha, ZWrite, ZTest LEqual, Cull Back, file Geometry (avec le decor opaque, avant les personnages et les effets-maillages)."""
+        tf = max(0.0, self.moteur.images - 2.0 + self.alpha)           # image du moteur affichee : celle du pas precedent + alpha (voir _interpoler)
+        M0 = None
+        if self.carte_nom == 'ev01':                                   # titre : le dragon n'est pas releve avec le groupe logo + ile (il sortirait de l'ecran) : decalage propre, en coordonnees d'ecran normalisees
+            dy = float(os.environ.get('DQ_FBX_DY', self.TITRE_DRAGON_HAUT)) - float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT))
+            if dy:
+                M0 = self.prog['mvp']; Ty = np.eye(4); Ty[1, 3] = dy
+                Mn = np.array(M0, float).reshape(4, 4).T; self.prog['mvp'] = tuple(float(x) for x in (Ty @ Mn).T.ravel())
+        for k in [k for k in self.fbx_lect if k not in e.fbx]: del self.fbx_lect[k]
+        for slot, mod in sorted(e.fbx.items()):
+            if not mod['vis']: continue
+            r = self._fbx_pret(mod['id'])
+            if r is None: continue
+            m = r['m']; lc = self.fbx_lect.get(slot)
+            if lc is None or lc['id'] != mod['id'] or lc['n'] > len(mod['anim']):
+                lc = self.fbx_lect[slot] = {'id': mod['id'], 'n': 0, 'a': FX.LecteurAnim({k: {'dur': c['dur'], 'wrap': c['wrap']} for k, c in m.clips.items()})}
+            for img, seq, force in mod['anim'][lc['n']:]: lc['a'].jouer(seq, force, img)
+            lc['n'] = len(mod['anim'])
+            ech = 0.4 if mod['id'] == 10 else 1.0                      # FbxObject.m_defScale (.ctor : 0,4 pour le modele 10, 1 sinon)
+            sc = tuple(float(x) * ech for x in mod['scl'])
+            V = m.sommets(FX.matrice_objet(mod['pos'], mod['rot'], sc), lc['a'].poses(tf))
+            vl = r['vl']; vl.position[:] = V[m.tri.ravel()].ravel(); vl.colors[:] = np.tile(np.array(mod['col'], np.float32), r['n'])
+            self.prog['cutoff'] = 0.0; self.prog['net'] = 1.0 if self.lissage else 0.0; self.prog['tsize'] = (float(m.tex.shape[1]), float(m.tex.shape[0]))
+            self._dom_lie = None
+            if os.environ.get('DQ_FBX_CULL', '1') == '1': gl.glEnable(gl.GL_CULL_FACE); gl.glCullFace(gl.GL_BACK)          # Custom/ImdChara : Cull Back (lu dans le shader) ; sans, des faces internes (tete, ailes) recouvrent le visage ; DQ_FBX_CULL=0 pour essayer sans
+            self._tracer(r['tex'], vl)
+            gl.glDisable(gl.GL_CULL_FACE)
+        if M0 is not None: self.prog['mvp'] = M0
+        self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['cutoff'] = 0.05
 
     def _fond_combat(self, c):
         """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
@@ -2543,6 +2599,7 @@ class Jeu(pyglet.window.Window):
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
             self._tracer_decor(True)
+            if e.fbx: self._tracer_fbx(e)               # modeles 3D animes (le dragon du titre) : meme file que le decor opaque
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
