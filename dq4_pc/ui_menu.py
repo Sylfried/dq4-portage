@@ -415,7 +415,7 @@ class Fenetre:
         """Code 3 : IFrame.Change(0xDB + code) choisit le cadre (219 : 316 de haut, 220 : 262, 221 : 260) ; code 2 : un seul bouton, plus bas, les deux autres caches."""
         if not 0 <= c <= 2: return
         cad = next((ib for pt in self.parts for ib in pt['ib'] if ib['k'] == 'frame'), None)
-        if cad is not None: self._cadre(cad, 0xDB + c)
+        if cad is not None: self._cadre(cad, 0xDB + c); self._titre_onglet(cad, c)
         bt = sorted((n for n in self.N.values() if n['buttonId'] is not None and n['buttonId'] >= 0 and n['pad'] == 0x10 and n['mats'] and n['mats'][0].get('part') == 7), key=lambda n: n['buttonId'])
         if not bt: return
         for nd in self.N.values():
@@ -424,6 +424,21 @@ class Fenetre:
         for nd in self.N.values():
             if nd['id'] == bt[0]['id'] or nd['par'] == bt[0]['id']: nd['pos'][2] = nd['_z0'] + dz
         for nd in bt[1:]: nd['act'] = (c != 2)
+
+    def _titre_onglet(self, cad, c):
+        """Titre du type 54 : le texte est pose pour le cadre 219 (onglet de 241,5 de large, 316 de haut) ; les cadres 220 (sans onglet) et 221 (onglet de 301,5, 260 de haut) changent la hauteur
+        et la largeur de l'onglet : le titre le suit (en bas : la hauteur perdue ; au centre : la moitie de la largeur gagnee), sinon il flotte au-dessus de l'onglet (liste « Reprendre » / « Auto »).
+        Choix du portage : le code d'origine (0xD0A604) ne deplace que les boutons, mais le texte envoye au code 2 est bien le titre de l'onglet."""
+        tx = next((n for n in self.N.values() if n['par'] == cad.get('go') and n['text'] is not None), None)
+        if tx is None: return
+        if '_x0' not in tx: tx['_x0'] = tx['pos'][0]; tx['_z0'] = tx['pos'][2]
+        def onglet(v):
+            if not 0 <= v < len(self.ml.cadres): return None
+            vt = self.ml.cadres[v]['vtx']; h = max(p[1] for p in vt); xs = [p[0] for p in vt if p[1] >= h - 12.5]
+            return (h, max(xs)) if max(xs) < 400.0 else None             # pas d'onglet : toute la largeur
+        o0, oc = onglet(0xDB), onglet(0xDB + c)
+        if o0 is None or oc is None: return
+        tx['pos'][0] = tx['_x0'] + (oc[1] - o0[1]) / 2.0; tx['pos'][2] = tx['_z0'] + (oc[0] - o0[0])
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
