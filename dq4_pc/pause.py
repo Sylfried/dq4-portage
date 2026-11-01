@@ -17,7 +17,7 @@ DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 # Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
 JAUNE = OR[:3]; CLAIR = (236, 236, 232)
-NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_FOND)
+NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_JEU, mesuree sur les fenetres du jeu)
 LARG_CELLULE, ECART_CELLULES = 150.0, 10.0       # menu Commandes : largeur d'une case de touche et ecart entre les deux (a 900 px de haut, multiplies par k)
 LARG_BARRE = 12.0                                 # barre de defilement
 CURSEUR = (194, 297, 238, 328)                    # curseur dore des menus du jeu dans la feuille MenuTexture (x0, y0, x1, y1)
@@ -135,7 +135,7 @@ class Pause:
         ic = self._tex_decoupe('ic_retour', 'ui_MenuTexture.png', ICONE_RETOUR)
         self._melange()
         if t is not None: t.blit(x, y)
-        else: HM.plaque(x, y, w, h, w / 64.0, pousse)
+        else: self._plaque(x, y, w, h, w / 64.0, pousse)
         if ic is not None:
             e = 62.4 / 64.0 * w; ic.blit(x + (w - e) / 2, y + (h - e) / 2, width=e, height=e)
 
@@ -693,7 +693,14 @@ class Pause:
     @staticmethod
     def _cadre(x, y, w, h, k):
         """Fenetre a la maniere des menus du jeu mobile : fond noir de meme opacite que les autres menus, cadre blanc en cinq traits, coins arrondis et transparents (hud_mobile.cadre)."""
-        HM.cadre(x, y, w, h, k, fond=NOIR, opacite=HM.OPACITE_FOND)
+        HM.cadre(x, y, w, h, k, fond=NOIR, opacite=HM.OPACITE_JEU)
+
+    def _plaque(self, x, y, w, h, k, choisi=False, contour=None):
+        """Fond d'un bouton : la plaque des fenetres du jeu (feuille Button, comme « Soigner tous »), enfoncee quand elle est choisie ; encadrement colore a la souris. Sans les menus d'origine : plaque dessinee (hud_mobile)."""
+        r = getattr(self.J, 'ui_rendu', None)
+        if r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), choisi):
+            if contour is not None: HM.contour(x, y, w, h, k, contour)
+        else: HM.plaque(x, y, w, h, k, choisi, contour)
 
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
         """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
@@ -743,7 +750,7 @@ class Pause:
         w = LARG_BARRE * k; x0 = x1 - w; fl = 14 * k; th0, th1 = ptop - fl - 2 * k, pbot + fl + 2 * k          # piste entre les deux fleches
         piste = pyglet.shapes.Rectangle(x0, th1, w, th0 - th1, color=(34, 36, 42)); piste.draw()
         th = max(26 * k, (th0 - th1) * vis / float(n)); f = deb / float(max(1, n - vis)); hau = th0 - f * (th0 - th1 - th)
-        HM.plaque(x0, hau - th, w, th, k * 0.8, actif)
+        self._plaque(x0, hau - th, w, th, k * 0.8, actif)
         coul = CLAIR if n > vis else GRIS[:3]
         pyglet.shapes.Triangle(x0 + 1.5 * k, ptop - fl + 3 * k, x1 - 1.5 * k, ptop - fl + 3 * k, (x0 + x1) / 2, ptop - 2 * k, color=coul).draw()
         pyglet.shapes.Triangle(x0 + 1.5 * k, pbot + fl - 3 * k, x1 - 1.5 * k, pbot + fl - 3 * k, (x0 + x1) / 2, pbot + 2 * k, color=coul).draw()
@@ -793,7 +800,7 @@ class Pause:
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         if editeur: self._apercu()
         else:
-            voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
+            voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
         t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
         ecr = self.ecran; e = self._entrees(); n = len(e)
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
@@ -869,7 +876,7 @@ class Pause:
             en = e[idx]; ybas = ytop - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
             note = en['note']() if en.get('note') else ''
             dec = max(0.0, min(8 * k, (rh - 36 * k) * 0.6)) if note else 0.0                  # note rouge sous la valeur : la ligne monte un peu pour lui laisser la place
-            if en['t'] != 'sep': HM.plaque(plx, ybas + 3 * k, plw, rh - 6 * k, k, sel, JAUNE if sel and mouse else None)       # fond du bouton, comme ceux du menu des commandes du jeu mobile (la selection l'eclaircit ; a la souris : encadrement jaune)
+            if en['t'] != 'sep': self._plaque(plx, ybas + 3 * k, plw, rh - 6 * k, k, sel, JAUNE if sel and mouse else None)       # fond du bouton, comme ceux du menu des commandes du jeu mobile (la selection l'eclaircit ; a la souris : encadrement jaune)
             if sel and not mouse: self._curseur(x0 + 6 * k, ybas + rh / 2 + dec, min(rh * 0.6, 26 * k))             # curseur dore des menus du jeu (selection au clavier)
             coul = GRIS if en.get('off') else BLANC
             base = ybas + rh / 2 - 0.45 * fs                                                  # texte centre dans le bouton
@@ -943,7 +950,7 @@ class Pause:
                     spr = pyglet.sprite.Sprite(t, x=mx + 20 * k, y=y1 - 40 * k - h_i); spr.scale_x = w_i / t.width; spr.scale_y = h_i / t.height; spr.draw()
                     liste = []
                     if inf:
-                        liste = [self._date_fr(inf[0].get('date')) or 'Sans date', self._lieu_lisible(inf[0]), 'Image du moteur %s' % inf[0].get('images', '')]
+                        liste = [self._date_fr(inf[0].get('date')) or 'Sans date', self._lieu_lisible(inf[0])]
                     for j, ligne in enumerate(liste):
                         el = self._et(ligne, fsp * 1.1, BLANC if j == 0 else GRIS); el.x = mx + (wmini - el.content_width) / 2; el.y = y1 - 40 * k - h_i - 34 * k - j * 30 * k; el.draw()
                 else:
@@ -1028,7 +1035,7 @@ class Pause:
         if ed: ed.x = x + (w - ed.content_width) / 2; ed.y = y + h - 92 * k; ed.draw()
         for i, lib in enumerate(('Oui', 'Non')):
             bx = x + w / 2 + (-bw - 14 * k if i == 0 else 14 * k); by = y + 28 * k; sel = p['sel'] == i
-            HM.plaque(bx, by, bw, bh, k, sel, JAUNE if sel and self.mode_souris else None)
+            self._plaque(bx, by, bw, bh, k, sel, JAUNE if sel and self.mode_souris else None)
             if sel and not self.mode_souris: self._curseur(bx - 24 * k, by + bh / 2, min(bh * 0.6, 26 * k))
             lb = self._et(lib, fs, BLANC); lb.x = bx + (bw - lb.content_width) / 2; lb.y = by + bh / 2 - 0.45 * fs; lb.draw()
             self.zones_popup.append((bx, by, bx + bw, by + bh, i))
@@ -1055,7 +1062,7 @@ class Pause:
         for j in range(top, top + nvis):
             yb = y - ih; courant = vals[j] == en['get']()
             if j == cur:
-                if self.mode_souris: HM.plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True, JAUNE)
+                if self.mode_souris: self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True, JAUNE)
                 else: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)
             et = self._et(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
             self.zones_pop.append((x0 + 6 * k, yb, x1 - 6 * k - lb, y, j)); y -= ih

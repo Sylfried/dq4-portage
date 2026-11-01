@@ -331,18 +331,13 @@ class Moteur:
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
         hfd = c.export('_ZN9FieldData9drawBlockEv')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
-        # compagnons : leur ecart au heros doit rester le meme en course (ils relisent un historique de positions, une entree par pas du heros : au pas de course l'ecart en distance grandissait)
-        self._h_ecart = 1.0; self._acc_ecart = 0.0; self.ecart_constant = True
-        def _hv(uc, a, sz, u):                   # TownPartyAction::normalMove (0x1db45c, etat d'historique « pair » : une entree sur deux)
-            e = self._pousses_en_plus()
-            if not e: return
-            this = uc.reg_read(c.XREG[19]); hero = uc.reg_read(c.XREG[20])
-            self._pousser_historique(struct.unpack('<Q', c.mem(this, 8))[0], struct.unpack('<Q', c.mem(this + 8, 8))[0], hero, hero + 0x3c, 127, True, 2 * 4096, e)
-        def _hf(uc, a, sz, u):                   # FieldParty::normalArray (0x1eb9ec) : decale toutes les entrees d'un cran
-            e = self._pousses_en_plus()
-            if not e: return
-            this = uc.reg_read(c.XREG[19]); q = lambda o: struct.unpack('<Q', c.mem(this + o, 8))[0]
-            self._pousser_historique(q(0x40), q(0x48), q(0), q(8), 160, False, 20 * 4096, e)
+        # compagnons en ville (premiere version, #30) : ils relisent un historique de positions du heros a un nombre fixe d'entrees (n = 8, ou 10 dans certaines salles) derriere lui ; en course l'ecart en distance grandissait
+        self._h_ecart = 1.0; self.ecart_constant = True      # facteur de vitesse du heros (les compagnons et le taux de rencontre le compensent)
+        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : n = nombre d'images d'historique entre deux compagnons ; divise par le facteur de vitesse, la distance reste celle d'origine
+            f = self._h_ecart
+            if self.ecart_constant and f > 1.05: uc.reg_write(c.XREG[1], max(2, int(round((uc.reg_read(c.XREG[1]) & 0xffffffff) / f))))
+        haa = c.export('_ZN15TownPartyAction11AdjustArrayEi')
+        if haa: c.uc.hook_add(unicorn.UC_HOOK_CODE, _aa, None, haa, haa)
         self._acc_enc = 0.0
         def _ew(uc, a, sz, u):                   # Encount::execWalk (appele a chaque image ou le heros avance) : 16 appels = un « pas » de rencontre ; courir fait plus de chemin par image, donc on compte plus vite : le taux suit la distance, pas le temps
             h = self._h_ecart
@@ -350,7 +345,6 @@ class Moteur:
             self._acc_enc += h - 1.0; k = int(self._acc_enc); self._acc_enc -= k
             if k: th = uc.reg_read(c.XREG[0]); c.mem_w(th + 0x20, struct.pack('<H', (struct.unpack('<H', c.mem(th + 0x20, 2))[0] + k) & 0xffff))
         ew = c.export('_ZN7Encount8execWalkEv'); c.uc.hook_add(unicorn.UC_HOOK_CODE, _ew, None, ew, ew)
-        for ad, fn in ((0x1db45c, _hv), (0x1eb9ec, _hf)): c.uc.hook_add(unicorn.UC_HOOK_CODE, fn, None, c.LIB_BASE + ad, c.LIB_BASE + ad)
         def _sca(uc, a, sz, u): self.fldobj = uc.reg_read(c.XREG[0])
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
@@ -398,32 +392,9 @@ class Moteur:
     # sans elles la course ne jouait pas en diagonale. Elles n'ont pas de symbole : decalage dans la bibliotheque)
     VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288), (0x27520c, 8192), (0x275210, 8192))
 
-    def _pousses_en_plus(self):
-        """Nombre d'entrees d'historique a ajouter, en plus de celle du moteur, a ce pas du heros : il y en a en moyenne f - 1 (f = facteur de vitesse du heros), pour que les compagnons restent a la meme distance."""
-        h = self._h_ecart
-        if not self.ecart_constant or h <= 1.05: self._acc_ecart = 0.0; return 0
-        self._acc_ecart += h; m = int(self._acc_ecart); self._acc_ecart -= m
-        return max(0, m - 1)
-
-    def _pousser_historique(self, hist, dirs, hero, hero_dir, nb, pair, seuil, extra):
-        """Ajoute `extra` positions intermediaires (entre la derniere position enregistree et celle du heros) a l'historique des compagnons, comme le ferait le moteur a chaque pas : decalage d'un cran (en ville : une entree sur deux, comme le code d'origine
-        dans cet etat), puis position et direction a l'indice 0. Pas d'interpolation apres un saut de position (changement de carte...)."""
-        c = self.core; m = extra + 1
-        prev = struct.unpack('<3i', c.mem(hist, 12)); cur = struct.unpack('<3i', c.mem(hero, 12))
-        if cur == prev or max(abs(a - b) for a, b in zip(cur, prev)) > seuil: return
-        d = c.mem(hero_dir, 2)
-        for j in range(1, m):
-            if pair:
-                b = bytearray(c.mem(hist, 12 * nb)); db = bytearray(c.mem(dirs, 2 * nb))
-                for i in range(63): dd = 126 - 2 * i; b[12 * dd:12 * dd + 12] = b[12 * (dd - 2):12 * (dd - 2) + 12]; db[2 * dd:2 * dd + 2] = db[2 * (dd - 2):2 * (dd - 2) + 2]
-                c.mem_w(hist, bytes(b)); c.mem_w(dirs, bytes(db))
-            else:
-                c.mem_w(hist + 12, c.mem(hist, 12 * (nb - 1))); c.mem_w(dirs + 2, c.mem(dirs, 2 * (nb - 1)))
-            c.mem_w(hist, struct.pack('<3i', *[p + int(round((q - p) * j / m)) for p, q in zip(prev, cur)])); c.mem_w(dirs, d)
-
     def vitesse_heros(self, f):
         """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi).
-        Les compagnons relisent l'historique des positions du heros (une entree par pas) : pour qu'ils restent a la meme distance, `_pousses_en_plus` ajoute des positions intermediaires a l'historique."""
+        En ville les compagnons relisent l'historique des positions du heros (une entree par pas) : `AdjustArray` (crochet de __init__) divise leur ecart d'historique par ce facteur pour qu'ils gardent la meme distance."""
         c = self.core; self._h_ecart = float(f)
         if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.LIB_BASE + n if isinstance(n, int) else c.export(n), b) for n, b in self.VITESSES_HEROS]
         for ad, base in self._vit_ad:

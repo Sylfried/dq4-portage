@@ -324,6 +324,29 @@ class Fenetre:
         zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
         return (min(zs), max(zs)) if zs else None
 
+    def rects(self):
+        """Rectangles (x0, z0, x1, z1) des elements dessines (visibles, avec maillage) de la fenetre : les cadres et les plaques."""
+        out = []
+        for nd in self.N.values():
+            if nd['vtx'] and nd['mats'] and self.visible(nd['id']):
+                xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
+                out.append((min(xs), min(zs), max(xs), max(zs)))
+        return out
+
+    def centrer_liste(self, z_haut, z_bas):
+        """Fenetre de liste de boutons (Make_NameButton) placee entre deux etiquettes (« Rapide » / « Lent », « Bas » / « Haut » du reglage des vitesses et volumes) : les boutons visibles sont centres entre elles.
+        Le jeu les place par du code (commandes 6 a 8, non extraites : « List index ») ; sans cela le dernier bouton tombe sur l'etiquette du bas. Le bouton retour (racine) ne bouge pas ; None remet la mise en page d'origine."""
+        racine = next((nd['id'] for nd in self.N.values() if nd['par'] is None), None)
+        enfants = [nd for nd in self.N.values() if nd['par'] is not None]
+        for nd in enfants:
+            if '_z0' not in nd: nd['_z0'] = nd['pos'][2]
+        dz = 0.0
+        if z_haut is not None:
+            plaques = [nd['_z0'] for nd in enfants if nd['buttonId'] is not None and nd['buttonId'] >= 0 and nd['vtx'] and self.visible(nd['id'])]
+            if plaques: dz = (z_haut + z_bas) / 2 - (max(plaques) + min(plaques)) / 2
+        for nd in enfants: nd['pos'][2] = nd['_z0'] + dz
+        return dz
+
     def etendue_x(self):
         """(gauche, droite) en unites d'interface de toutes les parties de la fenetre (visibles ou non : la mise en page ne change pas), ou None : limites dans lesquelles un texte doit tenir. Mis en cache."""
         c = getattr(self, '_ex_cache', None)
@@ -422,7 +445,7 @@ class Textes:
 class Rendu:
     """Dessine des Fenetre sur l'ecran : prog GL maison, feuilles 0 (MenuTexture) et 1 (Button)."""
     def __init__(self, ml, feuilles, police):
-        self.ml = ml
+        self.ml = ml; self.voisins = []                      # voisins : fenetres visibles de l'image (leurs cadres servent a compresser les textes d'une fenetre sans cadre)
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self._blanc = None                                  # texture blanche de 1 pixel (carres de couleur unie : lieux de la carte du monde)
         self.tex = {}
@@ -511,6 +534,39 @@ class Rendu:
                 self._texte(fen, nd, cx, cy, s)
         vider()
 
+    def _modele_plaque(self):
+        """Maillage de la plaque de bouton du jeu (feuille Button, partie 7, neuf morceaux de la fenetre « liste » Make_NameButton) : sommets, UV, indices, couleur."""
+        m = getattr(self, '_mdl_plaque', None)
+        if m is None:
+            m = False
+            for t in self.ml.types.values():
+                for n in t.get('nodes', []):
+                    mm = n.get('mesh'); mats = n.get('mats') or []
+                    if mm and mats and mats[0].get('sheet') == 1 and mats[0].get('part') == 7 and len(mm['vtx']) == 36 and n.get('parts', {}).get('buttonId') == 0:
+                        m = (np.array(mm['vtx'], np.float32), np.array(mm['uv'], np.float32), np.array(mm['sub']['0'], np.int64), list(mats[0].get('color') or (1, 1, 1, 1))); break
+                if m: break
+            self._mdl_plaque = m
+        return m or None
+
+    def plaque(self, x, y, w, h, vp, choisi=False):
+        """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (16 unites pour 50 de haut),
+        le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). -> False si la plaque du jeu est indisponible."""
+        mod = self._modele_plaque()
+        if mod is None or 1 not in self.tex: return False
+        vtx, uv, idx, col = mod
+        xs = sorted({round(float(v[0]), 2) for v in vtx}); zs = sorted({round(float(v[1]), 2) for v in vtx})          # quatre abscisses et quatre ordonnees : bords et limites des coins
+        cap = min((xs[1] - xs[0]) * h / (zs[-1] - zs[0]), w / 2.0, h / 2.0)                                              # le coin garde sa proportion avec la hauteur de la plaque
+        X = {xs[0]: x, xs[1]: x + cap, xs[2]: x + w - cap, xs[3]: x + w}; Y = {zs[3]: y + h, zs[2]: y + h - cap, zs[1]: y + cap, zs[0]: y}
+        px = np.array([X[round(float(v[0]), 2)] for v in vtx[idx]], np.float32); py = np.array([Y[round(float(v[1]), 2)] for v in vtx[idx]], np.float32)
+        uu = uv[idx] + (np.array(self.ml.pousse, np.float32) if choisi else 0.0)
+        a = np.column_stack([px, py, uu[:, 0], uu[:, 1], np.tile(np.array(col, np.float32), (len(idx), 1))]).astype(np.float32)
+        gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
+        self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
+        vl = self.prog.vertex_list(len(a), gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', a[:, 4:8].ravel()))
+        t = self.tex[1]; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
+        vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog.stop()
+        return True
+
     def _carte(self, fen, cx, cy, s, vp):
         """Plan de la fenetre de carte (ICityMap) : texture 4:3 (plan agrandi, voile compris) affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
@@ -527,7 +583,7 @@ class Rendu:
                 self._blanc = pyglet.image.ImageData(1, 1, 'RGBA', b'\xff\xff\xff\xff').get_texture()
             al = abs(1.0 - ((time.monotonic() - (fen.t_blink or 0.0)) % 4.0) / 2.0); k = 450.0 / 256.0; q = []
             for xb, yb in sy:
-                a0, b0 = cx + (-225.0 + xb * k) * s, cy + (400.0 - yb * k - 4.0) * s; a1, b1 = a0 + 4.0 * s, b0 + 4.0 * s
+                a0, b0 = cx + (-225.0 + xb * k - 2.0) * s, cy + (400.0 - yb * k - 2.0) * s; a1, b1 = a0 + 4.0 * s, b0 + 4.0 * s          # carre de 4 unites centre sur le lieu (comme le marqueur du joueur, de 24 unites, centre sur sa position)
                 q += [[a0, b0], [a1, b0], [a1, b1], [a0, b0], [a1, b1], [a0, b1]]
             q = np.array(q, np.float32); n = len(q)
             vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', q.ravel()), tex_coords=('f', np.zeros(n * 2, np.float32)), colors=('f', np.tile(np.array([1.0, 0.0, 0.0, al], np.float32), n)))
@@ -575,6 +631,13 @@ class Rendu:
         larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
         bl = max(larg) if larg else 0.0
         dispo = self._largeur_plaque(fen, nd, zp)
+        if dispo is None and fen.etendue_x() is None and not fen.rects():              # fenetre sans cadre propre (titre et etiquettes d'un reglage) : le cadre est dans une autre fenetre visible, on prend le plus petit rectangle qui contient le point d'ancrage
+            xa = nd['pos'][0]; z_a = nd['pos'][2] - lang['dy']; r_min = None
+            for v in self.voisins:
+                for (x0, z0, x1, z1) in v.rects():
+                    if x0 <= xa <= x1 and z0 <= z_a <= z1 and (r_min is None or (x1 - x0) * (z1 - z0) < (r_min[2] - r_min[0]) * (r_min[3] - r_min[1])): r_min = (x0, z0, x1, z1)
+            if r_min:
+                dispo = {0: r_min[2] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - r_min[0], r_min[2] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - r_min[0] - self.MARGE_PLAQUE}[col]
         if dispo is None and bl > 0:                                     # hors plaque de bouton : le texte doit tenir dans la largeur de sa fenetre (a partir de son point d'ancrage, avec la meme marge)
             ex = fen.etendue_x(); xa = nd['pos'][0]
             if ex and ex[0] <= xa <= ex[1]:
