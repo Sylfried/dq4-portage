@@ -133,6 +133,9 @@ class Fenetre:
         nom = self.t.get('name', '')                                              # types que le portage anime ou complete : le jeu les fait par du code que l'exporteur ne voit pas
         self.eglise = nom.startswith('Make_ChurchRoot'); self.eg_ids = []; self.txt_eglise = {}      # eglise : elements ajoutes, textes recus avant la creation des boutons
         self.statut = nom.startswith('Make_BattleUpStatus'); self.secousse = {}; self.t_curseur = None      # plaques des membres en combat : secousses en cours (membre -> etat), debut du clignotement de la fleche
+        self.noms = nom.startswith('Make_MonsterName')                            # plaques de monstres : marques de groupe (decor du combat : elles ne comptent pas dans l'etendue de la fenetre)
+        if self.noms:
+            for nd in self._marques(): nd['marque'] = True
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -245,6 +248,7 @@ class Fenetre:
     def code(self, i, c):
         if self.eglise and i == 0: self._eglise(c)
         elif self.statut: self._statut(i, c)
+        elif self.noms and i == 4: self._reset_marques()
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -374,6 +378,15 @@ class Fenetre:
             for m in nd['mats']:
                 if m.get('part') == 13: m['color'] = list(cs[c])
 
+    # ---- combat : marques de groupe sous les monstres (MonsterMarkList, type 31)
+    def _marques(self):
+        """Les 12 marques du type 31 : parties d'une seule icone de la feuille 6 (Button), dans l'ordre des parties."""
+        return [self.N[pt['node']] for pt in self.parts if len(pt['ib']) == 1 and pt['ib'][0]['k'] == 'icon' and pt['ib'][0].get('partsNo') == 6 and pt['node'] in self.N]
+
+    def _reset_marques(self):
+        """MonsterMarkList.Reset (code 4) : toutes les marques sont cachees."""
+        for nd in self._marques(): nd['act'] = False
+
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
         self.sel = bouton
@@ -452,6 +465,13 @@ class Fenetre:
             d = pl[i]; x = min(max(xs[i], -142.0), 142.0); z = zs[i]
             nc, nt = self.N[d['cadre']], self.N[d['texte']]
             nc['pos'] = [x, nc['pos'][1], z]; off = nc.get('off_texte', [0, 0, 0]); nt['pos'] = [x + off[0], nt['pos'][1], z + off[2]]
+        self._reset_marques(); marques = self._marques(); k = 0
+        for i in lst:                                                       # MonsterMarkList.SetMark : choix de cible (code 2) = une marque de la couleur de la plaque sous chaque monstre du groupe, a x du monstre, z = -64
+            if pl[i]['code'] != 2 or not proj: continue
+            for x in (proj(pl[i]['masque'], True) or []):
+                if k >= len(marques): break
+                nd = marques[k]; k += 1; nd['pos'] = [x, 0.0, -64.0]; nd['act'] = True
+                for j, uv in enumerate(uv_icone(self.ml.infos[6], 5 + i, 0)): nd['uv'][j] = list(uv)
 
     def boutons(self, ident=False):
         """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface ; ident : l'identifiant de l'element s'ajoute en fin de tuple."""
@@ -464,19 +484,19 @@ class Fenetre:
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas des parties visibles de la fenetre."""
-        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']) for v in nd['vtx']]
         return min(zs) if zs else 0.0
 
     def etendue(self):
         """(bas, haut) en unites d'interface des parties visibles de la fenetre, ou None si rien n'est dessine."""
-        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and self.visible(nd['id']) for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']) for v in nd['vtx']]
         return (min(zs), max(zs)) if zs else None
 
     def rects(self):
         """Rectangles (x0, z0, x1, z1) des elements dessines (visibles, avec maillage) de la fenetre : les cadres et les plaques."""
         out = []
         for nd in self.N.values():
-            if nd['vtx'] and nd['mats'] and self.visible(nd['id']):
+            if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']):
                 xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
                 out.append((min(xs), min(zs), max(xs), max(zs)))
         return out
@@ -848,7 +868,7 @@ class Gestionnaire:
     def selection(self, port, b):
         f = self.f.get(port)
         if f: f.selection(b)
-    proj = None            # appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None (fournie par la visionneuse)
+    proj = None            # appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None ; proj(masque, True) -> la liste des abscisses, une par monstre (fournie par la visionneuse)
     def plaque(self, port, i, nom, prm, code):
         f = self.f.get(port)
         if f: f.plaque(i, nom, prm, code)

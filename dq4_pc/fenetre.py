@@ -956,8 +956,8 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('fond de combat non calcule :', ex, flush=True); return None
 
-    def _ui_x_monstres(self, masque):
-        """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat."""
+    def _ui_x_monstres(self, masque, liste=False):
+        """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat. -> (min, max), ou la liste des abscisses (une par monstre) si `liste`."""
         M = getattr(self, '_M_combat', None); e = self.moteur.etat
         if M is None: return None
         ech = self.height / 800.0 * self.ui_k; cx = {'centre': self.width / 2, 'droite': self.width - 225 * ech, 'gauche': 225 * ech}.get(self.args.ui_pos, self.width / 2)
@@ -969,6 +969,7 @@ class Jeu(pyglet.window.Window):
             P = np.array(list(mm['pos']) + [1.0]); c = M @ P
             if c[3] <= 0: continue
             xs.append((((c[0] / c[3]) * 0.5 + 0.5) * self.width - cx) / ech)
+        if liste: return xs
         return (min(xs), max(xs)) if xs else None
 
     H_ECH = 87                                                  # hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limiter_lignes)
