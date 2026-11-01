@@ -335,12 +335,6 @@ class Moteur:
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
-        self._ecart_f = 1.0                      # facteur de vitesse du heros que les compagnons compensent (1 = d'origine)
-        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : n = nombre d'images d'historique entre deux compagnons (8, ou 10 dans certaines salles)
-            f = self._ecart_f
-            if f > 1.05: uc.reg_write(c.XREG[1], max(2, int(round((uc.reg_read(c.XREG[1]) & 0xffffffff) / f))))
-        haa = c.export('_ZN15TownPartyAction11AdjustArrayEi')
-        if haa: c.uc.hook_add(unicorn.UC_HOOK_CODE, _aa, None, haa, haa)
         self._creer_canevas()
 
     def _elargir_symboles(self):
@@ -380,15 +374,22 @@ class Moteur:
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')
 
     # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde
-    VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288))
+    # (carte du monde : en diagonale, FieldPlayer::move lit deux constantes locales du fichier, 0x27520c et 0x275210 (Fix32 2,0 chacune, posees par l'initialiseur statique 0x1eec50), au lieu de Speed (3,0) ;
+    # sans elles la course ne jouait pas en diagonale. Elles n'ont pas de symbole : decalage dans la bibliotheque)
+    VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288), (0x27520c, 8192), (0x275210, 8192))
 
-    def vitesse_heros(self, f, compagnons=False):
+    def vitesse_heros(self, f):
         """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi).
-        compagnons : en ville les compagnons suivent la trace du heros a un nombre fixe d'images (8) derriere lui, donc leur ecart grandit avec la vitesse ; vrai = cet ecart est divise par f pour garder la distance d'origine (essai : non verifie avec un groupe complet)."""
-        c = self.core; self._ecart_f = float(f) if compagnons else 1.0
-        if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.export(n), b) for n, b in self.VITESSES_HEROS]
+        (Les compagnons suivent la trace du heros : ils vont aussi vite que lui sans rien d'autre.)"""
+        c = self.core
+        if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.LIB_BASE + n if isinstance(n, int) else c.export(n), b) for n, b in self.VITESSES_HEROS]
         for ad, base in self._vit_ad:
             if ad: c.mem_w(ad, struct.pack('<i', int(round(base * f))))           # (a chaque image : un etat charge remet les valeurs qu'il avait)
+
+    def boutiques(self):
+        """(indice courant, nombre) des boutiques de la liste de la carte d'une ville (TownImageMap::execute : deux statiques locales, 0x2750c4 et 0x2750c8 ; la liste est la fenetre de type 24)."""
+        c = self.core; b = c.LIB_BASE
+        return struct.unpack('<hh', c.mem(b + 0x2750c4, 2) + c.mem(b + 0x2750c8, 2))
 
     def camera_ville(self):
         """Camera des villes du moteur d'origine (TownCamera, objet statique) : (limite gauche, limite droite, verrou) ; limite = 0 : rotation libre, < 0 : rotation interdite, > 0 : angle borne (unites de 1 / 4096 de tour) ; verrou : camera verrouillee par un evenement."""
@@ -554,6 +555,11 @@ class Moteur:
         a[32 + port] = idx + n + 1
         a[64] = idx + n + 2
         c.mem_w(self.buf1, struct.pack('<%dh' % PILE_SHORTS, *a))
+
+    def params_message(self):
+        """(nombre de lignes visibles - 1, hauteur d'une ligne, defilement) du canevas de message, tels que le moteur les tient."""
+        c = self.core; i16 = lambda ad: struct.unpack('<h', c.mem(ad, 2))[0]
+        return i16(self.L + 0x2523a0), i16(self.obj_msg + 0x42), i16(self.obj_msg + 0x4a)
 
     def lire_message(self):
         """Partie du canevas actuellement visible dans la fenetre de message : n lignes a partir du defilement courant.

@@ -19,7 +19,11 @@ FRAG = '''#version 330 core
 in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
 uniform sampler2D tex; uniform int mode;
 void main() {
-    vec4 c = texture(tex, v_uv);
+    vec4 c;
+    if (mode == 3) {                                                                               // plan de carte : texels nets, seule la frontiere entre deux texels est adoucie (« sharp bilinear »)
+        vec2 ts = vec2(textureSize(tex, 0)); vec2 p = v_uv * ts; vec2 seam = floor(p + 0.5);
+        vec2 aa = max(fwidth(p), vec2(1e-4)); c = texture(tex, (seam + clamp((p - seam) / aa, -0.5, 0.5)) / ts); }
+    else c = texture(tex, v_uv);
     if (mode == 1) { float g = dot(c.rgb, vec3(0.299, 0.587, 0.114)); c.rgb = vec3(g); }          // bouton grise
     else if (mode == 2) { c.rgb = vec3(1.0) - c.rgb; }                                            // bouton inverse
     c *= v_col;
@@ -63,6 +67,20 @@ def trois_lignes(t1, t0):
     return t
 
 
+def limiter_lignes(t, nb=3, lh=28.0, marge=3.0):
+    """Fenetre de message : le canevas montre exactement `nb` lignes de `lh` pixels (plus une marge de 3 pixels, le defilement du moteur commence a -3) au lieu de 3,5 lignes : la mise en page d'origine
+    laisse voir le haut de la ligne suivante sous la derniere ligne (canevas de 100,5 pour des lignes de 28 : type 0 ; combat : lignes de 34)."""
+    import copy
+    cv = t['canvas']; zmax = max(v[2] for v in cv['vtx']); zmin = min(v[2] for v in cv['vtx']); h = nb * lh + marge
+    if zmax - zmin <= h + 0.5: return t
+    t = copy.deepcopy(t); cv = t['canvas']
+    for v in cv['vtx']:
+        if v[2] == zmin: v[2] = zmax - h
+    for u, v in zip(cv['uv'], cv['vtx']):
+        if v[2] == zmax - h: u[1] = h / 512.0
+    return t
+
+
 def texte_plein(t):
     """Types de message de combat 2 et 3 (messages des actions) : la mise en page d'origine dessine leur canevas de texte a 90 % (`scale` 0,9 : 490 pixels du canevas dans 441 unites), ce qui rend le texte
     plus petit que dans les dialogues du terrain et le message de debut de combat. On agrandit toute la fenetre (cadre, canevas, curseur de fin de page) de 1 / scale autour de son coin bas gauche, puis on la recentre :
@@ -86,7 +104,8 @@ class MiseEnPage:
         self.hdr = d['header']; self.types = d['types']; self.message = d.get('message')       # message : fenetre de dialogue (MenuMessage), absente des anciens fichiers
         if self.message:                                                 # combat (type 1) : 3 lignes comme le terrain ; le cadre d'origine (4 lignes) reste en type 4, pour les messages qui en ont quatre
             ts = self.message['types']; ts.append(ts[1]); ts[1] = trois_lignes(ts[1], ts[0])
-            for i in (2, 3): ts[i] = texte_plein(ts[i])                          # messages d'action du combat : texte de la meme taille que dans les dialogues
+            for i in (2, 3): ts[i] = limiter_lignes(texte_plein(ts[i]), 3, 34.0)
+            ts[0] = limiter_lignes(ts[0], 3, 28.0)                          # messages d'action du combat : texte de la meme taille que dans les dialogues
         self.infos = self.hdr['info']; self.couleurs = [tuple(c) for c in self.hdr['colors']]
         self.pousse = tuple(self.hdr['pushed'])
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
@@ -408,7 +427,7 @@ class Rendu:
             self.tex[k] = t
         self.textes = Textes(police)
 
-    def maj_canevas(self, a):
+    def maj_canevas(self, a, nom='msg'):
         """Canevas de texte du moteur (512 x 512 octets d'opacite) -> texture « msg » (blanc, alpha = opacite), qui boucle comme dans Unity."""
         h, w = a.shape
         rgba = np.empty((h, w, 4), np.uint8); rgba[..., :3] = 255; rgba[..., 3] = a
@@ -416,7 +435,7 @@ class Rendu:
         t = img.get_texture(); gl.glBindTexture(t.target, t.id)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-        self.tex['msg'] = t
+        self.tex[nom] = t
 
     # ---- construction des elements a dessiner
     def _items(self, fen):
@@ -460,7 +479,9 @@ class Rendu:
                     sh = mat.get('sheet')
                     if sh not in self.tex: continue
                     col = list(mat.get('color') or (1, 1, 1, 1)); mode = 0; off = (0.0, 0.0)
-                    if k == 0 and nd['buttonId'] is not None and nd['buttonId'] >= 0 and 'part' in mat and mat['part'] == 7:
+                    if k == 0 and nd['buttonId'] is not None and 'part' in mat and mat['part'] == 10 and nd['buttonId'] < 0 and fen.sel_nd == nd['id']:
+                        col[:3] = [1.4, 1.4, 1.4]                                       # fleche de page survolee (PC) : eclaircie
+                    elif k == 0 and nd['buttonId'] is not None and (nd['buttonId'] >= 0 or fen.sel_nd == nd['id']) and 'part' in mat and mat['part'] == 7:
                         if fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
                         else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId'] and not ((nd['pad'] or 0) & 0xA0 and nd['buttonId'] in ok_num[id(fen)])) else nd['etat']       # un bouton d'annulation (manette 32 / 128, ex. « Rien ») qui partage son numero avec un bouton de validation (« Acheter ») ne s'allume pas avec lui
                         if etat == 1 or etat == 4: off = self.ml.pousse
@@ -488,8 +509,8 @@ class Rendu:
         u0, v0, u1, v1 = getattr(fen, 'carte_uv', None) or (0.0, 0.0, 1.0, 1.0)          # grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
         a = np.array([[x0, y0, u0, v0], [x1, y0, u1, v0], [x1, y1, u1, v1], [x0, y0, u0, v0], [x1, y1, u1, v1], [x0, y1, u0, v1]], np.float32)
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
-        t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
-        vl.draw(gl.GL_TRIANGLES); vl.delete()
+        t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 3
+        vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog['mode'] = 0
         if getattr(fen, 'voile', None) is not None:                                  # voile : silhouette grisee des terres sur les blocs non explores (meme cadre que le plan)
             a = np.array([[x0, y0, 0.0, 0.0], [x1, y0, 1.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y0, 0.0, 0.0], [x1, y1, 1.0, 1.0], [x0, y1, 0.0, 1.0]], np.float32)
             vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
@@ -506,12 +527,29 @@ class Rendu:
             vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', q.ravel()), tex_coords=('f', np.zeros(n * 2, np.float32)), colors=('f', np.tile(np.array([1.0, 0.0, 0.0, al], np.float32), n)))
             t = self._blanc; gl.glBindTexture(t.target, t.id); vl.draw(gl.GL_TRIANGLES); vl.delete()
 
+    MARGE_PLAQUE = 7.0          # marge (unites d'interface) laissee de chaque cote entre le texte et le bord de la plaque d'un bouton
+
+    def _largeur_plaque(self, fen, nd, zp):
+        """Largeur utile (unites) de la plaque de bouton (partie 7) qui porte ce texte centre, ou None : la plaque dont le rectangle contient le point d'ancrage du texte."""
+        t = nd['text']
+        if t['anchor'] % 3 != 1: return None
+        c = nd.get('_pl')
+        if c is None or c[0] is not fen.t:
+            r = None
+            for o in fen.N.values():
+                if o is nd or not o['vtx'] or not o['mats'] or o['mats'][0].get('part') != 7 or o['buttonId'] is None: continue
+                xs = [o['pos'][0] + v[0] for v in o['vtx']]; zs = [o['pos'][2] + v[1] for v in o['vtx']]
+                if min(xs) <= nd['pos'][0] <= max(xs) and min(zs) <= zp <= max(zs): r = max(xs) - min(xs) - 2 * self.MARGE_PLAQUE; break
+            nd['_pl'] = c = (fen.t, r)
+        return c[1]
+
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
         lignes = t['text'].split('\n'); N = len(lignes)
         em = TAILLE_POLICE * t['characterSize'] * 0.1 * nd['tscale']; emy = TAILLE_POLICE * t['characterSize'] * 0.1
         pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
+        ts = nd['tscale']
         row = t['anchor'] // 3; col = t['anchor'] % 3
         hb = N * pas                                                    # hauteur du bloc de texte
         haut = zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0)       # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
@@ -528,8 +566,11 @@ class Rendu:
                 cur = int(m.group(1)); pos = m.end()
             if pos < len(l): segs.append((l[pos:], cur))
             segs_l.append(segs)
-        larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * nd['tscale'] for t, _ in segs) for segs in segs_l]
+        larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
         bl = max(larg) if larg else 0.0
+        dispo = self._largeur_plaque(fen, nd, zp)
+        if dispo and bl > dispo:                                         # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
+            f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue
             lw = larg[i]
@@ -540,13 +581,13 @@ class Rendu:
             y_base = base0 - i * pas
             for texte, ci in segs:
                 tex, w, h, b = self.textes.ligne(texte, px)
-                x = cx + xs * s - 2 * nd['tscale']; y = cy + y_base * s - (h - b)
-                wd = w * nd['tscale']
+                x = cx + xs * s - 2 * ts; y = cy + y_base * s - (h - b)
+                wd = w * ts
                 a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + h, 1, 1], [x, y, 0, 0], [x + wd, y + h, 1, 1], [x, y + h, 0, 1]], np.float32)
                 vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.tile(np.array(teinte(ci), np.float32), 6)))
                 gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(tex.target, tex.id); self.prog['mode'] = 0
                 vl.draw(gl.GL_TRIANGLES); vl.delete()
-                xs += (w - 4) / s * nd['tscale']
+                xs += (w - 4) / s * ts
 
 
 class Gestionnaire:

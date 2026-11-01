@@ -59,6 +59,8 @@ class Pause:
         self.zone_ret = None; self.sur_ret = False; self.zones_eff = {}                      # bouton retour (x0, y0, x1, y1), pointeur dessus ; (ligne, colonne) -> croix « effacer la touche »
         self._pil = {}; self._img = {}                    # feuilles du jeu (PIL) et textures des sprites du menu
         self.mode_souris = False; self.pos_souris = None   # selection a la souris (encadrement jaune) ou au clavier (curseur dore) ; derniere position du pointeur
+        self.popup = None; self.zones_popup = []                                          # fenetre modale Oui / Non : {'titre', 'detail', 'oui', 'sel' (0 Oui, 1 Non)} ; zones de ses boutons
+        self.plie = False; self.zone_plier = None; self.tt = None                          # editeur d'interface : panneau replie ; barre de titre (plier / deplier) ; ligne survolee depuis (cle, instant) pour l'infobulle
         self.action_etat = 'creer'; self.etat_suppr = None                                  # menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
         self.barre_liste = None; self.glisse_liste = None; self.liste_top = None; self.liste_cur_vu = None      # liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
         self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
@@ -140,14 +142,14 @@ class Pause:
     # ---- ouverture / fermeture
     def ouvrir(self):
         if self.ouvert: return
-        self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
+        self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
         self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None
         self.J.pause_jeu(True)
 
     def fermer(self):
         if not self.ouvert: return
-        self.ouvert = False; self.capture = None; self.glisse = None; self.saisie = None; self.deroule = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
+        self.ouvert = False; self.capture = None; self.popup = None; self.glisse = None; self.saisie = None; self.deroule = None; self.J.reg.enregistrer(); self.J.pause_jeu(False)
         if self.mini_tex is not None:
             try: self.mini_tex.delete()
             except Exception: pass
@@ -168,7 +170,7 @@ class Pause:
     def _aller(self, nom):
         def va():
             self.pile.append(nom)
-            if nom in ('quitter', 'suppr_etat'): self.sel[nom] = 2        # « Non » preselectionne
+            if nom == 'quitter': self.sel[nom] = 2        # « Non » preselectionne
         return va
 
     def _e_racine(self):
@@ -228,7 +230,7 @@ class Pause:
                 self._choix('Shader', list(range(len(HD.MODES) + 1)), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
                 self._choix('Lissage des textures', [True, False], lambda: J.lissage, set_('lissage', J.regler_lissage)),
                 self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])),
-                self._choix('Caméra centrée sur le héros', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v)),
+                self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v)),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
                 self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else '')]
 
@@ -251,10 +253,15 @@ class Pause:
         else: d[self.cible] = [round(o[0], 4), round(o[1], 4), round(o[2], 4)]
         self.J.reg['interface_fenetres'] = d
 
+    def _poser_cible(self, v):
+        """Interface a modifier choisie : pour les dialogues, un nouveau message d'essai au hasard."""
+        if v != self.cible and v == 'msg': self.J.nouvel_echantillon()
+        self.cible = v
+
     def _e_interface(self):
         R = self.J.reg; H = self.J.hud; c = self.cible
         e = [self._choix("Afficher l'interface à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
-             self._choix('Interface à modifier', self.cibles(), lambda: self.cible, lambda v: setattr(self, 'cible', v))]
+             self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible)]
         if c == 'boutons':
             e.append(self._curs('Taille', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
         else:
@@ -299,14 +306,12 @@ class Pause:
                 vit('Vitesse de déplacement', 'vitesse_marche', 0.5, 2.0),
                 T('courir'), T('courir_bascule'),
                 vit('Multiplicateur de la course', 'vitesse_course', 1.0, 2.0),
-                self._choix('Compagnons à distance constante (essai)', [False, True], lambda: R['compagnons_distance'], lambda v: R.__setitem__('compagnons_distance', v)),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
                 vit('Vitesse de la caméra', 'vitesse_camera', 0.5, 2.0),
                 T('cam_accel'), T('cam_accel_bascule'),
-                vit("Multiplicateur d'accélération", 'accel_camera', 1.0, 4.0),
-                modif,
+                vit("Multiplicateur d'accélération", 'accel_camera', 1.0, 2.0),
                 vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
-                T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('infos'),
+                T('A'), T('menu'), T('B'), T('carte'), T('discussion'), modif, T('infos'),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)
@@ -323,7 +328,7 @@ class Pause:
         return inf.get('lieu', '') if inf.get('lieu') in ('Carte du monde', 'Combat') else ''
 
     def _e_etats(self):
-        """Etats instantanes : une liste deroulante choisit l'action (creer, charger, supprimer) appliquee a l'emplacement valide ; la confirmation de la suppression est un reglage."""
+        """Etats instantanes : une liste deroulante choisit l'action (creer, charger, supprimer) appliquee a l'emplacement valide ; la suppression passe par une fenetre de confirmation."""
         R = self.J.reg; act = self.action_etat
         e = [self._choix('Action', ['creer', 'charger', 'supprimer'], lambda: self.action_etat, lambda v: setattr(self, 'action_etat', v))]
         for n in range(1, NB_ETATS + 1):
@@ -333,13 +338,7 @@ class Pause:
             if act == 'creer': e.append(dict(t='slot', l=lib, v=val, n=n, off=False, ok=(lambda n=n: self._sauver(n))))
             elif act == 'charger': e.append(dict(t='slot', l=lib, v=val, n=n, off=inf is None, ok=(lambda n=n: self._charger(n))))
             else: e.append(dict(t='slot', l=lib, v=val, n=n, off=inf is None, ok=(lambda n=n: self._demander_suppression(n))))
-        if act == 'supprimer': e.append(self._choix('Confirmer la suppression', [True, False], lambda: R['confirmer_suppression'], lambda v: R.__setitem__('confirmer_suppression', v)))
         return e
-
-    def _e_suppr_etat(self):
-        n = self.etat_suppr; inf = self.J.infos_etat(n) if n else None
-        date = self._date_fr(inf[0].get('date')) if inf else ''
-        return [dict(t='sep', l="Supprimer l'état %d%s ?" % (n or 0, ' (' + date.strip() + ')' if date else '')), dict(t='act', l='Oui', ok=self._suppr_confirmee), dict(t='act', l='Non', ok=self.retour)]
 
     def _e_quitter(self):
         return [dict(t='sep', l='Quitter le jeu ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
@@ -361,14 +360,19 @@ class Pause:
             self._info('Impossible de charger l\'état : %r' % (ex,), True)
 
     def _demander_suppression(self, n):
-        """Supprimer l'etat n : avec confirmation (reglage), sinon tout de suite."""
-        if self.J.reg['confirmer_suppression']: self.etat_suppr = n; self._aller('suppr_etat')()
-        else: self._supprimer(n)
+        """Supprimer l'etat n : une fenetre modale demande confirmation (Non preselectionne)."""
+        inf = self.J.infos_etat(n); date = self._date_fr(inf[0].get('date')).strip() if inf else ''
+        self.popup = dict(titre="Supprimer l'état %d ?" % n, detail=date, oui=lambda: self._supprimer(n), sel=1)
 
-    def _suppr_confirmee(self):
-        n, self.etat_suppr = self.etat_suppr, None
-        if self.ecran == 'suppr_etat': self.pile.pop()
-        if n: self._supprimer(n)
+    def _touche_popup(self, symbol, act):
+        K = pyglet.window.key; p = self.popup
+        if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.popup = None
+        elif symbol in (K.LEFT, K.RIGHT, K.UP, K.DOWN) or act in ('gauche', 'droite', 'haut', 'bas'): p['sel'] = 1 - p['sel']
+        elif symbol in (K.RETURN, K.ENTER, K.SPACE) or act == 'A': self._valider_popup(p['sel'] == 0)
+
+    def _valider_popup(self, oui):
+        p, self.popup = self.popup, None
+        if oui and p and p.get('oui'): p['oui']()
 
     def _supprimer(self, n):
         try:
@@ -389,6 +393,9 @@ class Pause:
         if self.capture is not None: self._capturer(symbol); return True
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
+        if self.popup is not None: self._touche_popup(symbol, act); return True
+        if self.ecran == 'interface' and symbol == K.TAB: self.plie = not self.plie; return True              # (editeur : plier / deplier le panneau)
+        if self.ecran == 'interface' and self.plie and not (symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B'): return True
         if self.deroule is not None: self._touche_liste(symbol, act); return True
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
         if act == 'infos': self.J.regler_infos(not self.J.aide); R['infos'] = self.J.aide; return True          # (la touche des infos a l'ecran se regle dans Commandes)
@@ -527,6 +534,10 @@ class Pause:
         p = self.pos_souris; self.pos_souris = (x, y)
         if p is None or abs(x - p[0]) + abs(y - p[1]) < 3: return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
         self.mode_souris = True
+        if self.popup is not None:
+            for (x0, y0, x1, y1, i) in self.zones_popup:
+                if x0 <= x <= x1 and y0 <= y <= y1: self.popup['sel'] = i
+            return
         if self.capture is not None: return
         if self.deroule is not None:
             j = self._zone_liste(x, y)
@@ -565,6 +576,13 @@ class Pause:
         M = pyglet.window.mouse
         self.mode_souris = True; self.pos_souris = (x, y)
         if self.capture is not None: self.capture = None; return
+        if self.popup is not None:                                    # fenetre de confirmation : un bouton la valide, un clic droit ou ailleurs la ferme
+            if bouton != M.RIGHT:
+                for (x0, y0, x1, y1, i) in self.zones_popup:
+                    if x0 <= x <= x1 and y0 <= y <= y1: self._valider_popup(i == 0); return
+            else: self.popup = None
+            return
+        if self.ecran == 'interface' and self.zone_plier and self._dans(self.zone_plier, x, y) and bouton != M.RIGHT: self.plie = not self.plie; return
         if self.deroule is not None:                                  # liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
             b = self.barre_liste
             if bouton != M.RIGHT and b and b['x0'] <= x <= b['x1'] and b['y0'] <= y <= b['y1']: self._clic_barre_liste(x, y); return          # barre de defilement de la liste
@@ -661,6 +679,7 @@ class Pause:
             except ValueError: pass
 
     def molette(self, sy):
+        if self.popup is not None or (self.ecran == 'interface' and self.plie): return
         b = self.barre
         if b and self.deroule is None and b['n'] > b['vis']: self._fixer_vue(self.debut.get(self.ecran, 0) - 2 * (1 if sy > 0 else -1)); return      # liste qui defile : la molette fait defiler la vue (comme la barre)
         self._bouger(1 if sy > 0 else -1)                                    # (sinon, sens inverse : molette vers le haut = ligne suivante)
@@ -771,30 +790,18 @@ class Pause:
         else:
             voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 150; voile.draw()
         t = time.time(); self.dt_sw = min(0.1, t - self.t_sw); self.t_sw = t               # (animation des interrupteurs)
-        ecr = self.ecran; e = self._entrees(); n = len(e); i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
+        ecr = self.ecran; e = self._entrees(); n = len(e)
+        if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
+        i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'suppr_etat': 'Supprimer un état', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
         avec_mini = ecr == 'etats'
-        curs_aide = 'Curseurs : glisser, ←/→ ou cliquer sur la valeur pour la taper ; Suppr ou bouton rond : valeur par défaut'
-        aide_touche = 'Entrée : changer la touche    ←/→ : case    Suppr : effacer    Début ou bouton rond : touche d\'origine'
-        aide_sw = 'Entrée ou clic : activer / désactiver    ←  : Non    →  : Oui'; aide_liste = 'Entrée ou clic : ouvrir la liste    ←/→ : valeur précédente / suivante'
-        aide_liste_ouverte = '↑/↓ : choisir    Entrée ou clic : valider    Échap ou clic droit : fermer'; aide_saisie = 'Tape la valeur (Entrée : valider, Échap : annuler)'
-        aide_capture = 'Appuie sur la touche pour « %s »    (Échap : annuler, Suppr : effacer)'
-        aide_edit = "Glisse l'élément choisi pour le placer    Échap ou clic droit : terminer"
-        aide_etats = {'creer': 'Entrée : enregistrer ici (écrase l\'état)', 'charger': 'Entrée : charger cet état', 'supprimer': 'Entrée : supprimer cet état'}
-        aide = {'etats': aide_etats[self.action_etat], 'affichage': curs_aide, 'son': curs_aide, 'commandes': curs_aide, 'interface': aide_edit}.get(ecr, '')
-        aide_ecran = aide; en_sel = e[i_sel] if e else None
-        if en_sel and en_sel['t'] == 'touche': aide = en_sel.get('aide') or aide_touche
-        elif en_sel and en_sel['t'] == 'choix': aide = aide_sw if en_sel.get('sw') else aide_liste
-        if self.deroule is not None: aide = aide_liste_ouverte
-        if self.saisie is not None: aide = aide_saisie
-        if self.capture is not None: aide = aide_capture % dict(RG.ACTIONS)[self.capture[0]]
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
         avec_ret = not editeur and ecr != 'racine'                                  # (pas de bouton retour a la racine : « Reprendre » ferme le menu)
         kb = 1.1 * k; bw, bh = 64 * kb, 55.5 * kb; marge_ret = bh + 10 * k if avec_ret else 0.0
-        pied = 36 * k if aide else 0.0                     # (le message d'information est dessine au-dessus du cadre : il ne decale rien)
+        pied = 0.0                                          # (plus de ligne d'aide en bas : les aides sont des infobulles ; le message d'information est dessine au-dessus du cadre)
         hmax = H - 2 * 36 * k - marge_ret; h_titre = 78 * k + (22 * k if ecr == 'commandes' else 0.0)
         if editeur: h_titre = 64 * k
         rh = max(34 * k, min(52 * k, (hmax - h_titre - pad / 2 - pied) / max(1, n)))
@@ -817,22 +824,21 @@ class Pause:
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         if ecr == 'etats': pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
-        kinds = {x['t'] for x in e}; cand = [aide_ecran] if aide_ecran else []
-        if ecr == 'etats': cand += list(aide_etats.values())
-        if ecr in ('affichage', 'son', 'commandes', 'interface'): cand.append(curs_aide)
-        if 'touche' in kinds: cand += [aide_touche, aide_capture % max((l for _, l in RG.ACTIONS), key=len)] + [x['aide'] for x in e if x.get('aide')]
-        if 'choix' in kinds: cand += [x for x, ok in ((aide_sw, any(x.get('sw') for x in e if x['t'] == 'choix')), (aide_liste, any(x.get('liste') for x in e if x['t'] == 'choix'))) if ok] + [aide_liste_ouverte]
-        if 'curs' in kinds: cand.append(aide_saisie)
-        pw = max([pw] + [self._et(a, fsp, AIDE).content_width + 40 * k for a in cand])           # (l'aide ne depasse jamais la fenetre, quelle que soit la ligne choisie)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
-        if editeur:                                                                 # panneau colle en bas de l'ecran, ou en haut quand la fenetre montree est dans la moitie basse
-            r = self.rect_apercu
-            if r and (r[1] + r[3]) / 2 < H / 2: y1 = H - 22 * k; y0 = y1 - h
-            else: y0 = 22 * k; y1 = y0 + h
+        if editeur:                                                                 # panneau toujours en haut a gauche (replie : la barre de titre seule, pour voir tout l'ecran)
+            if self.plie: pw = max(300 * k, self._et(titres['interface'], fst).content_width + 130 * k)
+            x0 = 22 * k; y1 = H - 22 * k; y0 = y1 - h
         self.cadre_panneau = (x0, y0, x0 + pw, y1) if editeur else None
+        self.zone_plier = (x0, y1 - h_titre, x0 + pw, y1) if editeur else None
         self._cadre(x0, y0, pw, h, k)
         e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if editeur else 52) * k; e_t.draw()
+        if editeur:                                                                 # plier / deplier le panneau : fleche dans la barre de titre (vers le haut = replier, vers le bas = deplier)
+            fx, fy = x0 + pw - 34 * k, y1 - 32 * k
+            sur = self.mode_souris and self.pos_souris and self._dans(self.zone_plier, *self.pos_souris)
+            coul = OR[:3] if sur else (200, 200, 200)
+            if self.plie: pyglet.shapes.Triangle(fx - 9 * k, fy + 5 * k, fx + 9 * k, fy + 5 * k, fx, fy - 6 * k, color=coul).draw()
+            else: pyglet.shapes.Triangle(fx - 9 * k, fy - 5 * k, fx + 9 * k, fy - 5 * k, fx, fy + 6 * k, color=coul).draw()
         # vue : la selection reste visible quand elle change ; sinon la vue ne bouge que par la barre ou la molette
         deb = self.debut.get(ecr, n_f)
         if self.vu_sel.get(ecr) != i_sel:
@@ -913,8 +919,6 @@ class Pause:
         if barre: self.barre = self._barre_defilement(x0 + pw - 14 * k, y1 - h_titre, y1 - h_titre - visibles * rh, n_s, visibles, debut - n_f, k, self.glisse_barre is not None, n_f)
         # pied du cadre : aide (centree, toujours dans le cadre)
         yp = y0 + 12 * k
-        if aide:
-            ea = self._ajuster(aide, fsp, AIDE, pw - 24 * k); ea.x = x0 + (pw - ea.content_width) / 2; ea.y = yp; ea.draw(); yp += 36 * k
         if msg:
             em = self._ajuster(msg, fsp * 1.1, ROUGE if self.message[2] else OR, W - 24 * k); em.x = min(max(12 * k, x0 + (pw - em.content_width) / 2), W - em.content_width - 12 * k); em.y = min(H - 24 * k, y1 + 12 * k); em.draw()
         # bouton retour, en bas a droite de la fenetre
@@ -940,6 +944,88 @@ class Pause:
                     el = self._et('Emplacement vide' if not inf else 'Pas de miniature', fs, GRIS); el.x = mx + (wmini - el.content_width) / 2; el.y = y1 - h / 2; el.draw()
         if self.deroule is not None and self.deroule[0] in lignes and self.deroule[0] < n and e[self.deroule[0]]['t'] == 'choix':
             self._dessiner_liste(e[self.deroule[0]], lignes[self.deroule[0]], xr + 6 * k, k, fs)
+        self._dessiner_infobulle(e, n, lignes, plx, plw, k, fsp, W, H)
+        self._dessiner_popup(k, fs, fsp, W, H)
+
+    # ---- infobulles (aides au survol de la souris) et fenetre modale
+    AIDE_TOUCHE = "Entrée : changer la touche   ←/→ : case   Suppr : effacer   Début ou bouton rond : touche d'origine"
+    AIDE_ETATS = {'creer': "Entrée : enregistrer ici (écrase l'état)", 'charger': 'Entrée : charger cet état', 'supprimer': 'Entrée : supprimer cet état'}
+
+    def _aide_ligne(self, en):
+        """Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas."""
+        t = en['t']
+        if t == 'touche': return en.get('aide') or self.AIDE_TOUCHE
+        if t == 'curs': return 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
+        if t == 'choix':
+            return 'Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante'
+        if t == 'slot': return self.AIDE_ETATS[self.action_etat]
+        if self.ecran == 'interface': return "Glisse l'élément choisi pour le placer   Échap ou clic droit : terminer   Tab : replier le panneau"
+        return ''
+
+    def _lignes_aide(self, texte, maxw, fz):
+        """Lignes d'une infobulle : coupees aux espaces triples, puis a la largeur maxw."""
+        import re
+        out = []
+        for l in re.split(r'\s{3,}', texte.strip()):
+            cur = ''
+            for mot in l.split(' '):
+                essai = (cur + ' ' + mot).strip()
+                if cur and self._et(essai, fz).content_width > maxw: out.append(cur); cur = mot
+                else: cur = essai
+            if cur: out.append(cur)
+        return out
+
+    def _dessiner_infobulle(self, e, n, lignes, plx, plw, k, fsp, W, H):
+        """Infobulle : aide de la ligne survolee par la souris (apres 0,4 s), ou consigne de la saisie / de la capture d'une touche sous la ligne choisie."""
+        if self.popup is not None: self.tt = None; return
+        fz = fsp * 1.05; texte = ''; ancre = None
+        i_sel = min(self.sel.get(self.ecran, 0), max(0, n - 1))
+        if self.capture is not None: texte = "Appuie sur la touche pour « %s »   Échap : annuler   Suppr : effacer" % dict(RG.ACTIONS)[self.capture[0]]; ancre = i_sel
+        elif self.saisie is not None: texte = 'Tape la valeur   Entrée : valider   Échap : annuler'; ancre = self.saisie[0]
+        elif self.deroule is not None: self.tt = None; return
+        elif self.zone_plier and self.mode_souris and self.pos_souris and self._dans(self.zone_plier, *self.pos_souris):
+            cle = ('plier', 0)
+            if self.tt is None or self.tt[0] != cle: self.tt = (cle, time.time())
+            if time.time() - self.tt[1] > 0.4: texte = 'Replier / déplier le panneau (Tab)'
+        elif self.mode_souris and self.pos_souris and self.capture is None:
+            i, _ = self._zone(*self.pos_souris); cle = (self.ecran, i)
+            if i is None or i >= n: self.tt = None; return
+            if self.tt is None or self.tt[0] != cle: self.tt = (cle, time.time())
+            if time.time() - self.tt[1] > 0.4: texte = self._aide_ligne(e[i])
+        else: self.tt = None
+        if not texte: return
+        ls = self._lignes_aide(texte, 520 * k, fz)
+        if not ls: return
+        ets = [self._et(l, fz, BLANC) for l in ls]; lh = fz * 1.65
+        w = max(et.content_width for et in ets) + 28 * k; h = len(ets) * lh + 18 * k
+        if ancre is not None and ancre in lignes:                                   # consigne : sous la ligne choisie (au-dessus s'il n'y a pas la place)
+            yb, yt = lignes[ancre]; x = plx + 24 * k; y = yb - 8 * k - h
+            if y < 8 * k: y = yt + 8 * k
+        else:
+            mx, my = self.pos_souris; x = mx + 14 * k; y = my - 20 * k - h
+            if y < 8 * k: y = my + 22 * k
+        x = max(8 * k, min(x, W - w - 8 * k)); y = max(8 * k, min(y, H - h - 8 * k))
+        HM.cadre(x, y, w, h, k * 0.5, 0.0, fond=NOIR, opacite=0.94)
+        for j, et in enumerate(ets): et.x = x + 14 * k; et.y = y + h - 9 * k - lh * (j + 1) + (lh - fz * 1.0) * 0.45; et.draw()
+
+    def _dessiner_popup(self, k, fs, fsp, W, H):
+        """Fenetre modale Oui / Non (suppression d'un etat) : le menu reste visible, assombri ; Non est preselectionne."""
+        self.zones_popup = []
+        p = self.popup
+        if p is None: return
+        voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 120; voile.draw()
+        et = self._et(p['titre'], fs * 1.2, BLANC); ed = self._et(p['detail'], fsp * 1.15, GRIS) if p.get('detail') else None
+        bw, bh = 150 * k, 46 * k; w = max(2 * bw + 60 * k, et.content_width + 80 * k, (ed.content_width + 80 * k) if ed else 0); h = 200 * k
+        x, y = (W - w) / 2, (H - h) / 2
+        self._cadre(x, y, w, h, k)
+        et.x = x + (w - et.content_width) / 2; et.y = y + h - 62 * k; et.draw()
+        if ed: ed.x = x + (w - ed.content_width) / 2; ed.y = y + h - 92 * k; ed.draw()
+        for i, lib in enumerate(('Oui', 'Non')):
+            bx = x + w / 2 + (-bw - 14 * k if i == 0 else 14 * k); by = y + 28 * k; sel = p['sel'] == i
+            HM.plaque(bx, by, bw, bh, k, sel, JAUNE if sel and self.mode_souris else None)
+            if sel and not self.mode_souris: self._curseur(bx - 24 * k, by + bh / 2, min(bh * 0.6, 26 * k))
+            lb = self._et(lib, fs, BLANC); lb.x = bx + (bw - lb.content_width) / 2; lb.y = by + bh / 2 - 0.45 * fs; lb.draw()
+            self.zones_popup.append((bx, by, bx + bw, by + bh, i))
 
     def _dessiner_liste(self, en, ligne, xd, k, fs):
         """Liste deroulante d'un choix : sous la ligne (au-dessus s'il n'y a pas la place), valeur courante en or, curseur dore comme dans les menus du jeu ; une barre de defilement
