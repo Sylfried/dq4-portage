@@ -52,6 +52,7 @@ EFFET_FLOU = 1.0              # Capture.SetBlur(vrai) pendant l'effet : la captu
 
 BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
+SE_APERCU = 316                # bruitage d'essai des volumes (page Son du menu Echap) : degats du sol (CommonWalkDamage::checkWalk), court et sans rapport avec l'interface
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
 MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
 # Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/notes-technique-portage-dq4.md) :
@@ -192,6 +193,7 @@ class Jeu(pyglet.window.Window):
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
         self.son.precharger(SE_COURANTS)
+        self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
@@ -651,6 +653,49 @@ class Jeu(pyglet.window.Window):
 
     def regler_vol_musique(self, v): self.son.regler_volumes(v, None)
     def regler_vol_bruitages(self, v): self.son.regler_volumes(None, v)
+
+    # ---- son par categorie (menu Echap > Son) : voir son.py (CATEGORIES, Mixage)
+    def appliquer_mixage(self, depart=False):
+        """Volumes et interrupteurs des reglages -> son.mix, tout de suite pour les sons en cours. Au depart, les volumes de la musique et des bruitages sont ceux de la ligne de commande (Son les a deja)."""
+        R = self.reg; vol = dict(jingles=R['volume_jingles'], interface=R['volume_interface'])
+        if not depart: vol.update(musique=R['volume_musique'], effets=R['volume_bruitages'])
+        self.son.regler_mixage(general=R['volume_general'], volumes=vol, actifs=dict(musique=R['musique_active'], jingles=R['jingles_actifs'], effets=R['bruitages_actifs'], interface=R['interface_active']))
+
+    def apercu_son(self, cat):
+        """Reglage d'un volume sur la page Son : un bruitage d'essai de la categorie (un par quart de seconde au plus) ; la musique, elle, se fait entendre pendant la page (Son.ecouter)."""
+        t = time.time()
+        if t - self._t_apercu < 0.25: return
+        self._t_apercu = t
+        if cat in ('general', 'effets') and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
+        elif cat in ('general', 'interface'): self.son.jouer_se(SE_BOUTON)
+
+    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Texte et defilement)
+    def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
+
+    def defilement_actuel(self):
+        """(defilement automatique, vitesse 0 a 3) en vigueur : ceux du joueur s'ils sont imposes, sinon ceux du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
+        R = self.reg
+        if R['defilement_force']: return R['defilement_auto'], R['defilement_vitesse']
+        code = self.moteur.options_jeu()[2]
+        return code < MO.COMBAT_MANUEL, (code if code < MO.COMBAT_MANUEL else R['defilement_vitesse'])
+
+    def regler_defilement(self, auto=None, vitesse=None):
+        a, v = self.defilement_actuel(); R = self.reg
+        R['defilement_auto'] = a if auto is None else bool(auto); R['defilement_vitesse'] = v if vitesse is None else int(vitesse); R['defilement_force'] = True
+        self.appliquer_defilement()
+
+    def retablir_defilement(self):
+        self.reg['defilement_force'] = False; self.appliquer_defilement()
+
+    def appliquer_defilement(self):
+        R = self.reg
+        self.moteur.imposer_defilement((R['defilement_vitesse'] if R['defilement_auto'] else MO.COMBAT_MANUEL) if R['defilement_force'] else None)
+
+    def _adopter_defilement(self, code):
+        """Le joueur change la vitesse des messages dans la fenetre Parametres du jeu alors que le defilement est impose : ce nouveau choix remplace l'ancien."""
+        R = self.reg; R['defilement_auto'] = code < MO.COMBAT_MANUEL
+        if code < MO.COMBAT_MANUEL: R['defilement_vitesse'] = code
+        self.appliquer_defilement()
 
     def pause_jeu(self, oui):
         """Menu Echap ouvert (oui) ou ferme : le moteur et le son s'arretent ; a la reprise, les touches deja tenues ne comptent pas comme un nouvel appui."""
@@ -2105,6 +2150,8 @@ class Jeu(pyglet.window.Window):
         self.son.image = self.n
         if mo.etat.sons: self.son.evenements(mo.etat.sons); mo.etat.sons = []
         self.son.tick()
+        jeu = mo.options_jeu()[:2]
+        if jeu != self._opt_son: self._opt_son = jeu; self.son.regler_mixage(jeu={'musique': SON.volume_option_jeu(jeu[0]), 'effets': SON.volume_option_jeu(jeu[1])})        # options « volume » de la fenetre Parametres du jeu
         if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, mo.etat.partie, mo.etat.carte, None if mo.etat.champ is None else mo.etat.champ['cam'], p), flush=True)
         e = self.moteur.etat
         self._objets_carte()

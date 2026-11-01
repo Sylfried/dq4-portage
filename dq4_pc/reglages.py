@@ -33,6 +33,11 @@ DEFAUT = {
     'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
+    'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
+    'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
+    'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
+    'defilement_force': False,    # combats : impose le defilement ci-dessous (non : celui de la sauvegarde, regle dans la fenetre Parametres du jeu)
+    'defilement_auto': True, 'defilement_vitesse': 2,       # combats : defilement automatique des messages (non : on passe chaque message a la main) ; vitesse 0 (la plus rapide) a 3 (la plus lente) = attente de 12 / 22 / 32 / 42 images
     'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
@@ -54,6 +59,9 @@ DEFAUT = {
 
 
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0), 'defilement_vitesse': (0, 3)})
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force', 'defilement_auto')
+VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 
 
 def nom_touche(nom):
@@ -102,7 +110,11 @@ class Reglages:
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a and not (a in PARTAGE and b in PARTAGE)): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
-                for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                for k in BOOLEENS_SON_TEXTE:
+                    if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
+                self.v['defilement_vitesse'] = int(round(self.v['defilement_vitesse']))
+                self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}
