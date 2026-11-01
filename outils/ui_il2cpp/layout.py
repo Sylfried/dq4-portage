@@ -96,7 +96,10 @@ def export_type(typ):
     nm = R.tbl[typ]
     for o in [o for o, u in T.U.items() if u['kind'] == 'GameObject']: pass
     keep = set(T.U); T.tab = []; T.plist = []; T.deleg = {}; BUILDS.clear(); FCALLS.clear()
-    err = T.run(R.addr[nm[:-2]], [7, typ])
+    # CreateMenuPortItem (0xCE4294) appelle le delegue avec « type - Array.IndexOf(makeFuncList, delegue) » (0xCE43DC : sub w2, w21, w0) :
+    # pour les types qui partagent un meme Make_* (13..17 Make_Status, 22/23 Make_MapButton...) l'argument est le rang dans le groupe, pas le type
+    prem = min(t_ for t_ in range(len(R.tbl)) if R.tbl[t_] == nm)
+    err = T.run(R.addr[nm[:-2]], [7, typ - prem])
     objs = {o: u for o, u in T.U.items() if o not in keep}
     gos = {o: u for o, u in objs.items() if u['kind'] == 'GameObject'}
     gid = {o: u['id'] for o, u in gos.items()}

@@ -4,7 +4,7 @@ import json, struct, sys
 import scene as S, runall2 as R, menusys as M
 T = S.T
 # Color.cyan / Color.green : proprietes natives d'Unity (absentes de l'emulation) -> valeurs standard d'Unity
-GENERATION = 2      # numero de version de la mise en page : 2 = langue reglee (GetLangages) ; lancer_dq4.bat refait un fichier de generation plus ancienne
+GENERATION = 3      # numero de version de la mise en page : 2 = langue reglee (GetLangages) ; 3 = argument des Make_* = rang dans le groupe de types (type 22 : bouton Mode) ; lancer_dq4.bat refait un fichier de generation plus ancienne
 COULEURS_UNITY = {5: [0.0, 1.0, 1.0, 1.0], 6: [0.0, 1.0, 0.0, 1.0]}
 
 
