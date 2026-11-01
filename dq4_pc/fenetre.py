@@ -776,7 +776,9 @@ class Jeu(pyglet.window.Window):
         if self.fullscreen: self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
         if cible == 1: self.set_fullscreen(True)
         elif cible == 2:
-            m = choisir_mode_ecran(self.modes_ecran(), *self.reg['resolution'])
+            try: res = (int(self.reg['resolution'][0]), int(self.reg['resolution'][1]))
+            except Exception: res = (1920, 1080)
+            m = choisir_mode_ecran(self.modes_ecran(), *res)
             if m is None: raise RuntimeError("aucun mode d'affichage disponible")
             self.set_fullscreen(True, screen=self.screen, mode=m)
             if not self._mode_applique(m): raise RuntimeError('le moniteur a refusé le mode %d x %d' % (m.width, m.height))

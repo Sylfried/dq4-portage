@@ -91,6 +91,79 @@ class ChoixModeEcran(unittest.TestCase):
         m = self.choisir([types.SimpleNamespace(width=1280, height=720), types.SimpleNamespace(width=1920, height=1080)], 1920, 1080); self.assertEqual((m.width, m.height), (1920, 1080))
 
 
+class Raccourcis(unittest.TestCase):
+    """F11 et Alt + Entree (vrai code de Jeu.on_key_press / on_key_release / _fronts sur un faux Jeu, sans fenetre) : bascule, Entree avalee, discussion de groupe (Alt) au relachement d'Alt seul."""
+    @classmethod
+    def setUpClass(cls):
+        try: import fenetre, pyglet; cls.FE = fenetre; cls.K = pyglet.window.key; cls.pyglet = pyglet
+        except Exception as ex: raise unittest.SkipTest('fenetre.py non importable ici (%r)' % (ex,))
+
+    def faux_jeu(self):
+        FE = self.FE
+        j = types.SimpleNamespace(avalees=set(), alt_cand=False, alt_tap=False, reg=RG.Reglages(None), touches=self.K.KeyStateHandler(), act_prec={}, n=0, _pret=True, combo=[False, False],
+                                  pause=types.SimpleNamespace(ouvert=False, capture=None, touche=lambda sym, mods: True), _en_bascule=False, post=object(), sauv=None, licence=None, dernier_peripherique='', bascules=0, annulations=0)
+        j.basculer_exclusif = lambda: setattr(j, 'bascules', j.bascules + 1)
+        j._tenue = lambda a: FE.Jeu._tenue(j, a); j._saisie_nom_en_cours = lambda: False; j._num_etat = FE.Jeu._num_etat; j._raccourci_fenetre = lambda sym, mods: FE.Jeu._raccourci_fenetre(j, sym, mods)
+        j.annuler_chargement = lambda: setattr(j, 'annulations', j.annulations + 1)
+        return j
+
+    def appui(self, j, sym):
+        mods = self.K.MOD_ALT if j.touches[self.K.LALT] or j.touches[self.K.RALT] else 0
+        j.touches.on_key_press(sym, mods); return self.FE.Jeu.on_key_press(j, sym, mods)
+
+    def relache(self, j, sym):
+        j.touches.on_key_release(sym, 0); self.FE.Jeu.on_key_release(j, sym, 0)
+
+    def tick(self, j): return self.FE.Jeu._fronts(j)
+
+    def test_f11_bascule_et_n_est_pas_une_action(self):
+        K = self.K; j = self.faux_jeu(); self.appui(j, K.F11)
+        self.assertEqual(j.bascules, 1); self.assertIn(K.F11, j.avalees)
+        j.reg['touches']['infos'][0] = 'F11'; j.reg.codes_cache = {}                       # (un ancien fichier qui lie F11 a une action : elle ne part pas)
+        self.assertFalse(j._tenue('infos'))
+        self.relache(j, K.F11); self.assertNotIn(K.F11, j.avalees)
+
+    def test_alt_entree_bascule_sans_valider_ni_discussion(self):
+        K = self.K; j = self.faux_jeu()
+        self.appui(j, K.LALT); self.assertTrue(j.alt_cand)
+        self.assertFalse(self.tick(j)['discussion'])                                       # Alt tenue : rien tant qu'il n'est pas relache
+        self.appui(j, K.RETURN)
+        self.assertEqual(j.bascules, 1); self.assertFalse(j.alt_cand)
+        fr = self.tick(j); self.assertFalse(fr['menu']); self.assertFalse(j._tenue('menu'))      # Entree avalee : ni validation, ni menu
+        self.relache(j, K.RETURN); self.relache(j, K.LALT)
+        self.assertFalse(self.tick(j)['discussion']); self.assertFalse(j.alt_tap)          # Alt relache apres Alt + Entree : pas de discussion de groupe
+        self.appui(j, K.RETURN); self.assertTrue(self.tick(j)['menu'])                     # (Entree seule fonctionne de nouveau)
+        self.assertEqual(j.bascules, 1)
+
+    def test_entree_pave_et_alt_gr(self):
+        K = self.K; j = self.faux_jeu(); self.appui(j, K.RALT); self.appui(j, K.ENTER)
+        self.assertEqual(j.bascules, 1); self.relache(j, K.ENTER); self.relache(j, K.RALT); self.assertFalse(self.tick(j)['discussion'])
+
+    def test_alt_seul_declenche_la_discussion_au_relachement(self):
+        K = self.K; j = self.faux_jeu()
+        self.appui(j, K.LALT); self.assertFalse(self.tick(j)['discussion'])
+        self.relache(j, K.LALT); self.assertTrue(self.tick(j)['discussion'])               # une seule fois
+        self.assertFalse(self.tick(j)['discussion'])
+        self.appui(j, K.RALT); self.relache(j, K.RALT); self.assertTrue(self.tick(j)['discussion'])      # Alt Gr aussi
+
+    def test_alt_tab_ne_lance_pas_la_discussion(self):
+        K = self.K; j = self.faux_jeu(); self.appui(j, K.LALT)
+        j.touches.on_deactivate()                                                          # la fenetre perd le focus : le relachement n'arrive jamais
+        self.assertFalse(self.tick(j)['discussion']); self.assertFalse(j.alt_cand)
+
+    def test_menu_pause_ouvert_ou_touche_autre_que_alt(self):
+        K = self.K; j = self.faux_jeu(); j.pause.ouvert = True; self.appui(j, K.LALT); self.relache(j, K.LALT)
+        self.assertFalse(self.tick(j)['discussion'])                                       # (le menu Echap n'envoie rien au jeu)
+        j = self.faux_jeu(); j.reg.lier('discussion', 0, K.G); j.reg.delier('discussion', 1)      # discussion = G seule : au moment de l'appui, comme avant
+        self.appui(j, K.G); self.assertTrue(self.tick(j)['discussion']); self.relache(j, K.G)
+        self.appui(j, K.LALT); self.relache(j, K.LALT); self.assertFalse(self.tick(j)['discussion'])        # Alt ne sert plus a rien
+
+    def test_capture_de_touche_en_cours(self):
+        K = self.K; j = self.faux_jeu(); j.pause.capture = ('A', 0)
+        self.assertFalse(j._raccourci_fenetre(K.F11, 0))                                   # la page Commandes attend une touche : F11 lui revient (elle repond « reservee »)
+        self.assertEqual(j.bascules, 0)
+
+
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Fenêtre » a trois valeurs, « Résolution » grisee en plein ecran sans bordure."""
     ORDRE = ['Fenêtre', 'Résolution', 'Netteté', 'Shader', 'Lissage des textures', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Centrer la caméra sur le joueur', 'Interface']
