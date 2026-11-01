@@ -25,7 +25,7 @@ NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Ma
         'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
 
 DEFAUT = {
-    'mode_sprites': 4,            # 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect (voir hd.py)
+    'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
@@ -54,6 +54,18 @@ DEFAUT = {
     'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), course x1,5 (si elle etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
+
+
+MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
+MSAA_VALEURS = (0, 2, 4, 8)
+
+
+def mode_sprites_valide(v):
+    """Valeur lue (ancien fichier de reglages, option --hd) -> mode existant : 2 (regions lissees) et 3 (bicubique) sont devenus 1 (EPX x8, le plus proche : meme agrandissement x8 des contours, sans le flou) ; tout le reste -> pixel perfect."""
+    try: v = int(v)
+    except (TypeError, ValueError): return DEFAUT['mode_sprites']
+    if v in (2, 3): return 1
+    return v if v in MODES_SPRITES else DEFAUT['mode_sprites']
 
 
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0), 'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)}      # bornes des curseurs du menu Echap
@@ -106,6 +118,8 @@ class Reglages:
                         if n and any(n in l for b, l in ts.items() if b != a and not (a in PARTAGE and b in PARTAGE)): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}

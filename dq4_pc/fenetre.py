@@ -58,7 +58,7 @@ EFFET_FLOU = 1.0              # Capture.SetBlur(vrai) pendant l'effet : la captu
 BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
-MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
+MODE_PP = 4                   # dernier mode du menu « Shader » (0 originaux, 1 EPX x8, 4 pixel perfect : voir reglages.MODES_SPRITES) : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
 # Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/notes-technique-portage-dq4.md) :
 ASPECT_PORTRAIT = 0.5625      # SceneCamera.ASPECT_DEF : l'original est concu pour un ecran portrait 450 x 800 ; Unity fixe le champ de vision HORIZONTAL (fov x 4/3) et en deduit la hauteur
 RESOLUTIONS = ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160))
@@ -174,7 +174,7 @@ class Jeu(pyglet.window.Window):
         self.args = args
         self._journal_fenetre('création')
         self._attente('Chargement du moteur...')
-        self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie(); self.est_plein = bool(self.fullscreen); self.taille_fenetre = (args.largeur, args.hauteur)
+        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie(); self.est_plein = bool(self.fullscreen); self.taille_fenetre = (args.largeur, args.hauteur)
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
@@ -355,6 +355,7 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
         r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
+        if not self.lissage: self._filtrer(r['t'], False)
         return r
 
     def _camera_champ(self, e, aspect):
@@ -576,7 +577,7 @@ class Jeu(pyglet.window.Window):
         return chiffres.get(symbol)
 
     # ---- reglages appliques depuis le menu Echap
-    def regler_mode(self, m): self.mode = int(m)
+    def regler_mode(self, m): self.mode = RG.mode_sprites_valide(m)
 
     @staticmethod
     def _zoom_valide(z):
@@ -603,6 +604,8 @@ class Jeu(pyglet.window.Window):
         for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
         for r in self.decor_hd.values():
             for t in r.values(): self._filtrer(t, self.lissage)
+        for d in list(self.sprite_tex.values()) + list(self.cb_tex.values()):          # sprites et monstres agrandis (EPX) : meme choix ; les originaux le suivent dans le shader (net)
+            if d and d.get('hd'): self._filtrer(d['t'], self.lissage)
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
@@ -881,6 +884,7 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('lissage HD impossible (monstre %d) : %s' % (mid, ex), flush=True); self.cb_tex[cle] = orig; return orig
         self.cb_tex[cle] = dict(t=self._tex(a, False, HD_NIVEAUX), tw=a.shape[1], th=a.shape[0], hd=a is not orig['arr'])
+        if not self.lissage: self._filtrer(self.cb_tex[cle]['t'], False)
         return self.cb_tex[cle]
 
     def _maillages_combat(self, e, R=None):
@@ -1002,7 +1006,7 @@ class Jeu(pyglet.window.Window):
 
     def _tracer_decor(self, net=False):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
-        lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
+        lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; le mode agrandi (EPX) lui applique l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
         net_o = 1.0 if (net and r is None and self.lissage and not os.environ.get('DQ_DECOR_FLOU')) else 0.0           # villes et donjons en « Originaux » / pixel perfect : texels nets, seule la frontiere entre deux texels est adoucie (comme les sprites) ; en combat, peintures etirees : lissage normal
         est_tr = lambda k: isinstance(k, tuple) and k[0] == 'tr'
@@ -2367,7 +2371,7 @@ class Jeu(pyglet.window.Window):
             mons = self._maillages_combat(e)             # reecrit les sommets des monstres/effets (tampons « sales » : pas encore envoyes au GPU)
             self._dom_lie = None                         # force le rebind + commit() au 1er trace : sinon les monstres sortent avec les donnees de l'image precedente
             for tex, tw, th, vl, shader, hd in mons:
-                self.prog['net'] = 0.0 if hd else (2.0 if pp else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets
+                self.prog['net'] = 0.0 if hd else (2.0 if (pp or not self.lissage) else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets (plus proche voisin si le lissage est coupe)
                 if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)                 # DssaCharaTransparent : ZTest Always
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
                 if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
@@ -2380,7 +2384,7 @@ class Jeu(pyglet.window.Window):
                 gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)
                 self._dom_lie = None
                 for tex, tw, th, vl, shader, hd in self._maillages_combat(e, np.column_stack(cam3d)):
-                    self.prog['net'] = 0.0 if hd else 1.0
+                    self.prog['net'] = 0.0 if hd else (1.0 if self.lissage else 2.0)
                     if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)
                     self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
                     if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
@@ -2390,9 +2394,9 @@ class Jeu(pyglet.window.Window):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
             elif champ: self._dessiner_ombres_champ(ombres, w * CH_PX / 24.0)
         for slot, f, vl in a_dessiner:
-            self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
+            self.prog['net'] = 0.0 if f['hd'] else (2.0 if (pp or not self.lissage) else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
-        self.prog['net'] = 2.0 if pp else 1.0; self.prog['tsize'] = (32.0, 32.0)
+        self.prog['net'] = 2.0 if (pp or not self.lissage) else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
@@ -2515,7 +2519,7 @@ def main():
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--sans-preparation', action='store_true', help='(test) ne prepare pas le cache des cartes, sprites et monstres en arriere-plan')
-    ap.add_argument('--hd', type=int, default=None, help='sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; par defaut celui du menu Echap')
+    ap.add_argument('--hd', type=int, default=None, help='sprites : 0 originaux (pixels nets), 1 EPX, 4 pixel perfect (2 et 3, retires, valent 1) ; par defaut celui du menu Echap')
     ap.add_argument('--sans-son', action='store_true', help='coupe le son pour cette session (le menu Echap permet de le remettre)')
     ap.add_argument('--volume-musique', type=float, default=None, help='volume des musiques (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--volume-bruitages', type=float, default=None, help='volume des bruitages (0 a 1) ; par defaut celui du menu Echap')
@@ -2536,7 +2540,7 @@ def main():
     a = ap.parse_args()
     reg = RG.Reglages(a.reglages)
     if a.hd is None: a.hd = reg['mode_sprites']
-    else: reg['mode_sprites'] = a.hd
+    else: a.hd = reg['mode_sprites'] = RG.mode_sprites_valide(a.hd)
     if a.msaa is None: a.msaa = reg['msaa']
     else: reg['msaa'] = a.msaa
     if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else int(bool(reg['plein_ecran']))
