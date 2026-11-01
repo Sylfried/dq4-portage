@@ -129,7 +129,9 @@ class Fenetre:
             self.N[n['id']] = dict(id=n['id'], par=n['par'], pos=list(n['pos']), act=n['act'], mats=[dict(x) for x in n.get('mats', [])],
                                    vtx=[list(v) for v in m['vtx']] if m else None, uv=[list(v) for v in m['uv']] if m else None, sub=m['sub'] if m else None,
                                    text=dict(n['text']) if n.get('text') is not None else None, buttonId=(n.get('parts') or {}).get('buttonId'), pad=(n.get('parts') or {}).get('gamepad') or 0, etat=0, tcol=0, tscale=1.0)
-        self.parts = self.t['parts']
+        self.parts = list(self.t['parts']); self.n_parts = len(self.parts)         # copie de la liste : l'eglise (type 66) y ajoute les parties de ses boutons
+        nom = self.t.get('name', '')                                              # types que le portage anime ou complete : le jeu les fait par du code que l'exporteur ne voit pas
+        self.eglise = nom.startswith('Make_ChurchRoot'); self.eg_ids = []; self.txt_eglise = {}      # eglise : elements ajoutes, textes recus avant la creation des boutons
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -210,6 +212,7 @@ class Fenetre:
         elif k == 'frame': self._cadre(ib, v)
 
     def param_str(self, i, no, s):
+        if self.eglise: self.txt_eglise[(i, no)] = s
         p = self.params.get((i, no))
         if not p: return
         if 'custom' in p:
@@ -238,6 +241,7 @@ class Fenetre:
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
+        if self.eglise and i == 0: self._eglise(c)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -258,6 +262,34 @@ class Fenetre:
                     if pt:
                         for j, ib in enumerate(pt['ib']):
                             if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    # ---- eglise (type 66, Make_ChurchRoot)
+    # Le jeu fait les boutons dans le code de la fenetre (Sub_ShopButton) : l'exporteur de mise en page n'en voit que le titre et le bouton de sortie (« Rien »). On les refait ici d'apres le code recu du moteur
+    # (0 : cinq boutons, sinon quatre) : (x, z depuis le bas de l'ecran, largeur sans les bordures) ; maillage a neuf decoupes de la plaque de sortie, bouton n = numero n, manette 16 (valider).
+    EGLISE = {True: ((-111.5, 170.75, 177.1), (111.5, 170.75, 177.1), (-145.0, 106.25, 110.0), (0.0, 106.25, 110.0), (145.0, 106.25, 110.0)),
+              False: ((0.0, 170.75, 177.1), (-145.0, 106.25, 110.0), (0.0, 106.25, 110.0), (145.0, 106.25, 110.0))}
+
+    def _eglise(self, c):
+        for n in self.eg_ids: self.N.pop(n, None)
+        self.eg_ids = []; del self.parts[self.n_parts:]
+        tpl = next((n for n in self.N.values() if n['vtx'] and n['mats'] and n['mats'][0].get('part') == 7 and n['buttonId'] is not None), None)      # plaque de bouton existante : la sortie (« Rien », manette 32)
+        et = next((n for n in self.N.values() if tpl and n['par'] == tpl['id'] and n['text'] is not None), None)
+        pt0 = next((pt for pt in self.parts if tpl and pt['node'] == tpl['id']), None)
+        if tpl is None or et is None or pt0 is None: return
+        ax = sorted({abs(v[0]) for v in tpl['vtx']})
+        if len(ax) < 2: return
+        dedans, dehors = ax[-2], ax[-1]; nid = max(self.N) + 1
+        for no, (x, z, larg) in enumerate(self.EGLISE[c == 0]):
+            vtx = [[math.copysign(larg / 2 + (dehors - dedans) if abs(abs(v[0]) - dehors) < 1e-3 else larg / 2, v[0]), v[1]] for v in tpl['vtx']]
+            bid, tid = nid, nid + 1; nid += 2; z -= 400.0
+            self.N[bid] = dict(id=bid, par=tpl['par'], pos=[x, tpl['pos'][1], z], act=True, mats=[dict(m) for m in tpl['mats']], vtx=vtx, uv=[list(u) for u in tpl['uv']], sub=tpl['sub'], text=None, buttonId=no, pad=0x10, etat=0, tcol=0, tscale=1.0)
+            self.N[tid] = dict(id=tid, par=bid, pos=[x + et['pos'][0] - tpl['pos'][0], et['pos'][1], z + et['pos'][2] - tpl['pos'][2]], act=True, mats=[dict(m) for m in et['mats']], vtx=None, uv=None, sub=None, text=dict(et['text']), buttonId=None, pad=0, etat=0, tcol=0, tscale=1.0)
+            self.eg_ids += [bid, tid]
+            self.parts.append(dict(node=bid, ib=[dict(ib, go=tid) if ib['k'] == 'text' else dict(ib) for ib in pt0['ib']]))
+            tb = next((j for j, ib in enumerate(self.parts[-1]['ib']) if ib['k'] == 'text'), None)
+            if tb is None: continue
+            self.params[(no, 0)] = dict(id=no, no=0, parts=len(self.parts) - 1, base=tb)         # remplace les liaisons exportees (parties absentes de la mise en page)
+            if (no, 0) in self.txt_eglise: self.param_str(no, 0, self.txt_eglise[(no, 0)])
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
