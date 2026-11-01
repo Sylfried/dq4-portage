@@ -19,6 +19,7 @@ import pause as PA
 import hud_mobile as HM
 import etats as ET
 import avant_partie as AP
+import saisie_nom as SN
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -146,7 +147,7 @@ class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
-        self.carte_ext = []; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
+        self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
         self.msaa = 0
@@ -469,6 +470,7 @@ class Jeu(pyglet.window.Window):
         """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.molette(sy); return
+        if self.licence is not None: self.licence.defiler(-sy * 60.0); return
         if self.moteur.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and sy and not self.moteur.msg_visible and self.moteur.menu_actif() is None: self.regler_zoom(self.zoom * 1.1 ** sy)
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
@@ -480,6 +482,7 @@ class Jeu(pyglet.window.Window):
     def on_text(self, texte):
         """Menu Echap : saisie d'une valeur au clavier."""
         if self._pret and self.pause.ouvert and self.pause.saisie is not None: self.pause.texte(texte)
+        elif self._pret and self._saisie_nom_en_cours(): self.saisie_nom.texte_saisi(texte)
         return pyglet.event.EVENT_HANDLED
 
     def _lancer_preparation(self, cache):
@@ -506,6 +509,12 @@ class Jeu(pyglet.window.Window):
         K = pyglet.window.key
         if not self._pret: self._logo_touche = True; return pyglet.event.EVENT_HANDLED
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
+        if self._saisie_nom_en_cours(): self.saisie_nom.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED          # saisie du nom : le clavier lui appartient
+        if self.licence is not None:                                       # ecran Licence : defilement et retour
+            pas = {K.UP: -30.0, K.DOWN: 30.0, K.PAGEUP: -360.0, K.PAGEDOWN: 360.0, K.HOME: -1e9, K.END: 1e9}.get(symbol)
+            if pas is not None: self.licence.defiler(pas)
+            elif symbol in (K.ESCAPE, K.BACKSPACE) or self.reg.action_de(symbol) == 'B': self._licence_retour()
+            return pyglet.event.EVENT_HANDLED
         if symbol == K.ESCAPE:                                             # Echap : retour dans les menus du jeu et la carte (comme la touche Annuler), sinon le menu Echap
             if self._echap_retour(): self.clic_b = True
             else: self.pause.ouvrir()
@@ -539,6 +548,7 @@ class Jeu(pyglet.window.Window):
     def _echap_retour(self):
         """Echap sert de touche Annuler quand une fenetre du jeu (menu, carte) est ouverte sur le terrain : sinon il ouvre le menu Echap (combat, messages et terrain libre compris)."""
         mo = self.moteur
+        if mo.etat.partie == MO.PARTIE_DEPART: return self.saisie_nom.actif or self.licence is not None or (not mo.msg_visible and mo.menu_actif() is not None)           # menu de depart : Echap = Annuler (le retour de la racine = quitter)
         if mo.etat.partie not in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) or mo.etat.effet is not None: return False
         return bool(self.carte_ouverte) or (not mo.msg_visible and mo.menu_actif() is not None)
 
@@ -1405,6 +1415,8 @@ class Jeu(pyglet.window.Window):
         M = pyglet.window.mouse; mo = self.moteur
         if not self._pret: self._logo_touche = True; return
         if self.pause.ouvert: self.pause.clic(x, y, bouton); return
+        if self._saisie_nom_en_cours(): self.saisie_nom.clic(x, y, bouton); return
+        if self.licence is not None: self._licence_clic(x, y, bouton); return
         if self.titre is not None and bouton == M.LEFT: self.clic_a = True; return                 # titre : un toucher n'importe ou valide (la manette recoit A)
         if bouton == M.RIGHT: self.clic_b = True; return
         if bouton == M.LEFT:
@@ -1428,6 +1440,8 @@ class Jeu(pyglet.window.Window):
         if not self._pret: return
         self.souris = (x, y)
         if self.pause.ouvert: self.pause.survol(x, y); return
+        if self._saisie_nom_en_cours(): self.saisie_nom.survol(x, y); return
+        if self.licence is not None: self.licence.survol = self.licence.zone(x, y); return
         if self.souris_gel is not None:
             if abs(x - self.souris_gel[0]) + abs(y - self.souris_gel[1]) < 6: return
             self.souris_gel = None
@@ -1732,7 +1746,6 @@ class Jeu(pyglet.window.Window):
             o_t, no_t, n_t = (int(v) for v in os.environ['DQ_ANIM_TEST'].split(':'))
             if self.n == n_t: self.objets.anim_commune(o_t, no_t)
         sales = self.objets.tick()
-        if os.environ.get('DQ_SKY') and self.n % 20 == 0 and 15764 in self.objets.cur: print('SKY n=%d x[%.2f,%.2f] y[%.2f,%.2f] z[%.2f,%.2f]' % ((self.n,) + tuple(v for i in range(3) for v in (self.objets.cur[15764][:, i].min(), self.objets.cur[15764][:, i].max()))), flush=True)
         if self.palettes is not None: self.palettes.tick()
         sales_uv, sales_col = self.objets.sale_uv, self.objets.sale_col; self.objets.sale_uv = set(); self.objets.sale_col = set()
         for tex, vl, key, deb, n, dx in self.carte_ext:
@@ -2003,6 +2016,7 @@ class Jeu(pyglet.window.Window):
             p = decl = 0
         elif self.titre is not None:                       # ecran-titre : seul A valide (Espace, Entree ou toucher) ; ni marche, ni camera
             p = decl = MO.A if (decl & MO.A or fr['menu']) else 0
+        elif (self.saisie_nom.actif and not mo.msg_visible) or self.licence is not None: p = decl = 0           # saisie du nom, ecran Licence : tout passe par le clavier du portage
         elif not mo.msg_visible:
             # sur le terrain : A = parler / examiner, Annuler, X ou Start = ouvrir le menu (le moteur veut ces boutons seuls)
             hd, self.hud_decl = self.hud_decl, 0                # (le moteur veut ces boutons seuls) A, puis boutons a l'ecran, puis touches Commandes / Discussion / Carte
@@ -2060,6 +2074,55 @@ class Jeu(pyglet.window.Window):
             self.titre_n = n
             self.titre.maj(mo.images)
         else: self.titre = None
+        self._maj_saisie_nom(); self._maj_licence()
+
+    def _maj_licence(self):
+        """Fenetre de type 80 (Make_License) sur le port 15 : le texte des licences est dessine par Unity (LicenseNobu)."""
+        mo = self.moteur; port = next((q for q, f in mo.ui.f.items() if f.get('type') == 80 and not f.get('ferme')), None)
+        if port is None: self.licence = None; return
+        if self.licence is None: self.port_saisie = port; self.licence = AP.Licence(self.ap_fich.get('licence'))
+        mo.etat.fondu['noir'] = 0                                         # (l'ecran reste noir tant que la fenetre est ouverte : pas de reouverture automatique apres 6 s)
+
+    def _licence_retour(self):
+        self.moteur.envoyer_menu(self.port_saisie, 1, -1, 0x20); self.menu_relacher = self.port_saisie; self.son.jouer_se(SE_BOUTON)
+
+    def _licence_clic(self, x, y, bouton):
+        li = self.licence; nom = li.zone(x, y)
+        if bouton == pyglet.window.mouse.RIGHT: self._licence_retour(); return
+        if nom == 'retour': self._licence_retour()
+        elif nom == 'politique':
+            self.son.jouer_se(SE_BOUTON)
+            try: import webbrowser; webbrowser.open(AP.URL_CONFIDENTIALITE)
+            except Exception as ex: self.toast('Ouverture impossible : %r' % (ex,))
+
+    def _dessiner_licence(self):
+        if self.licence is None: return
+        cx, cy, ech = self._ui_repere(); self.licence.dessiner(self, cx, cy, ech)
+
+    def _maj_saisie_nom(self):
+        """Fenetre de type 55 (StartNameEntry) : le clavier de saisie du nom est tenu par Unity ; il est visible tant que le moteur a envoye [12, 1, 1] (le message [12, 0, 8] donne le nombre de caracteres)."""
+        mo = self.moteur; port = next((q for q, f in mo.ui.f.items() if f.get('type') == 55 and not f.get('ferme')), None)
+        f = mo.ui.f.get(port) if port is not None else None
+        clav = bool(f and f['indic'].get(1) == 1)
+        if clav and not self.saisie_nom.actif: self.port_saisie = port; self.saisie_nom.ouvrir((f['indic'].get(0, 8) & 0xff) or 8)
+        elif not clav and self.saisie_nom.actif: self.saisie_nom.fermer()
+
+    def _saisie_nom_en_cours(self):
+        return self.saisie_nom.actif and not self.moteur.msg_visible and not self.pause.ouvert
+
+    def _saisie_nom_ok(self, nom):
+        """OK : [2, nombre d'octets] puis les octets UTF-8 du nom (deux par nombre, petit-boutiste), tous deux avant la prochaine image du moteur."""
+        import struct
+        b = nom.encode('utf-8'); n = len(b); b += b'\0' * (n % 2)
+        self.moteur.envoyer_menu(self.port_saisie, 2, n); self.moteur.envoyer_menu(self.port_saisie, *struct.unpack('<%dh' % (len(b) // 2), b))
+
+    def _saisie_nom_retour(self):
+        """Retour : comme la touche B sur la fenetre 55, [1, -1, 32] (le moteur revient a la liste des journaux)."""
+        self.moteur.envoyer_menu(self.port_saisie, 1, -1, 0x20); self.menu_relacher = self.port_saisie
+
+    def _dessiner_saisie_nom(self):
+        if not self.saisie_nom.actif: return
+        cx, cy, ech = self._ui_repere(); self.saisie_nom.dessiner(cx, cy, ech)
 
     def _dessiner_titre(self):
         if self.titre is None: return
@@ -2212,7 +2275,7 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
         self._dessiner_fondu(); self._dessiner_degats(e)
-        self._maj_message(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_titre()
+        self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_titre(); self._dessiner_licence()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
         self._dessiner_aide()

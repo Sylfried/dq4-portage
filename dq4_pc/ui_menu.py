@@ -149,6 +149,9 @@ class Fenetre:
             for e in self.codes.get(5, []):
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
+        if self.t.get('name', '').startswith('Make_StartMenuSecond'):     # menu de depart : « Sauv. cloud » (bouton 8) absent sur PC (le moteur n'envoie plus son texte, la plaque doit disparaitre aussi)
+            for nd in self.N.values():
+                if nd['buttonId'] == 8: nd['act'] = False
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan

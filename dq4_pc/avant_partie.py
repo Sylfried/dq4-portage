@@ -3,6 +3,7 @@
 Tout vient du code d'origine (Boot, TapToStart, ApplicationQuit... de libil2cpp.so, relu par instruction : valeurs et adresses dans docs/notes-technique-portage-dq4.md,
 section « Avant la partie »). Ce module ne depend ni du moteur ni d'OpenGL en dehors du dessin des images (pyglet.sprite)."""
 import os
+import pyglet
 
 # fichiers du cache -> (archive, type d'objet Unity, nom de la ressource)
 RESSOURCES = {
@@ -138,3 +139,78 @@ class TitreTouch:
             if sp is None: sp = self.sprites[nom] = pyglet.sprite.Sprite(pyglet.image.load(self.fichiers[nom]))
             sp.update(x=x - w * ech / 2, y=y - h * ech / 2, scale_x=w * ech / sp.image.width, scale_y=h * ech / sp.image.height)
             sp.opacity = int(round(255 * min(1.0, alpha))); sp.draw()
+
+
+# ---- Ecran « Licence » (type 80, Make_License / LicensePolicy / LicenseNobu)
+URL_CONFIDENTIALITE = 'https://square-enix-games.com/en_US/documents/privacy'       # LicensePolicy.OnMouseUpAsButton : langue != 0 (le japonais ouvre https://www.jp.square-enix.com/privacy/)
+LI_CADRE = (-215.0, -345.0, 215.0, 330.0)
+LI_TEXTE = (-198.0, -262.0, 186.0, 272.0)                  # zone du texte (x0, y0, x1, y1), unites d'interface
+LI_POLITIQUE = (-198.0, -334.0, 90.0, -284.0)              # bouton « Privacy Policy »
+LI_RETOUR = (136.0, -337.0, 198.0, -285.0)
+LI_TITRE_Y = 302.0
+
+
+class Licence:
+    """Texte des licences (TextAsset Menu/License_list_A) dans une fenetre defilante, avec les titres <color=orange> en orange. Les positions exactes de la fenetre de l'original n'ont pas ete retrouvees
+    (elles dependent du rapport hauteur/largeur de l'ecran) : disposition dessinee ici, defilement a la molette, aux fleches, PageHaut/PageBas, ou en glissant la barre."""
+    def __init__(self, chemin):
+        import re
+        self.mise = None; self.zones = []; self.haut = 0.0; self.glisse = None; self.zone_barre = None; self.survol = None
+        txt = open(chemin, 'rb').read().decode('utf-8', 'replace').replace('\r\n', '\n').replace('\ufeff', '') if chemin else 'Texte des licences indisponible.'
+        self.plan = []; out = []; n = 0; orange = False
+        for m in re.split(r'(<color=orange>|</color>)', txt):
+            if m == '<color=orange>': orange = True
+            elif m == '</color>': orange = False
+            elif m: self.plan.append((n, n + len(m), orange)); out.append(m); n += len(m)
+        self.texte = ''.join(out)
+
+    def _mise(self, J, ech):
+        """TextLayout pyglet de la fenetre (recree si l'echelle change)."""
+        cle = round(ech, 3)
+        if self.mise is not None and self.mise[0] == cle: return self.mise[1]
+        P = J.pause; P._et('x', 10)                                                                     # (enregistre la police du jeu)
+        taille = 11.0 * ech * 0.75; larg = int((LI_TEXTE[2] - LI_TEXTE[0]) * ech); haut = int((LI_TEXTE[3] - LI_TEXTE[1]) * ech)
+        polices = tuple(P._pol or ()) + ('Consolas', 'DejaVu Sans Mono', 'Courier New')
+        doc = pyglet.text.document.FormattedDocument(self.texte)
+        doc.set_style(0, len(self.texte), dict(font_name=polices, font_size=taille, color=(235, 235, 235, 255)))
+        for a, b, o in self.plan:
+            if o: doc.set_style(a, b, dict(color=(255, 160, 40, 255)))
+        lay = pyglet.text.layout.ScrollableTextLayout(doc, width=larg, height=haut, multiline=True)
+        self.mise = (cle, lay); return lay
+
+    def maximum(self):
+        lay = self.mise[1] if self.mise else None
+        return max(0.0, lay.content_height - lay.height) if lay else 0.0
+
+    def defiler(self, delta):
+        self.haut = min(self.maximum(), max(0.0, self.haut + delta))
+
+    def dessiner(self, J, cx, cy, ech):
+        pg = pyglet; from pyglet import gl as g
+        P = J.pause; k = ech * 800.0 / 900.0
+        ech = min(ech, 0.97 * J.height / (LI_CADRE[3] - LI_CADRE[1])); k = ech * 800.0 / 900.0
+        U = lambda x, y: (cx + x * ech, cy + y * ech)
+        g.glDisable(g.GL_DEPTH_TEST); g.glEnable(g.GL_BLEND); g.glBlendFunc(g.GL_SRC_ALPHA, g.GL_ONE_MINUS_SRC_ALPHA)
+        x0, y0 = U(LI_CADRE[0], LI_CADRE[1]); x1, y1 = U(LI_CADRE[2], LI_CADRE[3]); P._cadre(x0, y0, x1 - x0, y1 - y0, k)
+        P._melange()
+        et = P._et('Licence', 24 * ech * 0.75); et.x = cx - et.content_width / 2; et.y = cy + LI_TITRE_Y * ech - 9 * ech; et.draw()
+        lay = self._mise(J, ech); self.haut = min(self.haut, self.maximum())
+        tx, ty = U(LI_TEXTE[0], LI_TEXTE[1]); lay.x = int(tx); lay.y = int(ty); lay.view_y = -int(self.haut); lay.draw()
+        # barre de defilement
+        bx0, by0 = U(LI_TEXTE[2] + 4, LI_TEXTE[1]); bw, bh = 8 * ech, (LI_TEXTE[3] - LI_TEXTE[1]) * ech; m = self.maximum()
+        pg.shapes.Rectangle(bx0, by0, bw, bh, color=(34, 36, 42)).draw()
+        if m > 0:
+            th = max(26 * ech, bh * lay.height / lay.content_height); hau = by0 + bh - th - (bh - th) * (self.haut / m)
+            P._plaque(bx0 - 1, hau, bw + 2, th, k * 0.6, self.glisse is not None)
+        self.zone_barre = (bx0 - 4, by0, bx0 + bw + 4, by0 + bh)
+        px0, py0 = U(LI_POLITIQUE[0], LI_POLITIQUE[1]); px1, py1 = U(LI_POLITIQUE[2], LI_POLITIQUE[3])
+        P._plaque(px0, py0, px1 - px0, py1 - py0, k, False, (255, 235, 4) if self.survol == 'politique' else None); P._melange()
+        e2 = P._et('Privacy Policy', 16 * ech * 0.75); e2.x = (px0 + px1) / 2 - e2.content_width / 2; e2.y = (py0 + py1) / 2 - 5 * ech; e2.draw()
+        rx0, ry0 = U(LI_RETOUR[0], LI_RETOUR[1]); rx1, ry1 = U(LI_RETOUR[2], LI_RETOUR[3])
+        P._bouton_retour(rx0, ry0, rx1 - rx0, ry1 - ry0, self.survol == 'retour')
+        self.zones = [(px0, py0, px1, py1, 'politique'), (rx0, ry0, rx1, ry1, 'retour')]
+
+    def zone(self, x, y):
+        for a, b, c, d, nom in self.zones:
+            if a <= x <= c and b <= y <= d: return nom
+        return None

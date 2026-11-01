@@ -5,6 +5,7 @@ import emu_core as T
 from pktlog import PacketLog
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
+PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
 PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
 PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
@@ -230,11 +231,11 @@ class Interface:
                 if len(a) >= 2 and 2 <= a[0] < 32:
                     if a[1] == 3: self.fen(a[0])['sv'] = bool(a[2]) if len(a) > 2 else True       # [fenetre, 3, visible] : MenuPort.SetVisible
                     elif a[1] == 2:                                                                # [fenetre, 2] : fermee
-                        f = self.fen(a[0]); f['act'] = f['vis'] = False
+                        f = self.fen(a[0]); f['act'] = f['vis'] = False; f['ferme'] = True          # (les messages d'arret du moteur peuvent remettre « act » : « ferme » reste jusqu'a la creation suivante)
                         if self.obs: self.obs.fermer(a[0])
                     elif a[1] == 1 and len(a) >= 4:                                                # [fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
                         f = self.fen(a[0]); f['type'] = a[3]; f['cases'] = {}; f['indic'] = {}; f['cur'] = 0; f['ints'] = {}; f['dispo'] = None; f['listes'] = {}; f['suite'] = None
-                        f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}; f['n_codes'] = {}
+                        f['act'] = f['req'] = f['draw'] = f['force'] = f['ign'] = False; f['sv'] = True; f['vis'] = False; f['att'] = None; f['plaq'] = {}; f['n_codes'] = {}; f['ferme'] = False
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
@@ -551,6 +552,7 @@ class Moteur:
 
     def envoyer_menu(self, port, *args):
         """Ce que fait Unity : depose un message [n, args...] dans la file moteur<-interface du port (touches/pointeur des menus)."""
+        if os.environ.get('DQ_MENUDBG'): print('ENVOI image %d port %d %s' % (self.images, port, list(args)), flush=True)         # (test) messages interface -> moteur
         c = self.core
         a = list(struct.unpack('<%dh' % PILE_SHORTS, c.mem(self.buf1, 2 * PILE_SHORTS)))
         n = len(args); idx = a[64] or 65
