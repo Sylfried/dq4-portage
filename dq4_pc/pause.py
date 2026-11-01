@@ -352,7 +352,7 @@ class Pause:
         return e
 
     def _e_quitter(self):
-        return [dict(t='sep', l='Quitter le jeu ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
+        return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
 
     # ---- actions
     def _info(self, texte, erreur=False): self.message = (texte, time.time(), erreur)
