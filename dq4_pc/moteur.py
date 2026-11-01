@@ -9,6 +9,7 @@ PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : li
 PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
 PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
+MSGDBG = bool(os.environ.get('DQ_MSGDBG'))     # (test) journal des etats du message du moteur
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
@@ -23,6 +24,10 @@ HAUT, BAS, GAUCHE, DROITE, A, B = 0x1, 0x2, 0x4, 0x8, 0x10, 0x20
 OBJ_MESSAGE = 0x252330                     # objet SDrawCTRL (canevas de texte des messages) dans la bibliotheque
 CANEVAS_L, CANEVAS_H = 512, 512            # texture du canevas de message d'Unity (MenuMessage : Texture2D(512, 512)) ; le moteur y ecrit en boucle
 PILE_SHORTS = 4096                         # taille reelle allouee pour la file des messages (Unity en annonce 1089)
+MSG_ACTIF, MSG_ETAT, MSG_COURANT, MSG_FIN, MSG_VITESSE = 0x25238e, 0x25238c, 0x2523cc, 0x2523ce, 0x2523b0      # ui_MsgLoop : message ouvert (octet), etat (1 lecture d'un code, 2 ecriture des lettres, 3 / 5 attente d'une touche), indice de la lettre courante et de la fin de ligne, lettres par image / 4 du type de fenetre
+UI_MSGLOOP_ECRITURE = 0x128                # ui_MsgLoop + 0x128 : `sxth w20, w8` apres `lsl w8, w8, #2` (etat 2 : nombre de lettres ecrites a cette image)
+SXTH_W20_W8 = 0x13003d14
+COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 
 
@@ -342,7 +347,9 @@ class Moteur:
         self.msg_visible = False                 # fenetre de message affichee ? (MenuPort::SetVisible sur le port du message)
         def _sv(uc, a, sz, u):
             port = uc.reg_read(c.XREG[0]) & 0xffffffffffff
-            if port and port == struct.unpack('<Q', c.mem(self.L + OBJ_MESSAGE + 0x30, 8))[0]: self.msg_visible = bool(uc.reg_read(c.XREG[1]) & 0xff)
+            if port and port == struct.unpack('<Q', c.mem(self.L + OBJ_MESSAGE + 0x30, 8))[0]:
+                self.msg_visible = bool(uc.reg_read(c.XREG[1]) & 0xff)
+                if not self.msg_visible: self._acc_texte = 0.0
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
@@ -352,8 +359,69 @@ class Moteur:
         def _sca(uc, a, sz, u): self.fldobj = uc.reg_read(c.XREG[0])
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
+        self._crochets_texte()
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
+
+    def _crochets_texte(self):
+        """Vitesse du texte des dialogues et defilement des combats (reglages du joueur, menu Echap).
+        - Texte : ui_MsgLoop ecrit, a chaque image du moteur (30 Hz), `vitesse x 4` lettres (vitesse = mot a MSG_VITESSE, copie du tableau du type de fenetre : 1 pour les dialogues, 100 pour les fenetres de combat qui
+          affichent leur ligne d'un coup). Un crochet sur `sxth w20, w8` remplace ce nombre par celui du reglage (`vitesse_texte`, lettres par image, fractions cumulees ; 4 = comme le jeu : le crochet ne fait rien).
+        - Combats : BattleAutoFeed lit OptionStatus.battleSpeed (g_Option + 5, option « Vitesse des messages » du jeu, enregistree dans la sauvegarde) a chaque message : `defilement` (None = on ne touche a rien)
+          est ecrit a cette adresse avant chaque image ; un changement fait par le joueur dans la fenetre Parametres du jeu (setBattleSpeed appele depuis TownMenu_OPERATION_SETTING::menuUpdate) est
+          signale a `rappel_defilement(valeur)` (le chargement d'une sauvegarde, lui, passe par Profile::deliverDATA_PARTY et ne declenche rien)."""
+        c = self.core
+        self.vitesse_texte = 4.0; self._acc_texte = 0.0
+        self.defilement = None; self.rappel_defilement = None; self._defil_origine = None
+        try:
+            a = c.export('_Z10ui_MsgLoopv')
+            if a and struct.unpack('<I', c.mem(a + UI_MSGLOOP_ECRITURE, 4))[0] == SXTH_W20_W8:        # autre version du moteur : on ne touche a rien
+                def _vt(uc, ad, sz, u):
+                    v = self.vitesse_texte
+                    if v == 4.0 or uc.reg_read(c.XREG[8]) & 0xffff != 4: return           # 4 : comme le jeu ; autre que 4 (vitesse 100 des fenetres de combat) : inchange
+                    self._acc_texte += v; n = int(self._acc_texte); self._acc_texte -= n
+                    uc.reg_write(c.XREG[8], min(n, 4000))
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _vt, None, a + UI_MSGLOOP_ECRITURE, a + UI_MSGLOOP_ECRITURE)
+            else: print('vitesse du texte : ui_MsgLoop inattendu, reglage sans effet', flush=True)
+        except Exception as ex: print('vitesse du texte non installee :', ex, flush=True)
+        try:
+            sb = c.export('_ZN6status12OptionStatus14setBattleSpeedEc'); mu = c.export('_ZN26TownMenu_OPERATION_SETTING10menuUpdateEv')
+            if sb and mu:
+                def _sb(uc, ad, sz, u):
+                    if self.defilement is not None and self.rappel_defilement is not None and mu <= uc.reg_read(c.XREG[30]) < mu + 0x400: self.rappel_defilement(uc.reg_read(c.XREG[1]) & 0xff)
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _sb, None, sb, sb)
+        except Exception as ex: print('defilement des combats : crochet non installe :', ex, flush=True)
+
+    def _option(self, decalage):
+        """Adresse d'un octet de status::g_Option (OptionStatus : +1 volume de la musique, +2 volume des bruitages (0 a 4), +5 vitesse des messages de combat)."""
+        ad = self.core.export('_ZN6status8g_OptionE')
+        return (ad if ad else self.L + 0x25b564) + decalage
+
+    def options_jeu(self):
+        """(volume musique, volume bruitages, vitesse des messages de combat) des options du jeu (fenetre Parametres, enregistrees dans la sauvegarde)."""
+        c = self.core
+        return c.mem(self._option(1), 1)[0], c.mem(self._option(2), 1)[0], c.mem(self._option(5), 1)[0]
+
+    def imposer_defilement(self, code):
+        """Defilement des messages de combat impose a chaque image (code 0 a 3 : attente de 12 / 22 / 32 / 42 images, 4 : a la main) ; None : on rend la valeur du jeu (celle de la sauvegarde, ou choisie dans ses Parametres)."""
+        if code is None:
+            if self.defilement is not None and self._defil_origine is not None: self.core.mem_w(self._option(5), bytes([self._defil_origine]))
+            self.defilement = None; self._defil_origine = None
+        else:
+            if self.defilement is None: self._defil_origine = self.options_jeu()[2]
+            self.defilement = int(code) & 0xff; self.core.mem_w(self._option(5), bytes([self.defilement]))
+
+    def ecrire_defilement(self):
+        """Avant chaque image du moteur : la valeur imposee est ecrite ; si le jeu en avait mis une autre (chargement d'une sauvegarde ou d'un etat, fenetre Parametres), c'est elle qu'on rendra."""
+        if self.defilement is None: return
+        ad = self._option(5); cur = self.core.mem(ad, 1)[0]
+        if cur != self.defilement: self._defil_origine = cur
+        self.core.mem_w(ad, bytes([self.defilement]))
+
+    def etat_message(self):
+        """(test) (message ouvert, etat de ui_MsgLoop, lettre courante, fin de ligne, vitesse du type de fenetre)."""
+        c = self.core; g = lambda off: struct.unpack('<H', c.mem(self.L + off, 2))[0]
+        return c.mem(self.L + MSG_ACTIF, 1)[0], g(MSG_ETAT), g(MSG_COURANT), g(MSG_FIN), g(MSG_VITESSE)
 
     def _elargir_symboles(self):
         """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
@@ -469,7 +537,9 @@ class Moteur:
                 im, ch, hh, nn = [int(x) for x in spec.split(':')]
                 if self.images == im: self.ui.image = self.images; c.call(self.E('_Z27BattleMenu_setHoppingNumbersss'), ch, hh, nn, label='hop')
         self.pk.begin()
+        if self.defilement is not None: self.ecrire_defilement()
         r = c.call(self.E('GameUpdate'), tenu, decl, label='GameUpdate')
+        if MSGDBG: self._journal_message()
         if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lignes[-12:]))
         pq = self.pk.packets()
         if os.environ.get('DQ_PKT') and self.etat.partie == PARTIE_COMBAT:       # (test) journal des paquets de combat : image, [(type, ints...)]
@@ -500,6 +570,14 @@ class Moteur:
         else: self._lire_monde()
         self.images += 1
         return pq
+
+    def _journal_message(self):
+        """(test, DQ_MSGDBG=1) une ligne a chaque changement d'etat du message : image du moteur, etat, lettres ecrites / lettres de la ligne, vitesse du type de fenetre."""
+        o = self.options_jeu()
+        if o != getattr(self, '_opt_vu', None): self._opt_vu = o; print('MSGDBG image %d options du jeu : volume musique %d, volume bruitages %d, vitesse des messages de combat %d (impose : %s)' % ((self.images,) + o + (self.defilement,)), flush=True)
+        e = self.etat_message()
+        if (e[0], e[1], e[4]) != getattr(self, '_msg_vu', None) or (e[1] == 2 and e[2] == e[3]):
+            self._msg_vu = (e[0], e[1], e[4]); print('MSGDBG image %d actif %d etat %d lettres %d/%d vitesse %d combat=%d' % ((self.images,) + e + (self.etat.partie == PARTIE_COMBAT,)), flush=True)
 
     def _lire_monde(self):
         """Carte du monde entiere (FieldData : grille CWorldMap +0x188 de 256 x 256 numeros de bloc, table des blocs +0x180 de 6 octets,
