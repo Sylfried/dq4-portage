@@ -1227,6 +1227,9 @@ class Jeu(pyglet.window.Window):
         cle = (port, f['ordre']); cur = self.cur_local.get(cle)
         if cur not in z:
             cur = self.cur_local[cle] = f['cur'] if f['cur'] in z else min(z, key=lambda b: (-round(z[b][1]), z[b][0]))       # depart : le bouton en haut a gauche
+        if decl & (MO.GAUCHE | MO.DROITE) and fe and fe.typ in (58, 59, 63):                       # quantite (types 58 / 59 : liste « Acheter », 63 : quantite a vendre) : la rangee du curseur porte ses propres fleches (boutons de meme numero, manette gauche 8 / droite 4 : liste « Acheter » d'une boutique, quantite a vendre) -> gauche / droite changent la quantite de la rangee choisie (comme le toucher d'une fleche) ; le curseur garde la rangee entiere
+            pad = 4 if decl & MO.DROITE else 8
+            if any(b == cur and pd & pad for b, pd, *_ in fe.boutons()): mo.envoyer_menu(port, 1, cur, pad); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON); return
         if len({round((x0 + x1) / 20.0) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}) <= 1 and decl & (MO.GAUCHE | MO.DROITE):       # une seule colonne : gauche / droite tournent les pages si une autre fenetre porte les fleches
             pad = 4 if decl & MO.DROITE else 8; q = self._port_pour_manette(port, pad)
             if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
