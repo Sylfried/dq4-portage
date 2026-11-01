@@ -185,6 +185,7 @@ class Fenetre:
         if 'custom' in p:
             cu = p['custom']; pt, ib = self._enrobe(p)
             if cu.get('cls', '').endswith('ICityMap'): self.nom_carte = s; return                   # fenetre de carte (type 25) : nom de la texture du plan (Menu/map)
+            if cu.get('cls', '').endswith('ItemNumCTRL'): self._item_num(i, v); return              # quantite d'une ligne de la liste d'objets (type 9)
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
@@ -208,6 +209,22 @@ class Fenetre:
             nd = self.N.get(pt['node'])
             if nd: nd['etat'] = v
         elif k == 'frame': self._cadre(ib, v)
+
+    def _item_num(self, i, v):
+        """ItemNumCTRL.Changer(v) (0xD08060) : compteur passif a deux chiffres d'une ligne de la liste d'objets (Sub_ItemButton : IBase 3 = dizaines, IBase 4 = unites, feuille 12, cases de 32 px).
+        v < 2 : deux cases vides (icone 1) ; sinon dizaines = (v / 10) % 10 (icone 16 x chiffre, ou 1 si zero), unites = icone 16 x (v % 10) ; 100 et plus se replient modulo 100 (123 -> 23).
+        Les deux chiffres sont les IBase 3 et 4 de la MenuParts de la ligne (celle de l'element (ligne, 0))."""
+        p0 = self.params.get((i, 0))
+        if not p0 or p0.get('parts') is None or p0['parts'] >= len(self.parts): return
+        pt = self.parts[p0['parts']]; nd = self.N.get(pt['node'])
+        if nd is None or not nd['uv'] or len(pt['ib']) < 5: return
+        if v < 2: dz, un = 1, 1
+        else: d = (v // 10) % 10; dz = d * 16 if d else 1; un = (v % 10) * 16
+        for ib, no in ((pt['ib'][3], dz), (pt['ib'][4], un)):
+            if ib['k'] != 'icon': continue
+            info = self.ml.infos[ib['partsNo']]; o = ib['vtx']
+            for j, uv in enumerate(uv_icone(info, no, 0)):
+                if o + j < len(nd['uv']): nd['uv'][o + j] = list(uv)
 
     def param_str(self, i, no, s):
         p = self.params.get((i, no))
