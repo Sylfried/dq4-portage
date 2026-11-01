@@ -387,6 +387,15 @@ class Moteur:
         """(essai) force le passage a la carte du monde : Global::startField()."""
         self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
 
+    def retour_titre(self):
+        """Retour a l'ecran-titre : ce que fait le bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
+        (sauvegarde automatique, killbank), verrouille le joueur, puis Global::startTitle() (fondu au noir, chapitre 0, la partie suivante est le titre). Les menus et le message du moteur doivent etre fermes."""
+        c = self.core
+        c.call(self.E('_ZN7profile8SaveLoad8killbankEib'), 4, 0, label='killbank')
+        c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
+        c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 1, label='setLock')
+        c.call(self.E('_ZN6Global10startTitleEv'), self._global(), label='startTitle')
+
     def demarrer_ville(self, nom):
         """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')

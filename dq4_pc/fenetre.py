@@ -659,6 +659,10 @@ class Jeu(pyglet.window.Window):
     def quitter(self):
         self.close(); pyglet.app.exit()
 
+    def retour_titre(self):
+        """Menu Pause > « Revenir à l'écran titre » (apres confirmation) : le moteur relance son titre (Moteur.retour_titre) ; le menu Pause est deja ferme. Seul chemin de retour au titre du jeu."""
+        self.moteur.retour_titre()
+
     # ---- etats instantanes (savestates)
     def chemin_etat(self, n): return os.path.join(self.args.saves_ecriture, 'etats', 'etat_%02d.dqs' % n)
 

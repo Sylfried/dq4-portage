@@ -1,4 +1,4 @@
-"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), quitter.
+"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), retour a l'ecran titre.
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
@@ -171,7 +171,7 @@ class Pause:
     def _aller(self, nom):
         def va():
             self.pile.append(nom)
-            if nom == 'quitter': self.sel[nom] = 2        # « Non » preselectionne
+            if nom in ('quitter', 'titre'): self.sel[nom] = 2        # « Non » preselectionne
         return va
 
     def _e_racine(self):
@@ -180,7 +180,7 @@ class Pause:
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
-                dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'), sous=True)]
+                dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
     def _choix(self, label, valeurs, get, set_, off=False, note=None):
         """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
@@ -354,6 +354,13 @@ class Pause:
 
     def _e_quitter(self):
         return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
+
+    def _e_titre(self):
+        return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self._vers_titre), dict(t='act', l='Non', ok=self.retour)]
+
+    def _vers_titre(self):
+        """« Oui » : le menu se ferme (le jeu reprend) puis le moteur revient a son ecran-titre."""
+        self.fermer(); self.J.retour_titre()
 
     # ---- actions
     def _info(self, texte, erreur=False): self.message = (texte, time.time(), erreur)
@@ -812,10 +819,10 @@ class Pause:
         ecr = self.ecran; e = self._entrees(); n = len(e)
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
         i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
-        while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr != 'quitter': i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
+        while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr not in ('quitter', 'titre'): i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
         n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
