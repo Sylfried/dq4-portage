@@ -40,6 +40,7 @@ class CoreJeu(T.Core):
     def h_fopen(self, path, mode, *a):
         p = self.read_cstr(path).decode('latin-1'); m = self.read_cstr(mode).decode()
         mm = re.search(r'(data\d+\.dat)$', p)
+        if mm and os.environ.get('DQ_SAVEDBG'): print('fopen %s mode %s' % (p, m), flush=True)           # (test) quand le moteur ouvre un fichier de sauvegarde
         if mm:
             nom = mm.group(1)
             if 'w' in m or 'a' in m:
@@ -73,11 +74,19 @@ class Etat:
         self.sprites = {}; self.cartes_chargees = 0; self.objets_cmd = []; self.fond = (0.0, 0.0, 0.0)       # objets_cmd : ordres sur les objets de la carte (paquets 2 a 5 et 7), vides par la fenetre : (genre, objet, valeurs...)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
         self.maillages_vus = set()                # combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
-        self.fondu = {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir
+        self.fondu = self._plan_fondu(); self.fondu_fond = self._plan_fondu()      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir. DEUX plans (Fade.l_fade, bit 14 de l'entier du paquet 9 = Fade.l_targetLayer) : 0 = « FadeForMenu » (shader Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris) ; 1 = « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres)
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
+
+    @staticmethod
+    def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
+
+    def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu())
+
+    def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
     def appliquer(self, paquets, lire_nom):
         self.maillages_vus = set()
@@ -114,7 +123,7 @@ class Etat:
             elif t == 20 and a and len(f) >= 4:     # cmd_rise_icon : emplacement ; x, y, z (SetPosition) puis alpha (Material.color = 1, 1, 1, alpha)
                 ic = self.icones.get(a[0])
                 if ic is not None: ic['pos'] = tuple(f[:3]); ic['alpha'] = f[3]
-            elif t == 9 and a:                      # cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : devant l'interface
+            elif t == 9 and a:                      # cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : plan de fond « FadeForBG » (derriere les fenetres ; sinon plan « FadeForMenu », devant tout : voir Etat._fondu)
                 self._fondu(a[0], f)
             elif t == 5 and a:                      # cmd_fld_common_anim : objet = v & 0xffff, numero d'animation commune = v >> 16 (FldObject.SetCommonAnimation)
                 self.objets_cmd.append(('anim', a[0] & 0xffff, (a[0] >> 16) & 0xffff))
@@ -170,8 +179,8 @@ class Etat:
 
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
-        entree = le plan repart de l'opacite 1 vers 0. Duree <= 1 image : immediat."""
-        d = v & 0x7ff; fd = self.fondu; fd['noir'] = 0
+        entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
+        d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
         if d > 1 and not v & (0x800 | 0x2000) and Etat.vitesse_fondu > 1.0: d = max(1, int(round(d / Etat.vitesse_fondu)))       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions »
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
@@ -184,16 +193,17 @@ class Etat:
             else: fd['a'] = 1.0; fd['pas'] = -1.0 / d; fd['n'] = d
 
     def tick_fondu(self):
-        """FadePlane.Update : une fois par image du jeu. Garde-fou : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert."""
-        fd = self.fondu
-        if fd['n'] >= 1:
-            fd['n'] -= 1
-            if fd['n'] < 1: fd['a'] = fd['fin']
-            else: fd['a'] += fd['pas']
-        if fd['a'] >= 0.999 and fd['n'] < 1:
-            fd['noir'] += 1
-            if fd['noir'] > 180: fd['fin'] = 0.0; fd['pas'] = -1.0 / 15; fd['n'] = 15; fd['noir'] = 0
-        else: fd['noir'] = 0
+        """FadePlane.Update : une fois par image du jeu, pour chacun des deux plans. Garde-fou (plan de devant seulement) : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert ;
+        le plan de fond n'en a pas : le moteur le tient noir de lui-meme (titre de chapitre, 160 images) et le rouvre par une commande."""
+        for fd, garde in ((self.fondu, True), (self.fondu_fond, False)):
+            if fd['n'] >= 1:
+                fd['n'] -= 1
+                if fd['n'] < 1: fd['a'] = fd['fin']
+                else: fd['a'] += fd['pas']
+            if garde and fd['a'] >= 0.999 and fd['n'] < 1:
+                fd['noir'] += 1
+                if fd['noir'] > 180: fd['fin'] = 0.0; fd['pas'] = -1.0 / 15; fd['n'] = 15; fd['noir'] = 0
+            else: fd['noir'] = 0
 
 
 DBG = bool(os.environ.get('DQ_UIDBG'))
@@ -239,6 +249,9 @@ class Interface:
                         if self.obs: self.obs.ouvrir(a[0], a[3])
                 continue
             f = self.fen(port)
+            if f.get('ferme'):                                  # MenuPortSystem.internalUpdate (D10A54) : [port, 2] detruit l'element (`s_ports[port] = null`), les messages du port recus ensuite (meme image : les ports 12 a 31 sont lus apres le port 0)
+                self.attente.pop(port, None)                    # n'ont plus de destinataire (`if (item != null) item.NoticeReceive`) ; avant, la fin de la liste des journaux (5, 6, 4) rouvrait la fenetre fermee une image : boite « simple » violette
+                continue
             if f['type'] == 43:                                 # Make_BattleHoppingNumber : [12, 0, 0] puis [monstre, hauteur, degats] (BattleMenu_setHoppingNumbers)
                 if f.get('dgt'):
                     f['dgt'] = False
@@ -400,6 +413,12 @@ class Moteur:
         if ad is None: return 0, 0, False
         lg, ld = struct.unpack('<ii', c.mem(ad + 0x34, 8)); return lg, ld, bool(c.mem(ad + 0x3e, 1)[0])
 
+    def camera_jeu(self):
+        """Etat de la TownCamera du moteur (objet statique), pour savoir si le jeu pilote la camera : (verrou +0x3e, mode de cible +0x48, verrou de point de vue +0x40, deplacement en cours +0x43)."""
+        c = self.core; ad = c.export('_ZN10TownCamera11m_singletonE')
+        if ad is None: return 0, 0, 0, 0
+        b = c.mem(ad + 0x3e, 6); return b[0], struct.unpack('<i', c.mem(ad + 0x48, 4))[0], b[2], b[5]
+
     def taille_croix(self):
         """Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite."""
         v = self.core.mem(self.core.LIB_BASE + 0x24a779, 1)[0]
@@ -441,7 +460,7 @@ class Moteur:
         if decl is None: decl = tenu
         c = self.core
         w = struct.unpack('<I', c.mem(c.outp, 4))[0]            # bit 0 : « un fondu est en cours » (Fade.FadePlane.CheckFade : images restantes > 0). Le moteur le leve lui-meme en lancant un fondu (UnitySetFade) puis attend qu'il retombe
-        w2 = (w | 1) if self.etat.fondu['n'] >= 1 else (w & ~1)      # (Global::IsFadeEnd : auberge, titres de chapitre, ecran de chargement, ouverture des menus, sifflet...)
+        w2 = (w | 1) if self.etat.fondu_en_cours() else (w & ~1)      # (Global::IsFadeEnd : auberge, titres de chapitre, ecran de chargement, ouverture des menus, sifflet...)
         if w2 != w: c.mem_w(c.outp, struct.pack('<I', w2))
         self._finir_anims()
         self._effet_combat()
@@ -597,6 +616,21 @@ class Moteur:
         for _, idx in due:
             ad = table + idx * 32 + 0x14
             c.mem_w(ad, bytes([c.mem(ad, 1)[0] & ~1]))
+
+    def statut_catalogue(self):
+        """Masque de `getCatalogStatus` : bits 0-4 = banque valide, 5-9 = illisible, 10-14 = corrompue, 15 = un fichier manque."""
+        return int(self.core.call(self.E('_ZN7profile8SaveLoad16getCatalogStatusEv'), label='getCatalogStatus')) & 0xffff
+
+    def relire_journaux(self):
+        """Apres un import de sauvegardes : le moteur ne releve les fichiers data1..5 / data9 qu'a la creation du menu de depart ; on lui refait relever le catalogue (noms, chapitres, durees des listes). -> nouveau masque de statut."""
+        for nom in ('getCatalogView', 'getCatalogRecent'):
+            self.core.call(self.E('_ZN7profile8SaveLoad%d%sEv' % (len(nom), nom)), label=nom)
+        return self.statut_catalogue()
+
+    @staticmethod
+    def etat_boutons_depart(statut):
+        """Ce que le moteur fixe a la creation du menu de depart (`updateActiveDiary`) : (une banque 0-2 contient des donnees, la banque 3 est valide, la banque 4 est valide) -> boutons grises ou absents."""
+        return (bool(statut & 0x0007 or statut & 0x00e0 or statut & 0x1c00), bool(statut & 0x0008), bool(statut & 0x0010))
 
     def charger_sauvegarde(self, numero):
         """numero 1..5 -> lit data<numero>.dat ; le moteur relance la ville sauvegardee"""
