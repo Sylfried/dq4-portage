@@ -40,6 +40,7 @@ class CoreJeu(T.Core):
     def h_fopen(self, path, mode, *a):
         p = self.read_cstr(path).decode('latin-1'); m = self.read_cstr(mode).decode()
         mm = re.search(r'(data\d+\.dat)$', p)
+        if mm and os.environ.get('DQ_SAVEDBG'): print('fopen %s mode %s' % (p, m), flush=True)           # (test) quand le moteur ouvre un fichier de sauvegarde
         if mm:
             nom = mm.group(1)
             if 'w' in m or 'a' in m:
@@ -597,6 +598,21 @@ class Moteur:
         for _, idx in due:
             ad = table + idx * 32 + 0x14
             c.mem_w(ad, bytes([c.mem(ad, 1)[0] & ~1]))
+
+    def statut_catalogue(self):
+        """Masque de `getCatalogStatus` : bits 0-4 = banque valide, 5-9 = illisible, 10-14 = corrompue, 15 = un fichier manque."""
+        return int(self.core.call(self.E('_ZN7profile8SaveLoad16getCatalogStatusEv'), label='getCatalogStatus')) & 0xffff
+
+    def relire_journaux(self):
+        """Apres un import de sauvegardes : le moteur ne releve les fichiers data1..5 / data9 qu'a la creation du menu de depart ; on lui refait relever le catalogue (noms, chapitres, durees des listes). -> nouveau masque de statut."""
+        for nom in ('getCatalogView', 'getCatalogRecent'):
+            self.core.call(self.E('_ZN7profile8SaveLoad%d%sEv' % (len(nom), nom)), label=nom)
+        return self.statut_catalogue()
+
+    @staticmethod
+    def etat_boutons_depart(statut):
+        """Ce que le moteur fixe a la creation du menu de depart (`updateActiveDiary`) : (une banque 0-2 contient des donnees, la banque 3 est valide, la banque 4 est valide) -> boutons grises ou absents."""
+        return (bool(statut & 0x0007 or statut & 0x00e0 or statut & 0x1c00), bool(statut & 0x0008), bool(statut & 0x0010))
 
     def charger_sauvegarde(self, numero):
         """numero 1..5 -> lit data<numero>.dat ; le moteur relance la ville sauvegardee"""

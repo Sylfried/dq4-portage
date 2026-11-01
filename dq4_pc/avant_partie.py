@@ -150,13 +150,46 @@ LI_RETOUR = (136.0, -337.0, 198.0, -285.0)
 LI_TITRE_Y = 302.0
 
 
+# Texte ajoute en tete de l'ecran Licence (en anglais, comme la liste d'origine) : ce que le portage est et ce qu'il utilise. La liste d'origine (TextAsset Menu/License_list_A) suit, inchangee.
+LICENCE_PROJET = (
+    "<color=orange>Dragon Quest IV PC port (unofficial)</color>\n"
+    "--------------------------------------------------\n"
+    "This is an unofficial, non-commercial fan project. It is not affiliated with, endorsed by or sponsored by SQUARE ENIX CO., LTD., ArtePiazza or any other rights holder. DRAGON QUEST is a trademark of SQUARE ENIX CO., LTD.\n"
+    "\n"
+    "This program contains no game content. It runs the original game engine (libdq4core.so) and reads the game data from the Android version of Dragon Quest IV that you own (the APK files and the save files on your own computer). Nothing from the game is copied, modified or distributed by this program, and your original files are never changed.\n"
+    "\n"
+    "The French text comes from an unofficial French translation patch that the user applied to those APK files.\n"
+    "\n"
+    "How it works: the original ARM64 game engine runs unmodified inside a CPU emulator (Unicorn). The Unity layer of the Android game (display, menus, input and sound) is re-implemented in Python (pyglet), following the behavior of the original game code. The 16:9 display, the mouse and keyboard controls, the on-screen buttons, the settings menu, the instant save states and the save export / import tool are additions of this port.\n"
+    "\n"
+    "Your save files, save states and settings stay on your computer (dq4_pc\\sauvegardes and dq4_pc\\reglages.json). This program does not send any data over the Internet; only the launcher downloads the components listed below, once, the first time it runs. The \"Privacy Policy\" button opens the publisher's web page in your browser.\n"
+    "\n"
+    "<color=orange>Components used by this port</color>\n"
+    "--------------------------------------------------\n"
+    "The Python packages below are downloaded by the launcher from the Python Package Index; none of them is distributed with this program.\n"
+    "\n"
+    "Python - PSF License - python.org\n"
+    "Unicorn Engine (CPU emulator) - GNU GPL v2 - unicorn-engine.org\n"
+    "pyglet (window, graphics, input) - BSD 3-Clause License - pyglet.org\n"
+    "NumPy - BSD 3-Clause License - numpy.org\n"
+    "Pillow (images) - MIT-CMU License - python-pillow.org\n"
+    "UnityPy (reading the game data) - MIT License - github.com/K0lb3/UnityPy\n"
+    "Capstone (reading the menu layout from the game code, once) - BSD License - capstone-engine.org\n"
+    "SoundFile (music) - BSD 3-Clause License; its libsndfile library - LGPL 2.1 - github.com/bastibe/python-soundfile\n"
+    "\n"
+    "<color=orange>Original game notices</color>\n"
+    "--------------------------------------------------\n"
+    "The notices below are those of the original Android game. They are kept unchanged.\n"
+    "\n\n")
+
+
 class Licence:
     """Texte des licences (TextAsset Menu/License_list_A) dans une fenetre defilante, avec les titres <color=orange> en orange. Les positions exactes de la fenetre de l'original n'ont pas ete retrouvees
     (elles dependent du rapport hauteur/largeur de l'ecran) : disposition dessinee ici, defilement a la molette, aux fleches, PageHaut/PageBas, ou en glissant la barre."""
     def __init__(self, chemin):
         import re
         self.mise = None; self.zones = []; self.haut = 0.0; self.glisse = None; self.zone_barre = None; self.survol = None; self.geom = None
-        txt = open(chemin, 'rb').read().decode('utf-8', 'replace').replace('\r\n', '\n').replace('\ufeff', '') if chemin else 'Texte des licences indisponible.'
+        txt = LICENCE_PROJET + (open(chemin, 'rb').read().decode('utf-8', 'replace').replace('\r\n', '\n').replace('\ufeff', '') if chemin else '')
         self.plan = []; out = []; n = 0; orange = False
         for m in re.split(r'(<color=orange>|</color>)', txt):
             if m == '<color=orange>': orange = True

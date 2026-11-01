@@ -20,6 +20,7 @@ import hud_mobile as HM
 import etats as ET
 import avant_partie as AP
 import saisie_nom as SN
+import ecran_sauvegardes as ES
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -49,6 +50,7 @@ uniform sampler2D tex; uniform float lum; uniform float flou;
 void main() { vec3 c = texture(tex, v_uv, flou).rgb; fragColor = vec4(c * v_col.rgb * lum, v_col.a * lum); }'''
 EFFET_FLOU = 1.0              # Capture.SetBlur(vrai) pendant l'effet : la capture est adoucie (biais de mipmap)
 
+BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
 MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
@@ -147,7 +149,7 @@ class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
-        self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
+        self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
         self.msaa = 0
@@ -510,7 +512,9 @@ class Jeu(pyglet.window.Window):
         K = pyglet.window.key
         if not self._pret: self._logo_touche = True; return pyglet.event.EVENT_HANDLED
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
+        self.dernier_peripherique = 'clavier'
         if self._saisie_nom_en_cours(): self.saisie_nom.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED          # saisie du nom : le clavier lui appartient
+        if self.sauv is not None: self.sauv.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED                       # ecran Sauvegardes (export / import)
         if self.licence is not None:                                       # ecran Licence : defilement et retour
             pas = {K.UP: -30.0, K.DOWN: 30.0, K.PAGEUP: -360.0, K.PAGEDOWN: 360.0, K.HOME: -1e9, K.END: 1e9}.get(symbol)
             if pas is not None: self.licence.defiler(pas)
@@ -1220,8 +1224,26 @@ class Jeu(pyglet.window.Window):
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
         if decl & MO.A and cur == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.son.jouer_se(SE_BOUTON); self.pause.ouvrir()          # (liste sans curseur du moteur : le bouton « Menu Echap » se choisit comme les autres)
+        elif decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
         elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
         elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+
+    def _port_depart(self, port):
+        """Vrai si ce port est le menu de depart (type 53, Make_StartMenuSecond)."""
+        fe = self.ui_g.f.get(port) if self.ui_g else None
+        return bool(fe and fe.typ == 53)
+
+    def _sauv_ouvrir(self):
+        if self.statut_depart is None: self.statut_depart = self.moteur.statut_catalogue()          # etat des journaux quand le moteur a construit le menu de depart (ses boutons grises / absents en dependent)
+        self.sauv = ES.EcranSauvegardes(self); self.appui = None; self.survol_nd = None
+
+    def _sauv_fermer(self):
+        s, self.sauv = self.sauv, None
+        if s is not None and s.a_recharger: self._apres_import()
+
+    def _apres_import(self):
+        """Des journaux viennent d'etre importes (le catalogue du moteur a deja ete relu par l'ecran Sauvegardes)."""
+        self.toast('Sauvegardes importées')
 
     @staticmethod
     def _voisin(z, cur, bit):
@@ -1416,8 +1438,10 @@ class Jeu(pyglet.window.Window):
         """Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler."""
         M = pyglet.window.mouse; mo = self.moteur
         if not self._pret: self._logo_touche = True; return
+        self.dernier_peripherique = 'souris'
         if self.pause.ouvert: self.pause.clic(x, y, bouton); return
         if self._saisie_nom_en_cours(): self.saisie_nom.clic(x, y, bouton); return
+        if self.sauv is not None: self.sauv.clic(x, y, bouton); return
         if self.licence is not None: self._licence_clic(x, y, bouton); return
         if self.titre is not None and bouton == M.LEFT: self.clic_a = True; return                 # titre : un toucher n'importe ou valide (la manette recoit A)
         if bouton == M.RIGHT: self.clic_b = True; return
@@ -1440,9 +1464,10 @@ class Jeu(pyglet.window.Window):
         """Survol de la souris : le bouton sous le pointeur est selectionne comme avec les fleches. Menu tactile (curseur local) : immediat ; menu a curseur du moteur :
         le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _survol_pas)."""
         if not self._pret: return
-        self.souris = (x, y)
+        self.souris = (x, y); self.dernier_peripherique = 'souris'
         if self.pause.ouvert: self.pause.survol(x, y); return
         if self._saisie_nom_en_cours(): self.saisie_nom.survol(x, y); return
+        if self.sauv is not None: self.sauv.hover(x, y); return
         if self.licence is not None: self.licence.survol = self.licence.zone(x, y); return
         if self.souris_gel is not None:
             if abs(x - self.souris_gel[0]) + abs(y - self.souris_gel[1]) < 6: return
@@ -1494,6 +1519,7 @@ class Jeu(pyglet.window.Window):
             if h and h[0] == b and h[1] == pad: self.carte_bascule = True
             return
         if h and h[0] == b and b == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.pause.ouvrir(); return          # bouton « Menu Echap » : propre au portage, le moteur n'en sait rien
+        if h and h[0] == b and b == BTN_SAUVEGARDES and self._port_depart(port): self._sauv_ouvrir(); return                # bouton « Sauvegardes » du menu de depart (a la place de « Sauv. cloud ») : propre au portage
         if h and h[0] == b and port in self.moteur.menus_saisie():
             self.moteur.envoyer_menu(port, 1, b, pad); self.menu_relacher = port
             f = self.moteur.ui.f.get(port)
@@ -1611,6 +1637,14 @@ class Jeu(pyglet.window.Window):
         if feed: self._boite_cachee = False                                  # une page qui attend une touche doit se voir
         return getattr(self, '_boite_cachee', False)
 
+    def _cadre_depart(self, fe, cx, cy, s):
+        """Cadre noir (comme les autres menus du portage) derriere tout le menu de depart."""
+        r = fe.cadre_menu()
+        if r is None: return
+        gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        self.pause._cadre(cx + r[0] * s, cy + r[1] * s, (r[2] - r[0]) * s, (r[3] - r[1]) * s, s * 800.0 / 900.0)
+        self.pause._melange()
+
     def _dessiner_menus(self):
         if self.pause.ouvert and self.pause.ecran == 'interface': return       # editeur d'interface : seul l'element choisi est montre (par le menu Echap), pas les fenetres du jeu
         mo = self.moteur
@@ -1622,11 +1656,13 @@ class Jeu(pyglet.window.Window):
         if self.ui_rendu:
             liste = sorted((f['ordre'], p) for p, f in mo.ui.f.items() if f['vis'] and p in self.ui_g.f)
             if mo.etat.partie == MO.PARTIE_COMBAT and float(mo.etat.fondu['a']) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
+            if self.sauv is not None: liste = []                                 # ecran Sauvegardes ouvert : le menu de depart est cache (sinon il se devine a travers le cadre translucide)
             fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
             zl = [nd['pos'][2] - self.ui_g.ml.hdr['lang']['dy'] for fe in fens_v if fe.typ == 27 for nd in fe.N.values() if nd['text'] and nd['text'].get('text') and nd['pos'][0] > 0]          # reglage de vitesse / volume : etiquettes du haut et du bas (« Rapide » / « Lent »)
             param = len(zl) < 2 and any(fe.typ == 27 for fe in fens_v)          # liste des Parametres : la fenetre de titre (type 27) n'a pas d'etiquettes de reglage (« Rapide » / « Lent ») et la liste montre ses cinq boutons (« Taille de la croix » n'en a que trois)
             self.echap_port = None
             for (_, p), fe in zip(liste, fens_v):
+                if fe.typ == 53: fe.centrer_menu()                  # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas)
                 if fe.typ == 8:
                     if len(zl) >= 2: fe.centrer_liste(max(zl), min(zl))
                     else: fe.centrer_liste(None, None, 1 if (param and fe.nb_plaques() == 3) else 0)          # « Taille de la croix » (3 plaques) : les boutons montent d'une rangee
@@ -1679,7 +1715,10 @@ class Jeu(pyglet.window.Window):
                 dzf = self.ui_dzp.get(next((p for _, p in liste if self.ui_g.f[p] is fe), None), dz)
                 if tf_msg: self.ui_rendu.dessiner([fe], tf_msg[0], tf_msg[1] + dzf * tf_msg[2], tf_msg[2], (self.width, self.height))
                 else: self.ui_rendu.dessiner([fe], cx, repere('msg')[0] + dzf * s, s, (self.width, self.height))
-            for cy, fens_g in bas.items(): self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
+            for cy, fens_g in bas.items():
+                for fe in fens_g:
+                    if fe.typ == 53: self._cadre_depart(fe, cx, cy, s)
+                self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
             for p, tf in perso.items(): self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
@@ -2012,7 +2051,7 @@ class Jeu(pyglet.window.Window):
             elif (fr['carte'] and self.carte_vue == 1 or bascule) and self.carte_deux_vues:           # (le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
                 mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
             elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
-        port = None if carte else mo.menu_actif()
+        port = None if carte or self.sauv is not None else mo.menu_actif()
         if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None
         if port is not None: port = self._port_clavier(port)      # critere memoire seul : le message d'abord
         if port is not None and self.menu_relacher is None: self._survol_pas()
@@ -2022,7 +2061,7 @@ class Jeu(pyglet.window.Window):
             p = decl = 0
         elif self.titre is not None:                       # ecran-titre : seul A valide (Espace, Entree ou toucher) ; ni marche, ni camera
             p = decl = MO.A if (decl & MO.A or fr['menu']) else 0
-        elif (self.saisie_nom.actif and not mo.msg_visible) or self.licence is not None: p = decl = 0           # saisie du nom, ecran Licence : tout passe par le clavier du portage
+        elif (self.saisie_nom.actif and not mo.msg_visible) or self.licence is not None or self.sauv is not None: p = decl = 0           # saisie du nom, ecran Licence : tout passe par le clavier du portage
         elif not mo.msg_visible:
             # sur le terrain : A = parler / examiner, Annuler, X ou Start = ouvrir le menu (le moteur veut ces boutons seuls)
             hd, self.hud_decl = self.hud_decl, 0                # (le moteur veut ces boutons seuls) A, puis boutons a l'ecran, puis touches Commandes / Discussion / Carte
@@ -2082,6 +2121,7 @@ class Jeu(pyglet.window.Window):
             self.titre.maj(mo.images)
         else: self.titre = None
         self._maj_saisie_nom(); self._maj_licence()
+        if self.sauv is not None: self.sauv.maj()
 
     def _maj_licence(self):
         """Fenetre de type 80 (Make_License) sur le port 15 : le texte des licences est dessine par Unity (LicenseNobu)."""
@@ -2102,6 +2142,10 @@ class Jeu(pyglet.window.Window):
             self.son.jouer_se(SE_BOUTON)
             try: import webbrowser; webbrowser.open(AP.URL_CONFIDENTIALITE)
             except Exception as ex: self.toast('Ouverture impossible : %r' % (ex,))
+
+    def _dessiner_sauvegardes(self):
+        if self.sauv is None: return
+        cx, cy, ech = self._ui_repere(); self.sauv.dessiner(self, cx, cy, ech)
 
     def _dessiner_licence(self):
         if self.licence is None: return
@@ -2283,7 +2327,7 @@ class Jeu(pyglet.window.Window):
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
         self._dessiner_fondu(); self._dessiner_degats(e)
-        self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_titre(); self._dessiner_licence()
+        self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_titre(); self._dessiner_licence(); self._dessiner_sauvegardes()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
         self._dessiner_aide()

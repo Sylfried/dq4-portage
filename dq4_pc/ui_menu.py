@@ -156,9 +156,8 @@ class Fenetre:
             for e in self.codes.get(5, []):
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
-        if self.t.get('name', '').startswith('Make_StartMenuSecond'):     # menu de depart : « Sauv. cloud » (bouton 8) absent sur PC (le moteur n'envoie plus son texte, la plaque doit disparaitre aussi)
-            for nd in self.N.values():
-                if nd['buttonId'] == 8: nd['act'] = False
+        if self.t.get('name', '').startswith('Make_StartMenuSecond'):     # menu de depart : la case « Sauv. cloud » (bouton 8) n'existe plus pour le moteur (octet g_isAmazon) ; le portage y met son bouton « Sauvegardes » (export / import), libelle pose ici
+            self.param_str(5, 0, 'Sauvegardes')
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
@@ -571,6 +570,23 @@ class Fenetre:
         for nd in enfants: nd['pos'][2] = nd['_z0'] + dz
         return dz
 
+    def centrer_menu(self):
+        """Menu de depart (type 53) : le jeu colle ses boutons au bord bas de l'ecran portrait ; la visionneuse les centre en hauteur (le groupe entier : « Sauvegarde automatique », les quatre choix, Licence, Sauvegardes, retour)
+        dans un cadre noir. Le decalage se calcule sur la mise en page complete (visible ou non) pour que le groupe ne bouge pas quand un bouton apparait ou disparait. -> decalage applique (unites)."""
+        for nd in self.N.values():
+            if '_zc' not in nd: nd['_zc'] = nd['pos'][2]
+        zs = [nd['_zc'] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
+        if not zs: return 0.0
+        dz = -(min(zs) + max(zs)) / 2.0
+        for nd in self.N.values(): nd['pos'][2] = nd['_zc'] + dz
+        return dz
+
+    def cadre_menu(self, marge=22.0):
+        """Rectangle (x0, z0, x1, z1) de toute la mise en page (plaques, boutons), agrandi de `marge` : le cadre noir du menu de depart."""
+        xs = [nd['pos'][0] + v[0] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
+        return (min(xs) - marge, min(zs) - marge, max(xs) + marge, max(zs) + marge) if xs else None
+
     def etendue_x(self):
         """(gauche, droite) en unites d'interface de toutes les parties de la fenetre (visibles ou non : la mise en page ne change pas), ou None : limites dans lesquelles un texte doit tenir. Mis en cache."""
         c = getattr(self, '_ex_cache', None)
@@ -829,17 +845,21 @@ class Rendu:
 
     def _largeur_plaque(self, fen, nd, zp):
         """Largeur utile (unites) de la plaque de bouton (partie 7) qui porte ce texte centre, ou None : la plaque dont le rectangle contient le point d'ancrage du texte."""
-        t = nd['text']
-        if t['anchor'] % 3 != 1: return None
+        t = nd['text']; col = t['anchor'] % 3
+        if col != 1 and fen.typ not in (53, 54): return None                 # (textes a gauche / a droite d'une plaque : seulement les listes du menu de depart, les autres fenetres gardent leur mise en page)
         c = nd.get('_pl')
         if c is None or c[0] is not fen.t:
             r = None
             for o in fen.N.values():
                 if o is nd or not o['vtx'] or not o['mats'] or o['mats'][0].get('part') != 7 or o['buttonId'] is None: continue
                 xs = [o['pos'][0] + v[0] for v in o['vtx']]; zs = [o['pos'][2] + v[1] for v in o['vtx']]
-                if min(xs) <= nd['pos'][0] <= max(xs) and min(zs) <= zp <= max(zs): r = max(xs) - min(xs) - 2 * self.MARGE_PLAQUE; break
+                if min(xs) <= nd['pos'][0] <= max(xs) and min(zs) <= zp <= max(zs): r = (min(xs), max(xs)); break
             nd['_pl'] = c = (fen.t, r)
-        return c[1]
+        r = c[1]
+        if r is None: return None
+        xa = nd['pos'][0]
+        if col == 1: return r[1] - r[0] - 2 * self.MARGE_PLAQUE                                      # texte centre : la plaque entiere
+        return (r[1] - self.MARGE_PLAQUE - xa) if col == 0 else (xa - r[0] - self.MARGE_PLAQUE)      # texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
 
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']

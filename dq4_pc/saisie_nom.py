@@ -9,6 +9,7 @@ Le clavier de l'ordinateur sert aussi (tout caractere de la grille), comme la so
 import time
 import pyglet
 from pyglet import gl
+import hud_mobile as HM
 
 VIDE = '＠'                           # case vide de la grille (C_NA)
 ALPHABET = ('abcdefghijklmnopqrstuvwxyz -,.!?' + VIDE * 3, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ -,.!?' + VIDE * 3)       # C_ALPHABET : minuscules, majuscules
@@ -152,11 +153,11 @@ class SaisieNom:
                 u, v = U(xc - 10, FENTES_Y - FENTE_H / 2 + 6); pyglet.shapes.Rectangle(u, v, 20 * ech, max(2, 2.5 * ech), color=JAUNE).draw()
         P._melange()
         zones = []; page = self.page()
+        mode_souris = self.J.dernier_peripherique == 'souris'       # dernier peripherique utilise : souris = encadrement jaune de la touche survolee ; clavier / manette = curseur dore (fleche) sur la touche choisie
         def bouton(i, xc, yc, w, h, etiquette, taille, enfonce=False, grise=False):
-            a, b = U(xc - w / 2, yc - h / 2); sel = (i == self.cur); souris = sel and self.souris == i
-            fonc = i >= N_GRILLE
-            P._plaque(a, b, w * ech, h * ech, k, enfonce or (sel and not fonc), JAUNE if (souris or (sel and fonc)) else None)
-            if sel and not souris and not fonc: P._curseur(a - 24 * ech, b + h * ech / 2, 28 * ech)
+            a, b = U(xc - w / 2, yc - h / 2); sel = (i == self.cur) and not mode_souris; sur = mode_souris and self.souris == i
+            P._plaque(a, b, w * ech, h * ech, k, enfonce or sel or sur, JAUNE if sur else None)
+            if sel: P._curseur(max(a - 24 * ech, U(CADRE[0] + 3, 0)[0]), b + h * ech / 2, 28 * ech)          # (la fleche ne sort pas du cadre : « Alphabet » est collee a son bord)
             P._melange(); texte(etiquette, xc, yc, taille, GRIS if grise else BLANC)
             zones.append((a, b, a + w * ech, b + h * ech, i))
         for i in range(N_GRILLE):
@@ -167,7 +168,9 @@ class SaisieNom:
             i = I_ALPHA + f; actif = (f == 0 and self.mode == 0) or (f == 1 and self.mode == 1) or (f == 2 and self.maj == 1)
             bouton(i, (f - 2) * FONC_PAS, FONC_Y, FONC_L, FONC_H, lib, 16, actif, f == 4 and not self.texte)
         a, b = U(CADRE[2] - RETOUR_L - 14, CADRE[1] + 12); w, h = RETOUR_L * ech, RETOUR_H * ech
-        P._bouton_retour(a, b, w, h, self.cur == I_RETOUR)
-        if self.cur == I_RETOUR: P._curseur(a - 24 * ech, b + h / 2, 28 * ech)
+        sur = mode_souris and self.souris == I_RETOUR; sel = self.cur == I_RETOUR and not mode_souris
+        P._bouton_retour(a, b, w, h, sel or sur)
+        if sur: HM.contour(a, b, w, h, k, JAUNE)
+        if sel: P._curseur(a - 24 * ech, b + h / 2, 28 * ech)
         zones.append((a, b, a + w, b + h, I_RETOUR)); self.zones = zones
         P._melange(); texte('Clavier : taper le nom', CADRE[0] + 18, CADRE[1] + 44, 13, AIDE, 0); texte('Entrée : valider · Échap : retour', CADRE[0] + 18, CADRE[1] + 26, 13, AIDE, 0)
