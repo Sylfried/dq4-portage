@@ -447,39 +447,6 @@ class Fenetre:
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
         self.sel = bouton
 
-    ID_ECHAP = 900001           # element ajoute par le portage (pas dans le jeu) : bouton « Menu Echap » de la liste des Parametres
-    BTN_ECHAP = 100             # son numero de bouton (la liste n'en a que 0 a 5) : jamais envoye au moteur
-
-    def nb_plaques(self):
-        """Nombre de plaques de boutons de la liste visibles (le bouton ajoute par le portage n'en fait pas partie)."""
-        return sum(1 for n in self.N.values() if n['buttonId'] is not None and 0 <= n['buttonId'] < self.BTN_ECHAP and n['mats'] and n['mats'][0].get('part') == 7 and self.visible(n['id']))
-
-    def bouton_echap(self, oui, libelle):
-        """Liste de boutons des Parametres (type 8) : un bouton de plus, une rangee AU-DESSUS du premier (meme gabarit, meme pas que les autres), qui ramene au menu Echap du portage.
-        Copie de la plaque du bouton 0 et de son etiquette, decalees du pas entre deux plaques ; l'espace est libre (le cadre de la fenetre garde la place d'une rangee en haut).
-        oui faux : le bouton est cache. -> vrai si le bouton est visible."""
-        nd = self.N.get(self.ID_ECHAP)
-        if nd is None:
-            if not oui: return False
-            pl = {n['buttonId']: n for n in self.N.values() if n['buttonId'] in (0, 1) and n['mats'] and n['mats'][0].get('part') == 7 and n['par'] is not None}
-            if len(pl) < 2: return False
-            p0, p1 = pl[0], pl[1]
-            et = next((n for n in self.N.values() if n['par'] == p0['id'] and n['text'] is not None and abs(n['pos'][0] - p0['pos'][0]) < 5.0), None)       # l'etiquette centree sur la plaque (l'autre texte de la plaque est a droite)
-            if et is None: return False
-            dz = p0['pos'][2] - p1['pos'][2]
-            def copie(n, **kw):
-                c = dict(n); c['pos'] = list(n['pos']); c['mats'] = [dict(m) for m in n['mats']]
-                c['vtx'] = [list(v) for v in n['vtx']] if n['vtx'] else n['vtx']; c['uv'] = [list(v) for v in n['uv']] if n['uv'] else n['uv']
-                c['text'] = dict(n['text']) if n['text'] is not None else None
-                for k in ('_pl', '_z0', 'base', 'vu'): c.pop(k, None)            # (caches propres a chaque element)
-                c.update(kw); c['pos'][2] += dz; return c
-            nd = copie(p0, id=self.ID_ECHAP, buttonId=self.BTN_ECHAP, pad=0x10, etat=0, act=True)
-            te = copie(et, id=self.ID_ECHAP + 1, par=self.ID_ECHAP, act=True, tscale=1.0, tcol=0)
-            te['text']['text'] = libelle; te['vu'] = True
-            self.N[nd['id']] = nd; self.N[te['id']] = te
-        nd['act'] = bool(oui)
-        return bool(oui)
-
     # ---- plaques de noms de monstres (MenuPortItemTable.MonsterNamePlate, type 31)
     def _noeuds_plaque(self, i):
         for e in self.codes.get(i, []):
@@ -556,23 +523,6 @@ class Fenetre:
                 xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
                 out.append((min(xs), min(zs), max(xs), max(zs)))
         return out
-
-    def centrer_liste(self, z_haut, z_bas, rangees=0):
-        """Fenetre de liste de boutons (Make_NameButton) placee entre deux etiquettes (« Rapide » / « Lent », « Bas » / « Haut » du reglage des vitesses et volumes) : les boutons visibles sont centres entre elles.
-        Le jeu les place par du code (commandes 6 a 8, non extraites : « List index ») ; sans cela le dernier bouton tombe sur l'etiquette du bas. Le bouton retour (racine) ne bouge pas ; None remet la mise en page d'origine ; `rangees` (avec None) : toute la liste monte de ce nombre de rangees (pas entre deux plaques)."""
-        racine = next((nd['id'] for nd in self.N.values() if nd['par'] is None), None)
-        enfants = [nd for nd in self.N.values() if nd['par'] is not None]
-        for nd in enfants:
-            if '_z0' not in nd: nd['_z0'] = nd['pos'][2]
-        dz = 0.0
-        if z_haut is not None:
-            plaques = [nd['_z0'] for nd in enfants if nd['buttonId'] is not None and nd['buttonId'] >= 0 and nd['vtx'] and self.visible(nd['id'])]
-            if plaques: dz = (z_haut + z_bas) / 2 - (max(plaques) + min(plaques)) / 2
-        elif rangees:
-            pl = {nd['buttonId']: nd['_z0'] for nd in enfants if nd['buttonId'] in (0, 1) and nd['mats'] and nd['mats'][0].get('part') == 7}
-            if 0 in pl and 1 in pl: dz = rangees * (pl[0] - pl[1])
-        for nd in enfants: nd['pos'][2] = nd['_z0'] + dz
-        return dz
 
     def centrer_menu(self):
         """Menu de depart (type 53) : le jeu colle ses boutons au bord bas de l'ecran portrait ; la visionneuse les centre en hauteur (le groupe entier : « Sauvegarde automatique », les quatre choix, Licence, Sauvegardes, retour)

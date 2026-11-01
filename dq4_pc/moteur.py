@@ -346,6 +346,8 @@ class Moteur:
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
+        self.demande_pause = False               # le joueur a choisi « Paramètres » dans le menu Divers : la visionneuse ouvre son menu Pause (voir _detourner_parametres)
+        self._detourner_parametres()
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
         hfd = c.export('_ZN9FieldData9drawBlockEv')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
@@ -371,6 +373,27 @@ class Moteur:
         except Exception as ex:
             print('fenetre des lieux non elargie :', ex, flush=True)
 
+    # TownMenu_OPERATION_ROOT::menuUpdate (liste du menu Divers) : « cmp w8, #7 » (0x16ef28) suivi de « b.ne » vers la sortie « bouton inconnu » ; le bouton 7 (« Paramètres ») ferme le menu et ouvre TownMenu_OPERATION_SETTING
+    CMP_PARAMETRES = 0x16ef28
+
+    def patcher_parametres(self):
+        """Le bouton « Paramètres » du menu Divers ouvre le menu Pause de la visionneuse, pas les reglages d'origine du jeu (volumes, vitesse, taille de la croix, retour au titre) : la comparaison du numero du bouton choisi a 7
+        est portee a 4095 (jamais egale : le moteur traite l'appui comme celui d'un bouton inconnu, ne ferme pas le menu Divers et n'entre pas dans l'etat « Parametres »). Sans effet si c'est deja fait ou si le moteur est une autre
+        version. Rappelee apres le chargement d'un etat (etats.appliquer remet l'image d'origine de la bibliotheque)."""
+        c = self.core; ad = c.LIB_BASE + self.CMP_PARAMETRES; w = struct.unpack('<I', c.mem(ad, 4))[0]
+        if w == 0x71001d1f: c.mem_w(ad, struct.pack('<I', (w & ~(0xfff << 10)) | (0xfff << 10)))       # « cmp w8, #7 » -> « cmp w8, #4095 »
+
+    def _detourner_parametres(self):
+        """Patch du bouton « Paramètres » (patcher_parametres) et crochet sur la comparaison : il leve `demande_pause` quand le bouton choisi est le 7 ; la visionneuse n'a plus qu'a ouvrir son menu Pause (Jeu.tick)."""
+        c = self.core
+        try:
+            self.patcher_parametres(); ad = c.LIB_BASE + self.CMP_PARAMETRES
+            def _p(uc, a, sz, u):
+                if uc.reg_read(c.XREG[8]) & 0xffffffff == 7: self.demande_pause = True
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _p, None, ad, ad)
+        except Exception as ex:
+            print('bouton Paramètres non detourne :', ex, flush=True)
+
     def _creer_canevas(self):
         c = self.core
         # canevas de texte des messages : Unity le cree par un message de port (largeur, hauteur) ; on appelle directement le gestionnaire
@@ -386,6 +409,15 @@ class Moteur:
     def demarrer_champ(self):
         """(essai) force le passage a la carte du monde : Global::startField()."""
         self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
+
+    def retour_titre(self):
+        """Retour a l'ecran-titre : ce que fait le bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
+        (sauvegarde automatique, killbank), verrouille le joueur, puis Global::startTitle() (fondu au noir, chapitre 0, la partie suivante est le titre). Les menus et le message du moteur doivent etre fermes."""
+        c = self.core
+        c.call(self.E('_ZN7profile8SaveLoad8killbankEib'), 4, 0, label='killbank')
+        c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
+        c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 1, label='setLock')
+        c.call(self.E('_ZN6Global10startTitleEv'), self._global(), label='startTitle')
 
     def demarrer_ville(self, nom):
         """(essai) charge une ville ou un donjon : Global::startTown(nom)."""

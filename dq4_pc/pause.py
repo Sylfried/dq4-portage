@@ -1,4 +1,4 @@
-"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), quitter.
+"""Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), retour a l'ecran titre.
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
@@ -40,7 +40,7 @@ NOMS_FENETRES = {'YesNo': 'Oui / Non', 'Money': 'Argent', 'RootMenu': 'Menu prin
                  'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait',
                  'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services', 'Chapter2Status': 'Chapitre 2 : statut', 'TorunekoMiseban': 'Boutique de Torneko', 'NENE_ItemView': "Aperçu d'objet",
                  'FightStadiumAbort': 'Stade : abandon', 'ViewVolumeDecision': 'Volume : validation', 'PortalButton': 'Bouton du portail', 'NetworkRoot': 'Réseau : menu', 'NetworkCODE': 'Réseau : code', 'NetworkITEM': 'Réseau : objet'}
-SANS_EDITION = ('BattleHoppingNumber', 'MonsterName')   # (suivent les monstres a l'ecran : on ne les deplace pas)
+SANS_EDITION = ('BattleHoppingNumber', 'MonsterName', 'Config')   # (les deux premieres suivent les monstres a l'ecran : on ne les deplace pas ; Config = reglages d'origine du jeu, remplaces par le menu Pause : le bouton « Paramètres » ne les ouvre plus)
 
 
 class Pause:
@@ -171,7 +171,7 @@ class Pause:
     def _aller(self, nom):
         def va():
             self.pile.append(nom)
-            if nom == 'quitter': self.sel[nom] = 2        # « Non » preselectionne
+            if nom in ('quitter', 'titre'): self.sel[nom] = 2        # « Non » preselectionne
         return va
 
     def _e_racine(self):
@@ -180,7 +180,7 @@ class Pause:
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
-                dict(t='act', l='Quitter le jeu', ok=self._aller('quitter'), sous=True)]
+                dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
     def _choix(self, label, valeurs, get, set_, off=False, note=None):
         """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
@@ -304,26 +304,26 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Quatre sections (intertitres) : deplacement (touches, vitesse, course), camera (touches, vitesse, acceleration comme la course), actions du jeu, autres (touche speciale, infos, vitesse de transition) ; puis le retablissement des touches."""
+        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition, touche et vitesse de l'accelerateur), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, mini, maxi, f=None):
             return self._curs(lib, lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
+        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
+        vit_acc = vit("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
-                vit('Vitesse de déplacement', 'vitesse_marche', 0.5, 2.0),
-                T('courir'), T('courir_bascule'),
-                vit('Multiplicateur de la course', 'vitesse_course', 1.0, 2.0),
                 dict(t='sep', l='Caméra'),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
-                vit('Vitesse de la caméra', 'vitesse_camera', 0.5, 2.0),
-                T('cam_accel'), T('cam_accel_bascule'),
-                vit("Multiplicateur d'accélération", 'accel_camera', 1.0, 2.0),
+                dict(t='sep', l='Vitesses'),
+                vit('Vitesse de marche', 'vitesse_marche', 0.5, 2.0),
+                vit('Vitesse de caméra', 'vitesse_camera', 0.5, 2.0),
+                vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
+                accel, vit_acc,
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
                 dict(t='sep', l='Autres'),
                 modif, T('infos'),
-                vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)
@@ -354,6 +354,13 @@ class Pause:
 
     def _e_quitter(self):
         return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
+
+    def _e_titre(self):
+        return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self._vers_titre), dict(t='act', l='Non', ok=self.retour)]
+
+    def _vers_titre(self):
+        """« Oui » : le menu se ferme (le jeu reprend) puis le moteur revient a son ecran-titre."""
+        self.fermer(); self.J.retour_titre()
 
     # ---- actions
     def _info(self, texte, erreur=False): self.message = (texte, time.time(), erreur)
@@ -812,10 +819,10 @@ class Pause:
         ecr = self.ecran; e = self._entrees(); n = len(e)
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
         i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
-        while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr != 'quitter': i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
+        while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr not in ('quitter', 'titre'): i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
         n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -835,7 +842,7 @@ class Pause:
         if barre: h = h_titre + visibles * rh + pad / 2 + pied                     # (la fenetre se referme sur la derniere ligne visible)
         rdr = 56 * k                                                               # marge droite du contenu des lignes (boutons : 42 px de marge a gauche comme a droite ; la barre de defilement est dans la marge)
         # largeur : le plus long libelle + la place des valeurs / curseurs / cases de touches
-        lw = max([self._et(x['l'], fs).content_width for x in e] + [0.0]); vw = 0.0
+        lw = max([self._et(x['l'], fs).content_width for x in e if not (ecr == 'etats' and x['t'] == 'slot')] + [0.0]); vw = 0.0       # (etats : la date des emplacements ne compte pas, la fenetre garde la meme taille avec ou sans etat enregistre ; la date se reduit au besoin)
         for x in e:
             if x['t'] == 'choix':
                 tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in x['vals'])
@@ -843,7 +850,6 @@ class Pause:
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
-        if ecr == 'etats': pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
         if editeur:                                                                 # panneau toujours en haut a droite (les boutons sont a gauche, la croix en bas a droite ; replie : la barre de titre seule, pour voir tout l'ecran)
@@ -892,10 +898,12 @@ class Pause:
                 et = self._et(en['l'], fs, OR); et.x = x0 + (pw - et.content_width) / 2; et.y = base; et.draw()
                 self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))
                 continue
+            maxw_lab = 0.0                                                                    # largeur permise au libelle (0 : aucune limite)
             if en['t'] == 'slot':
                 nu = self._et('%d' % en['n'], fs, coul); nu.x = lx; nu.y = base; nu.draw(); lx += 44 * k
+                maxw_lab = x0 + pw - 66 * k - (self._et(en['v'], fsp * 1.2, GRIS).content_width + 12 * k if en['v'] else 0.0) - lx           # (jusqu'au lieu, a droite)
             base += dec
-            lab = self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
+            lab = self._ajuster(en['l'], fs, coul, maxw_lab) if maxw_lab else self._et(en['l'], fs, coul); lab.x = lx; lab.y = base; lab.draw()
             if note:
                 en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = xr - en_.content_width; en_.y = ybas + 9 * k; en_.draw()
             if en['t'] == 'act' and en.get('sous'): self._chevron(xr - 6 * k, ybas + rh / 2 + dec, k)
@@ -975,7 +983,7 @@ class Pause:
         """Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas."""
         t = en['t']
         if t == 'touche': return en.get('aide') or self.AIDE_TOUCHE
-        if t == 'curs': return 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
+        if t == 'curs': return (en['aide'] + '   ' if en.get('aide') else '') + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
         if t == 'choix':
             return 'Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante'
         if t == 'slot': return self.AIDE_ETATS[self.action_etat]
