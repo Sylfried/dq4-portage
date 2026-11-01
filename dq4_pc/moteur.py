@@ -331,37 +331,6 @@ class Moteur:
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
         hfd = c.export('_ZN9FieldData9drawBlockEv')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
-        # compagnons en ville : le moteur les place sur un historique des positions du heros (entrees de 12 octets, le heros en 0), le compagnon i lit l'entree ESP x i (ESP = 8, ou 10 dans certaines salles, variable statique
-        # de libdq4core + 0x24de94). En marche normale seules les entrees PAIRES sont remises a jour (une par pas du heros) : les impaires gardent une vieille valeur. Courir fait faire plus de chemin par pas, donc les compagnons
-        # se retrouvent plus loin : on lit moins d'entrees en arriere (ESP / f, arrondi a un nombre PAIR). Surtout, on ne passe jamais par le code de AdjustArray pour changer ESP (il reorganise tout l'historique : un ESP
-        # impair ou une reorganisation faisaient lire de vieilles positions, d'ou un compagnon teleporte a l'entree de la salle pendant la course)
-        self._h_ecart = 1.0; self.ecart_constant = True      # facteur de vitesse du heros (les compagnons et le taux de rencontre le compensent)
-        self._n_jeu = None; self._f_mem = 0.0; self._f_cnt = 0
-        ESP = c.LIB_BASE + 0x24de94
-        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : appele a chaque pas avec le n voulu par le jeu (8 ou 10)
-            n = uc.reg_read(c.XREG[1]) & 0xffffffff; cur = struct.unpack('<i', c.mem(ESP, 4))[0]; f = self._h_ecart
-            if f > 1.05: self._f_mem = f; self._f_cnt = 0
-            elif self._f_mem > 1.05 and self._f_cnt < 6: f = self._f_mem; self._f_cnt += 1          # la course ne s'arrete pas pour autant : un changement de direction (une touche relachee, l'autre pas encore enfoncee) laisse une image sans direction tenue, d'ou un compagnon qui reculait puis revenait
-            else: self._f_mem = 0.0
-            ancien = self._n_jeu if self._n_jeu is not None else (cur if cur in (8, 10) else n)       # disposition d'avant : celle que le jeu a demandee, sinon la valeur d'ESP si c'est une disposition d'origine
-            if n != ancien:                      # le jeu change vraiment la disposition (8 <-> 10) : on rend la main a AdjustArray avec l'ESP d'origine
-                self._n_jeu = n
-                if cur != ancien: c.mem_w(ESP, struct.pack('<i', ancien))
-                return
-            self._n_jeu = n
-            cible = n
-            if self.ecart_constant and f > 1.05: cible = max(2, 2 * int(n / f / 2.0 + 0.5))
-            if cible != cur: cur += max(-2, min(2, cible - cur)); c.mem_w(ESP, struct.pack('<i', cur))       # au plus une entree paire par pas : un compagnon qui saute de 2 pas d'un coup se voit
-            uc.reg_write(c.XREG[1], cur)         # ESP == n : AdjustArray ne fait rien
-        haa = c.export('_ZN15TownPartyAction11AdjustArrayEi')
-        if haa: c.uc.hook_add(unicorn.UC_HOOK_CODE, _aa, None, haa, haa)
-        self._acc_enc = 0.0
-        def _ew(uc, a, sz, u):                   # Encount::execWalk (appele a chaque image ou le heros avance) : 16 appels = un « pas » de rencontre ; courir fait plus de chemin par image, donc on compte plus vite : le taux suit la distance, pas le temps
-            h = self._h_ecart
-            if not self.ecart_constant or h <= 1.05: self._acc_enc = 0.0; return
-            self._acc_enc += h - 1.0; k = int(self._acc_enc); self._acc_enc -= k
-            if k: th = uc.reg_read(c.XREG[0]); c.mem_w(th + 0x20, struct.pack('<H', (struct.unpack('<H', c.mem(th + 0x20, 2))[0] + k) & 0xffff))
-        ew = c.export('_ZN7Encount8execWalkEv'); c.uc.hook_add(unicorn.UC_HOOK_CODE, _ew, None, ew, ew)
         def _sca(uc, a, sz, u): self.fldobj = uc.reg_read(c.XREG[0])
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
@@ -404,18 +373,16 @@ class Moteur:
         """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')
 
-    # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde
-    # (carte du monde : en diagonale, FieldPlayer::move lit deux constantes locales du fichier, 0x27520c et 0x275210 (Fix32 2,0 chacune, posees par l'initialiseur statique 0x1eec50), au lieu de Speed (3,0) ;
-    # sans elles la course ne jouait pas en diagonale. Elles n'ont pas de symbole : decalage dans la bibliotheque)
-    VITESSES_HEROS = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288), (0x27520c, 8192), (0x275210, 8192))
+    # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde (Speed, plus les deux constantes locales 0x27520c et 0x275210 que
+    # FieldPlayer::move lit en diagonale). La course accelere l'horloge du moteur (viewer, _boucle), pas ces valeurs ; on ne les remet a l'origine qu'au chargement d'un etat (voir remettre_vitesses)
+    VITESSES_ORIGINE = (('_ZN16TownPlayerAction9walkSpeedE', 819), ('_ZN16TownPlayerAction10walkSpeed2E', 655), ('_ZN11FieldPlayer5SpeedE', 12288), (0x27520c, 8192), (0x275210, 8192))
 
-    def vitesse_heros(self, f):
-        """Multiplie la vitesse de marche du heros par f (1 = d'origine) sans toucher a l'horloge du moteur : les PNJ gardent leur vitesse et leurs animations (accelerer le moteur les accelerait aussi).
-        En ville les compagnons relisent l'historique des positions du heros (une entree par pas) : `AdjustArray` (crochet de __init__) divise leur ecart d'historique par ce facteur pour qu'ils gardent la meme distance."""
-        c = self.core; self._h_ecart = float(f)
-        if not hasattr(self, '_vit_ad'): self._vit_ad = [(c.LIB_BASE + n if isinstance(n, int) else c.export(n), b) for n, b in self.VITESSES_HEROS]
-        for ad, base in self._vit_ad:
-            if ad: c.mem_w(ad, struct.pack('<i', int(round(base * f))))           # (a chaque image : un etat charge remet les valeurs qu'il avait)
+    def remettre_vitesses(self):
+        """Remet les vitesses de marche du heros a leurs valeurs d'origine : un etat enregistre par une ancienne version pendant une course les contient majorees (la course n'y touche plus)."""
+        c = self.core
+        for n, base in self.VITESSES_ORIGINE:
+            ad = c.LIB_BASE + n if isinstance(n, int) else c.export(n)
+            if ad: c.mem_w(ad, struct.pack('<i', base))
 
     def boutiques(self):
         """(indice courant, nombre) des boutiques de la liste de la carte d'une ville (TownImageMap::execute : deux statiques locales, 0x2750c4 et 0x2750c8 ; la liste est la fenetre de type 24)."""

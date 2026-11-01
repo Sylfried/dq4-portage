@@ -273,7 +273,7 @@ class Pause:
                   self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0)]
         e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),            # (pour toutes les interfaces)
               self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v)),
-              dict(t='act', l="Rétablir les positions d'origine" if c == 'boutons' else 'Rétablir cette interface', ok=H.remettre if c == 'boutons' else (lambda: self._rien_ov()))]
+              dict(t='act', l='Rétablir cette interface', ok=self._remettre_boutons if c == 'boutons' else self._rien_ov)]            # (meme reinitialisation complete pour tous les types : tailles et positions)
         e.append(dict(t='act', l='Rétablir toutes les interfaces', ok=self._tout_remettre))
         e.append(dict(t='act', l='Terminer', ok=self.retour))
         return e
@@ -281,8 +281,12 @@ class Pause:
     def _rien_ov(self):
         d = dict(self.J.reg['interface_fenetres']); d.pop(self.cible, None); self.J.reg['interface_fenetres'] = d
 
+    def _remettre_boutons(self):
+        """Boutons et croix de l'ecran : positions et tailles d'origine (l'affichage de la croix reste un choix du joueur)."""
+        self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']; self.J.reg['croix_taille'] = RG.DEFAUT['croix_taille']
+
     def _tout_remettre(self):
-        self.J.reg['interface_fenetres'] = {}; self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']; self.J.reg['croix_taille'] = RG.DEFAUT['croix_taille']
+        self.J.reg['interface_fenetres'] = {}; self._remettre_boutons()
 
     def _e_son(self):
         J, R = self.J, self.J.reg
