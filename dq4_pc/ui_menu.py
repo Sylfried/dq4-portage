@@ -184,7 +184,7 @@ class Fenetre:
         if not p: return
         if 'custom' in p:
             cu = p['custom']; pt, ib = self._enrobe(p)
-            if cu.get('cls', '').endswith('ICityMap'): self.nom_carte = s; return                   # fenetre de carte (type 25) : nom de la texture du plan (Menu/map)
+            if cu.get('cls', '').endswith('ICityMap'): return                                       # fenetre de carte (type 25) : le nom de la texture du plan (Menu/map) est pose par la visionneuse (nom_carte)
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
