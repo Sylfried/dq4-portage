@@ -155,7 +155,7 @@ class Licence:
     (elles dependent du rapport hauteur/largeur de l'ecran) : disposition dessinee ici, defilement a la molette, aux fleches, PageHaut/PageBas, ou en glissant la barre."""
     def __init__(self, chemin):
         import re
-        self.mise = None; self.zones = []; self.haut = 0.0; self.glisse = None; self.zone_barre = None; self.survol = None
+        self.mise = None; self.zones = []; self.haut = 0.0; self.glisse = None; self.zone_barre = None; self.survol = None; self.geom = None
         txt = open(chemin, 'rb').read().decode('utf-8', 'replace').replace('\r\n', '\n').replace('\ufeff', '') if chemin else 'Texte des licences indisponible.'
         self.plan = []; out = []; n = 0; orange = False
         for m in re.split(r'(<color=orange>|</color>)', txt):
@@ -185,6 +185,17 @@ class Licence:
     def defiler(self, delta):
         self.haut = min(self.maximum(), max(0.0, self.haut + delta))
 
+    def sur_barre(self, x, y):
+        zb = self.zone_barre
+        return zb is not None and self.maximum() > 0 and zb[0] <= x <= zb[2] and zb[1] <= y <= zb[3]
+
+    def glisser(self, y):
+        """Le curseur de la barre suit le pointeur (LicenseNobu : position du curseur -> proportion du texte) ; y en pixels (pyglet, vers le haut)."""
+        if self.geom is None: return
+        by0, bh, th = self.geom; libre = bh - th
+        if libre <= 0: return
+        self.haut = min(1.0, max(0.0, (by0 + bh - th / 2 - y) / libre)) * self.maximum()
+
     def dessiner(self, J, cx, cy, ech):
         pg = pyglet; from pyglet import gl as g
         P = J.pause; k = ech * 800.0 / 900.0
@@ -201,7 +212,7 @@ class Licence:
         pg.shapes.Rectangle(bx0, by0, bw, bh, color=(34, 36, 42)).draw()
         if m > 0:
             th = max(26 * ech, bh * lay.height / lay.content_height); hau = by0 + bh - th - (bh - th) * (self.haut / m)
-            P._plaque(bx0 - 1, hau, bw + 2, th, k * 0.6, self.glisse is not None)
+            P._plaque(bx0 - 1, hau, bw + 2, th, k * 0.6, self.glisse is not None); self.geom = (by0, bh, th)
         self.zone_barre = (bx0 - 4, by0, bx0 + bw + 4, by0 + bh)
         px0, py0 = U(LI_POLITIQUE[0], LI_POLITIQUE[1]); px1, py1 = U(LI_POLITIQUE[2], LI_POLITIQUE[3])
         P._plaque(px0, py0, px1 - px0, py1 - py0, k, False, (255, 235, 4) if self.survol == 'politique' else None); P._melange()

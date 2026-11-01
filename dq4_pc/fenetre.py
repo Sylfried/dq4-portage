@@ -477,6 +477,7 @@ class Jeu(pyglet.window.Window):
         """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.glisser(x, y)
+        elif self.licence is not None: self.licence.glisse and self.licence.glisser(y)
         elif self.hud.croix_on: self.hud.croix_glisser(x, y)
 
     def on_text(self, texte):
@@ -1477,6 +1478,7 @@ class Jeu(pyglet.window.Window):
         """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.relache(x, y, bouton); return
+        if self.licence is not None: self.licence.glisse = None; return
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
@@ -2094,6 +2096,7 @@ class Jeu(pyglet.window.Window):
     def _licence_clic(self, x, y, bouton):
         li = self.licence; nom = li.zone(x, y)
         if bouton == pyglet.window.mouse.RIGHT: self._licence_retour(); return
+        if li.sur_barre(x, y): li.glisse = True; li.glisser(y); return                 # barre de defilement : le curseur se glisse avec le pointeur
         if nom == 'retour': self._licence_retour()
         elif nom == 'politique':
             self.son.jouer_se(SE_BOUTON)

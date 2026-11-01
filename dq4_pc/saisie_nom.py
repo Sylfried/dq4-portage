@@ -35,11 +35,11 @@ JAUNE = (255, 235, 4)
 class SaisieNom:
     def __init__(self, jeu):
         self.J = jeu; self.actif = False; self.texte = ''; self.max = 8; self.mode = 0; self.maj = 0; self.cur = 0
-        self.zones = []; self.souris = None; self.message = None; self.t0 = 0.0
+        self.zones = []; self.souris = None; self.t0 = 0.0
 
     # ---- etat
     def ouvrir(self, maxi=8):
-        self.actif = True; self.texte = ''; self.max = max(1, min(30, maxi)); self.mode = 0; self.maj = 0; self.cur = 0; self.message = None; self.t0 = time.time(); self.souris = None
+        self.actif = True; self.texte = ''; self.max = max(1, min(30, maxi)); self.mode = 0; self.maj = 0; self.cur = 0; self.t0 = time.time(); self.souris = None
 
     def fermer(self): self.actif = False
 
@@ -128,10 +128,6 @@ class SaisieNom:
                 return
         self.souris = None
 
-    def refuse(self, texte):
-        """Message sous le champ (nom refuse par le moteur)."""
-        self.message = (texte, time.time())
-
     # ---- dessin
     def dessiner(self, cx, cy, ech):
         """(cx, cy, ech) : repere de la colonne d'interface (Jeu._ui_repere) ; la fenetre est reduite pour tenir dans la hauteur de l'ecran."""
@@ -155,9 +151,6 @@ class SaisieNom:
             elif j == len(self.texte) and int(t * 2) % 2 == 0:
                 u, v = U(xc - 10, FENTES_Y - FENTE_H / 2 + 6); pyglet.shapes.Rectangle(u, v, 20 * ech, max(2, 2.5 * ech), color=JAUNE).draw()
         P._melange()
-        if self.message is not None:
-            if time.time() - self.message[1] < 4.0: texte(self.message[0], 0, FENTES_Y - 46, 17, ROUGE)
-            else: self.message = None
         zones = []; page = self.page()
         def bouton(i, xc, yc, w, h, etiquette, taille, enfonce=False, grise=False):
             a, b = U(xc - w / 2, yc - h / 2); sel = (i == self.cur); souris = sel and self.souris == i
