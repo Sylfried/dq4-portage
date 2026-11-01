@@ -114,6 +114,7 @@ CAM_LACET_VIT, CAM_TANGAGE_VIT = 100.0, 45.0                                # fl
 CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # angle de camera (0 = comme le jeu)
 CAM_CENTRE_MAX = 60.0                                                        # camera centree sur le heros : garde-fou, ecart maximal (unites) entre la cible du jeu et le heros pour corriger (position du heros perimee) ; le vrai critere est le verrou TownCamera (cam_jeu)
 CAM_SAUT_VILLE = 1.5                                                         # unites de ville par pas du moteur : au-dela, la cible de la camera a saute (coupure, changement de carte) : pas d'interpolation, et la correction du centrage suit aussitot
+CAM_MENE_DIST = 1.0                                                      # camera verrouillee sans cible (mode 0) : le jeu la mene ailleurs que sur le joueur quand sa cible est a plus de 1 unite du heros
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
@@ -181,7 +182,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
@@ -847,10 +848,20 @@ class Jeu(pyglet.window.Window):
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
             if hp is not None and math.hypot(hp[0] - cib[0], hp[2] - cib[2]) <= CAM_CENTRE_MAX: dec = (hp[0] - cib[0], hp[2] - cib[2])
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
-        a = 1.0 - math.exp(-14.0 * dt)                                    # l'ecart se resorbe en douceur (passage d'une scene a la main du joueur et inversement)
-        if self.cam_saut: a = 1.0; self.cam_saut = False                  # coupure du jeu (changement de carte, plan de scene) : la correction suit aussitot, sans glissement apres la coupure
-        self.cam_dec = [c + (d - c) * a for c, d in zip(self.cam_dec, dec)]
-        poids_cible = 1.0 if option and (e.cam_libre or not self.cam_jeu) else 0.0          # part de l'option « camera centree » (sans les bornes de la visionneuse) : 1 = centree, 0 = comme option desactivee
+        # Correction du centrage = cible (heros - cible du jeu, suivie A L'IMAGE PRES : la camera est rigide sur le heros, meme quand le jeu borne la sienne aux bords de la carte et que le heros court)
+        # + reste qui se resorbe en douceur. Le reste ne naît que d'un changement de regime (scene <-> main du joueur) ou d'une coupure : avant, TOUT l'ecart etait lisse (exp(-14 t)), donc la camera trainait derriere
+        # un heros en course (v / 14 : ~0,6 u a x1,5, plus aux vitesses x2 a x4) et « continuait son chemin » apres l'arret (declenchement d'un evenement) avant de se recentrer
+        saut = self.cam_saut
+        if saut: self.cam_res = [0.0, 0.0]; self.cam_saut = False             # coupure du jeu (changement de carte, plan de scene) : la correction suit aussitot, sans glissement apres la coupure
+        elif centre != self.cam_centre: self.cam_res = [c - d for c, d in zip(self.cam_dec, dec)]                    # changement de regime : on part de l'ecart actuel (aucun saut a l'image), il s'estompe
+        self.cam_centre = centre
+        k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
+        self.cam_res = [r * k for r in self.cam_res]
+        self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
+        a = 1.0 if saut else 1.0 - k                                      # (poids des bornes 16/9 ci-dessous : meme constante de temps, aussitot apres une coupure)
+        # part SANS les bornes 16/9 de la visionneuse : 1 = aucune borne, 0 = bornes completes. Option « camera centree » ; ET camera menee par le jeu (cam_jeu : travelling, cible = un personnage, retour) :
+        # Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), le cadre du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi (progressivement, sans a-coup)
+        poids_cible = 1.0 if option or self.cam_jeu else 0.0
         self.cam_poids += (poids_cible - self.cam_poids) * a
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
@@ -2300,7 +2311,7 @@ class Jeu(pyglet.window.Window):
         if self.ui_g: self.ui_g.tick()                     # animations des fenetres d'origine, une fois par image du jeu
         if mo.etat.partie == MO.PARTIE_VILLE:              # TownCamera du jeu : limite negative = rotation interdite dans ce lieu ; verrou = camera tenue par un evenement
             lg, ld, vr = mo.camera_ville(); self.cam_bloquee = lg < 0 or ld < 0 or vr
-            self.cam_jeu = vr                                       # TownCamera verrouillee (+0x3e) : la camera est menee par le jeu (scene, evenement, chute, retour)
+            self.cam_jeu = bool(vr) and self._camera_menee(mo)         # TownCamera verrouillee (+0x3e) ET menee AILLEURS que sur le joueur (travelling, cible = un personnage, retour, plan fixe) : la camera est celle du jeu (le verrou seul ne change rien : l'evenement garde le joueur au centre)
             if self._coupure_camera(mo.etat): self.cam_saut = True
             self.cam_limite = min(lg, ld) * 360.0 / 4096.0 if lg > 0 and ld > 0 else None          # rotation bornee (ex. 120 degres de chaque cote) ; 0 = libre
             if self.cam_limite is not None and abs(self.lacet) > self.cam_limite: self.lacet = math.copysign(self.cam_limite, self.lacet)
@@ -2331,6 +2342,17 @@ class Jeu(pyglet.window.Window):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
             print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
+
+    def _camera_menee(self, mo):
+        """La TownCamera verrouillee va-t-elle AILLEURS que sur le joueur ? Mode de cible 1 a 4 (deplacements : travelling, retour) ou 5 (un personnage : la grenouille du prologue...), deplacement en cours, ou cible du jeu a plus de CAM_MENE_DIST du heros
+        (plan fixe, heros hors champ). Mode 6 (le joueur) et verrou sans cible a cote du heros : le jeu tient le joueur comme hors scene : AUCUN changement de regime (centrage, bornes), donc pas de glissement au declenchement."""
+        try: _, mode, _, deplace = mo.camera_jeu()
+        except Exception: return True
+        if 1 <= mode <= 5 or deplace: return True
+        e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
+        if mode == 6: return False
+        if hp is None or e.cam_cible is None: return True
+        return math.hypot(hp[0] - e.cam_cible[0], hp[2] - e.cam_cible[2]) > CAM_MENE_DIST
 
     def _coupure_camera(self, e):
         """Pendant ce pas du moteur, la cible de la camera du jeu a-t-elle saute (coupure de scene, changement de carte) ? self.prec = etat du pas precedent."""
