@@ -30,7 +30,10 @@ DEFAUT = {
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
     'plein_ecran': False,
-    'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
+    'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
+    'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
+    'nettete': 0.0,               # 0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
+    'luminosite': 1.0,            # 0,5 a 1,5 : courbe de gamma de la scene (1 = comme le jeu ; plus haut = plus clair)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
     'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
@@ -53,7 +56,7 @@ DEFAUT = {
 }
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_course': (1.0, 2.0), 'accel_camera': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0), 'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)}      # bornes des curseurs du menu Echap
 
 
 def nom_touche(nom):

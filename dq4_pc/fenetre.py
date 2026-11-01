@@ -1,6 +1,6 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
 import os, sys, math, time, argparse, glob, collections, threading, random
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait as attendre_futures
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -21,6 +21,7 @@ import etats as ET
 import avant_partie as AP
 import saisie_nom as SN
 import ecran_sauvegardes as ES
+import postfx as PF
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -29,7 +30,7 @@ centroid out vec2 v_uv; out vec4 v_col;
 void main() { gl_Position = mvp * vec4(position, 1.0); v_uv = tex_coords; v_col = colors; }'''
 FRAG = '''#version 330 core
 centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
-uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul;
+uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c;
 void main() {
     vec2 uv = v_uv; float lod = 0.0;
     if (net > 0.5) { vec2 p0 = uv * tsize; vec2 dx = dFdx(p0), dy = dFdy(p0); lod = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8))); }      // mipmaps choisies sur l'uv d'origine (l'uv decalee saute d'un texel a l'autre)
@@ -38,7 +39,10 @@ void main() {
         vec2 p = uv * tsize; vec2 b = floor(p + 0.5); vec2 w = max(fwidth(p), vec2(1e-4));       // b = frontiere de texel la plus proche : le centre du texel reste pur, seule une bande d'un pixel d'ecran autour de la frontiere est melangee
         uv = (b + clamp((p - b) / w, -0.5, 0.5)) / tsize;
     }
-    vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
+    vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0);
+    if (a2c > 0.5) { c.a = clamp((c.a - cutoff) / max(fwidth(c.a), 1e-4) + 0.5, 0.0, 1.0); if (c.a <= 0.0) discard; }      // decor decoupe (fleurs, feuillages, grilles) : la silhouette devient une couverture de 0 a 4 echantillons (MSAA), pas un bord dur qui scintille
+    else if (c.a < cutoff) discard;
+    c.a *= amul; fragColor = c; }'''
 
 VERT_EFFET = '''#version 330 core
 in vec2 position; in vec2 tex_coords; in vec4 colors;
@@ -154,24 +158,17 @@ class Jeu(pyglet.window.Window):
         self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
-        self.msaa = 0
         if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
         plein = bool(getattr(args, 'plein_ecran', 0))          # plein ecran memorise : la fenetre est creee directement en plein ecran (a la resolution du bureau), logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
-        for ms in ((args.msaa, 0) if args.msaa else (0,)):       # anticrenelage materiel si la carte le permet
-            try:
-                cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3, sample_buffers=1 if ms else 0, samples=ms)
-                try:
-                    if plein: super().__init__(caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True, fullscreen=True)
-                    else: super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
-                except pyglet.window.NoSuchConfigException: raise
-                except Exception as ex:
-                    if not plein: raise
-                    print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True); plein = False
-                    super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
-                self.msaa = ms; break
-            except pyglet.window.NoSuchConfigException:
-                print('MSAA x%d indisponible' % ms, flush=True)
-        print('MSAA : %s' % ('x%d' % self.msaa if self.msaa else 'non'), flush=True)
+        cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)       # (l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
+        try:
+            if plein: super().__init__(caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True, fullscreen=True)
+            else: super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        except Exception as ex:
+            if not plein: raise
+            print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True)
+            super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        self.post = PF.PostFX(self, log=lambda *a: print(*a, flush=True))
         self.args = args
         self._journal_fenetre('création')
         self._attente('Chargement du moteur...')
@@ -1006,9 +1003,11 @@ class Jeu(pyglet.window.Window):
         est_tr = lambda k: isinstance(k, tuple) and k[0] == 'tr'
         opaques = [x for x in self.carte_vl if not est_tr(x[2])]
         transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
-        cutoff0 = self.prog['cutoff']
+        cutoff0 = self.prog['cutoff']; a2c = self.post.a2c
+        if a2c: self.prog['a2c'] = 1.0; gl.glEnable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glDisable(gl.GL_BLEND)      # decor opaque decoupe : alpha -> couverture MSAA, sans melange (le melange doublerait l'alpha)
         for pas, liste in ((0, opaques), (1, transp)):
             if pas == 1 and liste:
+                if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
                 gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL); self.prog['cutoff'] = 0.0      # Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
             for tex, vl, key in liste:
                 pg = self.pam_gl.get(key)
@@ -1020,6 +1019,7 @@ class Jeu(pyglet.window.Window):
             if pas == 0:
                 for tex, vl, key, deb, n, dx in self.carte_ext:
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
+        if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     def _fond_combat(self, c):
@@ -1931,6 +1931,8 @@ class Jeu(pyglet.window.Window):
         """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
         self.n_boucle += 1
         if self.args.touches_test or self.args.shots_boucle: self._touches_test()
+        if self.args.options_test: self._options_test()
+        if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
         if self.pause.ouvert: self.pause.maj(); self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # menu Echap : le moteur est arrete
         self._maj_camera()
         t = time.perf_counter()
@@ -1987,6 +1989,19 @@ class Jeu(pyglet.window.Window):
                 pyglet.image.get_buffer_manager().get_color_buffer().save(a.shot.replace('.png', '_%s.png' % nom_n))
                 if os.environ.get('DQ_TEMPS_REEL'): print('PAS moteur=%d images boucle=%d t=%.1f' % (self.n, self.n_boucle, time.time() - self.t_demarrage), flush=True)
                 if not a.shots_boucle: self.on_close(); pyglet.app.exit()
+
+    def _options_test(self):
+        """(test) --options-test "image:Libelle=valeur;image:Libelle=valeur" : applique des options de la page Affichage a l'image de boucle donnee, par les memes fonctions que le menu Echap (valeur lue comme du JSON : 3, true, 0.5, [1280, 720])."""
+        import json
+        for ev in list(self.args.options_test):
+            n, lib, val = ev
+            if n != self.n_boucle: continue
+            self.args.options_test.remove(ev)
+            for en in self.pause._e_affichage():
+                if en.get('l') != lib: continue
+                v = json.loads(val)
+                if isinstance(v, list): v = tuple(v)
+                (en['set'](v) if en['t'] == 'choix' else en['saisie'](float(v))); print('OPTION %s = %s (image %d)' % (lib, val, n), flush=True)
 
     def _pas(self):
         self.prec = self._instantane()
@@ -2276,7 +2291,7 @@ class Jeu(pyglet.window.Window):
         if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-        gl.glViewport(0, 0, *self.get_framebuffer_size())
+        gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
         aspect = self.width / max(1, self.height)
         if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
         elif bataille:
@@ -2371,7 +2386,7 @@ class Jeu(pyglet.window.Window):
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
-        self._dessiner_fondu(True); self._dessiner_degats(e)
+        self._dessiner_fondu(True); self.post.fin(); self._dessiner_degats(e)
         self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_fondu(); self._dessiner_titre(); self._dessiner_licence(); self._dessiner_sauvegardes()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
@@ -2438,7 +2453,7 @@ class Jeu(pyglet.window.Window):
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
         self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
         self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
-            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
+            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
 
     def _dessiner_aide(self):
@@ -2502,6 +2517,7 @@ def main():
     ap.add_argument('--images-combat', type=int, default=0, help='(test) prend la capture N images apres le debut d\'un combat')
     ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image')
     ap.add_argument('--touches-test', default=None, help='(test) touches pressees : "image_de_boucle:NOM,..." (noms pyglet : ESCAPE, DOWN, RETURN...)')
+    ap.add_argument('--options-test', default=None, help='(test) options de la page Affichage appliquees en cours de route : "image:Libelle=valeur;image:Libelle=valeur" (valeur JSON)')
     ap.add_argument('--shots-boucle', default=None, help='(test) captures <shot>_b<n>.png a ces images de boucle (menu Echap compris) ; la derniere quitte')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
     ap.add_argument('--images', type=int, default=60)
@@ -2511,6 +2527,7 @@ def main():
     if a.hd is None: a.hd = reg['mode_sprites']
     else: reg['mode_sprites'] = a.hd
     if a.msaa is None: a.msaa = reg['msaa']
+    else: reg['msaa'] = a.msaa
     if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else int(bool(reg['plein_ecran']))
     else: reg['plein_ecran'] = bool(a.plein_ecran)
     rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1920, 1080)
@@ -2536,6 +2553,7 @@ def main():
             a.script[n] = cur
     cle = lambda t: (int(t[1:].split('+')[0]), int((t[1:].split('+') + ['0'])[1])) if t[:1] == 'c' else int(t)
     a.touches_test = [(cle(x.split(':')[0]), x.split(':')[1]) for x in a.touches_test.split(',')] if a.touches_test else []
+    a.options_test = [(int(x.split(':', 1)[0]),) + tuple(x.split(':', 1)[1].split('=', 1)) for x in a.options_test.split(';')] if a.options_test else []
     a.shots_boucle = set(cle(x) for x in a.shots_boucle.split(',')) if a.shots_boucle else set()
     if a.shots_combat: a.shots_combat = set(int(x) for x in a.shots_combat.split(','))
     if a.shots_effet: a.shots_effet = set(int(x) for x in a.shots_effet.split(','))
