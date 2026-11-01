@@ -87,6 +87,8 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
+TITRE_HAUT = 0.3                  # ecran-titre (carte ev01) : decalage vertical de la scene en coordonnees d'ecran normalisees (+1 = demi-hauteur vers le haut)
+FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
 TXT_MENU_ECHAP = 'Menu Pause'      # libelle du bouton ajoute dans la fenetre des Parametres (retour au menu Pause, ouvert aussi par Echap)
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
@@ -811,8 +813,9 @@ class Jeu(pyglet.window.Window):
             fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
             pos = pos + fw * DIST_ADJ_VILLE
         M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=e.cam_far or VILLE_FAR, haut=haut)
-        if e.cam_yoff:
-            Ty = np.eye(4); Ty[1, 3] = e.cam_yoff; M = Ty @ M              # SceneCamera.s_yOffset
+        yoff = (e.cam_yoff or 0.0) + (float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT)) if self.carte_nom == 'ev01' else 0.0)       # titre : le groupe logo + ile est releve pour etre centre dans le 16/9
+        if yoff:
+            Ty = np.eye(4); Ty[1, 3] = yoff; M = Ty @ M              # SceneCamera.s_yOffset
         return M, (droite, np.cross(fw, droite), fw)
 
     def _camera_combat(self, e, aspect):
@@ -1647,9 +1650,9 @@ class Jeu(pyglet.window.Window):
         if feed: self._boite_cachee = False                                  # une page qui attend une touche doit se voir
         return getattr(self, '_boite_cachee', False)
 
-    def _cadre_depart(self, fe, cx, cy, s):
-        """Cadre noir (comme les autres menus du portage) derriere tout le menu de depart."""
-        r = fe.cadre_menu()
+    def _cadre_depart(self, fe, cx, cy, s, visibles=False):
+        """Cadre noir (comme les autres menus du portage) derriere tout le menu de depart (ou de la fenetre d'avant-partie centree)."""
+        r = fe.cadre_menu(22.0, visibles)
         if r is None: return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         self.pause._cadre(cx + r[0] * s, cy + r[1] * s, (r[2] - r[0]) * s, (r[3] - r[1]) * s, s * 800.0 / 900.0)
@@ -1672,7 +1675,7 @@ class Jeu(pyglet.window.Window):
             param = len(zl) < 2 and any(fe.typ == 27 for fe in fens_v)          # liste des Parametres : la fenetre de titre (type 27) n'a pas d'etiquettes de reglage (« Rapide » / « Lent ») et la liste montre ses cinq boutons (« Taille de la croix » n'en a que trois)
             self.echap_port = None
             for (_, p), fe in zip(liste, fens_v):
-                if fe.typ == 53: fe.centrer_menu()                  # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas)
+                if fe.typ == 53: fe.centrer_menu(); fe.cacher_plaque_vide(4)          # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas) ; plaque « Sauvegarde automatique » sans etiquette (pas de data5.dat lisible) : cachee
                 if fe.typ == 8:
                     if len(zl) >= 2: fe.centrer_liste(max(zl), min(zl))
                     else: fe.centrer_liste(None, None, 1 if (param and fe.nb_plaques() == 3) else 0)          # « Taille de la croix » (3 plaques) : les boutons montent d'une rangee
@@ -1712,6 +1715,10 @@ class Jeu(pyglet.window.Window):
                     v = ov.get(self._nom_de_type(self.ui_g.f[p].typ) or '')
                     if v: perso[p] = self.ui_tf[p] = self._ui_perso(mode_de(p), s, v)
             for _, p in liste:
+                if self.ui_g.f[p].typ in FENETRES_CENTREES and p not in perso:         # liste des journaux, choix du sexe : centrees a l'ecran dans un cadre noir (les boites de dialogue, elles, restent a leur place)
+                    c = self.ui_g.f[p].centre_visible()
+                    if c: perso[p] = self.ui_tf[p] = (cx - c[0] * s, H / 2 - c[1] * s, s)
+            for _, p in liste:
                 if self.ui_g.f[p].typ == 25: self._plan_fenetre(self.ui_g.f[p], mo.ui.f[p])
                 elif self.ui_g.f[p].typ == 26: self._plan_monde_fenetre(self.ui_g.f[p], mo.ui.f[p])
             haut, bas = ([self.ui_msg] if msg else []), {}
@@ -1729,7 +1736,9 @@ class Jeu(pyglet.window.Window):
                 for fe in fens_g:
                     if fe.typ == 53: self._cadre_depart(fe, cx, cy, s)
                 self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
-            for p, tf in perso.items(): self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
+            for p, tf in perso.items():
+                if self.ui_g.f[p].typ in FENETRES_CENTREES: self._cadre_depart(self.ui_g.f[p], tf[0], tf[1], tf[2], True)
+                self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
         ech = self.height / 720.0; W, H = self.width, self.height

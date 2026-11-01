@@ -585,11 +585,28 @@ class Fenetre:
         for nd in self.N.values(): nd['pos'][2] = nd['_zc'] + dz
         return dz
 
-    def cadre_menu(self, marge=22.0):
-        """Rectangle (x0, z0, x1, z1) de toute la mise en page (plaques, boutons), agrandi de `marge` : le cadre noir du menu de depart."""
-        xs = [nd['pos'][0] + v[0] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
-        zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] for v in nd['vtx']]
+    def cacher_plaque_vide(self, bouton):
+        """Plaque de bouton dont le moteur n'a envoye aucune etiquette (case inexistante : « Sauvegarde automatique » sans fichier data5.dat lisible) : cachee, avec ses textes ; remontree des qu'une etiquette arrive.
+        La mise en page ne change pas (le cadre du menu de depart garde la place) ; une plaque cachee n'est ni survolee ni choisie (`boutons` ignore les elements invisibles)."""
+        for pl in self.N.values():
+            if pl['buttonId'] != bouton or not pl['mats'] or pl['mats'][0].get('part') != 7 or not pl['vtx']: continue
+            tx = [n for n in self.N.values() if n['par'] == pl['id'] and n['text'] is not None]
+            vide = bool(tx) and not any((n['text'].get('text') or '').strip() for n in tx)
+            if vide: pl['act'] = False; pl['_vide'] = True
+            elif pl.pop('_vide', False): pl['act'] = True
+
+    def cadre_menu(self, marge=22.0, visibles=False):
+        """Rectangle (x0, z0, x1, z1) de toute la mise en page (plaques, boutons), agrandi de `marge` : le cadre noir du menu de depart ; `visibles` : seulement les elements montres (listes de journaux : le cadre change de hauteur)."""
+        nds = [nd for nd in self.N.values() if nd['vtx'] and nd['mats'] and (not visibles or self.visible(nd['id']))]
+        xs = [nd['pos'][0] + v[0] for nd in nds for v in nd['vtx']]
+        zs = [nd['pos'][2] + v[1] for nd in nds for v in nd['vtx']]
         return (min(xs) - marge, min(zs) - marge, max(xs) + marge, max(zs) + marge) if xs else None
+
+    def centre_visible(self):
+        """(x, z) du centre de ce que la fenetre montre (cadre, onglet, plaques, bouton de retour), en unites d'interface ; None si rien. Les fenetres d'avant-partie (liste des journaux, choix du sexe) sont posees sur le bord bas-droit
+        de l'ecran portrait : la visionneuse les centre (par le repere de dessin, sans toucher aux positions)."""
+        r = self.cadre_menu(0.0, True)
+        return ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0) if r else None
 
     def etendue_x(self):
         """(gauche, droite) en unites d'interface de toutes les parties de la fenetre (visibles ou non : la mise en page ne change pas), ou None : limites dans lesquelles un texte doit tenir. Mis en cache."""
