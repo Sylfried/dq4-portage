@@ -323,7 +323,7 @@ class Donnees:
         el = [('texture', 'field', 'tex_field.npy')]
         el += [('carte', n, 'carte8_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
-        el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', [])]
+        el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
         return el
 
@@ -344,7 +344,7 @@ class Donnees:
             if os.path.exists(fp):
                 try: liste = json.load(open(fp, encoding='utf-8'))
                 except Exception: liste = None
-                if liste is not None and 'plans' not in liste: liste = None            # ancienne liste (sans les plans de la fenetre de carte) : refaite
+                if liste is not None and ('plans' not in liste or 'effets' not in liste): liste = None            # ancienne liste (sans les plans de la fenetre de carte, ou sans les textures d'effets) : refaite
             if liste is not None:
                 echecs = set(liste.get('echecs', []))
                 if all(os.path.exists(os.path.join(self.cache, f)) or n in echecs for _, n, f in self._elements(liste)): self._purger_anciens(); return       # deja tout pret
@@ -353,7 +353,7 @@ class Donnees:
                     go = self._gos(); tx = self._textures()
                 liste = {'cartes': sorted(n[:-4] for n in go if n.endswith('.fld')),
                          'feuilles': sorted(str(int(n[1:])) for n in tx if re.fullmatch(r'h\d+', n)),
-                         'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'plans': sorted(n for n in tx if re.fullmatch(r'[a-z]{2}_map\d|dsdq4wmap\d+', n)), 'echecs': []}
+                         'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'effets': sorted(n for n in tx if re.fullmatch(r'm\d{4}', n)), 'plans': sorted(n for n in tx if re.fullmatch(r'[a-z]{2}_map\d|dsdq4wmap\d+', n)), 'echecs': []}
             echecs = set(liste.get('echecs', []))
             t_debut = time.time(); n_faits = 0
             self.log('Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...')

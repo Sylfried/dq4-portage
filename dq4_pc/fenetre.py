@@ -171,6 +171,7 @@ class Jeu(pyglet.window.Window):
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.cam_accel_appui = False; self.cam_dec = [0.0, 0.0]; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.echap_port = None       # liste des Parametres : port qui porte le bouton « Menu Echap » (ajoute par le portage)
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
@@ -706,7 +707,7 @@ class Jeu(pyglet.window.Window):
         self.ui_g_reset()
         self.carte_nom = None; self.champ_cle = None; self.prec = None; self.canevas_cle = None; self.msg_cle = None
         self.pad_prec = 0; self.rep = {}; self.menu_relacher = None; self.survol = None; self.appui = None; self.survol_nd = None; self.cur_local = {}; self.effet_ref = None; self.effet_tex_prete = False
-        self.acc = 0.0; self.t_boucle = None
+        self.acc = 0.0; self.t_boucle = None; self.effet_ancre = {}
         self.n_combat = 0 if mo.etat.partie != MO.PARTIE_COMBAT else self.n_combat
         e = mo.etat
         if e.carte and e.partie != MO.PARTIE_CHAMP and not e.carte.startswith('btl_'):
@@ -813,7 +814,58 @@ class Jeu(pyglet.window.Window):
         M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=e.cam_far or VILLE_FAR, haut=haut)
         if e.cam_yoff:
             Ty = np.eye(4); Ty[1, 3] = e.cam_yoff; M = Ty @ M              # SceneCamera.s_yOffset
+        self._cadre_vue = (np.array(pos, float), droite, np.cross(fw, droite), fw)
         return M, (droite, np.cross(fw, droite), fw)
+
+    def _cadre_jeu(self, e):
+        """(position, droite, haut, avant) de la camera de la ville telle que le jeu d'origine la place (meme calcul que _camera_ville, SANS le zoom, le centrage, la rotation et l'inclinaison de la visionneuse)."""
+        pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
+        if e.cam_libre and e.cam_rot is not None:
+            R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
+        else:
+            fw = cib - pos; fw /= np.linalg.norm(fw)
+            lacet = math.atan2(fw[0], fw[2]); tang = math.asin(-fw[1]) - math.radians(e.cam_bas if e.cam_bas is not None else BAS_DEF)
+            fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
+            pos = pos + fw * DIST_ADJ_VILLE
+        droite = np.cross(haut, fw); droite /= np.linalg.norm(droite)
+        return pos, droite, np.cross(fw, droite), fw
+
+    def _ancrer_effets(self, e):
+        """Effets-maillages de la ville (paquets 21 / 22) : le moteur pose l'effet sur le rayon de SA camera, entre elle et le personnage (sort Morph, eclaboussure de la grenouille : a mi-chemin exactement,
+        mesure sur le paquet 22). Il n'a pas de personnage dans le paquet : on le retrouve, c'est celui qui est sur ce rayon. Pour chaque effet on garde de quoi le replacer sur le meme personnage vu par la camera
+        de la visionneuse (zoom, centrage, rotation, inclinaison) : rapport des profondeurs et ecart angulaire (en tangentes) vu de la camera du jeu. Sans personnage sur le rayon : position telle quelle."""
+        anc = {}
+        if e.partie == MO.PARTIE_VILLE and e.maillages_vus and e.cam_pos is not None and e.cam_cible is not None and e.sprites:
+            C = np.array(e.cam_pos, float); Co, Dr, H, F = self._cadre_jeu(e)
+            for slot in e.maillages_vus:
+                mm = e.maillages.get(slot)
+                if mm is None: continue
+                P = np.array(mm['pos'], float); d = P - C; meilleur = None
+                for k, sp in e.sprites.items():
+                    if sp.get('pos') is None or len(sp['pos']) < 3: continue
+                    S = np.array(sp['pos'], float); v = S - C; n2 = float(v @ v)
+                    if n2 < 1e-6: continue
+                    t = float(d @ v) / n2
+                    if not 0.05 < t < 1.5: continue
+                    ecart = float(np.linalg.norm(d - t * v))
+                    if ecart < 0.05 and (meilleur is None or ecart < meilleur[0]): meilleur = (ecart, k, S)
+                if meilleur is None: continue
+                _, k, S = meilleur
+                vs, vp = S - Co, P - Co; zs, zp = float(vs @ F), float(vp @ F)
+                if zs < 1.0 or zp < 0.5: continue
+                anc[slot] = (k, zp / zs, float(vp @ Dr) / zp - float(vs @ Dr) / zs, float(vp @ H) / zp - float(vs @ H) / zs)
+        self.effet_ancre = anc
+
+    def _pos_effet(self, e, slot, pos):
+        """Position d'un effet-maillage de la ville vue par la camera de la visionneuse : sur le meme personnage, au meme rapport de profondeur et au meme ecart angulaire que pour la camera du jeu
+        (identique a `pos` quand les deux cameras sont les memes)."""
+        a = self.effet_ancre.get(slot); sp = e.sprites.get(a[0]) if a else None
+        if a is None or sp is None or sp.get('pos') is None or self._cadre_vue is None: return pos
+        C, Dr, H, F = self._cadre_vue
+        v = np.array(sp['pos'], float) - C; zs = float(v @ F)
+        if zs < 1.0: return pos
+        zp = zs * a[1]
+        return tuple(C + Dr * ((float(v @ Dr) / zs + a[2]) * zp) + H * ((float(v @ H) / zs + a[3]) * zp) + F * zp)
 
     def _camera_combat(self, e, aspect):
         R = self._rot_camera(e)
@@ -866,7 +918,7 @@ class Jeu(pyglet.window.Window):
         self.cb_tex[cle] = dict(t=self._tex(a, False, HD_NIVEAUX), tw=a.shape[1], th=a.shape[0], hd=a is not orig['arr'])
         return self.cb_tex[cle]
 
-    def _maillages_combat(self, e, R=None):
+    def _maillages_combat(self, e, R=None, ville=False):
         """Liste (texture, vertex_list, ...) des maillages de monstres de l'image courante, dans l'ordre de dessin d'Unity :
         shaders DssaMonster* = fusion alpha, pas d'ecriture de profondeur, pas de masquage des faces -> parties dessinees dans l'ordre des paquets ;
         entre monstres : file de rendu du shader (Transparent+150, +200...) puis du plus loin au plus proche."""
@@ -884,7 +936,7 @@ class Jeu(pyglet.window.Window):
             V = np.array(mm['v'], np.float32); ix = np.array(mm['idx'], np.int64)
             if self.cb_ordre and len(ix) % 6 == 0: ix = ix.reshape(-1, 6)[::-1].ravel()          # (essai) quadrilateres en ordre inverse
             P = V[ix]
-            xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(mm['pos'], np.float32)
+            xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
@@ -1973,7 +2025,17 @@ class Jeu(pyglet.window.Window):
     def _pas(self):
         self.prec = self._instantane()
         self.pas_t.append(time.perf_counter())
+        t0 = time.perf_counter()
         self.tick(PAS_MOTEUR)
+        self._ancrer_effets(self.moteur.etat)
+        self._mesure('pas', t0)
+
+    def _mesure(self, genre, t0):
+        """(test) DQ_TEMPS_IMAGES=<fichier> : journal « genre image-de-boucle image-du-moteur duree-en-ms » de chaque pas du moteur et de chaque dessin (repere les blocages d'un premier affichage :
+        texture ou modele charge a la volee)."""
+        f = os.environ.get('DQ_TEMPS_IMAGES')
+        if f:
+            with open(f, 'a') as fh: fh.write('%s %d %d %.1f\n' % (genre, self.n_boucle, self.moteur.images, 1000.0 * (time.perf_counter() - t0)))
 
     def _instantane(self):
         """Etat du pas qui vient de finir : positions des personnages et de la camera, pour l'interpolation."""
@@ -2007,12 +2069,13 @@ class Jeu(pyglet.window.Window):
     def on_draw(self):
         self._nb_dessins = getattr(self, '_nb_dessins', 0) + 1
         if self._nb_dessins <= 90 or self._nb_dessins % 120 == 0: self._verifier_taille_reelle()
-        sauve = self._interpoler()
+        sauve = self._interpoler(); t0 = time.perf_counter()
         try: self._dessiner()
         finally:
             for obj, nom, ancien, attr in sauve:
                 if attr: setattr(obj, nom, ancien)
                 else: obj[nom] = ancien
+            self._mesure('dessin', t0)
 
     def tick(self, dt):
         p = self.args.script.get(self.n, self.pad()) if self.args.script is not None else self.pad()
@@ -2330,16 +2393,6 @@ class Jeu(pyglet.window.Window):
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
             self._tracer_decor(True)
-            if e.maillages and e.partie == MO.PARTIE_VILLE and cam3d is not None:          # titre : crédits du staff et logo du jeu = maillages dynamiques (paquets 21, 22) tournes vers la camera, par-dessus le decor
-                self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0
-                gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)
-                self._dom_lie = None
-                for tex, tw, th, vl, shader, hd in self._maillages_combat(e, np.column_stack(cam3d)):
-                    self.prog['net'] = 0.0 if hd else 1.0
-                    if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)
-                    self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
-                    if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
-                gl.glDepthMask(gl.GL_TRUE); self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
@@ -2349,6 +2402,19 @@ class Jeu(pyglet.window.Window):
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
         self.prog['net'] = 2.0 if pp else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
+        if not champ and not bataille and e.maillages and e.partie == MO.PARTIE_VILLE and cam3d is not None:
+            # effets-maillages de la ville (paquets 21, 22 : sort Morph, eclaboussures, coups d'epee du prologue, credits et logo du titre), tournes vers la camera. Ils passent APRES les personnages (Custom/Chara : file Transparent,
+            # 3000) : DssaChara Transparent+100, DssaMonster0 +150, DssaMonster1 +200, DssaCharaTransparent Overlay-150 (3850, ZTest Always : devant tout, comme les bulles Riseup, de la meme file). Avant, ils etaient dessines
+            # avant les personnages : un personnage cache a l'effet qui le recouvre (le nuage du sort Morph passait « derriere » Elisa).
+            self.prog['cutoff'] = 0.05; self.prog['net'] = 1.0; self.prog['tsize'] = (1.0, 1.0)
+            gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)
+            self._dom_lie = None
+            for tex, tw, th, vl, shader, hd in self._maillages_combat(e, np.column_stack(cam3d), True):
+                self.prog['net'] = 0.0 if hd else 1.0
+                if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)
+                self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
+                if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
+            gl.glDepthMask(gl.GL_TRUE); self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
