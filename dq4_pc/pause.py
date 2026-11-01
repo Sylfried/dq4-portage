@@ -242,7 +242,7 @@ class Pause:
         return ['boutons', 'msg'] + sorted((n for n in noms if n not in SANS_EDITION), key=lambda n: (n not in NOMS_FENETRES, NOMS_FENETRES.get(n, n).lower()))
 
     def nom_cible(self, c):
-        return {'boutons': "Boutons de l'écran", 'msg': 'Dialogues (messages)'}.get(c) or NOMS_FENETRES.get(c, c)
+        return {'boutons': "Boutons et croix de l'écran", 'msg': 'Dialogues (messages)'}.get(c) or NOMS_FENETRES.get(c, c)
 
     def _ov(self):
         """[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu)."""
@@ -264,7 +264,9 @@ class Pause:
         e = [self._choix("Afficher l'interface à l'écran", [True, False], lambda: R['boutons'], lambda v: R.__setitem__('boutons', v)),
              self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible)]
         if c == 'boutons':
-            e.append(self._curs('Taille', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
+            e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
+            e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v)))
+            e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
         else:
             e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=1.0),
                   self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=0.0),
@@ -280,7 +282,7 @@ class Pause:
         d = dict(self.J.reg['interface_fenetres']); d.pop(self.cible, None); self.J.reg['interface_fenetres'] = d
 
     def _tout_remettre(self):
-        self.J.reg['interface_fenetres'] = {}; self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']
+        self.J.reg['interface_fenetres'] = {}; self.J.hud.remettre(); self.J.reg['boutons_taille'] = RG.DEFAUT['boutons_taille']; self.J.reg['croix_taille'] = RG.DEFAUT['croix_taille']
 
     def _e_son(self):
         J, R = self.J, self.J.reg
@@ -789,7 +791,7 @@ class Pause:
     def _apercu(self):
         """Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran."""
         J = self.J; self.rect_apercu = None
-        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS, True, J.reg['grille_edition']); return              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
+        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS_ED, True, J.reg['grille_edition']); return              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
         voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
         if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
         self.rect_apercu = J.apercu_interface(self.cible)                                                        # seule la fenetre choisie (ni les autres fenetres, ni les boutons)
@@ -839,9 +841,9 @@ class Pause:
         if ecr == 'etats': pw = max(pw, 52 * k + lw + 30 * k + 150 * k)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
-        if editeur:                                                                 # panneau toujours en haut a gauche (replie : la barre de titre seule, pour voir tout l'ecran)
+        if editeur:                                                                 # panneau toujours en haut a droite (les boutons sont a gauche, la croix en bas a droite ; replie : la barre de titre seule, pour voir tout l'ecran)
             if self.plie: pw = max(300 * k, self._et(titres['interface'], fst).content_width + 130 * k)
-            x0 = 22 * k; y1 = H - 22 * k; y0 = y1 - h
+            x0 = W - pw - 22 * k; y1 = H - 22 * k; y0 = y1 - h
         self.cadre_panneau = (x0, y0, x0 + pw, y1) if editeur else None
         self.zone_plier = (x0, y1 - h_titre, x0 + pw, y1) if editeur else None
         self._cadre(x0, y0, pw, h, k)
