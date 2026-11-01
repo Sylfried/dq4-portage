@@ -1000,6 +1000,8 @@ class Jeu(pyglet.window.Window):
             if slot not in e.maillages_vus: continue                # mode immediat : pas de paquet cette image = pas dessine
             mid = e.modeles.get(slot)
             if mid is None: continue
+            credits = ville and mid == 8905 and self.carte_nom == 'ev01'          # ecran-titre : les textes des credits (Yuji Horii...), avant le logo
+            if credits and os.environ.get('DQ_SANS_CREDITS'): continue            # (test) sans les credits : la difference avec la capture normale donne leur position exacte
             st = e.mesh_etat.get(slot) or {'shader': 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}
             if not st['vis']: continue
             ft = self._texture_monstre(mid); t, tw, th = ft['t'], ft['tw'], ft['th']
@@ -1008,6 +1010,7 @@ class Jeu(pyglet.window.Window):
             P = V[ix]
             xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
+            if credits: xyz = xyz + self._decalage_credits(mid, P, st['off'], Rb, xyz)           # centre le bloc de texte de la page au milieu de la zone de dessin
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
             coul = np.c_[np.ones((len(ix), 3), np.float32) * np.array(st['col'], np.float32), alpha].astype(np.float32)           # Material.color (paquet 25) x couleur de sommet
@@ -1188,6 +1191,46 @@ class Jeu(pyglet.window.Window):
             gl.glDisable(gl.GL_CULL_FACE)
         if M0 is not None: self.prog['mvp'] = M0
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['cutoff'] = 0.05
+
+    # ---- ecran-titre : textes des credits (modele 8905 : « Yuji Horii », « Akira Toriyama »... une page apres l'autre)
+    _credits_cache = {}
+
+    def _decalage_credits(self, mid, P, off, Rb, xyz):
+        """Vecteur monde (le long du haut de la camera) qui amene le centre vertical du bloc de texte visible des credits au milieu de la zone de dessin (ordonnee d'ecran normalisee 0, quel que soit le format de la fenetre),
+        comme le groupe logo + ile. La scene du titre est relevee de TITRE_HAUT (pour centrer le logo) : sans cette correction les credits, poses par le moteur bas dans l'image d'origine, se retrouvent trop hauts.
+        Le centre est celui de l'ENCRE (pixels non transparents de chaque ligne de texte, lus dans la texture d'origine), pas celui des quadrilateres. Toute erreur : aucun decalage."""
+        try:
+            if os.environ.get('DQ_CREDITS_ORIGINE'): return np.zeros(3, np.float32)             # (test) credits tels que le moteur les pose
+            M = getattr(self, '_M_ville', None); orig = self.cb_tex.get((mid, 0))
+            if M is None or orig is None or len(P) % 6: return np.zeros(3, np.float32)
+            cle = (mid, P.tobytes(), float(off[0]), float(off[1]))
+            y_c = self._credits_cache.get(cle)
+            if y_c is None:
+                arr = orig['arr']; H, W = arr.shape[:2]; yy = []; zz = []
+                for q in P.reshape(-1, 6, 5):                                    # un quadrilatere = 6 sommets (u, v - 1, x, y, z) dans le repere de la camera
+                    v0, v1 = float(q[:, 1].min()), float(q[:, 1].max())
+                    if v1 - v0 < 1e-6: continue
+                    ya, yb = float(q[q[:, 1] == v0][:, 3].mean()), float(q[q[:, 1] == v1][:, 3].mean())        # ordonnee locale aux bords bas / haut de la texture du quadrilatere
+                    r0 = int(min(max(np.floor(-(v1 + off[1]) * H), 0), H)); r1 = int(min(max(np.ceil(-(v0 + off[1]) * H), 0), H))
+                    c0 = int(min(max(np.floor((q[:, 0].min() + off[0]) * W), 0), W)); c1 = int(min(max(np.ceil((q[:, 0].max() + off[0]) * W), 0), W))
+                    if r1 <= r0 or c1 <= c0: continue
+                    lig = np.flatnonzero((arr[r0:r1, c0:c1, 3] > 32).any(1))
+                    if not len(lig): continue
+                    for r in (r0 + lig[0], r0 + lig[-1] + 1):                    # rangees d'encre extremes -> ordonnee locale (v = -rangee / H - decalage, interpolation lineaire sur le quadrilatere)
+                        v = -r / H - off[1]; yy.append(ya + (v - v0) / (v1 - v0) * (yb - ya))
+                    zz.append(float(q[:, 4].mean()))
+                if not yy: return np.zeros(3, np.float32)
+                y_c = (min(yy) + max(yy)) / 2, float(np.mean(zz))
+                if len(self._credits_cache) > 64: self._credits_cache.clear()
+                self._credits_cache[cle] = y_c
+            haut = Rb[:, 1].astype(float); pos = xyz[0].astype(float) - Rb.astype(float) @ P[0, 2:5].astype(float)             # position du maillage (xyz = pos + Rb x sommet local)
+            c = M @ np.append(pos + Rb.astype(float) @ np.array([0.0, y_c[0], y_c[1]]), 1.0)                 # centre du bloc, en coordonnees de clip (la scene du titre est deja relevee de TITRE_HAUT dans M)
+            pente = float(M[1, :3] @ haut)                                      # variation de la coordonnee de clip y par unite de deplacement le long du haut de la camera (la profondeur ne change pas)
+            if abs(pente) < 1e-9: return np.zeros(3, np.float32)
+            return (haut * (-c[1] / pente)).astype(np.float32)
+        except Exception as ex:
+            if not getattr(self, '_credits_err', False): self._credits_err = True; print('Credits du titre non centres : %s' % ex, flush=True)
+            return np.zeros(3, np.float32)
 
     def _fond_combat(self, c):
         """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
@@ -2598,7 +2641,7 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            self._tracer_decor(True)
+            self._tracer_decor(True); self._M_ville = M
             if e.fbx: self._tracer_fbx(e)               # modeles 3D animes (le dragon du titre) : meme file que le decor opaque
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
