@@ -331,11 +331,25 @@ class Moteur:
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
         hfd = c.export('_ZN9FieldData9drawBlockEv')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _fd, None, hfd, hfd)
-        # compagnons en ville (premiere version, #30) : ils relisent un historique de positions du heros a un nombre fixe d'entrees (n = 8, ou 10 dans certaines salles) derriere lui ; en course l'ecart en distance grandissait
+        # compagnons en ville : le moteur les place sur un historique des positions du heros (entrees de 12 octets, le heros en 0), le compagnon i lit l'entree ESP x i (ESP = 8, ou 10 dans certaines salles, variable statique
+        # de libdq4core + 0x24de94). En marche normale seules les entrees PAIRES sont remises a jour (une par pas du heros) : les impaires gardent une vieille valeur. Courir fait faire plus de chemin par pas, donc les compagnons
+        # se retrouvent plus loin : on lit moins d'entrees en arriere (ESP / f, arrondi a un nombre PAIR). Surtout, on ne passe jamais par le code de AdjustArray pour changer ESP (il reorganise tout l'historique : un ESP
+        # impair ou une reorganisation faisaient lire de vieilles positions, d'ou un compagnon teleporte a l'entree de la salle pendant la course)
         self._h_ecart = 1.0; self.ecart_constant = True      # facteur de vitesse du heros (les compagnons et le taux de rencontre le compensent)
-        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : n = nombre d'images d'historique entre deux compagnons ; divise par le facteur de vitesse, la distance reste celle d'origine
-            f = self._h_ecart
-            if self.ecart_constant and f > 1.05: uc.reg_write(c.XREG[1], max(2, int(round((uc.reg_read(c.XREG[1]) & 0xffffffff) / f))))
+        self._n_jeu = None
+        ESP = c.LIB_BASE + 0x24de94
+        def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : appele a chaque pas avec le n voulu par le jeu (8 ou 10)
+            n = uc.reg_read(c.XREG[1]) & 0xffffffff; cur = struct.unpack('<i', c.mem(ESP, 4))[0]; f = self._h_ecart
+            ancien = self._n_jeu if self._n_jeu is not None else (cur if cur in (8, 10) else n)       # disposition d'avant : celle que le jeu a demandee, sinon la valeur d'ESP si c'est une disposition d'origine
+            if n != ancien:                      # le jeu change vraiment la disposition (8 <-> 10) : on rend la main a AdjustArray avec l'ESP d'origine
+                self._n_jeu = n
+                if cur != ancien: c.mem_w(ESP, struct.pack('<i', ancien))
+                return
+            self._n_jeu = n
+            cible = n
+            if self.ecart_constant and f > 1.05: cible = max(2, 2 * int(n / f / 2.0 + 0.5))
+            if cible != cur: cur += max(-2, min(2, cible - cur)); c.mem_w(ESP, struct.pack('<i', cur))       # au plus une entree paire par pas : un compagnon qui saute de 2 pas d'un coup se voit
+            uc.reg_write(c.XREG[1], cur)         # ESP == n : AdjustArray ne fait rien
         haa = c.export('_ZN15TownPartyAction11AdjustArrayEi')
         if haa: c.uc.hook_add(unicorn.UC_HOOK_CODE, _aa, None, haa, haa)
         self._acc_enc = 0.0

@@ -83,6 +83,7 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
+TXT_MENU_ECHAP = 'Menu Échap'      # libelle du bouton ajoute dans la fenetre des Parametres (retour au menu Echap)
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
 CH_MOTIF_FIN = np.array([326, 403, 940, 1195, 1260, 1713])                  # fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
@@ -164,6 +165,7 @@ class Jeu(pyglet.window.Window):
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.course_appui = False; self.cam_accel_appui = False; self.cam_dec = [0.0, 0.0]; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
+        self.echap_port = None       # liste des Parametres : port qui porte le bouton « Menu Echap » (ajoute par le portage)
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
@@ -1155,7 +1157,8 @@ class Jeu(pyglet.window.Window):
             if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
-        if decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        if decl & MO.A and cur == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.son.jouer_se(SE_BOUTON); self.pause.ouvrir()          # (liste sans curseur du moteur : le bouton « Menu Echap » se choisit comme les autres)
+        elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
         elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
 
     @staticmethod
@@ -1381,7 +1384,7 @@ class Jeu(pyglet.window.Window):
         if not touches: self.survol = None; return                  # hors d'un bouton : l'element survole en dernier reste seul en surbrillance (le curseur du moteur y est aussi) ; effacé par on_mouse_leave ou une touche
         _, _, port, h = max(touches, key=lambda t: t[:2]); f = mo.ui.f[port]; self.survol_nd = (port, h[3])
         if h[0] < 0: self.survol = None                              # bouton sans numero (retour, fleches de page) : seul l'element est allume, le curseur du menu ne bouge pas
-        elif f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] else None
+        elif f.get('grille'): self.survol = [port, h[0], 0] if f['cur'] != h[0] and h[0] != UI.Fenetre.BTN_ECHAP else None       # (le bouton « Menu Echap » n'existe pas pour le moteur : pas d'appuis de direction vers lui)
         elif self.cur_local.get((port, f['ordre'])) != h[0]: self.cur_local[(port, f['ordre'])] = h[0]; self.survol = None
 
     def _est_bouton(self, port, nid):
@@ -1417,6 +1420,7 @@ class Jeu(pyglet.window.Window):
         if b == -1 and pad == 0x400:                       # bouton retour : MenuPortItem.Update ajoute 0x400 aux touches du jeu (le moteur ferme la carte) au lieu d'envoyer un message au port
             if h and h[0] == b: self.hud_decl = BTN_DISCUSSION
             return
+        if h and h[0] == b and b == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.pause.ouvrir(); return          # bouton « Menu Echap » : propre au portage, le moteur n'en sait rien
         if h and h[0] == b and port in self.moteur.menus_saisie():
             self.moteur.envoyer_menu(port, 1, b, pad); self.menu_relacher = port
             f = self.moteur.ui.f.get(port)
@@ -1498,7 +1502,7 @@ class Jeu(pyglet.window.Window):
         nd = next((o for o in fe.N.values() if o['mats'] and o['mats'][0].get('part') == 3), None)      # marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
-            nd['pos'][0] = -225.0 + mx * 450.0 / 256.0 - 12.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0 - 12.0; nd['act'] = True
+            nd['pos'][0] = -225.0 + mx * 450.0 / 256.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0; nd['act'] = True        # le coin bas gauche de l'icone (la pointe de la plume) est sur la position, comme le noeud d'origine (sommets de (0, 0) a (24, 24))
 
     def _plan_monde_fenetre(self, fe, f):
         """Grande carte du monde (type 26, Make_WorldLargeMap) : le moteur envoie le drapeau des pieces du plan (indicateur 0), puis la position du joueur x, y (indicateurs 1 et 2) en pixels d'un plan de
@@ -1522,6 +1526,17 @@ class Jeu(pyglet.window.Window):
         if x is not None and y is not None:
             fe.carte_uv = ((x - 128) / 1024.0, 1.0 - (y + 96) / 1024.0, (x + 128) / 1024.0, 1.0 - (y - 96) / 1024.0)
 
+    def _boite_fin_combat(self):
+        """Vrai quand la boite de dialogue d'un combat doit disparaitre : un fondu au noir commence et la boite n'attend pas de touche (pas de curseur de fin de page : derniere page validee, ou message qui se ferme seul comme « Ragnar meurt ! »).
+        Le moteur ne ferme la boite qu'apres le fondu : elle restait affichee sur l'ecran qui noircit. Une boite qui attend encore une touche reste affichee. Elle revient si un nouveau fondu (d'ouverture) commence."""
+        mo = self.moteur; e = mo.etat; fd = e.fondu; feed = bool(mo.ui.msg.get('feed'))
+        montee = e.partie == MO.PARTIE_COMBAT and fd['pas'] > 0 and (fd['n'] >= 1 or fd['a'] >= 0.999)         # fondu au noir en cours (ou noir maintenu)
+        if not montee: self._boite_cachee = False
+        elif not getattr(self, '_montee_prec', False): self._boite_cachee = not feed
+        self._montee_prec = montee
+        if feed: self._boite_cachee = False                                  # une page qui attend une touche doit se voir
+        return getattr(self, '_boite_cachee', False)
+
     def _dessiner_menus(self):
         if self.pause.ouvert and self.pause.ecran == 'interface': return       # editeur d'interface : seul l'element choisi est montre (par le menu Echap), pas les fenetres du jeu
         mo = self.moteur
@@ -1535,9 +1550,14 @@ class Jeu(pyglet.window.Window):
             if mo.etat.partie == MO.PARTIE_COMBAT and float(mo.etat.fondu['a']) >= 0.6: liste = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
             fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
             zl = [nd['pos'][2] - self.ui_g.ml.hdr['lang']['dy'] for fe in fens_v if fe.typ == 27 for nd in fe.N.values() if nd['text'] and nd['text'].get('text') and nd['pos'][0] > 0]          # reglage de vitesse / volume : etiquettes du haut et du bas (« Rapide » / « Lent »)
-            for fe in fens_v:
-                if fe.typ == 8: fe.centrer_liste(max(zl), min(zl)) if len(zl) >= 2 else fe.centrer_liste(None, None)
-            msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex)
+            param = len(zl) < 2 and any(fe.typ == 27 for fe in fens_v)          # liste des Parametres : la fenetre de titre (type 27) n'a pas d'etiquettes de reglage (« Rapide » / « Lent ») et la liste montre ses cinq boutons (« Taille de la croix » n'en a que trois)
+            self.echap_port = None
+            for (_, p), fe in zip(liste, fens_v):
+                if fe.typ == 8:
+                    fe.centrer_liste(max(zl), min(zl)) if len(zl) >= 2 else fe.centrer_liste(None, None)
+                    if fe.bouton_echap(param and fe.nb_plaques() == 5, TXT_MENU_ECHAP): self.echap_port = p
+            cacher = self._boite_fin_combat()
+            msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex and not cacher)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
             self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if dz else set()      # le Oui/Non (type 1) suit la fenetre de message
             em = self.ui_msg.etendue() if msg else None
