@@ -602,14 +602,15 @@ class Rendu:
             self._mdl_plaque = m
         return m or None
 
-    def plaque(self, x, y, w, h, vp, choisi=False):
-        """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (16 unites pour 50 de haut),
-        le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). -> False si la plaque du jeu est indisponible."""
+    def plaque(self, x, y, w, h, vp, choisi=False, coin=None):
+        """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (celles du modele : 16 unites de coin pour sa hauteur),
+        le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). coin : cote des coins en pixels (les 16 unites d'origine, quelle que soit la hauteur : boutons de l'ecran).
+        -> False si la plaque du jeu est indisponible."""
         mod = self._modele_plaque()
         if mod is None or 1 not in self.tex: return False
         vtx, uv, idx, col = mod
         xs = sorted({round(float(v[0]), 2) for v in vtx}); zs = sorted({round(float(v[1]), 2) for v in vtx})          # quatre abscisses et quatre ordonnees : bords et limites des coins
-        cap = min((xs[1] - xs[0]) * h / (zs[-1] - zs[0]), w / 2.0, h / 2.0)                                              # le coin garde sa proportion avec la hauteur de la plaque
+        cap = min((xs[1] - xs[0]) * h / (zs[-1] - zs[0]) if coin is None else coin, w / 2.0, h / 2.0)                    # le coin garde sa proportion avec la hauteur de la plaque (ou la taille demandee)
         X = {xs[0]: x, xs[1]: x + cap, xs[2]: x + w - cap, xs[3]: x + w}; Y = {zs[3]: y + h, zs[2]: y + h - cap, zs[1]: y + cap, zs[0]: y}
         px = np.array([X[round(float(v[0]), 2)] for v in vtx[idx]], np.float32); py = np.array([Y[round(float(v[1]), 2)] for v in vtx[idx]], np.float32)
         uu = uv[idx] + (np.array(self.ml.pousse, np.float32) if choisi else 0.0)

@@ -1365,9 +1365,9 @@ class Jeu(pyglet.window.Window):
                 if n: n != HM.CROIX and self.son.jouer_se(SE_BOUTON); return
         if bouton != M.LEFT or not self.ui_rendu: return
         cp = self._carte_ports()
-        if 22 in cp:                                                               # bouton retour de la carte (touche de manette 0x400, sans numero) : ferme la carte au relachement
+        if 22 in cp:                                                               # boutons de la fenetre de la carte (sans numero) : retour (touche de manette 0x400, ferme la carte) et mode (haut de la manette, change de vue), actifs au relachement
             h = self._bouton_sous(cp[22], x, y)
-            if h and h[0] == -1 and h[1] == 0x400: self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
+            if h and h[0] == -1 and h[1] in (0x400, 2): self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
             _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.appui_nd = h[3]; self.son.jouer_se(SE_BOUTON); return
@@ -1416,14 +1416,16 @@ class Jeu(pyglet.window.Window):
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
-            if n == 'mode_carte': self.carte_bascule = True
-            elif n: self.hud_decl = HM.DECL[n]
+            if n: self.hud_decl = HM.DECL[n]
             return
         if bouton != pyglet.window.mouse.LEFT or not self.appui: return
         port, b, pad = self.appui; self.appui = None
         h = self._bouton_sous(port, x, y)
         if b == -1 and pad == 0x400:                       # bouton retour : MenuPortItem.Update ajoute 0x400 aux touches du jeu (le moteur ferme la carte) au lieu d'envoyer un message au port
             if h and h[0] == b: self.hud_decl = BTN_DISCUSSION
+            return
+        if b == -1 and pad == 2:                           # bouton « mode de la carte » de la fenetre (type 22, icone 19 / 20 / 2 envoyee par le moteur) : haut de la manette = change de vue (traite avec la touche Carte)
+            if h and h[0] == b and h[1] == pad: self.carte_bascule = True
             return
         if h and h[0] == b and b == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.pause.ouvrir(); return          # bouton « Menu Echap » : propre au portage, le moteur n'en sait rien
         if h and h[0] == b and port in self.moteur.menus_saisie():
