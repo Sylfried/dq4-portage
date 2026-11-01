@@ -1,20 +1,34 @@
-"""Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe.
+"""Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe, et la croix (manette tactile, utilisable a la souris).
 
 Le jeu d'origine les dessine dans la couche Unity (TouchPad : « Map Button » = touche 0x1000, « Command Button » = 0x800, « Talk Button » = 0x400 ; icones 3, 4 et 15 de la feuille
 MenuTexture, rangee de 32 px a y = 224). Le moteur dit quand ils sont visibles par le mot Global.Flag (premier mot de sa sortie) : (Flag & (8 | 0x30047)) == 8 (pad present, ni verrou du
-joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige en plus le bit 0x20. Les positions se reglent sur une grille de 32 x 18 cases (aimantation facultative)."""
-import os
+joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige en plus le bit 0x20. Les positions se reglent sur une grille de 32 x 18 cases (aimantation facultative).
+
+La croix est celle de TouchPad (feuille « Button » : anneau, huit pastilles de direction avec leur fleche, boule). Sur le telephone elle apparait sous le doigt ; sur PC elle est fixe (en bas a droite par defaut, a deplacer
+dans l'editeur d'interface) : un appui dans l'anneau la prend, la boule suit la souris (limitee a l'anneau), la direction est l'un des huit secteurs de 45 degres, comme les touches du clavier (elle suit donc la camera)."""
+import math, os, time
 import numpy as np
 import pyglet
 from pyglet import gl
 
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
 NOMS = ('carte', 'mode_carte', 'menu', 'discussion')
-DEFAUT = {'carte': (30, 1), 'mode_carte': (30, 3), 'menu': (30, 12), 'discussion': (30, 14)}      # coin superieur gauche (colonne, ligne) : colonne de droite, comme sur le telephone (Carte en haut, Commandes puis Discussion plus bas)
+CROIX = 'croix'
+NOMS_ED = NOMS + (CROIX,)                    # elements places dans l'editeur d'interface
+DEFAUT = {'carte': (0.4, 1), 'mode_carte': (0.4, 3), 'menu': (0.4, 12), 'discussion': (0.4, 14)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas
 DECL = {'carte': 0x1000, 'mode_carte': 0, 'menu': 0x800, 'discussion': 0x400}          # (mode_carte : pas de touche du jeu, le bouton change la vue de la carte ouverte)
 ICONE = {'carte': 3, 'mode_carte': 19, 'menu': 4, 'discussion': 15}
-LIBELLE = {'carte': 'Carte', 'mode_carte': 'Mode de la carte', 'menu': 'Commandes', 'discussion': 'Discussion'}
+LIBELLE = {'carte': 'Carte', 'mode_carte': 'Mode de la carte', 'menu': 'Commandes', 'discussion': 'Discussion', CROIX: 'Croix'}
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
+
+# ---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
+ART_CROIX = {'anneau': (256, 256, 256, 256), 'pastille': (384, 192, 128, 64), 'pastille_on': (256, 192, 128, 64), 'boule': (448, 128, 64, 64), 'halo': (320, 128, 64, 64), 'boule_on': (384, 128, 64, 64)}
+DIAM_CROIX = 165.0                            # diametre de l'anneau (unites de l'interface d'origine, 800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage
+ECHELLE_CROIX = (1.25, 1.0, 0.75)             # option « Taille de la croix » du jeu (g_pad_size : 0 Grande, 1 Moyenne (defaut), 2 Petite) -> facteur
+RAYON_PASTILLE = 85.0 / 256.0                 # distance du centre de l'anneau au centre d'une pastille (fraction du diametre)
+COURSE_BOULE = 0.5                            # deplacement maximal de la boule (fraction du rayon de l'anneau)
+ZONE_MORTE = 0.15                             # en dessous (fraction du rayon), aucune direction
+ATTENTE_CROIX, ALPHA_CROIX = 0.5, 0.4         # croix transparente (40 %) apres 0,5 s sans appui
 
 # ---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
 # boutons = plaques grises a degrade (claires en haut, sombres en bas), bordure gris clair. Dessines en tableaux (distance au bord) puis gardes en textures : aucun cout par image.
@@ -117,22 +131,36 @@ class Boutons:
     def __init__(self, jeu):
         self.J = jeu; self.spr = {}; self.orig = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
         self.pose_prise = None                  # (nom, decalage x, decalage y) pendant un deplacement
+        self.croix_on = False; self.cv = (0.0, 0.0); self.croix_t = 0.0; self.art = None      # croix tenue par la souris ; position de la souris relative au centre (rayon de l'anneau = 1) ; dernier appui ; textures
 
     # ---- geometrie
     def taille(self):
         return self.J.height / LIGNES * 1.6 * float(self.J.reg['boutons_taille'])
 
+    def diametre_croix(self):
+        """Diametre de l'anneau de la croix en pixels : echelle de l'interface d'origine, option « Taille de la croix » du jeu, reglage du portage."""
+        return self.J.height / 800.0 * DIAM_CROIX * ECHELLE_CROIX[self.J.moteur.taille_croix()] * float(self.J.reg['croix_taille'])
+
+    def cote(self, nom):
+        return self.diametre_croix() if nom == CROIX else self.taille()
+
     def case(self, nom):
         p = self.J.reg['boutons_pos'].get(nom)
-        return tuple(p) if p and len(p) == 2 else DEFAUT[nom]
+        if p and len(p) == 2: return tuple(p)
+        if nom == CROIX:                                   # d'origine : en bas a droite, a une demi-case du bord
+            c = self.diametre_croix(); return (COLS - c * COLS / self.J.width - 0.6, LIGNES - c * LIGNES / self.J.height - 0.6)
+        return DEFAUT[nom]
 
     def rect(self, nom):
         """(x, y, cote) en pixels, origine en bas a gauche."""
-        W, H = self.J.width, self.J.height; c = self.taille(); col, lig = self.case(nom)
+        W, H = self.J.width, self.J.height; c = self.cote(nom); col, lig = self.case(nom)
         x = min(max(0.0, col * W / COLS), W - c); y = min(max(0.0, H - lig * H / LIGNES - c), H - c)
         return x, y, c
 
     def sous(self, x, y, visibles):
+        if CROIX in visibles:
+            rx, ry, c = self.rect(CROIX)
+            if math.hypot(x - rx - c / 2, y - ry - c / 2) <= c / 2: return CROIX
         for nom in reversed(NOMS):
             if nom not in visibles: continue
             rx, ry, c = self.rect(nom)
@@ -148,12 +176,13 @@ class Boutons:
         if J.carte_ouverte: return ('mode_carte',) if J.carte_deux_vues else ()          # carte ouverte : seul le bouton qui change la vue (comme sur le mobile), s'il y en a deux
         f = J.moteur.drapeaux()
         if (f & (8 | 0x30047)) != 8: return ()
-        return tuple(n for n in NOMS if n != 'mode_carte' and (n != 'carte' or f & 0x20))
+        return tuple(n for n in NOMS if n != 'mode_carte' and (n != 'carte' or f & 0x20)) + ((CROIX,) if J.reg['croix'] else ())
 
     # ---- souris
     def appuyer(self, x, y, visibles):
         n = self.sous(x, y, visibles)
-        if n: self.appui = n
+        if n == CROIX: self.croix_on = True; self.croix_t = time.perf_counter(); self.croix_glisser(x, y)
+        elif n: self.appui = n
         return n
 
     def relacher(self, x, y, visibles):
@@ -163,13 +192,13 @@ class Boutons:
 
     # ---- edition des positions
     def prendre(self, x, y):
-        n = self.sous(x, y, NOMS)
+        n = self.sous(x, y, NOMS_ED)
         if n: rx, ry, c = self.rect(n); self.pris = (n, x - rx, y - ry)
         return n
 
     def deplacer(self, x, y):
         if not self.pris: return
-        n, dx, dy = self.pris; W, H = self.J.width, self.J.height; c = self.taille()
+        n, dx, dy = self.pris; W, H = self.J.width, self.J.height; c = self.cote(n)
         px = min(max(0.0, x - dx), W - c); py = min(max(0.0, y - dy), H - c)         # coin inferieur gauche demande
         col = px * COLS / W; lig = (H - py - c) * LIGNES / H
         if self.J.reg['boutons_aimant']: col, lig = float(round(col)), float(round(lig))
@@ -178,6 +207,30 @@ class Boutons:
         pos = dict(self.J.reg['boutons_pos']); pos[n] = [col, lig]; self.J.reg['boutons_pos'] = pos
 
     def poser(self): self.pris = None
+
+    # ---- croix a la souris
+    def croix_glisser(self, x, y):
+        """Souris deplacee (ou appuyee) : position relative au centre de l'anneau, en rayons."""
+        rx, ry, c = self.rect(CROIX); r = c / 2
+        self.cv = ((x - rx - r) / r, (y - ry - r) / r); self.croix_t = time.perf_counter()
+
+    def croix_lacher(self):
+        self.croix_on = False; self.cv = (0.0, 0.0); self.croix_t = time.perf_counter()
+
+    def croix_secteur(self):
+        """Secteur de 45 degres de la direction tenue (0 haut, 1 haut-droite, 2 droite... dans le sens horaire) ou None (zone morte, croix non tenue)."""
+        if not self.croix_on: return None
+        vx, vy = self.cv
+        if math.hypot(vx, vy) < ZONE_MORTE: return None
+        return int(((math.degrees(math.atan2(vx, vy)) + 22.5) % 360.0) // 45.0)
+
+    def croix_bits(self):
+        """Direction de la croix en bits de la manette du jeu (haut / bas / gauche / droite), comme celle des touches de deplacement."""
+        if self.croix_on and CROIX not in self.visibles(): self.croix_lacher(); return 0
+        k = self.croix_secteur()
+        if k is None: return 0
+        import moteur as MO
+        return (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)[k]
 
     def remettre(self): self.J.reg['boutons_pos'] = {}
 
@@ -207,6 +260,42 @@ class Boutons:
             s = self.spr[(nom, n)] = pyglet.sprite.Sprite(t)
         return s, n
 
+    def _art_croix(self):
+        """Sprites de la croix (morceaux de la feuille « Button », ancres au centre pour tourner autour)."""
+        if self.art is None:
+            from PIL import Image
+            import hd as HD
+            try: im = np.array(Image.open(os.path.join(self.J.args.cache, 'ui_Button.png')).convert('RGBA'))
+            except Exception: im = np.zeros((512, 512, 4), np.uint8)
+            self.art = {}
+            for nom, (x, y, w, h) in ART_CROIX.items():
+                a = HD._dilater(im[y:y + h, x:x + w].copy(), 1)
+                t = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=w * 4).get_texture()
+                gl.glBindTexture(t.target, t.id)
+                gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+                t.anchor_x = w / 2.0; t.anchor_y = h / 2.0
+                self.art[nom] = pyglet.sprite.Sprite(t)
+        return self.art
+
+    def _croix(self, edition=False):
+        """Croix : anneau, huit pastilles (celle de la direction tenue s'allume), boule qui suit la souris. Presque transparente quand on n'y touche pas."""
+        art = self._art_croix(); x, y, c = self.rect(CROIX); cx, cy = x + c / 2, y + c / 2; k = c / 256.0
+        t = time.perf_counter(); sect = self.croix_secteur()
+        if self.croix_on or edition: a = 0.95
+        else: a = 0.95 - (0.95 - ALPHA_CROIX) * min(1.0, max(0.0, (t - self.croix_t - ATTENTE_CROIX) / 0.3))
+        if edition and not self.J.reg['croix']: a = 0.35                                    # masquee : montree pour pouvoir la placer
+        def poser(nom, px, py, rot=0.0, op=1.0):
+            sp = art[nom]; sp.update(x=px, y=py, scale=k, rotation=rot); sp.opacity = int(255 * a * op); sp.draw()
+        poser('anneau', cx, cy)
+        for i in range(8):
+            ang = i * 45.0; r = RAYON_PASTILLE * c
+            poser('pastille_on' if sect == i else 'pastille', cx + math.sin(math.radians(ang)) * r, cy + math.cos(math.radians(ang)) * r, ang)
+        vx, vy = self.cv if self.croix_on else (0.0, 0.0); n = math.hypot(vx, vy)
+        if n > COURSE_BOULE: vx, vy = vx * COURSE_BOULE / n, vy * COURSE_BOULE / n
+        bx, by = cx + vx * c / 2, cy + vy * c / 2
+        if sect is not None: poser('halo', bx, by, 0.0, 0.8)
+        poser('boule_on' if sect is not None else 'boule', bx, by)
+
     def dessiner(self, visibles, edition=False, grille=True):
         if not visibles and not edition: return
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -225,3 +314,9 @@ class Boutons:
             if edition:
                 pyglet.shapes.Box(x, y, c, c, thickness=2, color=(255, 235, 130)).draw()
                 et = self.J._etiq(LIBELLE[nom], max(11.0, c / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + c / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + c + 4, H - et.content_height - 2); et.draw()
+        if CROIX in visibles or edition:
+            self._croix(edition)
+            if edition:
+                x, y, c = self.rect(CROIX); actif = self.pris is not None and self.pris[0] == CROIX
+                pyglet.shapes.Box(x, y, c, c, thickness=2, color=(255, 235, 130)).draw()
+                et = self.J._etiq(LIBELLE[CROIX], max(11.0, self.taille() / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + c / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + c + 4, H - et.content_height - 2); et.draw()

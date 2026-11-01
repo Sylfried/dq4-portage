@@ -336,10 +336,13 @@ class Moteur:
         # se retrouvent plus loin : on lit moins d'entrees en arriere (ESP / f, arrondi a un nombre PAIR). Surtout, on ne passe jamais par le code de AdjustArray pour changer ESP (il reorganise tout l'historique : un ESP
         # impair ou une reorganisation faisaient lire de vieilles positions, d'ou un compagnon teleporte a l'entree de la salle pendant la course)
         self._h_ecart = 1.0; self.ecart_constant = True      # facteur de vitesse du heros (les compagnons et le taux de rencontre le compensent)
-        self._n_jeu = None
+        self._n_jeu = None; self._f_mem = 0.0; self._f_cnt = 0
         ESP = c.LIB_BASE + 0x24de94
         def _aa(uc, a, sz, u):                   # TownPartyAction::AdjustArray(n) : appele a chaque pas avec le n voulu par le jeu (8 ou 10)
             n = uc.reg_read(c.XREG[1]) & 0xffffffff; cur = struct.unpack('<i', c.mem(ESP, 4))[0]; f = self._h_ecart
+            if f > 1.05: self._f_mem = f; self._f_cnt = 0
+            elif self._f_mem > 1.05 and self._f_cnt < 6: f = self._f_mem; self._f_cnt += 1          # la course ne s'arrete pas pour autant : un changement de direction (une touche relachee, l'autre pas encore enfoncee) laisse une image sans direction tenue, d'ou un compagnon qui reculait puis revenait
+            else: self._f_mem = 0.0
             ancien = self._n_jeu if self._n_jeu is not None else (cur if cur in (8, 10) else n)       # disposition d'avant : celle que le jeu a demandee, sinon la valeur d'ESP si c'est une disposition d'origine
             if n != ancien:                      # le jeu change vraiment la disposition (8 <-> 10) : on rend la main a AdjustArray avec l'ESP d'origine
                 self._n_jeu = n
@@ -424,6 +427,11 @@ class Moteur:
         c = self.core; ad = c.export('_ZN10TownCamera11m_singletonE')
         if ad is None: return 0, 0, False
         lg, ld = struct.unpack('<ii', c.mem(ad + 0x34, 8)); return lg, ld, bool(c.mem(ad + 0x3e, 1)[0])
+
+    def taille_croix(self):
+        """Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite."""
+        v = self.core.mem(self.core.LIB_BASE + 0x24a779, 1)[0]
+        return v if v in (0, 1, 2) else 1
 
     def drapeaux(self):
         """Global.Flag : premier mot de la sortie du moteur (bit 3 : manette tactile presente ; 4 verrou du joueur, 0x20 carte autorisee, 0x40 interface verrouillee...)."""

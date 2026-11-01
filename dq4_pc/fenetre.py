@@ -439,8 +439,10 @@ class Jeu(pyglet.window.Window):
         if self.moteur.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and sy and not self.moteur.msg_visible and self.moteur.menu_actif() is None: self.regler_zoom(self.zoom * 1.1 ** sy)
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
-        """Menu Echap : un curseur maintenu suit la souris."""
-        if self._pret and self.pause.ouvert: self.pause.glisser(x, y)
+        """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris."""
+        if not self._pret: return
+        if self.pause.ouvert: self.pause.glisser(x, y)
+        elif self.hud.croix_on: self.hud.croix_glisser(x, y)
 
     def on_text(self, texte):
         """Menu Echap : saisie d'une valeur au clavier."""
@@ -1358,7 +1360,9 @@ class Jeu(pyglet.window.Window):
         if bouton == M.RIGHT: self.clic_b = True; return
         if bouton == M.LEFT:
             vis = self.hud.visibles()
-            if vis and self.hud.appuyer(x, y, vis): self.son.jouer_se(SE_BOUTON); return                  # boutons a l'ecran (Carte, Commandes, Discussion)
+            if vis:
+                n = self.hud.appuyer(x, y, vis)                                                            # boutons a l'ecran (Carte, Commandes, Discussion) et croix
+                if n: n != HM.CROIX and self.son.jouer_se(SE_BOUTON); return
         if bouton != M.LEFT or not self.ui_rendu: return
         cp = self._carte_ports()
         if 22 in cp:                                                               # bouton retour de la carte (touche de manette 0x400, sans numero) : ferme la carte au relachement
@@ -1409,6 +1413,7 @@ class Jeu(pyglet.window.Window):
         """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.relache(x, y, bouton); return
+        if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
             if n == 'mode_carte': self.carte_bascule = True
@@ -1554,7 +1559,8 @@ class Jeu(pyglet.window.Window):
             self.echap_port = None
             for (_, p), fe in zip(liste, fens_v):
                 if fe.typ == 8:
-                    fe.centrer_liste(max(zl), min(zl)) if len(zl) >= 2 else fe.centrer_liste(None, None)
+                    if len(zl) >= 2: fe.centrer_liste(max(zl), min(zl))
+                    else: fe.centrer_liste(None, None, 1 if (param and fe.nb_plaques() == 3) else 0)          # « Taille de la croix » (3 plaques) : les boutons montent d'une rangee
                     if fe.bouton_echap(param and fe.nb_plaques() == 5, TXT_MENU_ECHAP): self.echap_port = p
             cacher = self._boite_fin_combat()
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex and not cacher)
@@ -1728,7 +1734,9 @@ class Jeu(pyglet.window.Window):
         if not libre:
             for act, bit in (('cam_haut', MO.HAUT), ('cam_bas', MO.BAS), ('cam_gauche', MO.GAUCHE), ('cam_droite', MO.DROITE)):
                 if self._tenue(act): p |= bit
-        elif p and self._lacet_eff(): p = self._tourner_dir(p, int(round(self._lacet_eff() / 45.0)))
+        else:
+            p |= self.hud.croix_bits()                                                                        # croix a l'ecran tenue a la souris : une direction de plus (relative a l'ecran, comme les touches)
+            if p and self._lacet_eff(): p = self._tourner_dir(p, int(round(self._lacet_eff() / 45.0)))
         if self._tenue('A'): p |= MO.A
         if self._tenue('B'): p |= MO.B
         return p
@@ -1828,6 +1836,7 @@ class Jeu(pyglet.window.Window):
                 v = [int(t) for t in nom[1:].split('@')] + [0]; x, y = v[0], self.height - v[1]
                 self.on_mouse_motion(x, y, 0, 0)
                 if v[2] != 2: self.on_mouse_press(x, y, pyglet.window.mouse.RIGHT if v[2] else pyglet.window.mouse.LEFT, 0); a.touches_test.append((n + 3, '~@%d@%d' % (v[0], v[1])))
+            elif nom[0] == '!': x, y = [int(t) for t in nom[1:].split('!')]; self.on_mouse_motion(x, self.height - y, 0, 0); self.on_mouse_press(x, self.height - y, pyglet.window.mouse.LEFT, 0)      # !x!y : appui sans relachement automatique (relachement : ~@x@y)
             elif nom[0] == '~': x, y = [int(t) for t in nom[2:].split('@')]; self.on_mouse_release(x, self.height - y, pyglet.window.mouse.LEFT, 0)
             elif nom[0] == '^': x, y = [int(t) for t in nom[1:].split('^')]; self.on_mouse_drag(x, self.height - y, 0, 0, pyglet.window.mouse.LEFT, 0)      # ^x^y : souris deplacee bouton enfonce
             elif nom[0] == '$': self.dispatch_event('on_text', nom[1:])                                                                                   # $texte : caracteres tapes

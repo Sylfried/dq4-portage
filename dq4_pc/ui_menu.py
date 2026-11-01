@@ -366,9 +366,9 @@ class Fenetre:
                 out.append((min(xs), min(zs), max(xs), max(zs)))
         return out
 
-    def centrer_liste(self, z_haut, z_bas):
+    def centrer_liste(self, z_haut, z_bas, rangees=0):
         """Fenetre de liste de boutons (Make_NameButton) placee entre deux etiquettes (« Rapide » / « Lent », « Bas » / « Haut » du reglage des vitesses et volumes) : les boutons visibles sont centres entre elles.
-        Le jeu les place par du code (commandes 6 a 8, non extraites : « List index ») ; sans cela le dernier bouton tombe sur l'etiquette du bas. Le bouton retour (racine) ne bouge pas ; None remet la mise en page d'origine."""
+        Le jeu les place par du code (commandes 6 a 8, non extraites : « List index ») ; sans cela le dernier bouton tombe sur l'etiquette du bas. Le bouton retour (racine) ne bouge pas ; None remet la mise en page d'origine ; `rangees` (avec None) : toute la liste monte de ce nombre de rangees (pas entre deux plaques)."""
         racine = next((nd['id'] for nd in self.N.values() if nd['par'] is None), None)
         enfants = [nd for nd in self.N.values() if nd['par'] is not None]
         for nd in enfants:
@@ -377,6 +377,9 @@ class Fenetre:
         if z_haut is not None:
             plaques = [nd['_z0'] for nd in enfants if nd['buttonId'] is not None and nd['buttonId'] >= 0 and nd['vtx'] and self.visible(nd['id'])]
             if plaques: dz = (z_haut + z_bas) / 2 - (max(plaques) + min(plaques)) / 2
+        elif rangees:
+            pl = {nd['buttonId']: nd['_z0'] for nd in enfants if nd['buttonId'] in (0, 1) and nd['mats'] and nd['mats'][0].get('part') == 7}
+            if 0 in pl and 1 in pl: dz = rangees * (pl[0] - pl[1])
         for nd in enfants: nd['pos'][2] = nd['_z0'] + dz
         return dz
 
