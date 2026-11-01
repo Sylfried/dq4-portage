@@ -30,8 +30,8 @@ void main() {
     if (c.a < 0.004) discard;
     fragColor = c; }'''
 
-HAUTEUR_LIGNE = 1.246     # hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/PM (28 px) et le centrage des boutons
-TAILLE_POLICE = 19.0        # taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
+HAUTEUR_LIGNE = 1.246     # (police de repli GMaruGoPro-M, utilisee seulement sans ui_garrir.*) hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/PM (28 px) et le centrage des boutons
+TAILLE_POLICE = 19.0        # (repli GMaruGoPro-M) taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
 MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
 
 
@@ -619,10 +619,75 @@ class FenetreMessage:
         return c['pos'][2] + min(v[1] for v in c['vtx']) if c and c['vtx'] else 0.0
 
 
+class PoliceBitmap:
+    """Police bitmap Unity du jeu pour la langue anglaise (et le patch FR) : « SE-GARRIR » (Font « Garrick », 20 px, 218 glyphes) ; elle remplace GMaruGoPro-M, la police japonaise.
+    Les donnees (ui_garrir.json : metriques et rectangles des glyphes ; ui_garrir.png : atlas 256 x 256, alpha) sont extraites de base.apk par preparer_ressources.
+    Un TextMesh de caractere de taille cs affiche 1 px de police = cs * 0.1 unite d'interface ; la largeur d'une ligne = somme des « advance » des glyphes (pas de crenage)."""
+    PAD = 2                                                       # marge (px de police) autour d'une ligne : certains glyphes depassent leur « advance » (W, ’, …)
+    HAUT, BAS = 22, 9                                             # lignes de texture au-dessus / au-dessous de la ligne de base
+
+    def __init__(self, chemin_json, chemin_png):
+        from PIL import Image
+        d = json.load(open(chemin_json, encoding='utf-8'))
+        self.interligne = d['lineSpacing']; self.ascent = d['ascent']
+        atlas = np.asarray(Image.open(chemin_png).convert('RGBA'))[::-1, :, 3]      # ligne n = v * 256 (coordonnees de texture d'Unity : v = 0 en bas)
+        self.G = {}
+        for code, vx, vy, vw, vh, adv, flip, ux, uy, uw, uh in d['glyphes']:
+            c0, c1 = int(round(ux * 256)), int(round((ux + uw) * 256)); ra, rb = int(round(uy * 256)), int(round((uy + uh) * 256))
+            b = atlas[min(ra, rb):max(ra, rb), c0:c1]
+            if flip: b = b.T[::-1, ::-1]                          # glyphe « flipped » : stocke transpose dans l'atlas
+            self.G[code] = (int(round(adv)), int(round(vx)), int(round(-vy - self.ascent)), np.ascontiguousarray(b))      # (advance, decalage x, haut du glyphe par rapport a la ligne de base (vers le bas), bitmap)
+        self.tex = {}; self.larg = {}; self.secours = None
+
+    def _glyphe(self, c):
+        g = self.G.get(ord(c))
+        if g is not None: return g
+        if c in '\u00a0\u202f\u2009': return self.G.get(32)
+        if c < ' ': return (0, 0, 0, np.zeros((0, 0), np.uint8))       # caracteres de controle (« \r » en fin de ligne) : ni largeur ni dessin
+        return None
+
+    def largeur(self, texte):
+        """Largeur d'une ligne en px de police (somme des advance ; un caractere absent de la police compte comme une espace)."""
+        w = self.larg.get(texte)
+        if w is None:
+            w = self.larg[texte] = sum((self._glyphe(c) or self.G[32])[0] for c in texte)
+        return w
+
+    def ligne(self, texte):
+        """-> (texture, largeur, hauteur, base) en px de police ; base = distance du haut de l'image a la ligne de base."""
+        r = self.tex.get(texte)
+        if r is None:
+            if len(self.tex) > 800:
+                for t, *_ in self.tex.values(): t.delete() if hasattr(t, 'delete') else None
+                self.tex.clear()
+            W = int(self.largeur(texte)) + 2 * self.PAD; H = self.HAUT + self.BAS
+            a = np.zeros((H, W), np.uint8); x = self.PAD
+            for c in texte:
+                g = self._glyphe(c) or self.G[32]
+                adv, vx, top, b = g
+                if b.size:
+                    y0 = self.HAUT + top; x0 = x + vx; h, w = b.shape
+                    sub = a[max(y0, 0):y0 + h, max(x0, 0):x0 + w]
+                    bb = b[max(-y0, 0):max(-y0, 0) + sub.shape[0], max(-x0, 0):max(-x0, 0) + sub.shape[1]]
+                    sub[...] = np.maximum(sub, bb)
+                x += adv
+            rgba = np.zeros((H, W, 4), np.uint8); rgba[..., :3] = 255; rgba[..., 3] = a
+            img = pyglet.image.ImageData(W, H, 'RGBA', np.ascontiguousarray(rgba[::-1]).tobytes(), pitch=W * 4)
+            t = img.get_texture(); gl.glBindTexture(t.target, t.id)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)      # filtre bilineaire, comme l'atlas du jeu (Texture2D.filterMode = Bilinear)
+            gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+            r = self.tex[texte] = (t, W, H, self.HAUT)
+        return r
+
+
 class Textes:
     """Lignes de texte -> textures (police du jeu rendue par Pillow, blanche ; la couleur est appliquee au dessin)."""
     def __init__(self, police):
-        self.police = police; self.pol = {}; self.tex = {}
+        self.police = police; self.pol = {}; self.tex = {}; self.bitmap = None
+        d = os.path.dirname(police); j, g = os.path.join(d, 'ui_garrir.json'), os.path.join(d, 'ui_garrir.png')
+        if os.path.exists(j) and os.path.exists(g) and not os.environ.get('DQ_POLICE_GMARU'):        # DQ_POLICE_GMARU=1 (test) : ancienne police japonaise, pour comparer
+            try: self.bitmap = PoliceBitmap(j, g)
+            except Exception as e: print('Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.' % (e,), flush=True)
     def _font(self, px):
         from PIL import ImageFont
         f = self.pol.get(px)
@@ -835,8 +900,10 @@ class Rendu:
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
         lignes = t['text'].split('\n'); N = len(lignes)
-        em = TAILLE_POLICE * t['characterSize'] * 0.1 * nd['tscale']; emy = TAILLE_POLICE * t['characterSize'] * 0.1
-        pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
+        bm = self.textes.bitmap                                         # police d'origine (SE-GARRIR) : 1 px de police = characterSize * 0.1 unite ; sinon GMaruGoPro-M rendue par Pillow
+        u = t['characterSize'] * 0.1
+        if bm: emy = u; pas = bm.interligne * u * t['lineSpacing']; asc = bm.ascent * u
+        else: emy = TAILLE_POLICE * u; pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = nd['tscale']
         row = t['anchor'] // 3; col = t['anchor'] % 3
@@ -855,7 +922,8 @@ class Rendu:
                 cur = int(m.group(1)); pos = m.end()
             if pos < len(l): segs.append((l[pos:], cur))
             segs_l.append(segs)
-        larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
+        if bm: larg = [sum(bm.largeur(t) * u * ts for t, _ in segs) for segs in segs_l]
+        else: larg = [sum((self.textes.ligne(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
         bl = max(larg) if larg else 0.0
         dispo = self._largeur_plaque(fen, nd, zp)
         if dispo is None and fen.etendue_x() is None and not fen.rects():              # fenetre sans cadre propre (titre et etiquettes d'un reglage) : le cadre est dans une autre fenetre visible, on prend le plus petit rectangle qui contient le point d'ancrage
@@ -870,7 +938,7 @@ class Rendu:
             if ex and ex[0] <= xa <= ex[1]:
                 dispo = {0: ex[1] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - ex[0] - self.MARGE_PLAQUE}[col]
                 if dispo < 0.4 * bl: dispo = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
-        if dispo and bl > dispo:                                         # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
+        if dispo and bl > dispo and not bm:                              # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
             f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue
@@ -881,14 +949,19 @@ class Rendu:
             xs = nd['pos'][0] - bx + al
             y_base = base0 - i * pas
             for texte, ci in segs:
-                tex, w, h, b = self.textes.ligne(texte, px)
-                x = cx + xs * s - 2 * ts; y = cy + y_base * s - (h - b)
-                wd = w * ts
-                a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + h, 1, 1], [x, y, 0, 0], [x + wd, y + h, 1, 1], [x, y + h, 0, 1]], np.float32)
+                if bm:                                                   # texture a la taille native de la police (1 px = 1 px de police), agrandie par le filtre bilineaire comme dans Unity
+                    tex, w, h, b = bm.ligne(texte); k = u * s
+                    x = cx + xs * s - bm.PAD * k * ts; y = cy + y_base * s - (h - b) * k
+                    wd = w * k * ts; ht = h * k; avance = bm.largeur(texte) * u * ts
+                else:
+                    tex, w, h, b = self.textes.ligne(texte, px)
+                    x = cx + xs * s - 2 * ts; y = cy + y_base * s - (h - b)
+                    wd = w * ts; ht = h; avance = (w - 4) / s * ts
+                a = np.array([[x, y, 0, 0], [x + wd, y, 1, 0], [x + wd, y + ht, 1, 1], [x, y, 0, 0], [x + wd, y + ht, 1, 1], [x, y + ht, 0, 1]], np.float32)
                 vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.tile(np.array(teinte(ci), np.float32), 6)))
                 gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(tex.target, tex.id); self.prog['mode'] = 0
                 vl.draw(gl.GL_TRIANGLES); vl.delete()
-                xs += (w - 4) / s * ts
+                xs += avance
 
 
 class Gestionnaire:
@@ -939,10 +1012,20 @@ class Gestionnaire:
 RESSOURCES = {'ui_MenuTexture.png': 'MenuTexture', 'ui_Button.png': 'Button'}
 
 
+def extraire_garrir(o, d, chemin_json, chemin_png):
+    """Police bitmap SE-GARRIR (Font Unity) -> ui_garrir.json (metriques, glyphes : code, vert x y l h, advance, flipped, uv x y l h) et ui_garrir.png (atlas RGBA, tel que le rend UnityPy)."""
+    t = o.read_typetree()
+    d.m_Texture.read().image.convert('RGBA').save(chemin_png)
+    gl_ = [[r['index'], r['vert']['x'], r['vert']['y'], r['vert']['width'], r['vert']['height'], r['advance'], int(bool(r['flipped'])),
+            r['uv']['x'], r['uv']['y'], r['uv']['width'], r['uv']['height']] for r in t['m_CharacterRects']]
+    with open(chemin_json, 'w', encoding='utf-8') as f: json.dump({'nom': t['m_Name'], 'fontSize': t['m_FontSize'], 'lineSpacing': t['m_LineSpacing'], 'ascent': t['m_Ascent'], 'descent': t['m_Descent'], 'pixelScale': t['m_PixelScale'], 'glyphes': gl_}, f)
+
+
 def preparer_ressources(dossier_apk, cache, log=print):
     """Extrait des APK du jeu (une seule fois) : feuilles MenuTexture et Button, police, maillages des cadres. -> True si tout est la."""
     dest = {n: os.path.join(cache, n) for n in list(RESSOURCES) + ['ui_font.otf', 'ui_frameData.bin']}
-    if all(os.path.exists(p) for p in dest.values()): return True
+    dest_g = [os.path.join(cache, n) for n in ('ui_garrir.json', 'ui_garrir.png')]            # police d'origine SE-GARRIR (facultative : sans elle, GMaruGoPro-M)
+    if all(os.path.exists(p) for p in list(dest.values()) + dest_g): return True
     try:
         import UnityPy, zipfile
         os.makedirs(cache, exist_ok=True)
@@ -957,6 +1040,9 @@ def preparer_ressources(dossier_apk, cache, log=print):
                 d = o.read()
                 if d.m_Name == 'GMaruGoPro-M' and d.m_FontData and not os.path.exists(dest['ui_font.otf']):
                     open(dest['ui_font.otf'], 'wb').write(bytes(d.m_FontData))
+                elif d.m_Name == 'SE-GARRIR' and not all(os.path.exists(p) for p in dest_g):
+                    try: extraire_garrir(o, d, *dest_g)
+                    except Exception as e: log('Police SE-GARRIR non extraite : %r' % (e,))
         if not os.path.exists(dest['ui_frameData.bin']):
             pack = UnityPy.load(zipfile.ZipFile(os.path.join(dossier_apk, 'split_UnityDataAssetPack.apk')).read('assets/bin/Data/datapack.unity3d'))
             for o in pack.objects:
