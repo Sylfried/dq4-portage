@@ -45,10 +45,16 @@ DEFAUT = {
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
     'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
     'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
+    'interface_masquees': [],     # editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
     'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
+
+# Fenetres du jeu absentes de l'editeur d'interface (pause.py) : lancement du jeu (menu de depart, nom, titre, licence, reseau : gerees a part), sans maillage (rien a regler), sans objet sur PC
+# ou qui suivent les monstres a l'ecran. Leurs reglages enregistres par une ancienne version sont abandonnes au chargement (ils decalaient un texte seul ou une fenetre du lancement).
+FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'StartNameEntry', 'SaveOverwrite', 'TitleTouch', 'PortalButton', 'NetworkRoot', 'NetworkPLST', 'NetworkCODE', 'NetworkITEM',
+                     'ViewVolumeDecision', 'License', 'MagicInfo', 'Config', 'NENE_ItemView', 'MonsterName', 'BattleHoppingNumber')
 
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 
@@ -105,6 +111,8 @@ class Reglages:
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
+                fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
+                ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}

@@ -1310,9 +1310,20 @@ class Jeu(pyglet.window.Window):
         return self._noms_make
 
     def _nom_de_type(self, typ):
-        for nom, nums in self.noms_fenetres().items():
-            if typ in nums: return nom
-        return None
+        m = getattr(self, '_types_noms', None)
+        if m is None: m = self._types_noms = {n: nom for nom, nums in self.noms_fenetres().items() for n in nums}          # numero de type -> nom Make_* (une fois par partie : appele pour chaque fenetre a chaque image)
+        return m.get(typ)
+
+    def _cachee(self, typ):
+        """Fenetre du jeu masquee par le joueur (editeur d'interface : « Afficher cette interface a l'ecran » = Non) ?"""
+        ms = self.reg['interface_masquees']
+        return bool(ms) and self._nom_de_type(typ) in ms
+
+    def _ui_ouinon(self, base, D, e0, v):
+        """Oui / Non (type 1) regle par le joueur : il suit la fenetre de message comme d'habitude (base = (cx, cy, s) de celle-ci, D = decalage vertical d'unites qui l'y colle, e0 = son bord bas en unites),
+        puis sa taille v[0] se change autour de son bord bas et il se decale de v[1], v[2] (fractions de l'ecran). -> (cx, cy, s) de dessin."""
+        bx, by, bs = base; s2 = bs * float(v[0]); y_bas = by + (D + e0) * bs + float(v[2]) * self.height
+        return bx + float(v[1]) * self.width, y_bas - e0 * s2, s2
 
     def _ui_perso(self, mode, s, v):
         """Repere (cx, cy, s) d'une fenetre modifiee par le joueur (editeur d'interface) : taille v[0] autour du bord de son groupe (bas, haut ou milieu de l'ecran), puis decalage v[1], v[2] en fraction de l'ecran."""
@@ -1326,9 +1337,8 @@ class Jeu(pyglet.window.Window):
             self._ech_vu = self._essai; self.ui_rendu.maj_canevas(self._canevas_apercu(), 'msg_apercu')
             fe.regler(0, 0, False)
 
-    def apercu_interface(self, cle):
-        """Editeur d'interface : apercu de la fenetre `cle` ('msg' = dialogues, sinon nom Make_*) a sa taille et sa place (mise en page d'origine, sans etat de jeu)."""
-        if self.ui_rendu is None or self.ui_g is None: return None
+    def _fenetre_apercu(self, cle):
+        """Fenetre d'apercu de l'editeur d'interface (gardee) : 'msg' = dialogues (texte d'essai), sinon le nom Make_* ; None si elle n'a pas de mise en page."""
         if not hasattr(self, '_apercus'): self._apercus = {}
         fe = self._apercus.get(cle)
         if fe is None:
@@ -1338,11 +1348,20 @@ class Jeu(pyglet.window.Window):
                 nums = self.noms_fenetres().get(cle)
                 if not nums: return None
                 fe = UI.Fenetre(self.ui_g.ml, nums[0])
+                if fe.etendue() is None:                                                    # parties cachees tant que le moteur ne les demande pas (bandeau de l'equipe en combat, jetons du stade...) : l'apercu les montre toutes
+                    for nd in fe.N.values(): nd['act'] = True
             self._apercus[cle] = fe
-        if cle == 'msg':
-            self._canevas_apercu_maj(fe)
+        return fe
+
+    def apercu_interface(self, cle):
+        """Editeur d'interface : apercu de la fenetre `cle` ('msg' = dialogues, sinon nom Make_*) a sa taille et sa place (mise en page d'origine, sans etat de jeu) -> (x0, y0, x1, y1) en pixels, ou None."""
+        if self.ui_rendu is None or self.ui_g is None: return None
+        fe = self._fenetre_apercu(cle)
+        if fe is None: return None
+        if cle == 'msg': self._canevas_apercu_maj(fe)
         e = fe.etendue()
         if not e: return None
+        if cle == 'YesNo': return self._apercu_ouinon(fe, e)
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
         k, gr, modes = self._ui_echelle([(e[0] + dz, e[1] + dz)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'
@@ -1351,6 +1370,22 @@ class Jeu(pyglet.window.Window):
         fe.sel = None; fe.sel_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
         x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + (e[0] + dz) * s2, cy + (e[1] + dz) * s2          # cadre jaune : emprise de la fenetre
+        pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()
+        return x0, y0, x1, y1
+
+    def _apercu_ouinon(self, fe, e):
+        """Apercu de Oui / Non : comme dans le jeu, il est colle au-dessus de la fenetre de message (montree a sa place, avec ses reglages) ; son cadre jaune est celui de l'element regle."""
+        fm = self._fenetre_apercu('msg'); self._canevas_apercu_maj(fm); em = fm.etendue()
+        if not em: return None
+        dzm = MSG_BAS - fm.bas(); D = dzm + (em[1] + OUINON_ECART - e[0])
+        k, gr, modes = self._ui_echelle([(em[0] + dzm, em[1] + dzm), (e[0] + D, e[1] + D)]); s = self.height / 800.0 * k
+        mode = modes[0] if modes else 'bas'; ov = self.reg['interface_fenetres']
+        cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or [1.0, 0.0, 0.0])
+        fm.sel = None; fm.sel_nd = None; fe.sel = None; fe.sel_nd = None
+        self.ui_rendu.dessiner([fm], cxm, cym + dzm * sm, sm, (self.width, self.height))
+        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or [1.0, 0.0, 0.0])
+        self.ui_rendu.dessiner([fe], cx, cy, s2, (self.width, self.height))
+        x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + e[0] * s2, cy + e[1] * s2
         pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()
         return x0, y0, x1, y1
 
@@ -1386,7 +1421,7 @@ class Jeu(pyglet.window.Window):
     def _zones(self, port):
         """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1, profondeur, identifiant de l'element)] en pixels."""
         fe = self.ui_g.f.get(port) if self.ui_g else None
-        if not fe: return []
+        if not fe or self._cachee(fe.typ): return []
         cx, cy, ech = self.ui_tf.get(port) or self._ui_repere(); dz = getattr(self, 'ui_dzp', {}).get(port, 0.0)
         return [(b, pad, cx + x0 * ech, cy + (z0 + dz) * ech, cx + x1 * ech, cy + (z1 + dz) * ech, pr, nid) for b, pad, x0, z0, x1, z1, pr, nid in fe.boutons(True)]
 
@@ -1694,14 +1729,22 @@ class Jeu(pyglet.window.Window):
                 m = mode_de(cle)
                 return (400.0 * s if m == 'bas' else H - 400.0 * s if m == 'haut' else H / 2), s
             self.ui_tf = {p: (cx,) + repere(p) for _, p in liste}
-            ov = self.reg['interface_fenetres']; tf_msg = None; perso = {}           # fenetres modifiees par le joueur (taille, position) : dessinees a part, avec leur propre repere (les zones tactiles le suivent)
+            ov = self.reg['interface_fenetres']; tf_msg = None; perso = {}; ouinon = {}           # fenetres modifiees par le joueur (taille, position) : dessinees a part, avec leur propre repere (les zones tactiles le suivent)
+            masque = set(self.reg['interface_masquees'])                                  # interfaces masquees (« Afficher cette interface a l'ecran » = Non) : calculees comme les autres (la mise en page ne bouge pas), seul leur dessin est omis
             if ov:
                 if msg and ov.get('msg'): tf_msg = self._ui_perso(mode_de('msg'), s, ov['msg'])
                 for _, p in liste:
+                    nom = self._nom_de_type(self.ui_g.f[p].typ) or ''; v = ov.get(nom) if nom not in RG.FENETRES_RETIREES else None
+                    e1 = self.ui_g.f[p].etendue() if (v and self.ui_g.f[p].typ == 1) else None
+                    if e1:                                                                  # Oui / Non : reglages relatifs a la fenetre de message qu'il suit
+                        D = self.ui_dzp.get(p, 0.0); base = (tf_msg or (cx, repere('msg')[0], s)) if p in self.ui_suit else ((cx,) + repere(p)); t2 = self._ui_ouinon(base, D, e1[0], v)
+                        self.ui_tf[p] = (t2[0], t2[1] - D * t2[2], t2[2])
+                        if p in self.ui_suit: ouinon[p] = t2
+                        else: perso[p] = t2
+                        continue
                     if p in self.ui_suit:
                         if tf_msg: self.ui_tf[p] = tf_msg
                         continue
-                    v = ov.get(self._nom_de_type(self.ui_g.f[p].typ) or '')
                     if v: perso[p] = self.ui_tf[p] = self._ui_perso(mode_de(p), s, v)
             for _, p in liste:
                 if self.ui_g.f[p].typ in FENETRES_CENTREES and p not in perso:         # liste des journaux, choix du sexe : centrees a l'ecran dans un cadre noir (les boites de dialogue, elles, restent a leur place)
@@ -1718,14 +1761,17 @@ class Jeu(pyglet.window.Window):
                 if p in self.ui_suit: haut.append(fe)
                 elif p not in perso: bas.setdefault(self.ui_tf[p][1], []).append(fe)
             for fe in haut:                                   # le message d'abord, puis chaque fenetre qui le suit (Oui/Non) a son propre decalage
-                dzf = self.ui_dzp.get(next((p for _, p in liste if self.ui_g.f[p] is fe), None), dz)
-                if tf_msg: self.ui_rendu.dessiner([fe], tf_msg[0], tf_msg[1] + dzf * tf_msg[2], tf_msg[2], (self.width, self.height))
+                pf = next((p for _, p in liste if self.ui_g.f[p] is fe), None); dzf = self.ui_dzp.get(pf, dz)
+                if ('msg' in masque) if pf is None else self._cachee(self.ui_g.f[pf].typ): continue
+                if pf in ouinon: self.ui_rendu.dessiner([fe], ouinon[pf][0], ouinon[pf][1], ouinon[pf][2], (self.width, self.height))
+                elif tf_msg: self.ui_rendu.dessiner([fe], tf_msg[0], tf_msg[1] + dzf * tf_msg[2], tf_msg[2], (self.width, self.height))
                 else: self.ui_rendu.dessiner([fe], cx, repere('msg')[0] + dzf * s, s, (self.width, self.height))
             for cy, fens_g in bas.items():
                 for fe in fens_g:
                     if fe.typ == 53: self._cadre_depart(fe, cx, cy, s)
-                self.ui_rendu.dessiner(fens_g, cx, cy, s, (self.width, self.height))
+                self.ui_rendu.dessiner([fe for fe in fens_g if not self._cachee(fe.typ)], cx, cy, s, (self.width, self.height))
             for p, tf in perso.items():
+                if self._cachee(self.ui_g.f[p].typ): continue
                 if self.ui_g.f[p].typ in FENETRES_CENTREES: self._cadre_depart(self.ui_g.f[p], tf[0], tf[1], tf[2], True)
                 self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
