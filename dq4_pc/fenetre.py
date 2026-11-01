@@ -1427,9 +1427,9 @@ class Jeu(pyglet.window.Window):
                 if n: n != HM.CROIX and self.son.jouer_se(SE_BOUTON); return
         if bouton != M.LEFT or not self.ui_rendu: return
         cp = self._carte_ports()
-        if 22 in cp:                                                               # bouton retour de la carte (touche de manette 0x400, sans numero) : ferme la carte au relachement
+        if 22 in cp:                                                               # boutons de la fenetre de la carte (sans numero) : retour (touche de manette 0x400, ferme la carte) et mode (haut de la manette, change de vue), actifs au relachement
             h = self._bouton_sous(cp[22], x, y)
-            if h and h[0] == -1 and h[1] == 0x400: self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
+            if h and h[0] == -1 and h[1] in (0x400, 2): self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
             _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.appui_nd = h[3]; self.son.jouer_se(SE_BOUTON); return
@@ -1480,14 +1480,16 @@ class Jeu(pyglet.window.Window):
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
-            if n == 'mode_carte': self.carte_bascule = True
-            elif n: self.hud_decl = HM.DECL[n]
+            if n: self.hud_decl = HM.DECL[n]
             return
         if bouton != pyglet.window.mouse.LEFT or not self.appui: return
         port, b, pad = self.appui; self.appui = None
         h = self._bouton_sous(port, x, y)
         if b == -1 and pad == 0x400:                       # bouton retour : MenuPortItem.Update ajoute 0x400 aux touches du jeu (le moteur ferme la carte) au lieu d'envoyer un message au port
             if h and h[0] == b: self.hud_decl = BTN_DISCUSSION
+            return
+        if b == -1 and pad == 2:                           # bouton « mode de la carte » de la fenetre (type 22, icone 19 / 20 / 2 envoyee par le moteur) : haut de la manette = change de vue (traite avec la touche Carte)
+            if h and h[0] == b and h[1] == pad: self.carte_bascule = True
             return
         if h and h[0] == b and b == UI.Fenetre.BTN_ECHAP and port == self.echap_port: self.pause.ouvrir(); return          # bouton « Menu Echap » : propre au portage, le moteur n'en sait rien
         if h and h[0] == b and port in self.moteur.menus_saisie():
@@ -1549,6 +1551,7 @@ class Jeu(pyglet.window.Window):
         li = f.get('listes') or {}                                 # lieux decouverts (code 3 : x + 256 y, un par nombre) et voile des blocs non explores (code 5) envoyes par le moteur
         fe.symboles = [(v & 0xff, v >> 8 & 0xff) for v in li.get(3, ())]
         if fe.symboles and getattr(fe, 't_blink', None) is None: fe.t_blink = time.monotonic()
+        v4 = f['indic'].get(4); fe.special = None if v4 is None else (v4 & 0xff, v4 >> 8 & 0xff)        # code 4 : lieu special (croix rouge), meme codage que les lieux : x + 256 y
         cle = tuple(li[5][:16]) if li.get(5) else None
         if fe.nom_carte and (fe.carte is None or getattr(fe, '_cle_tex', None) != (fe.nom_carte, cle)):
             fe._cle_tex = (fe.nom_carte, cle)
@@ -1571,7 +1574,7 @@ class Jeu(pyglet.window.Window):
         nd = next((o for o in fe.N.values() if o['mats'] and o['mats'][0].get('part') == 3), None)      # marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
-            nd['pos'][0] = -225.0 + mx * 450.0 / 256.0; nd['pos'][2] = 400.0 - my * 337.5 / 192.0; nd['act'] = True        # le coin bas gauche de l'icone (la pointe de la plume) est sur la position, comme le noeud d'origine (sommets de (0, 0) a (24, 24))
+            nd['pos'][0] = -223.0 + mx * 1.740234; nd['pos'][2] = 398.0 - my * 1.740234; nd['act'] = True        # AddIcon(Vector3.zero, 31, bInBounds) : le coin bas gauche de l'icone (la pointe de la plume) est sur la position, dans le plan de 450 x 337,5 pose en (2, -2) a l'echelle 0,99 (0,99 x 450 / 256)
 
     def _plan_monde_fenetre(self, fe, f):
         """Grande carte du monde (type 26, Make_WorldLargeMap) : le moteur envoie le drapeau des pieces du plan (indicateur 0), puis la position du joueur x, y (indicateurs 1 et 2) en pixels d'un plan de

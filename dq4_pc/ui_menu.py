@@ -162,6 +162,7 @@ class Fenetre:
         self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
+        self.special = None                                                # petite carte du monde : lieu special (code 4), (x, y) en pixels du plan de 256 x 192, ou None
 
     # ---- application des messages
     def _ib(self, p):
@@ -196,6 +197,7 @@ class Fenetre:
             cu = p['custom']; pt, ib = self._enrobe(p)
             if cu.get('cls', '').endswith('ICityMap'): return                                       # fenetre de carte (type 25) : le nom de la texture du plan (Menu/map) est pose par la visionneuse (nom_carte)
             if cu.get('cls', '').endswith('StatusIconChanger'): self._icone_etat(i, v); return       # icones d'etat (mort, poison, sort scelle) et couleur du nom
+            if cu.get('cls', '').endswith('ItemNumCTRL'): self._item_num(i, v); return              # quantite d'une ligne de la liste d'objets (type 9)
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
@@ -219,6 +221,22 @@ class Fenetre:
             nd = self.N.get(pt['node'])
             if nd: nd['etat'] = v
         elif k == 'frame': self._cadre(ib, v)
+
+    def _item_num(self, i, v):
+        """ItemNumCTRL.Changer(v) (0xD08060) : compteur passif a deux chiffres d'une ligne de la liste d'objets (Sub_ItemButton : IBase 3 = dizaines, IBase 4 = unites, feuille 12, cases de 32 px).
+        v < 2 : deux cases vides (icone 1) ; sinon dizaines = (v / 10) % 10 (icone 16 x chiffre, ou 1 si zero), unites = icone 16 x (v % 10) ; 100 et plus se replient modulo 100 (123 -> 23).
+        Les deux chiffres sont les IBase 3 et 4 de la MenuParts de la ligne (celle de l'element (ligne, 0))."""
+        p0 = self.params.get((i, 0))
+        if not p0 or p0.get('parts') is None or p0['parts'] >= len(self.parts): return
+        pt = self.parts[p0['parts']]; nd = self.N.get(pt['node'])
+        if nd is None or not nd['uv'] or len(pt['ib']) < 5: return
+        if v < 2: dz, un = 1, 1
+        else: d = (v // 10) % 10; dz = d * 16 if d else 1; un = (v % 10) * 16
+        for ib, no in ((pt['ib'][3], dz), (pt['ib'][4], un)):
+            if ib['k'] != 'icon': continue
+            info = self.ml.infos[ib['partsNo']]; o = ib['vtx']
+            for j, uv in enumerate(uv_icone(info, no, 0)):
+                if o + j < len(nd['uv']): nd['uv'][o + j] = list(uv)
 
     def param_str(self, i, no, s):
         if self.eglise: self.txt_eglise[(i, no)] = s
@@ -739,14 +757,15 @@ class Rendu:
             self._mdl_plaque = m
         return m or None
 
-    def plaque(self, x, y, w, h, vp, choisi=False):
-        """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (16 unites pour 50 de haut),
-        le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). -> False si la plaque du jeu est indisponible."""
+    def plaque(self, x, y, w, h, vp, choisi=False, coin=None):
+        """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (celles du modele : 16 unites de coin pour sa hauteur),
+        le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). coin : cote des coins en pixels (les 16 unites d'origine, quelle que soit la hauteur : boutons de l'ecran).
+        -> False si la plaque du jeu est indisponible."""
         mod = self._modele_plaque()
         if mod is None or 1 not in self.tex: return False
         vtx, uv, idx, col = mod
         xs = sorted({round(float(v[0]), 2) for v in vtx}); zs = sorted({round(float(v[1]), 2) for v in vtx})          # quatre abscisses et quatre ordonnees : bords et limites des coins
-        cap = min((xs[1] - xs[0]) * h / (zs[-1] - zs[0]), w / 2.0, h / 2.0)                                              # le coin garde sa proportion avec la hauteur de la plaque
+        cap = min((xs[1] - xs[0]) * h / (zs[-1] - zs[0]) if coin is None else coin, w / 2.0, h / 2.0)                    # le coin garde sa proportion avec la hauteur de la plaque (ou la taille demandee)
         X = {xs[0]: x, xs[1]: x + cap, xs[2]: x + w - cap, xs[3]: x + w}; Y = {zs[3]: y + h, zs[2]: y + h - cap, zs[1]: y + cap, zs[0]: y}
         px = np.array([X[round(float(v[0]), 2)] for v in vtx[idx]], np.float32); py = np.array([Y[round(float(v[1]), 2)] for v in vtx[idx]], np.float32)
         uu = uv[idx] + (np.array(self.ml.pousse, np.float32) if choisi else 0.0)
@@ -759,15 +778,26 @@ class Rendu:
         return True
 
     def _carte(self, fen, cx, cy, s, vp):
-        """Plan de la fenetre de carte (ICityMap) : texture 4:3 (plan agrandi, voile compris) affichee en 450 x 337,5 sous le cadre (de x = -225 a 225, de z = 400 vers le bas)."""
+        """Plan de la fenetre de carte : texture 4:3 (plan agrandi, voile compris). Petite carte (type 25, ICityMap : CreateFromTexture 450 x 337,5 pose en (2, -2) sous le cadre, echelle locale 0,99) : de x = -223 a 222,5,
+        de z = 398 a 63,875 ; grande carte du monde (type 26) : rectangle de 450 x 337,5 de x = -225 a 225 (position d'origine non lue : garde)."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
-        x0, x1, y1, y0 = cx - 225.0 * s, cx + 225.0 * s, cy + 400.0 * s, cy + (400.0 - 337.5) * s
+        if getattr(fen, 'typ', 0) == 25: xa, xb, zh, zb = -223.0, 222.5, 398.0, 398.0 - 334.125
+        else: xa, xb, zh, zb = -225.0, 225.0, 400.0, 400.0 - 337.5
+        x0, x1, y1, y0 = cx + xa * s, cx + xb * s, cy + zh * s, cy + zb * s
         u0, v0, u1, v1 = getattr(fen, 'carte_uv', None) or (0.0, 0.0, 1.0, 1.0)          # grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
         a = np.array([[x0, y0, u0, v0], [x1, y0, u1, v0], [x1, y1, u1, v1], [x0, y0, u0, v0], [x1, y1, u1, v1], [x0, y1, u0, v1]], np.float32)
         vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
         t = fen.carte; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = getattr(fen, 'carte_mode', 3)         # plans agrandis (HD, voile compris) : filtrage lineaire ; grande carte du monde : bilineaire net
         vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog['mode'] = 0
+        sp = getattr(fen, 'special', None)
+        if sp is not None:                                                            # code 4 : lieu special, croix rouge (MenuTexture, feuille 5, case 3 ; AddIcon 1,2 x 16 = 21,6 unites), coin bas gauche en (-227 + x k, 402 - y k) (ancrage suppose comme la plume)
+            info = self.ml.infos[5]; t = self.tex.get(info['tex']); k = 450.0 / 256.0
+            if t is not None:
+                uv = uv_icone(info, 3, 0); xl, yb = cx + (-227.0 + sp[0] * k) * s, cy + (402.0 - sp[1] * k) * s; xr, yt = xl + 21.6 * s, yb + 21.6 * s
+                a = np.array([[xl, yt, *uv[0]], [xr, yt, *uv[1]], [xr, yb, *uv[2]], [xl, yt, *uv[0]], [xr, yb, *uv[2]], [xl, yb, *uv[3]]], np.float32)
+                vl = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', np.ones(24, np.float32)))
+                gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0; vl.draw(gl.GL_TRIANGLES); vl.delete()
         sy = getattr(fen, 'symboles', None)
         if sy:                                                                        # lieux decouverts (BlinkMapSymbol) : carres rouges de 4 unites dont la transparence va et vient (0,5 par seconde : 1 -> 0 -> 1 en 4 s)
             if self._blanc is None:
