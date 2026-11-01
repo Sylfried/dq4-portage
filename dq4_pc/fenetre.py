@@ -83,7 +83,7 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
-TXT_MENU_ECHAP = 'Menu Échap'      # libelle du bouton ajoute dans la fenetre des Parametres (retour au menu Echap)
+TXT_MENU_ECHAP = 'Menu Pause'      # libelle du bouton ajoute dans la fenetre des Parametres (retour au menu Pause, ouvert aussi par Echap)
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
 CH_MOTIF_FIN = np.array([326, 403, 940, 1195, 1260, 1713])                  # fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
@@ -1801,7 +1801,6 @@ class Jeu(pyglet.window.Window):
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse()
-        h = min(f, 2.0); self.moteur.vitesse_heros(h); f /= h           # le heros seul va plus vite (ses variables de vitesse) : les PNJ gardent leur vitesse et leurs animations ; au-dela de x2 (risque de traverser les murs) le reste passe par des pas de moteur en plus
         self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
         n = 0; nmax = 3 * max(1, math.ceil(f))
         while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
@@ -1810,8 +1809,9 @@ class Jeu(pyglet.window.Window):
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):
-        """Facteur de vitesse du heros quand il marche (reglages : vitesse de marche, course tant que la touche est tenue). Seulement sur le terrain (ville, donjon, carte du monde),
-        direction tenue, sans message ni menu ni combat ni effet d'ecran. Applique a la vitesse du heros (voir _boucle), pas a l'horloge du jeu : les PNJ ne vont pas plus vite."""
+        """Facteur de vitesse de l'horloge du jeu quand le heros marche (reglages : vitesse de marche, course tant que la touche est tenue). Seulement sur le terrain (ville, donjon, carte du monde),
+        direction tenue, sans message ni menu ni combat ni effet d'ecran. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
+        les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
         if R['vitesse_marche'] == 1.0 and R['vitesse_course'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
