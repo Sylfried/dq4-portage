@@ -16,7 +16,7 @@ ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'D
            ('accel', "Touche d'accélérateur"), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
-RESERVEES = ('ESCAPE',)                # Echap ouvre le menu : non reattribuable
+RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule le plein ecran exclusif (avec Alt + Entree) : non reattribuables
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
         'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
         'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
@@ -27,7 +27,8 @@ DEFAUT = {
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
-    'plein_ecran': False,
+    'mode_fenetre': 0,            # fenetre : 0 fenetre, 1 plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas : le plein ecran d'avant, ex-booleen « plein_ecran »), 2 plein ecran exclusif (le moniteur passe a la resolution du reglage « resolution ») ; F11 / Alt + Entree : bascule vers 2, puis retour
+    'mode_fenetre_retour': 0,     # dernier mode non exclusif (0 ou 1) : F11 / Alt + Entree depuis le plein ecran exclusif y revient
     'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
     'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
     'nettete': 0.0,               # 0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
@@ -39,7 +40,7 @@ DEFAUT = {
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
     'defilement_force': False,    # combats : impose le defilement ci-dessous (non : celui de la sauvegarde, regle dans la fenetre Parametres du jeu)
     'defilement_auto': True, 'defilement_vitesse': 2,       # combats : defilement automatique des messages (non : on passe chaque message a la main) ; vitesse 0 (la plus rapide) a 3 (la plus lente) = attente de 12 / 22 / 32 / 42 images
-    'resolution': [1920, 1080],   # taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; en plein ecran : mode d'affichage choisi
+    'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran exclusif : mode d'affichage du moniteur ; plein ecran : sans effet (resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche (0,5 a 2)
@@ -64,6 +65,8 @@ DEFAUT = {
 FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'StartNameEntry', 'SaveOverwrite', 'TitleTouch', 'PortalButton', 'NetworkRoot', 'NetworkPLST', 'NetworkCODE', 'NetworkITEM',
                      'ViewVolumeDecision', 'License', 'MagicInfo', 'Config', 'NENE_ItemView', 'MonsterName', 'BattleHoppingNumber')
 
+MODES_FENETRE = (0, 1, 2)      # valeurs possibles de 'mode_fenetre' : fenetre, plein ecran (sans bordure), plein ecran exclusif
+NOMS_MODES_FENETRE = {0: 'Fenêtré', 1: 'Plein écran', 2: 'Plein écran exclusif'}
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -74,6 +77,14 @@ def mode_sprites_valide(v):
     except (TypeError, ValueError): return DEFAUT['mode_sprites']
     if v in (2, 3): return 1
     return v if v in MODES_SPRITES else DEFAUT['mode_sprites']
+
+
+def mode_fenetre_valide(v):
+    """Valeur lue (reglages.json, option --plein-ecran) -> 0, 1 ou 2. Un booleen est l'ancien reglage « plein_ecran » (vrai = 1 : plein ecran sans bordure, le comportement qu'il avait) ; tout ce qui est invalide -> fenetre."""
+    if isinstance(v, bool): return 1 if v else 0
+    try: n = int(v)
+    except (TypeError, ValueError, OverflowError): return DEFAUT['mode_fenetre']
+    return n if n in MODES_FENETRE and n == v else DEFAUT['mode_fenetre']
 
 
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
@@ -105,6 +116,7 @@ class Reglages:
         if chemin and os.path.exists(chemin):
             try:
                 with open(chemin, encoding='utf-8') as f: d = json.load(f)
+                if 'mode_fenetre' not in d and 'plein_ecran' in d: d['mode_fenetre'] = d['plein_ecran']      # ancien reglage « Plein écran » (booleen) -> mode 1 (plein ecran sans bordure, comme avant) ou 0 ; le booleen n'est plus enregistre
                 if 'distance_camera' not in d and isinstance(d.get('zoom'), (int, float)) and d['zoom'] > 0: d['distance_camera'] = min(200, max(50, round(10000.0 / d['zoom'])))      # ancien reglage « Zoom » (40 a 400 %) -> distance de la camera
                 if 'vitesse_accel' not in d and isinstance(d.get('vitesse_course'), (int, float)) and not isinstance(d.get('vitesse_course'), bool): d['vitesse_accel'] = d['vitesse_course']      # ancien « Multiplicateur de la course » -> vitesse de l'accelerateur (l'ancien multiplicateur de la camera, accel_camera, est abandonne : un seul facteur pour les deux)
                 if isinstance(d.get('touches'), dict) and 'accel' not in d['touches']:       # anciennes touches de course et d'acceleration de la camera -> une seule « Touche d'accélérateur » : « Courir (maintenir) », a defaut les trois autres (« appuyer » n'existe plus)
@@ -134,6 +146,9 @@ class Reglages:
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
+                for ts in self.v['touches'].values():                   # une touche reservee (F11 : bascule du plein ecran exclusif) ne peut plus etre une touche d'action : retiree d'un ancien fichier
+                    for i in range(2):
+                        if ts[i] in RESERVEES: ts[i] = None
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
                 for k in BOOLEENS_SON_TEXTE:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
@@ -142,6 +157,7 @@ class Reglages:
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre']); self.v['mode_fenetre_retour'] = 1 if mode_fenetre_valide(self.v['mode_fenetre_retour']) == 1 else 0       # (le retour de l'exclusif n'est jamais l'exclusif)
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
