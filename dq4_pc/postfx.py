@@ -120,7 +120,7 @@ class PostFX:
     def debut(self, fond):
         """Commence le dessin de la scene ; retourne (largeur, hauteur) de la zone de dessin a utiliser pour glViewport. Efface avec la couleur de fond."""
         W, H = self.f.get_framebuffer_size(); self.actif_cadre = False; self.a2c = False
-        if not self.ok: return W, H
+        if not self.ok or W < 2 or H < 2: return W, H            # (fenetre reduite dans la barre des taches : zone de dessin nulle, rien a creer ; ce n'est pas une panne)
         ms, ech, net, lum = self.demande()
         if ms == 0 and ech <= 1.0 and net <= 0.001 and abs(lum - 1.0) <= 0.001: return W, H       # rien a faire : dessin direct
         try:
