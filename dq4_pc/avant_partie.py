@@ -12,6 +12,7 @@ RESSOURCES = {
     'ap_taptostart.png': ('pack', 'Texture2D', 'taptostart'),         # « Touchez l'ecran » (Resources/Title/TapToStart)
     'ap_copyright.png': ('pack', 'Texture2D', 'Retro4_copyright'),    # ligne de copyright du titre (Resources/Title/Retro4_copyright)
     'ap_licence.txt': ('pack', 'TextAsset', 'License_list_A'),         # texte de l'ecran Licence (variante Android)
+    'ap_hyodai1.png': ('pack', 'Texture2D', 'hyodai1'),               # bandeau des titres de chapitre (Menu/map/hyodai1, 256 x 128, Make_Chapter)
 }
 
 # ---- Boot.Logo (MoveNext 0xCC5618) : constantes de la classe Boot
