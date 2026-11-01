@@ -162,7 +162,7 @@ class Fenetre:
             for nd in self.N.values():                  # CreateFromTexture ajuste la largeur (450) et deduit la hauteur de la texture (256 x 128 : 225) : bandeau dore a fond bleu, centre
                 if nd['vtx'] and nd['mats'] and nd['mats'][0].get('sheet') is None:
                     nd['vtx'] = [[-225.0, 112.5], [225.0, 112.5], [225.0, -112.5], [-225.0, -112.5]]; nd['mats'][0] = dict(nd['mats'][0], sheet='hyodai1', color=[1.0, 1.0, 1.0, 1.0])
-        self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
+        self.vu = True; self.sel = None; self.sel_nd = None; self.appui_nd = None; self.ordre = 0
         self.nom_carte = None; self.carte = None            # fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
         self.symboles = []; self.t_blink = None; self.carte_mode = 3      # carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
         self.special = None                                                # petite carte du monde : lieu special (code 4), (x, y) en pixels du plan de 256 x 192, ou None
@@ -789,7 +789,8 @@ class Rendu:
                     if sh not in self.tex: continue
                     col = list(mat.get('color') or (1, 1, 1, 1)); mode = 0; off = (0.0, 0.0)
                     if k == 0 and nd['buttonId'] is not None and 'part' in mat and mat['part'] == 10 and nd['buttonId'] < 0 and fen.sel_nd == nd['id']:
-                        col[:3] = [1.4, 1.4, 1.4]                                       # fleche de page survolee (PC) : eclaircie
+                        if getattr(fen, 'appui_nd', None) == nd['id']: col = [c * 0.75 for c in col]        # fleche de page APPUYEE : comme le mobile (IButton(Material), DisplayClass6_0.b__0 : Material.color = 0,75 sur les quatre canaux)
+                        else: col[:3] = [1.4, 1.4, 1.4]                                 # fleche de page survolee (PC, le mobile n'a pas de survol) : eclaircie
                     elif k == 0 and nd['buttonId'] is not None and (nd['buttonId'] >= 0 or fen.sel_nd == nd['id']) and 'part' in mat and mat['part'] == 7:
                         if fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
                         else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId'] and not ((nd['pad'] or 0) & 0xA0 and nd['buttonId'] in ok_num[id(fen)])) else nd['etat']       # un bouton d'annulation (manette 32 / 128, ex. « Rien ») qui partage son numero avec un bouton de validation (« Acheter ») ne s'allume pas avec lui
