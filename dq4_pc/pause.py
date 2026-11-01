@@ -232,7 +232,8 @@ class Pause:
                 self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])),
                 self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v)),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
-                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else '')]
+                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Sera appliqué au prochain lancement du jeu' if R['msaa'] != J.args.msaa else ''),
+                dict(t='act', l='Interface', ok=self._aller('interface'), sous=True)]          # (editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
 
     # ---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et toutes les fenetres du jeu (taille, position)
     def cibles(self):
@@ -296,22 +297,26 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Interface (bouton fixe en haut), deplacements (touches puis vitesse), course, camera (touches, vitesse, acceleration comme la course), touche speciale, actions du jeu, retablissement des touches."""
+        """Quatre sections (intertitres) : deplacement (touches, vitesse, course), camera (touches, vitesse, acceleration comme la course), actions du jeu, autres (touche speciale, infos, vitesse de transition) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, mini, maxi, f=None):
             return self._curs(lib, lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
-        return [dict(t='act', l='Interface', ok=self._aller('interface'), sous=True, fixe=True),
+        return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 vit('Vitesse de déplacement', 'vitesse_marche', 0.5, 2.0),
                 T('courir'), T('courir_bascule'),
                 vit('Multiplicateur de la course', 'vitesse_course', 1.0, 2.0),
+                dict(t='sep', l='Caméra'),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
                 vit('Vitesse de la caméra', 'vitesse_camera', 0.5, 2.0),
                 T('cam_accel'), T('cam_accel_bascule'),
                 vit("Multiplicateur d'accélération", 'accel_camera', 1.0, 2.0),
+                dict(t='sep', l='Actions du jeu'),
+                T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
+                dict(t='sep', l='Autres'),
+                modif, T('infos'),
                 vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
-                T('A'), T('menu'), T('B'), T('carte'), T('discussion'), modif, T('infos'),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)
@@ -793,6 +798,7 @@ class Pause:
         ecr = self.ecran; e = self._entrees(); n = len(e)
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
         i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
+        while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr != 'quitter': i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
         n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
@@ -834,7 +840,7 @@ class Pause:
         self._cadre(x0, y0, pw, h, k)
         e_t = self._et(titres.get(ecr, ''), fst, BLANC); e_t.x = x0 + (pw - e_t.content_width) / 2; e_t.y = y1 - (44 if editeur else 52) * k; e_t.draw()
         if editeur:                                                                 # plier / deplier le panneau : fleche dans la barre de titre (vers le haut = replier, vers le bas = deplier)
-            fx, fy = x0 + pw - 34 * k, y1 - 32 * k
+            fx, fy = e_t.x + e_t.content_width + 26 * k, y1 - 32 * k                  # (collee au titre : elle le suit quand le panneau change de largeur)
             sur = self.mode_souris and self.pos_souris and self._dans(self.zone_plier, *self.pos_souris)
             coul = OR[:3] if sur else (200, 200, 200)
             if self.plie: pyglet.shapes.Triangle(fx - 9 * k, fy + 5 * k, fx + 9 * k, fy + 5 * k, fx, fy - 6 * k, color=coul).draw()

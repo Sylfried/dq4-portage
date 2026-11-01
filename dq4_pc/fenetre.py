@@ -177,7 +177,7 @@ class Jeu(pyglet.window.Window):
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
         self.prepa_arret = threading.Event(); self.prepa_proc = None
-        self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_liste_vue = False; self.carte_ouverte = False; self.carte_deux_vues = False; self.carte_bascule = False; self.nb_degats = []; self._nb_tex = None
+        self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_ouverte = False; self.carte_deux_vues = False; self.carte_bascule = False; self.nb_degats = []; self._nb_tex = None
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
@@ -412,6 +412,7 @@ class Jeu(pyglet.window.Window):
                 self.champ_ico = (n, self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', pos), tex_coords=('f', tc), colors=('f', cc)))
             else:
                 v = self.champ_ico[1]; v.position[:] = pos; v.tex_coords[:] = tc; v.colors[:] = cc
+            self._dom_lie = None                                  # sommets ecrits apres le 1er trace de l'image : sans rebind + commit() ils partent avec l'image precedente (icones en retard d'une image, absentes une image quand leur nombre change)
             self._tracer(self.champ_tex_ico, self.champ_ico[1])
         self.prog['net'] = 0.0
 
@@ -967,54 +968,27 @@ class Jeu(pyglet.window.Window):
 
     H_ECH = 87                                                  # hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limiter_lignes)
 
-    def _fichier_echantillons(self):
-        return os.path.join(os.path.dirname(os.path.abspath(self.args.reglages)), 'echantillons_message.npz')
-
-    def _charger_echantillons(self):
-        if getattr(self, 'echantillons', None) is not None: return
-        self.echantillons = []; self.apercu_msg = None
-        try:
-            d = np.load(self._fichier_echantillons())
-            self.echantillons = [d[k] for k in sorted(d.files)][:12]
-        except Exception: pass
-        self._ech_hash = {hash(x.tobytes()) for x in self.echantillons}
-
-    def _noter_echantillon(self, a, y):
-        """Page de message de 2 ou 3 lignes affichee en entier (curseur de fin de page) : sa zone visible du canevas est gardee (12 au plus, aussi dans echantillons_message.npz) ; l'editeur d'interface en montre un au hasard."""
-        self._charger_echantillons()
-        blk = a[(np.arange(self.H_ECH) + y) % 512].copy()
-        if blk[35:57].max() < 60 or blk[:, 500:].max() > 0: return                    # moins de 2 lignes de texte
-        h = hash(blk.tobytes())
-        if h in self._ech_hash: return
-        self._ech_hash.add(h); self.echantillons.append(blk); del self.echantillons[:-12]
-        try: np.savez_compressed(self._fichier_echantillons(), **{'e%02d' % i: x for i, x in enumerate(self.echantillons)})
-        except Exception as ex: print('echantillons de message non enregistres :', ex, flush=True)
-
-    ESSAIS = (("Bienvenue, voyageur ! Ce village est", "tranquille, mais gare aux monstres", "qui rôdent à la nuit tombée."),          # textes de repli de l'apercu (tant qu'aucune page du jeu n'a ete vue), 3 lignes comme une boite de dialogue
-              ("As-tu croisé un homme à l'allure", "étrange près du puits ? Il a disparu", "ce matin et je suis très inquiet."),
-              ("Le roi attend de bonnes nouvelles.", "Allez, braves aventuriers, et", "revenez-nous sains et saufs !"),
-              ("Cette herbe soigne les petites", "blessures. Garde-la précieusement :", "elle pourrait te sauver la vie."),
-              ("Autrefois, ce village était réputé", "pour ses récoltes. Depuis l'arrivée", "des monstres, personne n'ose sortir."))
+    ESSAIS = (("Aperçu d'un message.",),                                                          # textes d'essai de l'editeur d'interface (1 a 3 lignes, comme une boite de dialogue) : un au hasard a chaque choix de « Dialogues »
+              ("Ceci est un texte de test.", "Il sert à régler la taille et", "la position des dialogues."),
+              ("Aperçu d'un message", "sur deux lignes."),
+              ("Voici un exemple de dialogue.", "Déplace et redimensionne cette", "fenêtre comme tu le souhaites."),
+              ("Texte d'essai : les messages du jeu", "s'afficheront ici, à cette taille."))
 
     def nouvel_echantillon(self):
-        """L'editeur choisit le message d'essai montre dans la fenetre de dialogue : au hasard parmi ceux deja vus, sinon l'un des textes de repli (ESSAIS)."""
-        self._charger_echantillons(); n = len(self.echantillons)
-        self.apercu_msg = random.randrange(n) if n else -1; self._ech_vu = None; self._essai = random.randrange(len(self.ESSAIS))
+        """L'editeur choisit le texte d'essai montre dans la fenetre de dialogue : au hasard parmi ESSAIS (autre que le precedent)."""
+        n = len(self.ESSAIS); p = getattr(self, '_essai', None)
+        self._essai = random.choice([k for k in range(n) if k != p]); self._ech_vu = None
 
     def _canevas_apercu(self):
-        """Canevas 512 x 512 de l'apercu des dialogues : l'echantillon choisi (ou un texte d'essai en police du jeu) range des la 1re rangee."""
-        self._charger_echantillons()
-        if getattr(self, 'apercu_msg', None) is None: self.nouvel_echantillon()
+        """Canevas 512 x 512 de l'apercu des dialogues : le texte d'essai choisi, en police du jeu, range des la 1re rangee."""
+        if getattr(self, '_essai', None) is None: self.nouvel_echantillon()
         cv = np.zeros((512, 512), np.uint8)
-        i = self.apercu_msg
-        if 0 <= i < len(self.echantillons): cv[:self.H_ECH] = self.echantillons[i]
-        else:
-            from PIL import Image, ImageDraw, ImageFont
-            im = Image.new('L', (512, self.H_ECH), 0); dr = ImageDraw.Draw(im)
-            try: f = ImageFont.truetype(os.path.join(self.args.cache, 'ui_font.otf'), 22)
-            except Exception: f = ImageFont.load_default()
-            for j, t in enumerate(self.ESSAIS[getattr(self, '_essai', 0) % len(self.ESSAIS)]): dr.text((4, 7 + 28 * j + 20), t, font=f, fill=255, anchor='ls')
-            cv[:self.H_ECH] = np.asarray(im)
+        from PIL import Image, ImageDraw, ImageFont
+        im = Image.new('L', (512, self.H_ECH), 0); dr = ImageDraw.Draw(im)
+        try: f = ImageFont.truetype(os.path.join(self.args.cache, 'ui_font.otf'), 22)
+        except Exception: f = ImageFont.load_default()
+        for j, t in enumerate(self.ESSAIS[self._essai % len(self.ESSAIS)]): dr.text((4, 7 + 28 * j + 20), t, font=f, fill=255, anchor='ls')
+        cv[:self.H_ECH] = np.asarray(im)
         return cv
 
     def _maj_message(self):
@@ -1035,7 +1009,6 @@ class Jeu(pyglet.window.Window):
                             g.append((int(s0), int(p0)))
                         print('CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s' % (self.moteur.images, g, self.moteur.ui.msg, self.moteur.params_message()), flush=True)
             m = self.moteur.ui.msg; typ = m['type']
-            if typ == 0 and m['feed'] and a is not None: self._noter_echantillon(a, int(m['y']))
             if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
             self.ui_msg.regler(typ, m['y'], m['feed'])
             return
@@ -1224,9 +1197,9 @@ class Jeu(pyglet.window.Window):
         return self._ui_repere()[0] + float(v[1]) * self.width, cy + float(v[2]) * H, s2
 
     def _canevas_apercu_maj(self, fe):
-        if getattr(self, 'apercu_msg', None) is None: self.nouvel_echantillon()
-        if getattr(self, '_ech_vu', None) != self.apercu_msg:
-            self._ech_vu = self.apercu_msg; self.ui_rendu.maj_canevas(self._canevas_apercu(), 'msg_apercu')
+        if getattr(self, '_essai', None) is None: self.nouvel_echantillon()
+        if getattr(self, '_ech_vu', None) != self._essai:
+            self._ech_vu = self._essai; self.ui_rendu.maj_canevas(self._canevas_apercu(), 'msg_apercu')
             fe.regler(0, 0, False)
 
     def apercu_interface(self, cle):
@@ -1304,7 +1277,7 @@ class Jeu(pyglet.window.Window):
         t = None
         if self._menu_tex is not False:
             r, c = divmod(ident, 32); h = self._menu_tex.shape[0]
-            if (r + 1) * 32 <= h: t = self._tex(self._menu_tex[r * 32:(r + 1) * 32, c * 32:(c + 1) * 32], False)
+            if (r + 1) * 32 <= h: t = self._tex(HD._dilater(self._menu_tex[r * 32:(r + 1) * 32, c * 32:(c + 1) * 32], 3), False)          # (couleur du bord sous les pixels transparents : pas de liseré clair au filtrage)
         self.icone_tex[ident] = t
         return t
 
@@ -1473,36 +1446,28 @@ class Jeu(pyglet.window.Window):
         nom = f['cases'].get((0, 0))
         if nom and fe.nom_carte != nom:
             fe.nom_carte = nom
-        if fe.nom_carte and (fe.carte is None or getattr(fe, '_nom_tex', None) != fe.nom_carte):
-            t = self.plans.get(fe.nom_carte)
-            if t is None:
-                try: a = self.donnees.texture(fe.nom_carte)
-                except Exception as ex: a = None; print('Plan %s illisible : %r' % (fe.nom_carte, ex), flush=True)
-                if a is not None:
-                    t = pyglet.image.ImageData(a.shape[1], a.shape[0], 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=a.shape[1] * 4).get_texture()
-                    gl.glBindTexture(t.target, t.id)
-                    gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
-                    gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
-                self.plans[fe.nom_carte] = t
-            fe.carte = t; fe._nom_tex = fe.nom_carte
         li = f.get('listes') or {}                                 # lieux decouverts (code 3 : x + 256 y, un par nombre) et voile des blocs non explores (code 5) envoyes par le moteur
         fe.symboles = [(v & 0xff, v >> 8 & 0xff) for v in li.get(3, ())]
         if fe.symboles and getattr(fe, 't_blink', None) is None: fe.t_blink = time.monotonic()
-        cle = tuple(li[5]) if li.get(5) else None
-        if cle != getattr(fe, '_cle_voile', None):
-            fe._cle_voile = cle
-            if getattr(fe, 'voile', None) is not None: fe.voile.delete(); fe.voile = None
-            src = self.donnees.voile_monde() if cle else None
-            if src is not None:                                    # chaque bit leve = un bloc de 10 x 10 pixels non explore (16 x 16 blocs a partir de x = 56, y = 16) : la silhouette des terres le recouvre
-                a = np.zeros_like(src)
-                for r, m in enumerate(cle[:16]):
-                    for c in range(16):
-                        if m >> c & 1: y0, x0 = 16 + 10 * r, 56 + 10 * c; a[y0:y0 + 10, x0:x0 + 10] = src[y0:y0 + 10, x0:x0 + 10]
-                t = pyglet.image.ImageData(256, 192, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=1024).get_texture()
+        cle = tuple(li[5][:16]) if li.get(5) else None
+        if fe.nom_carte and (fe.carte is None or getattr(fe, '_cle_tex', None) != (fe.nom_carte, cle)):
+            fe._cle_tex = (fe.nom_carte, cle)
+            hd_a = self.plans.get(fe.nom_carte)                    # plan agrandi (1024 x 768) : Lanczos, avec arrondi des contours (EPX) pour le plan du monde dont les terres sont en pixel art
+            if hd_a is None:
+                try:
+                    a = self.donnees.texture(fe.nom_carte)
+                    if a is not None: hd_a = self.plans[fe.nom_carte] = HD.agrandir_plan(a, epx=fe.nom_carte.startswith('dsdq4w'))
+                except Exception as ex: print('Plan %s illisible : %r' % (fe.nom_carte, ex), flush=True)
+            if hd_a is not None:
+                if cle:                                            # carte du monde : voile (silhouette grisee) sur les blocs de 10 x 10 pixels non explores (16 x 16 blocs a partir de x = 48, y = 16 du plan de 256 x 192)
+                    src = self.donnees.voile_monde()
+                    if src is not None: hd_a = HD.voiler_plan(hd_a, src, cle)
+                t = pyglet.image.ImageData(hd_a.shape[1], hd_a.shape[0], 'RGBA', np.ascontiguousarray(hd_a[::-1]).tobytes(), pitch=hd_a.shape[1] * 4).get_texture()
                 gl.glBindTexture(t.target, t.id)
-                gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+                gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
                 gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
-                fe.voile = t
+                if fe.carte is not None: fe.carte.delete()
+                fe.carte = t; fe.carte_mode = 0
         nd = next((o for o in fe.N.values() if o['mats'] and o['mats'][0].get('part') == 3), None)      # marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
         mx, my = f['indic'].get(1), f['indic'].get(2)
         if nd is not None and mx is not None and my is not None:
@@ -1526,7 +1491,7 @@ class Jeu(pyglet.window.Window):
             gl.glBindTexture(t.target, t.id)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT); gl.glTexParameteri(t.target, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)
-            fe.carte = t; fe._flag_plan = flag
+            fe.carte = t; fe._flag_plan = flag; fe.carte_mode = 3
         if x is not None and y is not None:
             fe.carte_uv = ((x - 128) / 1024.0, 1.0 - (y + 96) / 1024.0, (x + 128) / 1024.0, 1.0 - (y - 96) / 1024.0)
 
@@ -1893,26 +1858,19 @@ class Jeu(pyglet.window.Window):
         if self.menu_relacher is not None:                 # fin de l'appui OK / Annuler envoye au menu
             mo.envoyer_menu(self.menu_relacher, 1, -1, 0); self.menu_relacher = None
         carte = self._carte_ports() if not mo.msg_visible else {}
-        if bool(carte) != self.carte_ouverte: self.carte_ouverte = bool(carte); self.carte_vue = 1; self.carte_liste_vue = False           # carte ouverte : premiere version
+        if bool(carte) != self.carte_ouverte: self.carte_ouverte = bool(carte); self.carte_vue = 1           # carte ouverte : premiere version
         liste = bool(carte) and 24 in carte and 25 in carte and mo.ui.f.get(carte[24], {}).get('cases') and mo.boutiques()[1] > 0          # ville avec des boutiques : la carte a une 2e vue, la liste des boutiques (type 24)
-        if liste and not self.carte_liste_vue:                      # a l'ouverture de la carte d'une ville : la liste des boutiques d'abord (comme sur le mobile), le plan avec le bouton « mode de la carte »
-            f25 = mo.ui.f.get(carte[25], {})
-            if f25.get('vis') and f25.get('entree') and not self.menu_relacher:
-                mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_liste_vue = True
         self.carte_deux_vues = (25 in carte and 26 in carte) or bool(liste)
         if carte:
-            # Touche Carte : 1re fois la premiere version, 2e fois l'autre version (haut de la manette sur la fenetre du plan : FieldImageMap::execute), 3e fois ferme (bouton retour : 0x400, comme MenuPortItem.Update d'Unity) ;
-            # Annuler ou le bouton retour ferment aussi. Le curseur et les fleches ne servent pas ici.
+            # Touche Carte : 1re fois la premiere version (en ville : le plan), 2e fois l'autre version (en ville : la liste des boutiques ; haut de la manette sur la fenetre du plan : FieldImageMap::execute), 3e fois ferme (bouton retour : 0x400, comme MenuPortItem.Update d'Unity) ;
+            # Annuler ou le bouton retour ferment aussi. Le curseur et les fleches ne servent pas ici (sauf les fleches de la liste des boutiques : boutique precedente / suivante).
             bascule, self.carte_bascule = self.carte_bascule, False
-            if liste:                                              # ville : M = boutique suivante (la derniere : ferme), le bouton « mode de la carte » alterne plan / liste
+            if liste:                                              # ville : M = plan, puis liste des boutiques, puis ferme ; le bouton « mode de la carte » alterne plan / liste
                 en_liste = bool(mo.ui.f.get(carte[24], {}).get('vis'))
                 if bascule: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
                 elif fr['carte'] and not en_liste: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
-                elif fr['carte']:
-                    i, n = mo.boutiques()
-                    if i + 1 < n: mo.envoyer_menu(carte[24], 1, -1, 4); self.menu_relacher = carte[24]; self.son.jouer_se(SE_BOUTON)
-                    else: self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
-                elif decl & MO.B: self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+                elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+                elif en_liste and decl & (MO.GAUCHE | MO.DROITE): mo.envoyer_menu(carte[24], 1, -1, 4 if decl & MO.DROITE else 8); self.menu_relacher = carte[24]; self.son.jouer_se(SE_BOUTON)         # fleches de la liste : boutique suivante / precedente
             elif (fr['carte'] and self.carte_vue == 1 or bascule) and self.carte_deux_vues:           # (le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
                 mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
             elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
@@ -2009,7 +1967,10 @@ class Jeu(pyglet.window.Window):
         if (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
             # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite)
             gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
-            gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu(); self._maj_message(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_aide(); return
+            gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu()
+            if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
+                self._maj_message(); self._dessiner_message(); self._dessiner_menus()
+            self._dessiner_aide(); return
         if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)

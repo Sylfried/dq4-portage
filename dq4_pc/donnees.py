@@ -286,7 +286,7 @@ class Donnees:
 
     # ---- voile de la carte du monde (fenetre « Carte », ICityMap : code 5)
     def voile_monde(self):
-        """Image 192 x 256 x 4 (RGBA) du TextAsset `dsdq4wmap01m` : silhouette grisee des terres que la fenetre de carte pose sur les blocs de 10 x 10 pixels (a partir de x = 56, y = 16) non encore explores. Mise en cache."""
+        """Image 192 x 256 x 4 (RGBA) du TextAsset `dsdq4wmap01m` : silhouette grisee des terres que la fenetre de carte pose sur les blocs de 10 x 10 pixels (a partir de x = 48, y = 16) non encore explores. Mise en cache."""
         f = os.path.join(self.cache, 'voile_monde.npy')
         if os.path.exists(f): return np.load(f)
         with self._verrou:
