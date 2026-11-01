@@ -400,6 +400,12 @@ class Moteur:
         if ad is None: return 0, 0, False
         lg, ld = struct.unpack('<ii', c.mem(ad + 0x34, 8)); return lg, ld, bool(c.mem(ad + 0x3e, 1)[0])
 
+    def camera_jeu(self):
+        """Etat de la TownCamera du moteur (objet statique), pour savoir si le jeu pilote la camera : (verrou +0x3e, mode de cible +0x48, verrou de point de vue +0x40, deplacement en cours +0x43)."""
+        c = self.core; ad = c.export('_ZN10TownCamera11m_singletonE')
+        if ad is None: return 0, 0, 0, 0
+        b = c.mem(ad + 0x3e, 6); return b[0], struct.unpack('<i', c.mem(ad + 0x48, 4))[0], b[2], b[5]
+
     def taille_croix(self):
         """Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite."""
         v = self.core.mem(self.core.LIB_BASE + 0x24a779, 1)[0]
