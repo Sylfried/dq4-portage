@@ -304,26 +304,26 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Quatre sections (intertitres) : deplacement (touches, vitesse, course), camera (touches, vitesse, acceleration comme la course), actions du jeu, autres (touche speciale, infos, vitesse de transition) ; puis le retablissement des touches."""
+        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition, touche et vitesse de l'accelerateur), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, mini, maxi, f=None):
             return self._curs(lib, lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
+        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
+        vit_acc = vit("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
-                vit('Vitesse de déplacement', 'vitesse_marche', 0.5, 2.0),
-                T('courir'), T('courir_bascule'),
-                vit('Multiplicateur de la course', 'vitesse_course', 1.0, 2.0),
                 dict(t='sep', l='Caméra'),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
-                vit('Vitesse de la caméra', 'vitesse_camera', 0.5, 2.0),
-                T('cam_accel'), T('cam_accel_bascule'),
-                vit("Multiplicateur d'accélération", 'accel_camera', 1.0, 2.0),
+                dict(t='sep', l='Vitesses'),
+                vit('Vitesse de marche', 'vitesse_marche', 0.5, 2.0),
+                vit('Vitesse de caméra', 'vitesse_camera', 0.5, 2.0),
+                vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
+                accel, vit_acc,
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
                 dict(t='sep', l='Autres'),
                 modif, T('infos'),
-                vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)
@@ -975,7 +975,7 @@ class Pause:
         """Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas."""
         t = en['t']
         if t == 'touche': return en.get('aide') or self.AIDE_TOUCHE
-        if t == 'curs': return 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
+        if t == 'curs': return (en['aide'] + '   ' if en.get('aide') else '') + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
         if t == 'choix':
             return 'Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante'
         if t == 'slot': return self.AIDE_ETATS[self.action_etat]
