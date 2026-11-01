@@ -2,7 +2,7 @@
 
 Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
-Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, la ligne est encadree de jaune.
+Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, rien n'est encadre : comme au toucher sur mobile, la plaque (ou le bouton) sous le pointeur s'assombrit et se rallume quand il sort.
 Les reglages sont enregistres dans reglages.json. Fenetres noires, curseur dore et bouton retour : ceux des menus du jeu (feuilles MenuTexture et Button)."""
 import math, os, time
 import numpy as np
@@ -64,7 +64,7 @@ class Pause:
         self.J = jeu; self.ouvert = False; self.pile = []; self.sel = {}; self.capture = None; self.message = None
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_col = 0.0; self.minis = {}; self.rep = None; self.veut_miniature = False; self.mini_tex = None; self.confirme = None
         self.cadre_panneau = None                          # (x0, y0, x1, y1) du cadre dessine a la derniere image (placement des boutons : un clic hors du cadre saisit un bouton)
-        self.zones_def = {}                                # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs
+        self.zones_def = {}; self.zones_mute = {}          # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs ; du bouton « muet » des lignes de la page Son
         self.glisse = None; self.saisie = None            # curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
         self.deroule = None; self.zones_pop = []          # liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
         self.pos_sw = {}; self.t_sw = time.time(); self.dt_sw = 0.0         # interrupteurs : position du bouton (0 = Non, 1 = Oui) par libelle, pour l'animation
@@ -74,7 +74,7 @@ class Pause:
         self.debut = {}; self.vu_sel = {}; self.barre = None; self.glisse_barre = None      # defilement : premiere ligne visible par ecran, derniere selection vue (la vue la suit quand elle change), barre dessinee, prise du curseur de la barre
         self.zone_ret = None; self.sur_ret = False; self.zones_eff = {}                      # bouton retour (x0, y0, x1, y1), pointeur dessus ; (ligne, colonne) -> croix « effacer la touche »
         self._pil = {}; self._img = {}                    # feuilles du jeu (PIL) et textures des sprites du menu
-        self.mode_souris = False; self.pos_souris = None   # selection a la souris (encadrement jaune) ou au clavier (curseur dore) ; derniere position du pointeur
+        self.mode_souris = False; self.pos_souris = None   # selection a la souris (la plaque sous le pointeur s'assombrit, comme au toucher sur mobile) ou au clavier (curseur dore) ; derniere position du pointeur
         self.popup = None; self.zones_popup = []                                          # fenetre modale Oui / Non : {'titre', 'detail', 'oui', 'sel' (0 Oui, 1 Non)} ; zones de ses boutons
         self.plie = False; self.zone_plier = None; self.tt = None                          # editeur d'interface : panneau replie ; barre de titre (plier / deplier) ; ligne survolee depuis (cle, instant) pour l'infobulle
         self.action_etat = 'creer'; self.etat_suppr = None                                  # menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
@@ -129,6 +129,14 @@ class Pause:
     def _melange():
         """Les formes de pyglet coupent le melange alpha a la fin de leur dessin : on le remet avant une texture."""
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+
+    def _pointeur_dans(self, z):
+        """Le pointeur de la souris est-il dans la zone z (x0, y0, x1, y1) ? Seulement en mode souris : au clavier, rien n'est survole."""
+        return bool(self.mode_souris and self.pos_souris is not None and z is not None and self._dans(z, *self.pos_souris))
+
+    def _sur(self, z):
+        """Zone survolee et active : comme _pointeur_dans, sauf sous une fenetre modale (fenetre Oui / Non, liste deroulante ouverte, attente d'une touche) qui garde le survol pour elle."""
+        return self.popup is None and self.deroule is None and self.capture is None and self._pointeur_dans(z)
 
     def _curseur(self, x, yc, haut):
         """Curseur dore des menus du jeu (pointe vers la droite), de `haut` pixels de haut, a gauche en x, centre verticalement en yc ; il reste fixe."""
@@ -197,7 +205,7 @@ class Pause:
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
-                dict(t='act', l='Texte et défilement', ok=self._aller('texte'), sous=True),
+                dict(t='act', l='Vitesse de défilement du texte', ok=self._aller('texte'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
@@ -252,8 +260,10 @@ class Pause:
         'Suréchantillonnage': {1.0: 'Aucun', 1.5: 'x1,5', 2.0: 'x2'},
         'Action': {'creer': 'Créer un état', 'charger': 'Charger un état', 'supprimer': 'Supprimer un état'},
     }
-    noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal (jeu)', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
-    noms['Vitesse de défilement'] = {0: '1 (rapide)', 1: '2', 2: '3', 3: '4 (lent)'}
+    noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
+    noms['Messages en combat'] = {0: 'Rapide', 2: 'Moyen', 3: 'Lent', 4: 'Manuel'}                       # OptionStatus.battleSpeed (voir RG.CRANS_DEFILEMENT)
+    for lib in ('Vitesse de marche', 'Vitesse de caméra', 'Vitesse de transition'): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
+    del lib
 
     def _e_affichage(self):
         J, R = self.J, self.J.reg
@@ -353,42 +363,40 @@ class Pause:
             if cat and not isinstance(v, bool): self.J.apercu_son(cat)
         return poser
 
+    def _ligne_son(self, lib, cle_vol, cat, actif, aide):
+        """Ligne de la page Son : le nom du son, sa barre de volume (et sa valeur), le bouton muet (`actif` = (lire, ecrire) l'interrupteur du son), le bouton « par defaut » (volume d'origine et son remis).
+        Clavier : haut / bas change de ligne, gauche / droite regle le volume, Entree coupe ou remet le son, Suppr ou Debut remet la ligne par defaut."""
+        R = self.J.reg; lire, ecrire = actif; poser = self._poser_son(cle_vol, cat); defaut = RG.DEFAUT[cle_vol]
+        d = self._curs(lib, lambda: R[cle_vol], poser, 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0)
+        def bascule():
+            ecrire(not lire()); self.J.appliquer_mixage()
+            if lire(): self.J.apercu_son(cat)                                                 # (le son revient : on l'entend)
+        def remettre():
+            ecrire(True); poser(defaut)                                                       # volume d'origine ET son remis
+        d.update(actif=lire, ok=bascule, defaut=remettre, est_defaut=lambda: abs(R[cle_vol] - defaut) < 0.005 and lire(), aide=aide)
+        return d
+
     def _e_son(self):
-        """Interrupteur general, volume general, puis une section par categorie de sons (son.CATEGORIES) : un interrupteur et un volume chacune."""
+        """Une ligne par son (son.CATEGORIES, plus le son en general) : nom | barre de volume | bouton muet | bouton « par defaut » ; plus de sections."""
         J, R = self.J, self.J.reg
-        def sw(lib, cle, aide):
-            d = self._choix(lib, [True, False], lambda: R[cle], self._poser_son(cle)); d['aide'] = aide; return d
-        def vol(lib, cle, cat, aide):
-            d = self._curs(lib, lambda: R[cle], self._poser_son(cle, cat), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
-        general = self._choix('Son', [True, False], lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v)))
-        general['aide'] = 'Coupe ou remet tout le son du jeu   Le son reprend ici pour que tu entendes tes réglages ; le jeu, lui, reste en pause'
-        return [dict(t='sep', l='Général'), general,
-                vol('Volume général', 'volume_general', 'general', 'Multiplie tous les autres volumes   Se combine avec le volume réglé dans la fenêtre Paramètres du jeu'),
-                dict(t='sep', l='Musique'),
-                sw('Musique', 'musique_active', 'Musique de fond des cartes, villes et combats   Coupée, elle continue en silence et reprend là où elle en est'),
-                vol('Volume de la musique', 'volume_musique', 'musique', 'La musique en cours change tout de suite'),
-                dict(t='sep', l='Jingles et fanfares'),
-                sw('Jingles et fanfares', 'jingles_actifs', 'Morceaux courts joués une seule fois (le reste de la musique est réglé au-dessus)'),
-                vol('Volume des jingles', 'volume_jingles', 'jingles', 'Se fait entendre à la prochaine fanfare'),
-                dict(t='sep', l='Bruitages'),
-                sw('Bruitages', 'bruitages_actifs', 'Effets sonores du jeu : combats, sorts, objets, pas...   Sans les sons de l\'interface (réglés plus bas)'),
-                vol('Volume des bruitages', 'volume_bruitages', 'effets', 'Un bruitage d\'essai est joué quand tu changes la valeur'),
-                dict(t='sep', l='Interface'),
-                sw('Sons de l\'interface', 'interface_active', 'Bip des pages de message, validation des menus et des boutons'),
-                vol('Volume de l\'interface', 'volume_interface', 'interface', 'Un son de bouton est joué quand tu changes la valeur')]
+        def cle(c): return (lambda: R[c]), self._poser_son(c)
+        gen = (lambda: J.son.actif, lambda v: (J.regler_son(v), R.__setitem__('son', v)))
+        return [self._ligne_son('Général', 'volume_general', 'general', gen, 'Tout le son du jeu : multiplie les autres volumes (et se combine avec le volume réglé dans la fenêtre Paramètres du jeu)   Le son reprend ici pour que tu entendes tes réglages ; le jeu, lui, reste en pause'),
+                self._ligne_son('Musique', 'volume_musique', 'musique', cle('musique_active'), 'Musique de fond des cartes, villes et combats   Coupée, elle continue en silence et reprend là où elle en est   Le volume change la musique en cours tout de suite'),
+                self._ligne_son('Jingles et fanfares', 'volume_jingles', 'jingles', cle('jingles_actifs'), 'Morceaux courts joués une seule fois (le reste de la musique est réglé au-dessus)   Le volume se fait entendre à la prochaine fanfare'),
+                self._ligne_son('Bruitages', 'volume_bruitages', 'effets', cle('bruitages_actifs'), "Effets sonores du jeu : combats, sorts, objets, pas...   Sans les sons de l'interface (ligne du dessous)   Un bruitage d'essai est joué quand tu changes le volume"),
+                self._ligne_son('Interface', 'volume_interface', 'interface', cle('interface_active'), "Bip des pages de message, validation des menus et des boutons   Un son de bouton est joué quand tu changes le volume")]
 
     def _e_texte(self):
-        """Dialogues : vitesse d'affichage du texte. Combats : defilement automatique des messages (interrupteur) et sa vitesse. Le defilement ne concerne que les combats : dans les dialogues normaux, on passe toujours chaque page a la main."""
+        """Vitesse d'ecriture des dialogues, puis defilement des messages de combat (Rapide, Moyen, Lent, Manuel). Le defilement ne concerne que les combats : dans les dialogues normaux, on passe toujours chaque page a la main."""
         J, R = self.J, self.J.reg
         vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()))
-        vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal (jeu) » : comme dans le jeu d\'origine'
-        auto = self._choix('Défilement automatique', [True, False], lambda: J.defilement_actuel()[0], lambda v: J.regler_defilement(auto=v))
-        auto['aide'] = 'Combats seulement : les messages défilent seuls   Désactivé : on passe chaque message à la main (c\'est le 5e cran de « Vitesse texte » dans Divers > Paramètres du jeu)   Les dialogues hors combat ne défilent jamais seuls'
-        vit = self._choix('Vitesse de défilement', [0, 1, 2, 3], lambda: J.defilement_actuel()[1], lambda v: J.regler_defilement(vitesse=v), off=not J.defilement_actuel()[0])
-        vit['aide'] = 'Combats seulement : crans 1 à 4 de « Vitesse texte » dans Divers > Paramètres du jeu (attente de 0,4 / 0,7 / 1,1 / 1,4 s avant le message suivant)   Sans effet quand le défilement automatique est désactivé'
+        vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal » : comme dans le jeu d\'origine'
+        cb = self._choix('Messages en combat', list(RG.CRANS_DEFILEMENT), J.defilement_actuel, J.regler_defilement)
+        cb['aide'] = 'Combats seulement : attente avant le message suivant (rapide : 0,4 s, moyen : 1,1 s, lent : 1,4 s)   Manuel : on passe chaque message avec Entrée, Espace ou un clic   Moyen est la valeur d\'origine du jeu   Les dialogues hors combat ne défilent jamais seuls'
         retab = dict(t='act', l='Rétablir le réglage du jeu', ok=J.retablir_defilement)
         retab['aide'] = 'Combats : reprend la vitesse des messages enregistrée dans la sauvegarde (fenêtre Paramètres du jeu)'
-        return [dict(t='sep', l='Dialogues'), vt, dict(t='sep', l='Combats'), auto, vit, retab]
+        return [vt, cb, retab]
 
     def _touche(self, act):
         """Ligne d'une action au clavier : deux cases (touche principale, secondaire) ; Suppr efface la case choisie, le bouton rond (ou Debut) remet les touches d'origine."""
@@ -399,21 +407,23 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition, touche et vitesse de l'accelerateur), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et vitesse de l'accelerateur : curseur), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
-        def vit(lib, cle, mini, maxi, f=None):
-            return self._curs(lib, lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
+        def vit(lib, cle, aide, f=None):
+            d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None)); d['aide'] = aide; return d
+        def vit_acc_curs(lib, cle, mini, maxi):
+            return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
-        vit_acc = vit("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
+        vit_acc = vit_acc_curs("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
                 T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
                 dict(t='sep', l='Vitesses'),
-                vit('Vitesse de marche', 'vitesse_marche', 0.5, 2.0),
-                vit('Vitesse de caméra', 'vitesse_camera', 0.5, 2.0),
-                vit('Vitesse de transition', 'vitesse_fondu', 0.5, 2.0, self.J.regler_fondu),
+                vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les combats, les menus et les messages gardent leur vitesse)'),
+                vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
+                vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
                 accel, vit_acc,
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
@@ -631,7 +641,7 @@ class Pause:
         en = self._courante()
         if not en or en.get('off'): return
         if en['t'] == 'touche': self.capture = (en['act'], self.sel.get('col', 0)); return
-        if en['t'] == 'curs': self.saisie = [self.sel.get(self.ecran, 0), '']
+        if en['t'] == 'curs' and 'ok' not in en: self.saisie = [self.sel.get(self.ecran, 0), '']          # (une ligne de la page Son a son 'ok' : Entree coupe / remet le son ; la valeur se tape en cliquant dessus)
         elif en['t'] == 'choix' and en.get('liste'): self._ouvrir_liste()
         elif 'ok' in en: en['ok']()
 
@@ -732,8 +742,9 @@ class Pause:
         if i is None: return
         self.sel[self.ecran] = i; en = self._entrees()[i]
         bar = self.barres.get(i)
-        zv = self.zones_val.get(i); zd = self.zones_def.get(i)
-        if en['t'] in ('curs', 'touche') and zd and zd[0] <= x <= zd[2] and zd[1] <= y <= zd[3]:       # bouton rond « valeur par defaut » (curseurs, touches d'origine)
+        zv = self.zones_val.get(i); zd = self.zones_def.get(i); zm = self.zones_mute.get(i)
+        if en['t'] == 'curs' and zm and self._dans(zm, x, y): en['ok']()                           # bouton muet de la page Son : coupe ou remet le son
+        elif en['t'] in ('curs', 'touche') and zd and zd[0] <= x <= zd[2] and zd[1] <= y <= zd[3]:       # bouton rond « valeur par defaut » (curseurs, touches d'origine)
             if 'defaut' in en: en['defaut']()
         elif en['t'] == 'curs' and bar and bar[0] - 6 <= x <= bar[1] + 6:       # curseur : le clic maintenu le fait glisser (glisser)
             self.glisse = i; en['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
@@ -743,6 +754,7 @@ class Pause:
                 ze = self.zones_eff.get((i, c))
                 if ze and self._dans(ze, x, y): self.sel['col'] = c; self.J.reg.delier(en['act'], c); self.J.reg.enregistrer(); return          # croix : efface la touche de la case
             col = 1 if x > self.zones_col else 0; self.sel['col'] = col; self._valider()
+        elif en['t'] == 'curs' and 'ok' in en: pass                                                  # ligne de la page Son : un clic a cote des boutons ne coupe pas le son
         else: self._valider()
 
     @staticmethod
@@ -832,23 +844,43 @@ class Pause:
         HM.cadre(x, y, w, h, k, fond=NOIR, opacite=HM.OPACITE_JEU)
 
     def _plaque(self, x, y, w, h, k, choisi=False, contour=None):
-        """Fond d'un bouton : la plaque des fenetres du jeu (feuille Button, comme « Soigner tous »), enfoncee quand elle est choisie ; encadrement colore a la souris. Sans les menus d'origine : plaque dessinee (hud_mobile)."""
+        """Fond d'un bouton : la plaque des fenetres du jeu (feuille Button, comme « Soigner tous »), enfoncee (assombrie) quand elle est choisie ou survolee. `contour` (encadrement colore) : plus utilise par la page Pause,
+        garde pour les ecrans d'avant-partie (sauvegardes, nom, licence). Sans les menus d'origine : plaque dessinee (hud_mobile)."""
         r = getattr(self.J, 'ui_rendu', None)
         if r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), choisi):
             if contour is not None: HM.contour(x, y, w, h, k, contour)
         else: HM.plaque(x, y, w, h, k, choisi, contour)
 
     def _bouton_defaut(self, idx, x, y, c, est_defaut, sel, k):
-        """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon."""
-        self.zones_def[idx] = (x - 3 * k, y - 3 * k, x + c + 3 * k, y + c + 3 * k)
-        coul = (90, 90, 90) if est_defaut else CLAIR
-        r = pyglet.shapes.BorderedRectangle(x, y, c, c, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=coul[:3]); r.opacity = 30 if est_defaut else 70; r.draw()
+        """Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon ; s'assombrit (75 %, comme un bouton-icone du jeu appuye) sous le pointeur."""
+        self.zones_def[idx] = z = (x - 3 * k, y - 3 * k, x + c + 3 * k, y + c + 3 * k)
+        f = 0.75 if self._sur(z) else 1.0
+        coul = tuple(int(a * f) for a in ((90, 90, 90) if est_defaut else CLAIR))
+        r = pyglet.shapes.BorderedRectangle(x, y, c, c, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=coul[:3]); r.opacity = int((30 if est_defaut else 70) * f); r.draw()
         cx, cy, ra = x + c / 2, y + c / 2, c * 0.28; t0, t1 = math.radians(55), math.radians(55 + 270)
         pts = [(cx + ra * math.cos(t0 + (t1 - t0) * i / 14), cy + ra * math.sin(t0 + (t1 - t0) * i / 14)) for i in range(15)]
         for a, b in zip(pts, pts[1:]): pyglet.shapes.Line(a[0], a[1], b[0], b[1], thickness=max(1.5, 2 * k), color=coul[:3]).draw()
         ex, ey = pts[0]; tg = t0 - math.pi / 2                                       # pointe de fleche au debut de l'arc
         h = c * 0.2
         pyglet.shapes.Triangle(ex + h * math.cos(tg), ey + h * math.sin(tg), ex + h * math.cos(tg + 2.4), ey + h * math.sin(tg + 2.4), ex + h * math.cos(tg - 2.4), ey + h * math.sin(tg - 2.4), color=coul[:3]).draw()
+
+    def _bouton_muet(self, idx, x, y, c, coupe, k):
+        """Bouton carre « muet » de la page Son : haut-parleur et ondes quand le son joue, haut-parleur grise barre d'une croix rouge quand il est coupe ; s'assombrit (75 %) sous le pointeur."""
+        self.zones_mute[idx] = z = (x - 3 * k, y - 3 * k, x + c + 3 * k, y + c + 3 * k)
+        f = 0.75 if self._sur(z) else 1.0
+        coul = tuple(int(a * f) for a in (GRIS[:3] if coupe else CLAIR))
+        r = pyglet.shapes.BorderedRectangle(x, y, c, c, border=max(1, int(2 * k)), color=(255, 255, 255), border_color=tuple(int(a * f) for a in CLAIR)); r.opacity = int(70 * f); r.draw()
+        cy = y + c / 2; ep = max(1.5, 2 * k)
+        x0 = x + c * 0.14; x1 = x + c * 0.32; x2 = x + c * 0.54                    # caisse du haut-parleur (x0 a x1), puis le cone qui s'evase (x1 a x2)
+        pyglet.shapes.Rectangle(x0, cy - c * 0.13, x1 - x0, c * 0.26, color=coul).draw()
+        pyglet.shapes.Triangle(x1, cy + c * 0.13, x1, cy - c * 0.13, x2, cy - c * 0.32, color=coul).draw(); pyglet.shapes.Triangle(x1, cy + c * 0.13, x2, cy + c * 0.32, x2, cy - c * 0.32, color=coul).draw()
+        if coupe:                                                                    # croix rouge a la place des ondes
+            rc = tuple(int(a * f) for a in ROUGE[:3]); xc = x + c * 0.76; d = c * 0.14
+            pyglet.shapes.Line(xc - d, cy - d, xc + d, cy + d, thickness=ep * 1.3, color=rc).draw(); pyglet.shapes.Line(xc - d, cy + d, xc + d, cy - d, thickness=ep * 1.3, color=rc).draw()
+        else:
+            for ra in (c * 0.17, c * 0.31):                                          # deux ondes (arcs de cercle) a droite du cone
+                pts = [(x2 - c * 0.04 + ra * math.cos(math.radians(a)), cy + ra * math.sin(math.radians(a))) for a in range(-50, 51, 10)]
+                for p0, p1 in zip(pts, pts[1:]): pyglet.shapes.Line(p0[0], p0[1], p1[0], p1[1], thickness=ep, color=coul).draw()
 
     @staticmethod
     def _pilule(x, yc, w, h, couleur):
@@ -886,17 +918,19 @@ class Pause:
         w = LARG_BARRE * k; x0 = x1 - w; fl = 14 * k; th0, th1 = ptop - fl - 2 * k, pbot + fl + 2 * k          # piste entre les deux fleches
         piste = pyglet.shapes.Rectangle(x0, th1, w, th0 - th1, color=(34, 36, 42)); piste.draw()
         th = max(26 * k, (th0 - th1) * vis / float(n)); f = deb / float(max(1, n - vis)); hau = th0 - f * (th0 - th1 - th)
-        self._plaque(x0, hau - th, w, th, k * 0.8, actif)
+        self._plaque(x0, hau - th, w, th, k * 0.8, actif or self._sur((x0, hau - th, x1, hau)))                       # curseur de la barre : assombri quand on le tient ou qu'on le survole
         coul = CLAIR if n > vis else GRIS[:3]
-        pyglet.shapes.Triangle(x0 + 1.5 * k, ptop - fl + 3 * k, x1 - 1.5 * k, ptop - fl + 3 * k, (x0 + x1) / 2, ptop - 2 * k, color=coul).draw()
-        pyglet.shapes.Triangle(x0 + 1.5 * k, pbot + fl - 3 * k, x1 - 1.5 * k, pbot + fl - 3 * k, (x0 + x1) / 2, pbot + 2 * k, color=coul).draw()
+        for yb, yt, tri in ((ptop - fl, ptop, (x0 + 1.5 * k, ptop - fl + 3 * k, x1 - 1.5 * k, ptop - fl + 3 * k, (x0 + x1) / 2, ptop - 2 * k)), (pbot, pbot + fl, (x0 + 1.5 * k, pbot + fl - 3 * k, x1 - 1.5 * k, pbot + fl - 3 * k, (x0 + x1) / 2, pbot + 2 * k))):
+            pyglet.shapes.Triangle(*tri, color=tuple(int(a * 0.75) for a in coul) if n > vis and self._sur((x0, yb, x1, yt)) else coul).draw()             # fleches : 75 % sous le pointeur
         return dict(x0=x0 - 3 * k, x1=x1 + 3 * k, y0=pbot, y1=ptop, ptop=th0, pbot=th1, th=th, pouce=(hau - th, hau), n=n, vis=vis, base=base)
 
-    def _croix(self, x, y, c):
-        """Croix rouge du jeu (effacer une touche), de c pixels, coin bas gauche en (x, y)."""
+    def _croix(self, x, y, c, sombre=False):
+        """Croix rouge du jeu (effacer une touche), de c pixels, coin bas gauche en (x, y) ; sombre : a 75 % (sous le pointeur, comme un bouton-icone du jeu appuye)."""
         t = self._tex_decoupe('croix', 'ui_MenuTexture.png', CROIX)
         if t is None: return
-        self._melange(); t.blit(x, y, width=c, height=c * (CROIX[3] - CROIX[1]) / float(CROIX[2] - CROIX[0]))
+        self._melange()
+        if not sombre: t.blit(x, y, width=c, height=c * (CROIX[3] - CROIX[1]) / float(CROIX[2] - CROIX[0])); return
+        spr = pyglet.sprite.Sprite(t, x=x, y=y); spr.scale_x = c / t.width; spr.scale_y = c * (CROIX[3] - CROIX[1]) / float(CROIX[2] - CROIX[0]) / t.height; spr.color = (191, 191, 191); spr.opacity = 191; spr.draw()
 
     def _chevron(self, x, yc, k):
         """Chevron « > » : la ligne ouvre un autre menu."""
@@ -972,10 +1006,10 @@ class Pause:
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
         i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
         while i_sel < n - 1 and e[i_sel]['t'] == 'sep' and ecr not in ('quitter', 'titre'): i_sel += 1; self.sel[ecr] = i_sel          # (la selection saute les intertitres, y compris a l'ouverture de l'ecran)
-        n_f = 1 if e and e[0].get('fixe') else 0                                          # ligne fixe en haut (bouton Interface de Commandes) : elle ne defile pas
+        n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
-        titres['texte'] = 'Texte et défilement'
+        titres['texte'] = 'Vitesse de défilement du texte'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -1001,7 +1035,7 @@ class Pause:
                 tw = max(self._et(self._nom_valeur(x['l'], v), fs).content_width for v in x['vals'])
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
-        if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr)
+        if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr + (36 * k if ecr == 'son' else 0.0))          # (son : plus le bouton muet)
         if ecr in ('texte',): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
@@ -1033,7 +1067,8 @@ class Pause:
                 elif i_sel >= deb + visibles: deb = i_sel - visibles + 1
             self.vu_sel[ecr] = i_sel
         debut = self.debut[ecr] = max(n_f, min(deb, max(n_f, n - visibles)))
-        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_eff = {}; self.zones_pop = []; lignes = {}; self.barre = None; self.barre_liste = None; self.cadre_liste = None
+        anc = (self.zones_def, self.zones_mute, self.zones_eff)                                  # boutons de chaque ligne a l'image precedente : sous le pointeur, c'est le bouton qui s'assombrit, pas la plaque de la ligne
+        self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_def = {}; self.zones_mute = {}; self.zones_eff = {}; self.zones_pop = []; lignes = {}; self.barre = None; self.barre_liste = None; self.cadre_liste = None
         xr = x0 + pw - rdr                                                        # bord droit du contenu des lignes
         cx2 = xr - 40 * k - LARG_CELLULE * k; cx1 = cx2 - ECART_CELLULES * k - LARG_CELLULE * k; self.zones_col = cx2 - ECART_CELLULES * k / 2
         plx = x0 + 42 * k; plw = pw - 84 * k                                      # boutons : meme marge a gauche et a droite
@@ -1044,14 +1079,19 @@ class Pause:
         if n_f: pos.append((0, y1 - 66 * k))
         yy = y1 - h_titre
         for idx in range(debut, min(n, debut + visibles)): pos.append((idx, yy)); yy -= rh
-        mouse = self.mode_souris
+        mouse = self.mode_souris; modal = self.popup is not None or self.deroule is not None or self.capture is not None
         for idx, ytop in pos:
-            en = e[idx]; ybas = ytop - rh; sel = idx == i_sel and en['t'] != 'sep'; lignes[idx] = (ybas, ytop)
+            en = e[idx]; ybas = ytop - rh; lignes[idx] = (ybas, ytop)
+            if mouse:                                                                         # souris : la ligne est assombrie tant que le pointeur est sur elle (et pas sur l'un de ses boutons) ; il n'y a plus de selection quand il en sort
+                sel = (not modal and en['t'] != 'sep' and self._pointeur_dans((plx, ybas + 3 * k, plx + plw, ytop - 3 * k))
+                       and not self._pointeur_dans(anc[0].get(idx)) and not self._pointeur_dans(anc[1].get(idx)) and not any(self._pointeur_dans(z) for (i_, c_), z in anc[2].items() if i_ == idx))
+            else: sel = idx == i_sel and en['t'] != 'sep'                                      # clavier : la ligne choisie, avec le curseur dore
             note = en['note']() if en.get('note') else ''
             dec = max(0.0, min(8 * k, (rh - 36 * k) * 0.6)) if note else 0.0                  # note rouge sous la valeur : la ligne monte un peu pour lui laisser la place
-            if en['t'] != 'sep': self._plaque(plx, ybas + 3 * k, plw, rh - 6 * k, k, sel, JAUNE if sel and mouse else None)       # fond du bouton, comme ceux du menu des commandes du jeu mobile (la selection l'eclaircit ; a la souris : encadrement jaune)
+            if en['t'] != 'sep': self._plaque(plx, ybas + 3 * k, plw, rh - 6 * k, k, sel)       # fond du bouton, comme ceux du menu des commandes du jeu mobile : la plaque s'assombrit quand elle est choisie (clavier) ou survolee (souris), sans encadrement
             if sel and not mouse: self._curseur(x0 + 6 * k, ybas + rh / 2 + dec, min(rh * 0.6, 26 * k))             # curseur dore des menus du jeu (selection au clavier)
-            coul = GRIS if en.get('off') else BLANC
+            muet = en['t'] == 'curs' and 'actif' in en and not en['actif']()                  # ligne de la page Son dont le son est coupe : nom, valeur et jauge grises
+            coul = GRIS if en.get('off') or muet else BLANC
             base = ybas + rh / 2 - 0.45 * fs                                                  # texte centre dans le bouton
             lx = x0 + 52 * k
             if en['t'] == 'sep':                                                              # intertitre : au centre de la fenetre
@@ -1080,19 +1120,21 @@ class Pause:
             elif en['t'] == 'curs':
                 if self.saisie is not None and self.saisie[0] == idx: txt = (self.saisie[1] + ('_' if int(time.time() * 2) % 2 == 0 else ' ')).rjust(3)
                 else: txt = en['v']()
-                dr = xr - 40 * k                                                              # bord droit de la valeur : le bouton « valeur par defaut » est a sa droite
+                dm = 36 * k if 'actif' in en else 0.0                                         # place du bouton muet (page Son), entre la valeur et le bouton « valeur par defaut »
+                dr = xr - 40 * k - dm                                                         # bord droit de la valeur : le bouton « valeur par defaut » est a sa droite
                 vl = self._et(txt, fs, OR if self.saisie is not None and self.saisie[0] == idx else coul); vl.x = dr - vl.content_width; vl.y = base; vl.draw()
                 self.zones_val[idx] = (vl.x - 10 * k, dr + 10 * k)
                 bw_ = 200 * k; bx1 = dr - 90 * k - 20 * k; bx0 = bx1 - bw_; by = ybas + rh / 2 - 5 * k; self.barres[idx] = (bx0, bx1)
                 fond = pyglet.shapes.Rectangle(bx0, by, bw_, 10 * k, color=(16, 18, 22)); fond.draw()
-                rem = pyglet.shapes.Rectangle(bx0, by, bw_ * max(0.0, min(1.0, en['frac']())), 10 * k, color=JAUNE); rem.draw()
+                rem = pyglet.shapes.Rectangle(bx0, by, bw_ * max(0.0, min(1.0, en['frac']())), 10 * k, color=(110, 110, 104) if muet else JAUNE); rem.draw()            # (jauge jaune ; grise quand le son est coupe)
                 cur = pyglet.shapes.Rectangle(bx0 + bw_ * max(0.0, min(1.0, en['frac']())) - 3 * k, by - 4 * k, 6 * k, 18 * k, color=(255, 255, 255)); cur.draw()
+                if 'actif' in en: self._bouton_muet(idx, xr - 62 * k, ybas + rh / 2 - 13 * k, 26 * k, muet, k)
                 if 'defaut' in en: self._bouton_defaut(idx, xr - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             elif en['t'] == 'slot':
                 if en['v']: vl = self._et(en['v'], fsp * 1.2, GRIS); vl.x = x0 + pw - 24 * k - 42 * k - vl.content_width; vl.y = base; vl.draw()
             elif en['t'] == 'touche':
                 for c, cx in enumerate((cx1, cx2)):
-                    txt = en['v'][c]; actif = sel and self.sel.get('col', 0) == c; vide = txt == RG.nom_touche(None)
+                    txt = en['v'][c]; actif = (sel and not mouse and self.sel.get('col', 0) == c) or self.capture == (en['act'], c); vide = txt == RG.nom_touche(None)          # (case choisie : au clavier, ou en attente d'une touche ; a la souris c'est la plaque qui s'assombrit)
                     if self.capture is not None and self.capture == (en['act'], c): txt = '…'
                     HM.cadre(cx, ybas + 9 * k, LARG_CELLULE * k, rh - 18 * k, k * 0.5, 0.5 if actif else 0.0, fond=NOIR, opacite=0.75)          # case de la touche (plus claire quand elle est choisie), a distance des bords du bouton
                     zone_t = LARG_CELLULE * k - (0 if vide else 2 * 22 * k); fz = fs * 0.8                 # texte centre dans la case (marges egales : la croix rouge est a droite, hors de la zone du texte)
@@ -1100,8 +1142,8 @@ class Pause:
                     if vl.content_width > zone_t - 8 * k: fz *= (zone_t - 8 * k) / vl.content_width; vl = self._et(txt, fz, OR if actif else BLANC)
                     vl.x = cx + (LARG_CELLULE * k - vl.content_width) / 2; vl.y = ybas + rh / 2 - self._cap(fz) / 2 + dec; vl.draw()               # (ligne de base : le milieu de la hauteur des capitales sur le milieu de la case)
                     if not vide and self.capture != (en['act'], c):
-                        cc = 12 * k; cxx = cx + LARG_CELLULE * k - cc - 8 * k; self._croix(cxx, ybas + rh / 2 - cc * 0.45 + dec, cc)
-                        self.zones_eff[(idx, c)] = (cxx - 4 * k, ybas + 9 * k, cx + LARG_CELLULE * k, ybas + rh - 9 * k)
+                        cc = 12 * k; cxx = cx + LARG_CELLULE * k - cc - 8 * k; self.zones_eff[(idx, c)] = ze = (cxx - 4 * k, ybas + 9 * k, cx + LARG_CELLULE * k, ybas + rh - 9 * k)
+                        self._croix(cxx, ybas + rh / 2 - cc * 0.45 + dec, cc, self._sur(ze))                  # (a 75 % sous le pointeur)
                 self._bouton_defaut(idx, xr - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))
         if barre: self.barre = self._barre_defilement(x0 + pw - 14 * k, y1 - h_titre, y1 - h_titre - visibles * rh, n_s, visibles, debut - n_f, k, self.glisse_barre is not None, n_f)
@@ -1113,7 +1155,7 @@ class Pause:
         self.zone_ret = None
         if avec_ret:
             bx = x0 + pw - bw - 8 * k; by = y0 - 8 * k - bh; self.zone_ret = (bx, by, bx + bw, by + bh)
-            self._bouton_retour(bx, by, bw, bh, self.sur_ret)
+            self._bouton_retour(bx, by, bw, bh, self._sur(self.zone_ret))                    # (version enfoncee de la feuille Button sous le pointeur)
         # miniature de l'etat survole
         if avec_mini:
             mx = x0 + pw + gap; mh = min(h, 270 * k)
@@ -1144,6 +1186,7 @@ class Pause:
         t = en['t']
         if t == 'touche': return en.get('aide') or self.AIDE_TOUCHE
         sup = en['aide'] + '   ' if en.get('aide') and t != 'act' else ''          # texte propre a la ligne, avant la consigne generale
+        if t == 'curs' and 'actif' in en: return sup + 'Glisser ou ←/→ : volume   Entrée ou haut-parleur : couper / remettre   Clic sur la valeur : la taper   Suppr ou bouton rond : volume et son par défaut'
         if t == 'curs': return sup + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
         if t == 'choix':
             return sup + ('Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante')
@@ -1212,8 +1255,9 @@ class Pause:
         et.x = x + (w - et.content_width) / 2; et.y = y + h - 62 * k; et.draw()
         if ed: ed.x = x + (w - ed.content_width) / 2; ed.y = y + h - 92 * k; ed.draw()
         for i, lib in enumerate(('Oui', 'Non')):
-            bx = x + w / 2 + (-bw - 14 * k if i == 0 else 14 * k); by = y + 28 * k; sel = p['sel'] == i
-            self._plaque(bx, by, bw, bh, k, sel, JAUNE if sel and self.mode_souris else None)
+            bx = x + w / 2 + (-bw - 14 * k if i == 0 else 14 * k); by = y + 28 * k
+            sel = self._pointeur_dans((bx, by, bx + bw, by + bh)) if self.mode_souris else p['sel'] == i                  # souris : le bouton sous le pointeur s'assombrit ; clavier : le bouton choisi, avec le curseur dore
+            self._plaque(bx, by, bw, bh, k, sel)
             if sel and not self.mode_souris: self._curseur(bx - 24 * k, by + bh / 2, min(bh * 0.6, 26 * k))
             lb = self._et(lib, fs, BLANC); lb.x = bx + (bw - lb.content_width) / 2; lb.y = by + bh / 2 - 0.45 * fs; lb.draw()
             self.zones_popup.append((bx, by, bx + bw, by + bh, i))
@@ -1242,9 +1286,9 @@ class Pause:
             if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en or, sans zone de clic
                 et = self._et(noms[j], fs * 0.92, OR); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
                 pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=(120, 110, 40)).draw(); y -= ih; continue
-            if j == cur:
-                if self.mode_souris: self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True, JAUNE)
-                else: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)
+            if self.mode_souris:                                                               # souris : la valeur sous le pointeur est assombrie (plaque enfoncee), sans encadrement
+                if self._pointeur_dans((x0 + 6 * k, yb, x1 - 6 * k - lb, yb + ih)): self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True)
+            elif j == cur: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)                       # clavier : curseur dore
             et = self._et(noms[j], fs, OR if courant else BLANC); et.x = x0 + 44 * k; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
             self.zones_pop.append((x0 + 6 * k, yb, x1 - 6 * k - lb, y, j)); y -= ih
         if barre: self.barre_liste = self._barre_defilement(x1 - 8 * k, y1 - 10 * k, y0 + 10 * k, n, nvis, top, k, self.glisse_liste is not None, 0)
