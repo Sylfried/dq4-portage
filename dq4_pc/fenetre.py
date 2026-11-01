@@ -22,6 +22,7 @@ import avant_partie as AP
 import saisie_nom as SN
 import ecran_sauvegardes as ES
 import postfx as PF
+import decors_plats as DP
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -123,6 +124,7 @@ CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
              12: (0, 448, 32, 46), 13: (64, 448, 26, 28), 14: (128, 448, 41, 39), 15: (224, 448, 27, 42), 16: (288, 448, 48, 48), 17: (384, 448, 40, 32),
              19: (544, 448, 64, 58), 20: (640, 448, 41, 39)}   # icones de lieux de la carte du monde (FieldSymbol.s_symbols : 21 rectangles ; le 18 est vide dans l'atlas)
+DECOR_BIAIS = 4.0            # decor : decalage de profondeur (en plus petites unites de profondeur) entre deux groupes dessines l'un apres l'autre ; 24 bits : 4 unites = 2e-7 de la plage de profondeur, invisible pour un relief reel
 GOUT_ORIG = 2                 # feuilles d'origine : gouttiere de 2 px (bords repetes) autour de chaque case, comme les feuilles HD : le filtrage n'attrape plus un bout de la case voisine
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
@@ -825,7 +827,7 @@ class Jeu(pyglet.window.Window):
             lacet = math.atan2(fw[0], fw[2]); tang = math.asin(-fw[1]) - math.radians(e.cam_bas if e.cam_bas is not None else BAS_DEF)
             fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
             pos = pos + fw * DIST_ADJ_VILLE
-        M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=e.cam_far or VILLE_FAR, haut=haut)
+        M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=(e.cam_far or VILLE_FAR) + (0.05 * self.n_boucle if os.environ.get('DQ_ZDEBUG') else 0.0), haut=haut)      # (test) DQ_ZDEBUG : le plan lointain change a chaque image : seules les surfaces en z-fighting changent d'une image a l'autre
         if e.cam_yoff:
             Ty = np.eye(4); Ty[1, 3] = e.cam_yoff; M = Ty @ M              # SceneCamera.s_yOffset
         return M, (droite, np.cross(fw, droite), fw)
@@ -930,6 +932,9 @@ class Jeu(pyglet.window.Window):
             c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        if not os.environ.get('DQ_SANS_DECALAGE'):
+            try: DP.decaler(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir decors_plats.py)
+            except Exception as ex: print('decors_plats :', ex, flush=True)
         self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
         self.palettes = OC.PalettesCarte(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
@@ -1009,13 +1014,16 @@ class Jeu(pyglet.window.Window):
             if pas == 1 and liste:
                 if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
                 gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL); self.prog['cutoff'] = 0.0      # Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
-            for tex, vl, key in liste:
+            gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+            for i, (tex, vl, key) in enumerate(liste):
+                gl.glPolygonOffset(0.0, -DECOR_BIAIS * (i + (len(opaques) if pas else 0)))         # decors a plat superposes a la meme hauteur (deux massifs de fleurs, chemin et pelouse...) : sans cela leur profondeur est egale a l'arrondi pres et l'un ou l'autre gagne pixel par pixel, ce qui change a chaque mouvement de la camera (scintillement) ; le groupe dessine en dernier l'emporte, toujours
                 pg = self.pam_gl.get(key)
                 t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
                 self.prog['net'] = net_o if (r is None or key not in r) else 0.0
                 self.prog['tsize'] = (float(t.width), float(t.height))
                 self._tracer(t, vl)
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
             if pas == 0:
                 for tex, vl, key, deb, n, dx in self.carte_ext:
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
@@ -2269,6 +2277,9 @@ class Jeu(pyglet.window.Window):
             nom_t, pc, cc = os.environ['DQ_CARTE_TEST'].split(';')
             e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.cam_libre = False
             e.cam_pos = tuple(float(v) for v in pc.split(',')); e.cam_cible = tuple(float(v) for v in cc.split(','))
+            if os.environ.get('DQ_CARTE_DEPL'):                              # (test) DQ_CARTE_DEPL="dx,dy,dz" : la camera se deplace de ce vecteur a chaque image affichee (scintillement en mouvement)
+                dv = [float(v) * self.n_boucle for v in os.environ['DQ_CARTE_DEPL'].split(',')]
+                e.cam_pos = tuple(a + b for a, b in zip(e.cam_pos, dv)); e.cam_cible = tuple(a + b for a, b in zip(e.cam_cible, dv))
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
         if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); self._dessiner_aide(); return
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
