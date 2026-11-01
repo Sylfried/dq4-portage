@@ -23,12 +23,15 @@ NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Ma
         'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
 
 DEFAUT = {
-    'mode_sprites': 4,            # 0 originaux, 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect (voir hd.py)
+    'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
     'plein_ecran': False,
-    'msaa': 4,                    # anticrenelage materiel (pris en compte au prochain lancement)
+    'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
+    'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
+    'nettete': 0.0,               # 0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
+    'luminosite': 1.0,            # 0,5 a 1,5 : courbe de gamma de la scene (1 = comme le jeu ; plus haut = plus clair)
     'infos': False,               # F1 : lignes d'information
     'son': True, 'volume_musique': 1.0, 'volume_bruitages': 1.0,
     'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
@@ -61,7 +64,20 @@ DEFAUT = {
 FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'StartNameEntry', 'SaveOverwrite', 'TitleTouch', 'PortalButton', 'NetworkRoot', 'NetworkPLST', 'NetworkCODE', 'NetworkITEM',
                      'ViewVolumeDecision', 'License', 'MagicInfo', 'Config', 'NENE_ItemView', 'MonsterName', 'BattleHoppingNumber')
 
+MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
+MSAA_VALEURS = (0, 2, 4, 8)
+
+
+def mode_sprites_valide(v):
+    """Valeur lue (ancien fichier de reglages, option --hd) -> mode existant : 2 (regions lissees) et 3 (bicubique) sont devenus 1 (EPX x8, le plus proche : meme agrandissement x8 des contours, sans le flou) ; tout le reste -> pixel perfect."""
+    try: v = int(v)
+    except (TypeError, ValueError): return DEFAUT['mode_sprites']
+    if v in (2, 3): return 1
+    return v if v in MODES_SPRITES else DEFAUT['mode_sprites']
+
+
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (0.5, 2.0), 'vitesse_camera': (0.5, 2.0), 'vitesse_fondu': (0.5, 2.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0), 'defilement_vitesse': (0, 3)})
 BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force', 'defilement_auto')
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
@@ -125,6 +141,8 @@ class Reglages:
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
+                self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}

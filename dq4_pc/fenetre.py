@@ -1,6 +1,6 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
 import os, sys, math, time, argparse, glob, collections, threading, random
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait as attendre_futures
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -21,6 +21,8 @@ import etats as ET
 import avant_partie as AP
 import saisie_nom as SN
 import ecran_sauvegardes as ES
+import postfx as PF
+import decors_plats as DP
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -29,7 +31,7 @@ centroid out vec2 v_uv; out vec4 v_col;
 void main() { gl_Position = mvp * vec4(position, 1.0); v_uv = tex_coords; v_col = colors; }'''
 FRAG = '''#version 330 core
 centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
-uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul;
+uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c;
 void main() {
     vec2 uv = v_uv; float lod = 0.0;
     if (net > 0.5) { vec2 p0 = uv * tsize; vec2 dx = dFdx(p0), dy = dFdy(p0); lod = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8))); }      // mipmaps choisies sur l'uv d'origine (l'uv decalee saute d'un texel a l'autre)
@@ -38,7 +40,10 @@ void main() {
         vec2 p = uv * tsize; vec2 b = floor(p + 0.5); vec2 w = max(fwidth(p), vec2(1e-4));       // b = frontiere de texel la plus proche : le centre du texel reste pur, seule une bande d'un pixel d'ecran autour de la frontiere est melangee
         uv = (b + clamp((p - b) / w, -0.5, 0.5)) / tsize;
     }
-    vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0); if (c.a < cutoff) discard; c.a *= amul; fragColor = c; }'''
+    vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0);
+    if (a2c > 0.5) { c.a = clamp((c.a - cutoff) / max(fwidth(c.a), 1e-4) + 0.5, 0.0, 1.0); if (c.a <= 0.0) discard; }      // decor decoupe (fleurs, feuillages, grilles) : la silhouette devient une couverture de 0 a 4 echantillons (MSAA), pas un bord dur qui scintille
+    else if (c.a < cutoff) discard;
+    c.a *= amul; fragColor = c; }'''
 
 VERT_EFFET = '''#version 330 core
 in vec2 position; in vec2 tex_coords; in vec4 colors;
@@ -54,7 +59,7 @@ BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du m
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
 SE_APERCU = 316                # bruitage d'essai des volumes (page Son du menu Echap) : degats du sol (CommonWalkDamage::checkWalk), court et sans rapport avec l'interface
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
-MODE_PP = len(HD.MODES)       # dernier mode de F2 : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
+MODE_PP = 4                   # dernier mode du menu « Shader » (0 originaux, 1 EPX x8, 4 pixel perfect : voir reglages.MODES_SPRITES) : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
 # Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/notes-technique-portage-dq4.md) :
 ASPECT_PORTRAIT = 0.5625      # SceneCamera.ASPECT_DEF : l'original est concu pour un ecran portrait 450 x 800 ; Unity fixe le champ de vision HORIZONTAL (fov x 4/3) et en deduit la hauteur
 RESOLUTIONS = ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160))
@@ -121,6 +126,7 @@ CH_ICONES = {0: (0, 512, 48, 32), 1: (96, 512, 48, 32), 2: (192, 512, 48, 48), 3
              6: (544, 512, 25, 31), 7: (608, 512, 40, 32), 8: (704, 512, 24, 24), 9: (768, 512, 32, 32), 10: (832, 512, 40, 32), 11: (928, 512, 24, 40),
              12: (0, 448, 32, 46), 13: (64, 448, 26, 28), 14: (128, 448, 41, 39), 15: (224, 448, 27, 42), 16: (288, 448, 48, 48), 17: (384, 448, 40, 32),
              19: (544, 448, 64, 58), 20: (640, 448, 41, 39)}   # icones de lieux de la carte du monde (FieldSymbol.s_symbols : 21 rectangles ; le 18 est vide dans l'atlas)
+DECOR_BIAIS = 4.0            # decor : decalage de profondeur (en plus petites unites de profondeur) entre deux groupes dessines l'un apres l'autre ; 24 bits : 4 unites = 2e-7 de la plage de profondeur, invisible pour un relief reel
 GOUT_ORIG = 2                 # feuilles d'origine : gouttiere de 2 px (bords repetes) autour de chaque case, comme les feuilles HD : le filtrage n'attrape plus un bout de la case voisine
 HD_GOUTTIERE, HD_NIVEAUX = 4, 2      # sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
 POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
@@ -150,24 +156,27 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
 
 class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
+        self._journal_logo = False
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
         self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
-        self.msaa = 0
         if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
-        for ms in ((args.msaa, 0) if args.msaa else (0,)):       # anticrenelage materiel si la carte le permet
-            try:
-                cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3, sample_buffers=1 if ms else 0, samples=ms)
-                super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
-                self.msaa = ms; break
-            except pyglet.window.NoSuchConfigException:
-                print('MSAA x%d indisponible' % ms, flush=True)
-        print('MSAA : %s' % ('x%d' % self.msaa if self.msaa else 'non'), flush=True)
+        plein = bool(getattr(args, 'plein_ecran', 0))          # plein ecran memorise : la fenetre est creee directement en plein ecran (a la resolution du bureau), logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
+        cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)       # (l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
+        try:
+            if plein: super().__init__(caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True, fullscreen=True)
+            else: super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        except Exception as ex:
+            if not plein: raise
+            print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True)
+            super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        self.post = PF.PostFX(self, log=lambda *a: print(*a, flush=True))
         self.args = args
+        self._journal_fenetre('création')
         self._attente('Chargement du moteur...')
-        self.mode = max(0, min(int(args.hd), MODE_PP)); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie(); self.est_plein = False; self.taille_fenetre = (args.largeur, args.hauteur)
+        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie(); self.est_plein = bool(self.fullscreen); self.taille_fenetre = (args.largeur, args.hauteur)
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
@@ -218,7 +227,6 @@ class Jeu(pyglet.window.Window):
         # boucle a pas fixe : le moteur avance exactement a 30 Hz (comme FixedUpdate de l'original) quelle que soit la cadence d'affichage, et l'image affichee est calculee entre deux pas
         self.acc = 0.0; self.t_boucle = None; self.alpha = 1.0; self.prec = None; self.pas_t = collections.deque(maxlen=60)
         self.n_boucle = 0; self.base_c = {}
-        if self.reg['plein_ecran'] and not args.shot: pyglet.clock.schedule_once(lambda dt: (self.regler_plein_ecran(True)), 0.5)       # plein ecran memorise
         self.fixe_test = bool(args.shot) and not os.environ.get('DQ_TEMPS_REEL')         # (test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
         pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._pret = True
@@ -266,6 +274,7 @@ class Jeu(pyglet.window.Window):
                 texte.draw(); time.sleep(0.02)
             self._logo_touche = False
             self.flip()
+            if not self._journal_logo: self._journal_logo = True; self._journal_fenetre('1re image affichée (logos)')
         fil.join()
         if 'e' in res: raise res['e']
         self.moteur = res['m']; self.moteur.duree_anim = self._duree_anim
@@ -348,6 +357,7 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
         r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
+        if not self.lissage: self._filtrer(r['t'], False)
         return r
 
     def _camera_champ(self, e, aspect):
@@ -565,7 +575,7 @@ class Jeu(pyglet.window.Window):
         return chiffres.get(symbol)
 
     # ---- reglages appliques depuis le menu Echap
-    def regler_mode(self, m): self.mode = int(m)
+    def regler_mode(self, m): self.mode = RG.mode_sprites_valide(m)
 
     @staticmethod
     def _zoom_valide(z):
@@ -592,6 +602,8 @@ class Jeu(pyglet.window.Window):
         for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
         for r in self.decor_hd.values():
             for t in r.values(): self._filtrer(t, self.lissage)
+        for d in list(self.sprite_tex.values()) + list(self.cb_tex.values()):          # sprites et monstres agrandis (EPX) : meme choix ; les originaux le suivent dans le shader (net)
+            if d and d.get('hd'): self._filtrer(d['t'], self.lissage)
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
@@ -639,8 +651,16 @@ class Jeu(pyglet.window.Window):
         oui = bool(oui)
         if oui == self.est_plein: return
         if oui: self.taille_fenetre = (self.width, self.height); self.set_fullscreen(True)
-        else: self.set_fullscreen(False, width=self.taille_fenetre[0], height=self.taille_fenetre[1])
+        else: self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
         self.est_plein = oui
+        self._journal_fenetre('plein écran' if oui else 'fenêtre')
+
+    def _journal_fenetre(self, quand):
+        """Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule."""
+        try:
+            ec = self.screen; fb = self.get_framebuffer_size()
+            print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d' % (quand, 'PLEIN ÉCRAN' if self.fullscreen else 'fenêtre', self.width, self.height, fb[0], fb[1], ec.width, ec.height), flush=True)
+        except Exception as ex: print('Fenêtre (%s) : état illisible (%r)' % (quand, ex), flush=True)
 
     def regler_son(self, oui):
         if bool(oui) != self.son.actif:
@@ -855,7 +875,7 @@ class Jeu(pyglet.window.Window):
             lacet = math.atan2(fw[0], fw[2]); tang = math.asin(-fw[1]) - math.radians(e.cam_bas if e.cam_bas is not None else BAS_DEF)
             fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
             pos = pos + fw * DIST_ADJ_VILLE
-        M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=e.cam_far or VILLE_FAR, haut=haut)
+        M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=(e.cam_far or VILLE_FAR) + (0.05 * self.n_boucle if os.environ.get('DQ_ZDEBUG') else 0.0), haut=haut)      # (test) DQ_ZDEBUG : le plan lointain change a chaque image : seules les surfaces en z-fighting changent d'une image a l'autre
         yoff = (e.cam_yoff or 0.0) + (float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT)) if self.carte_nom == 'ev01' else 0.0)       # titre : le groupe logo + ile est releve pour etre centre dans le 16/9
         if yoff:
             Ty = np.eye(4); Ty[1, 3] = yoff; M = Ty @ M              # SceneCamera.s_yOffset
@@ -910,6 +930,7 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             print('lissage HD impossible (monstre %d) : %s' % (mid, ex), flush=True); self.cb_tex[cle] = orig; return orig
         self.cb_tex[cle] = dict(t=self._tex(a, False, HD_NIVEAUX), tw=a.shape[1], th=a.shape[0], hd=a is not orig['arr'])
+        if not self.lissage: self._filtrer(self.cb_tex[cle]['t'], False)
         return self.cb_tex[cle]
 
     def _maillages_combat(self, e, R=None):
@@ -961,6 +982,9 @@ class Jeu(pyglet.window.Window):
             c = self.donnees.carte(src)
         except Exception as ex:
             print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        if not os.environ.get('DQ_SANS_DECALAGE'):
+            try: DP.decaler(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir decors_plats.py)
+            except Exception as ex: print('decors_plats :', ex, flush=True)
         self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
         self.palettes = OC.PalettesCarte(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
@@ -1028,26 +1052,32 @@ class Jeu(pyglet.window.Window):
 
     def _tracer_decor(self, net=False):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
-        lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; les modes agrandis (EPX, regions lissees, bicubique) lui appliquent l'algorithme HD choisi."""
+        lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; le mode agrandi (EPX) lui applique l'algorithme HD choisi."""
         r = self._decor_hd() if self.mode not in (0, MODE_PP) else None
         net_o = 1.0 if (net and r is None and self.lissage and not os.environ.get('DQ_DECOR_FLOU')) else 0.0           # villes et donjons en « Originaux » / pixel perfect : texels nets, seule la frontiere entre deux texels est adoucie (comme les sprites) ; en combat, peintures etirees : lissage normal
         est_tr = lambda k: isinstance(k, tuple) and k[0] == 'tr'
         opaques = [x for x in self.carte_vl if not est_tr(x[2])]
         transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
-        cutoff0 = self.prog['cutoff']
+        cutoff0 = self.prog['cutoff']; a2c = self.post.a2c
+        if a2c: self.prog['a2c'] = 1.0; gl.glEnable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glDisable(gl.GL_BLEND)      # decor opaque decoupe : alpha -> couverture MSAA, sans melange (le melange doublerait l'alpha)
         for pas, liste in ((0, opaques), (1, transp)):
             if pas == 1 and liste:
+                if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
                 gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL); self.prog['cutoff'] = 0.0      # Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
-            for tex, vl, key in liste:
+            gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+            for i, (tex, vl, key) in enumerate(liste):
+                gl.glPolygonOffset(0.0, -DECOR_BIAIS * (i + (len(opaques) if pas else 0)))         # decors a plat superposes a la meme hauteur (deux massifs de fleurs, chemin et pelouse...) : sans cela leur profondeur est egale a l'arrondi pres et l'un ou l'autre gagne pixel par pixel, ce qui change a chaque mouvement de la camera (scintillement) ; le groupe dessine en dernier l'emporte, toujours
                 pg = self.pam_gl.get(key)
                 t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
                 self.prog['net'] = net_o if (r is None or key not in r) else 0.0
                 self.prog['tsize'] = (float(t.width), float(t.height))
                 self._tracer(t, vl)
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
             if pas == 0:
                 for tex, vl, key, deb, n, dx in self.carte_ext:
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
+        if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     def _fond_combat(self, c):
@@ -2002,6 +2032,8 @@ class Jeu(pyglet.window.Window):
         """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
         self.n_boucle += 1
         if self.args.touches_test or self.args.shots_boucle: self._touches_test()
+        if self.args.options_test: self._options_test()
+        if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
         if self.pause.ouvert: self.pause.maj(); self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # menu Echap : le moteur est arrete
         self._maj_camera()
         t = time.perf_counter()
@@ -2059,6 +2091,19 @@ class Jeu(pyglet.window.Window):
                 if os.environ.get('DQ_TEMPS_REEL'): print('PAS moteur=%d images boucle=%d t=%.1f' % (self.n, self.n_boucle, time.time() - self.t_demarrage), flush=True)
                 if not a.shots_boucle: self.on_close(); pyglet.app.exit()
 
+    def _options_test(self):
+        """(test) --options-test "image:Libelle=valeur;image:Libelle=valeur" : applique des options de la page Affichage a l'image de boucle donnee, par les memes fonctions que le menu Echap (valeur lue comme du JSON : 3, true, 0.5, [1280, 720])."""
+        import json
+        for ev in list(self.args.options_test):
+            n, lib, val = ev
+            if n != self.n_boucle: continue
+            self.args.options_test.remove(ev)
+            for en in self.pause._e_affichage():
+                if en.get('l') != lib: continue
+                v = json.loads(val)
+                if isinstance(v, list): v = tuple(v)
+                (en['set'](v) if en['t'] == 'choix' else en['saisie'](float(v))); print('OPTION %s = %s (image %d)' % (lib, val, n), flush=True)
+
     def _pas(self):
         self.prec = self._instantane()
         self.pas_t.append(time.perf_counter())
@@ -2095,6 +2140,7 @@ class Jeu(pyglet.window.Window):
 
     def on_draw(self):
         self._nb_dessins = getattr(self, '_nb_dessins', 0) + 1
+        if self._nb_dessins == 1: self._journal_fenetre('1re image du jeu')
         if self._nb_dessins <= 90 or self._nb_dessins % 120 == 0: self._verifier_taille_reelle()
         sauve = self._interpoler()
         try: self._dessiner()
@@ -2327,6 +2373,9 @@ class Jeu(pyglet.window.Window):
             nom_t, pc, cc = os.environ['DQ_CARTE_TEST'].split(';')
             e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.cam_libre = False
             e.cam_pos = tuple(float(v) for v in pc.split(',')); e.cam_cible = tuple(float(v) for v in cc.split(','))
+            if os.environ.get('DQ_CARTE_DEPL'):                              # (test) DQ_CARTE_DEPL="dx,dy,dz" : la camera se deplace de ce vecteur a chaque image affichee (scintillement en mouvement)
+                dv = [float(v) * self.n_boucle for v in os.environ['DQ_CARTE_DEPL'].split(',')]
+                e.cam_pos = tuple(a + b for a, b in zip(e.cam_pos, dv)); e.cam_cible = tuple(a + b for a, b in zip(e.cam_cible, dv))
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
         if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); self._dessiner_aide(); return
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
@@ -2349,7 +2398,7 @@ class Jeu(pyglet.window.Window):
         if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-        gl.glViewport(0, 0, *self.get_framebuffer_size())
+        gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
         aspect = self.width / max(1, self.height)
         if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
         elif bataille:
@@ -2414,7 +2463,7 @@ class Jeu(pyglet.window.Window):
             mons = self._maillages_combat(e)             # reecrit les sommets des monstres/effets (tampons « sales » : pas encore envoyes au GPU)
             self._dom_lie = None                         # force le rebind + commit() au 1er trace : sinon les monstres sortent avec les donnees de l'image precedente
             for tex, tw, th, vl, shader, hd in mons:
-                self.prog['net'] = 0.0 if hd else (2.0 if pp else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets
+                self.prog['net'] = 0.0 if hd else (2.0 if (pp or not self.lissage) else 1.0)           # texture agrandie : filtrage doux des mipmaps ; originale : pixels nets (plus proche voisin si le lissage est coupe)
                 if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)                 # DssaCharaTransparent : ZTest Always
                 self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
                 if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
@@ -2427,7 +2476,7 @@ class Jeu(pyglet.window.Window):
                 gl.glDisable(gl.GL_CULL_FACE); gl.glDepthMask(gl.GL_FALSE)
                 self._dom_lie = None
                 for tex, tw, th, vl, shader, hd in self._maillages_combat(e, np.column_stack(cam3d)):
-                    self.prog['net'] = 0.0 if hd else 1.0
+                    self.prog['net'] = 0.0 if hd else (1.0 if self.lissage else 2.0)
                     if shader == 3: gl.glDisable(gl.GL_DEPTH_TEST)
                     self.prog['tsize'] = (float(tw), float(th)); self._tracer(tex, vl)
                     if shader == 3: gl.glEnable(gl.GL_DEPTH_TEST)
@@ -2437,14 +2486,14 @@ class Jeu(pyglet.window.Window):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
             elif champ: self._dessiner_ombres_champ(ombres, w * CH_PX / 24.0)
         for slot, f, vl in a_dessiner:
-            self.prog['net'] = 0.0 if f['hd'] else (2.0 if pp else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
+            self.prog['net'] = 0.0 if f['hd'] else (2.0 if (pp or not self.lissage) else 1.0); self.prog['tsize'] = (float(f['tw']), float(f['th']))
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
-        self.prog['net'] = 2.0 if pp else 1.0; self.prog['tsize'] = (32.0, 32.0)
+        self.prog['net'] = 2.0 if (pp or not self.lissage) else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
-        self._dessiner_fondu(True); self._dessiner_degats(e)
+        self._dessiner_fondu(True); self.post.fin(); self._dessiner_degats(e)
         self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_fondu(); self._dessiner_titre(); self._dessiner_licence(); self._dessiner_sauvegardes()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide
@@ -2511,7 +2560,7 @@ class Jeu(pyglet.window.Window):
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
         self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
         self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
-            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.msaa if self.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
+            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
 
     def _dessiner_aide(self):
@@ -2562,10 +2611,11 @@ def main():
     ap.add_argument('--msg-origine', action='store_true', help='garde la fenetre de message du terrain a sa place d\'origine (portrait) au lieu de la descendre en bas de l\'ecran')
     ap.add_argument('--ui-pos', default='centre', choices=['centre', 'droite', 'gauche'], help='position de la colonne d\'interface d\'origine (portrait 450 x 800) dans la fenetre 16/9')
     ap.add_argument('--sans-preparation', action='store_true', help='(test) ne prepare pas le cache des cartes, sprites et monstres en arriere-plan')
-    ap.add_argument('--hd', type=int, default=None, help='sprites : 0 originaux (pixels nets), 1 EPX, 2 regions lissees, 3 bicubique, 4 pixel perfect ; par defaut celui du menu Echap')
+    ap.add_argument('--hd', type=int, default=None, help='sprites : 0 originaux (pixels nets), 1 EPX, 4 pixel perfect (2 et 3, retires, valent 1) ; par defaut celui du menu Echap')
     ap.add_argument('--sans-son', action='store_true', help='coupe le son pour cette session (le menu Echap permet de le remettre)')
     ap.add_argument('--volume-musique', type=float, default=None, help='volume des musiques (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--volume-bruitages', type=float, default=None, help='volume des bruitages (0 a 1) ; par defaut celui du menu Echap')
+    ap.add_argument('--plein-ecran', type=int, choices=(0, 1), default=None, help='1 = lance le jeu en plein ecran (fenetre creee directement en plein ecran), 0 = en fenetre ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
     ap.add_argument('--msaa', type=int, default=None, help='anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap')
     ap.add_argument('--reglages', default=os.path.join(ici, 'reglages.json'), help='fichier des reglages du joueur (menu Echap : affichage, son, touches)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
@@ -2574,6 +2624,7 @@ def main():
     ap.add_argument('--images-combat', type=int, default=0, help='(test) prend la capture N images apres le debut d\'un combat')
     ap.add_argument('--force-champ', type=int, default=0, help='(test) force le passage a la carte du monde a cette image')
     ap.add_argument('--touches-test', default=None, help='(test) touches pressees : "image_de_boucle:NOM,..." (noms pyglet : ESCAPE, DOWN, RETURN...)')
+    ap.add_argument('--options-test', default=None, help='(test) options de la page Affichage appliquees en cours de route : "image:Libelle=valeur;image:Libelle=valeur" (valeur JSON)')
     ap.add_argument('--shots-boucle', default=None, help='(test) captures <shot>_b<n>.png a ces images de boucle (menu Echap compris) ; la derniere quitte')
     ap.add_argument('--shot', default=None, help='(test) enregistre une capture puis quitte')
     ap.add_argument('--images', type=int, default=60)
@@ -2581,8 +2632,11 @@ def main():
     a = ap.parse_args()
     reg = RG.Reglages(a.reglages)
     if a.hd is None: a.hd = reg['mode_sprites']
-    else: reg['mode_sprites'] = a.hd
+    else: a.hd = reg['mode_sprites'] = RG.mode_sprites_valide(a.hd)
     if a.msaa is None: a.msaa = reg['msaa']
+    else: reg['msaa'] = a.msaa
+    if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else int(bool(reg['plein_ecran']))
+    else: reg['plein_ecran'] = bool(a.plein_ecran)
     rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1920, 1080)
     if a.largeur is None: a.largeur = int(rs[0]) if a.hauteur is None else int(round(a.hauteur * 16 / 9))
     if a.hauteur is None: a.hauteur = int(rs[1]) if a.largeur == int(rs[0]) else int(round(a.largeur * 9 / 16))
@@ -2606,6 +2660,7 @@ def main():
             a.script[n] = cur
     cle = lambda t: (int(t[1:].split('+')[0]), int((t[1:].split('+') + ['0'])[1])) if t[:1] == 'c' else int(t)
     a.touches_test = [(cle(x.split(':')[0]), x.split(':')[1]) for x in a.touches_test.split(',')] if a.touches_test else []
+    a.options_test = [(int(x.split(':', 1)[0]),) + tuple(x.split(':', 1)[1].split('=', 1)) for x in a.options_test.split(';')] if a.options_test else []
     a.shots_boucle = set(cle(x) for x in a.shots_boucle.split(',')) if a.shots_boucle else set()
     if a.shots_combat: a.shots_combat = set(int(x) for x in a.shots_combat.split(','))
     if a.shots_effet: a.shots_effet = set(int(x) for x in a.shots_effet.split(','))

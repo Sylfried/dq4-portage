@@ -1,4 +1,4 @@
-"""Lissage HD des feuilles de sprites : plusieurs algorithmes d'agrandissement x8 (EPX, regions lissees, bicubique), calcules
+"""Lissage HD des feuilles de sprites : agrandissement x8 EPX, calcule
 au chargement et mis en cache (aucun fichier du jeu modifie).
 
 Chaque case (24x32) est agrandie séparément puis replacée dans un nouvel atlas avec une marge (gouttière) qui répète
@@ -122,36 +122,10 @@ def agrandir_bicubique(case, f=8):
     return _dilater(a, 3)
 
 
-def agrandir_regions(case, passes=2, f=2, flou=0.9, max_classes=40):
-    """Regions lissees : EPX x2**passes, puis chaque couleur devient un masque interpole en bilineaire x f, floute, et
-    chaque pixel prend la couleur dont le masque est le plus fort (contours arrondis, aplats nets). Repli bicubique si trop de couleurs."""
-    a = _dilater(case)
-    for _ in range(passes): a = _x2(a)
-    k = _cle(a)
-    uniq, inv = np.unique(k, return_inverse=True)
-    if len(uniq) > max_classes: return agrandir_bicubique(case, f * 2 ** passes)
-    h, w = k.shape
-    inv = inv.reshape(h, w)
-    Ry, Rx = _matrice_interp(h, f, flou * f), _matrice_interp(w, f, flou * f)
-    best = None; lab = np.zeros((h * f, w * f), np.int32)
-    for c in range(len(uniq)):
-        m = (inv == c).astype(np.float32)
-        v = Ry @ m @ Rx.T
-        if best is None: best = v
-        else:
-            sup = v > best; best = np.where(sup, v, best); lab[sup] = c
-    couleur = np.zeros((len(uniq), 4), np.uint8)
-    for c in range(len(uniq)):
-        y, x = np.argwhere(inv == c)[0]; couleur[c] = a[y, x]
-        if uniq[c] == 0: couleur[c, 3] = 0
-    return _dilater(couleur[lab], 3)
-
-
-# (nom affiche, identifiant de cache, fonction) ; l'indice 0 = sprites d'origine (pixels nets, sans agrandissement)
+# (nom affiche, identifiant de cache, fonction) ; l'indice 0 = sprites d'origine (pixels nets, sans agrandissement), 1 = EPX x8 ; le mode 4 (pixel perfect) est gere par fenetre.py
+# (« regions lissees » et « bicubique » ont ete retires : ils floutaient les contours au lieu de les affiner ; agrandir_bicubique ne sert plus que de repli d'EPX pour les feuilles deja adoucies)
 MODES = [('Originaux (pixels nets)', None, None),
-         ('EPX x8', 'epx', agrandir_epx),
-         ('Regions lissees', 'reg', agrandir_regions),
-         ('Bicubique (doux)', 'bic', lambda c: agrandir_bicubique(c, FACTEUR))]
+         ('EPX x8', 'epx', agrandir_epx)]
 
 
 # ---- plans des fenetres de carte (256 x 256 affiches en 4:3) ------------------------------------------------------
