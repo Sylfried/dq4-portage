@@ -481,6 +481,7 @@ class Jeu(pyglet.window.Window):
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
         """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris."""
         if not self._pret: return
+        self.souris = (x, y)                                          # (pendant un appui, pyglet n'envoie plus on_mouse_motion : la position sert a savoir si le doigt est toujours sur le bouton)
         if self.pause.ouvert: self.pause.glisser(x, y)
         elif self.licence is not None: self.licence.glisse and self.licence.glisser(y)
         elif self.hud.croix_on: self.hud.croix_glisser(x, y)
@@ -1400,7 +1401,7 @@ class Jeu(pyglet.window.Window):
         mode = modes[0] if modes else 'bas'
         v = self.reg['interface_fenetres'].get(cle) or [1.0, 0.0, 0.0]
         cx, cy, s2 = self._ui_perso(mode, s, v)
-        fe.sel = None; fe.sel_nd = None
+        fe.sel = None; fe.sel_nd = None; fe.appui_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
         x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + (e[0] + dz) * s2, cy + (e[1] + dz) * s2          # cadre jaune : emprise de la fenetre
         pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()
@@ -1770,7 +1771,12 @@ class Jeu(pyglet.window.Window):
             for _, p in liste:
                 fe = self.ui_g.f[p]
                 fe.selection(self.appui[1] if self.appui and self.appui[0] == p else (self._curseur(p) if p == actif else None))
-                fe.sel_nd = self.appui_nd if self.appui and self.appui[0] == p else (self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p else (-1 if self.survol_nd else None))       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
+                if self.appui and self.appui[0] == p:           # appui en cours : l'element est sombre tant que le pointeur est dessus ; s'il en sort, plus rien (MenuPortItem.Update, etat 2 : SetPush(touche)), s'il revient, il se rassombrit
+                    h = self._bouton_sous(p, *self.souris); sur = bool(h) and h[3] == self.appui_nd
+                    fe.sel_nd = self.appui_nd if sur else -1; fe.appui_nd = self.appui_nd if sur else None
+                else:
+                    fe.appui_nd = None
+                    fe.sel_nd = self.survol_nd[1] if self.survol_nd and self.survol_nd[0] == p else (-1 if self.survol_nd else None)       # souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
                 if p in self.ui_suit: haut.append(fe)
                 elif p not in perso: bas.setdefault(self.ui_tf[p][1], []).append(fe)
             for fe in haut:                                   # le message d'abord, puis chaque fenetre qui le suit (Oui/Non) a son propre decalage
