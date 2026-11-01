@@ -188,6 +188,7 @@ class Fenetre:
         if 'custom' in p:
             cu = p['custom']; pt, ib = self._enrobe(p)
             if cu.get('cls', '').endswith('ICityMap'): return                                       # fenetre de carte (type 25) : le nom de la texture du plan (Menu/map) est pose par la visionneuse (nom_carte)
+            if cu.get('cls', '').endswith('StatusIconChanger'): self._icone_etat(i, v); return       # icones d'etat (mort, poison, sort scelle) et couleur du nom
             if cu.get('cls', '').endswith('BattleBar') and ib and ib['k'] == 'bar':      # BattleBar.Change(int) : barre normale
                 cu['_v'] = v; self._barre(ib, pt, v)
             return
@@ -359,6 +360,19 @@ class Fenetre:
         if self.t_curseur is not None:
             no = 2 + int(((time.monotonic() if t is None else t) - self.t_curseur) / self.CLIGNOTE) % 2
             if no != getattr(self, 'n_curseur', 2): self._icone_curseur(no)
+
+    # ---- icones d'etat (MenuPortItemTable.StatusIconChanger)
+    def _icone_etat(self, i, v):
+        """StatusIconChanger : v = icone | (couleur << 16). La premiere icone (feuille 13) prend `v & 3` (0 rien, 1 croix = mort, 2 tete de mort = poison), la seconde l'oeil (3) si le bit 2 est leve (sort scelle) ;
+        la couleur (palette de l'en-tete : blanc, jaune = a l'article de la mort, rouge = mort) teinte la matiere de cette feuille. i = rang de la partie qui porte deux icones de la feuille 13."""
+        pts = [pt for pt in self.parts if sum(1 for ib in pt['ib'] if ib['k'] == 'icon' and ib.get('partsNo') == 13) == 2]
+        if not 0 <= i < len(pts): return
+        pt = pts[i]; i1, i2 = [ib for ib in pt['ib'] if ib['k'] == 'icon' and ib.get('partsNo') == 13]
+        self._icone(pt, i1, v & 3); self._icone(pt, i2, ((v >> 2) & 1) * 3)
+        nd = self.N.get(pt['node']); cs = self.ml.couleurs; c = (v >> 16) & 0xffff
+        if nd and c < len(cs):
+            for m in nd['mats']:
+                if m.get('part') == 13: m['color'] = list(cs[c])
 
     def selection(self, bouton):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
