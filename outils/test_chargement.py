@@ -6,7 +6,8 @@ jusqu'a ce que la scene soit en place, sans changer la duree du fondu.
 
   1. regles pures (`Etat.appliquer`, `maj_chargement`, `tick_fondu` sur des paquets fabriques) ;
   2. absorption des blocages (`Jeu._absorber_blocage`, faux objet) ;
-  3. moteur d'origine (si --apk et --saves sont donnes) : teleportations vers des cartes de villes : la retenue dure au plus CHARGEMENT_MAX images, la 1re image montree est complete (camera envoyee, personnages
+  3. Windows : transitions du gestionnaire de fenetres (`transitions_dwm`, systeme simule) ;
+  4. moteur d'origine (si --apk et --saves sont donnes) : teleportations vers des cartes de villes : la retenue dure au plus CHARGEMENT_MAX images, la 1re image montree est complete (camera envoyee, personnages
      places) et le fondu d'entree garde toute sa duree.
 
     python3 outils/test_chargement.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4]]
@@ -152,6 +153,34 @@ class Absorption(unittest.TestCase):
         j.moteur.etat.cartes_chargees = 2
         F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
         self.assertIsNone(j.t_boucle, 'nouvelle carte : le compte repart')
+
+
+class DWM(unittest.TestCase):
+    """Windows : animation d'ouverture de la fenetre coupee pendant le lancement (fenetre.transitions_dwm). Ici sans Windows : le systeme est simule."""
+    def avec_dwm(self, dwm, fenetre):
+        import ctypes
+        ancien = sys.platform; sys.platform = 'win32'; ctypes.windll = types.SimpleNamespace(dwmapi=dwm)
+        try: return F.transitions_dwm(fenetre, False), F.transitions_dwm(fenetre, True)
+        finally: sys.platform = ancien; del ctypes.windll
+
+    def test_hors_windows_rien_ne_change(self):
+        self.assertFalse(F.transitions_dwm(types.SimpleNamespace(_hwnd=123), False))
+
+    def test_appel_windows(self):
+        appels = []
+        class Dwm:
+            def DwmSetWindowAttribute(self, h, attr, ref, taille): appels.append((h.value, attr, ref._obj.value, taille)); return 0
+        self.assertEqual(self.avec_dwm(Dwm(), types.SimpleNamespace(_hwnd=0x1234)), (True, True))
+        self.assertEqual(appels, [(0x1234, 3, 1, 4), (0x1234, 3, 0, 4)], 'DWMWA_TRANSITIONS_FORCEDISABLED : 1 pour couper, 0 pour remettre')
+
+    def test_erreurs_sans_suite(self):
+        class Casse:
+            def DwmSetWindowAttribute(self, *a): raise OSError('dwmapi absent')
+        class Refuse:
+            def DwmSetWindowAttribute(self, *a): return 0x80070057
+        self.assertEqual(self.avec_dwm(Casse(), types.SimpleNamespace(_hwnd=1)), (False, False))
+        self.assertEqual(self.avec_dwm(Refuse(), types.SimpleNamespace(_hwnd=1)), (False, False))
+        self.assertEqual(self.avec_dwm(Refuse(), types.SimpleNamespace()), (False, False), 'pas de poignee de fenetre')
 
 
 @unittest.skipIf(ARGS is None and '--apk' not in sys.argv, 'moteur d\'origine : --apk et --saves requis')

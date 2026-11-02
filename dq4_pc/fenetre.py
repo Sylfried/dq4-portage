@@ -178,6 +178,21 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
     return M, droite
 
 
+def transitions_dwm(fenetre, actif):
+    """Windows seulement : active ou coupe les animations de la fenetre faites par le gestionnaire de fenetres (DWM : ouverture en fondu / zoom, reduction, restauration ; DWMWA_TRANSITIONS_FORCEDISABLED).
+    Coupees pendant l'ouverture de la fenetre du jeu, elles ne s'ajoutent pas (un fondu de la fenetre elle-meme, par-dessus le noir puis les logos, ressemble a un rideau) ; remises ensuite (voir on_draw).
+    Aucune erreur ne remonte (systeme sans DWM, poignee absente : rien ne change). -> True si le systeme a accepte."""
+    if not sys.platform.startswith('win'): return False
+    try:
+        import ctypes
+        hwnd = getattr(fenetre, '_hwnd', None)
+        if not hwnd: return False
+        v = ctypes.c_int(0 if actif else 1)
+        return ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), 3, ctypes.byref(v), ctypes.sizeof(v)) == 0
+    except Exception as ex:
+        print('Transitions de fenêtre (DWM) inchangées : %r' % (ex,), flush=True); return False
+
+
 class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
         SV.noter('demarrage', largeur=args.largeur, hauteur=args.hauteur, plein_ecran=getattr(args, 'plein_ecran', 0), shot=bool(args.shot))
@@ -287,8 +302,11 @@ class Jeu(pyglet.window.Window):
             try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
             SV.noter('image noire presentee (fenetre cachee)')
+            self.dwm_coupe = transitions_dwm(self, False)    # Windows : pas d'animation d'ouverture du gestionnaire de fenetres (remise par on_draw, 2 s apres la 1re image du jeu)
             self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
-            SV.noter('fenetre montree', taille='%dx%d' % (self.width, self.height))
+            try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()      # Windows : l'image noire presentee fenetre cachee n'est pas forcement affichee ; une 2e, fenetre montree, evite le fond de classe (blanc) le temps du chargement
+            except Exception: pass
+            SV.noter('fenetre montree', taille='%dx%d' % (self.width, self.height), dwm_coupe=self.dwm_coupe)
             return mode
 
     def _init_ui(self):
@@ -2679,7 +2697,9 @@ class Jeu(pyglet.window.Window):
 
     def on_draw(self):
         self._nb_dessins = getattr(self, '_nb_dessins', 0) + 1
-        if self._nb_dessins == 1: self._journal_fenetre('1re image du jeu')
+        if self._nb_dessins == 1:
+            self._journal_fenetre('1re image du jeu')
+            if getattr(self, 'dwm_coupe', False): pyglet.clock.schedule_once(lambda dt: transitions_dwm(self, True), 2.0)
         if self._nb_dessins <= 90 or self._nb_dessins % 120 == 0: self._verifier_taille_reelle()
         sauve = self._interpoler(); t0 = time.perf_counter(); self._dessin_genre = '?'
         try: self._dessiner()
