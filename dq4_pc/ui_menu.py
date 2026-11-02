@@ -131,6 +131,12 @@ class MiseEnPage:
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
 
 
+# MenuPortItemTable.name_button_param (RVA 0xCF8E00-0xCF8F98, .cctor) : (nombre de rangees, ordonnee de depart, pas) de la liste Make_NameButton ; le moteur choisit la mise en page par le code 6 de la fenetre
+# (`<Make_NameButton>b__0`, 0xD08BE8 : les rangees 0 a nombre - 1 sont activees et posees en `depart - pas x rang`, les autres sont desactivees jusqu'a la 6e). L'exporteur ne peut pas jouer cette fonction (« List index »).
+NOMS_PRESETS = ((4, 382.0, 67.0), (5, 382.0, 67.0), (5, 434.0, 67.0), (6, 434.0, 67.0), (5, 412.0, 67.0))
+NOMS_DEPART, NOMS_PAS = 382.0, 67.0         # mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
+
+
 def uv_icone(info, no, decal):
     """PartsInfo.SetUV : 4 sommets (HG, HD, BD, BG) de l'icone numero `no` dans la feuille."""
     n = no + info['startNo']; w = info['widthNum']
@@ -173,6 +179,7 @@ class Fenetre:
                 if e['kind'] == 'func':
                     for nid, dd in ((e.get('fx') or {}).get('-1') or {}).get('d', {}).items():
                         if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
+        self.noms_liste = nom.startswith('Make_NameButton'); self.noms_dec = {}       # liste de boutons nommes (type 8) : decalage deja applique a chaque rangee (voir _liste_noms)
         if self.t.get('name', '').startswith('Make_NameButton'):       # liste de 6 boutons mais le moteur n'en pilote que 5 (codes 0 a 4) : le 6e (en bas, sous « Sauvegarde rapide ») reste cache tant qu'aucun code ne le montre
             for e in self.codes.get(5, []):
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
@@ -297,6 +304,7 @@ class Fenetre:
         elif self.statut: self._statut(i, c)
         elif self.noms and i == 4: self._reset_marques()
         elif self.debut and i == 3: self._debut(c)
+        elif self.noms_liste and i == 6: self._liste_noms(c); return
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -317,6 +325,26 @@ class Fenetre:
                     if pt:
                         for j, ib in enumerate(pt['ib']):
                             if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    def _liste_noms(self, c):
+        """Make_NameButton, code 6 (`<Make_NameButton>b__0`) : mise en page de la liste. Le preset `c` (NOMS_PRESETS) donne le nombre de rangees visibles et l'ordonnee de la premiere : les rangees suivantes (jusqu'a la 6e) sont desactivees, donc ni
+        dessinees ni cliquables (la 5e rangee, vide, restait visible et menait, au toucher, a une magie inexistante : <ERR ...> a l'ecran). Les codes de rangee (0 cache, 1 / 2 visible) arrivent apres et priment."""
+        if not isinstance(c, int) or not 0 <= c < len(NOMS_PRESETS) or len(self.parts) < 7: return
+        nb, depart, pas = NOMS_PRESETS[c]
+        for k in range(6):
+            nid = self.parts[1 + k]['node']; racine = self.N.get(nid)
+            if racine is None: continue
+            racine['act'] = k < nb and self.vals_code.get(k) != 0        # (rejeu d'une fenetre : le code de la rangee peut etre deja connu)
+            dz = (depart - pas * k) - (NOMS_DEPART - NOMS_PAS * k)                   # decalage voulu de la rangee k (le jeu pose la plaque, ses textes la suivent)
+            d = dz - self.noms_dec.get(k, 0.0)
+            if abs(d) > 1e-6:
+                for nd in self.N.values():
+                    x = nd; filiation = False
+                    while x is not None:
+                        if x['id'] == nid: filiation = True; break
+                        x = self.N.get(x['par'])
+                    if filiation: nd['pos'][2] += d
+                self.noms_dec[k] = dz
 
     def _code_masque(self, e, c):
         """Fonction de code dont l'argument est un MASQUE DE BITS sur des elements actifs / inactifs (Make_Casino_Poker b__1 : bit n = zone tactile de numero n, cartes 0 a 4 et « Donner » 5 ; le moteur envoie 63 pour toutes).
