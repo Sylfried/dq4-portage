@@ -1575,21 +1575,45 @@ class Jeu(pyglet.window.Window):
         """Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)]."""
         if champ or bataille or not e.icones or e.cam_pos is None or e.cam_cible is None: return []
         fwd = np.array(e.cam_cible, float) - np.array(e.cam_pos, float); fwd /= np.linalg.norm(fwd) or 1
-        out = []
+        out = []; corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None
         for slot, ic in sorted(e.icones.items()):
             if ic['pos'] is None or ic['alpha'] < 0.02: continue
             tex = self._tex_icone(ic['id'])
             if not tex: continue
-            p = np.array(ic['pos'], float) - fwd * 0.48
-            if cam3d is not None: a, b, up = p - cam3d[0] * 0.48, p + cam3d[0] * 0.48, cam3d[1] * 0.96       # de face a l'ecran, comme les personnages (rotation de la camera)
-            else: a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
-            q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+            if cam3d is not None:
+                # de face a l'ecran, comme les personnages (rotation de la camera). Avance de 0,48 vers la camera de la VISIONNEUSE (et non de celle du jeu : tournee ou inclinee par le joueur, elle decalait la bulle a l'ecran),
+                # le long du rayon de vue (voir _decaler_profondeur) ; la bulle reste collee au personnage qui la porte, quelle que soit l'inclinaison de la camera (voir _ancrer_icone)
+                P = self._ancrer_icone(e, np.array(ic['pos'], float), cam3d); r_, u_, f_ = cam3d; D = self._decaler_profondeur
+                A0, B0 = P - r_ * 0.48, P + r_ * 0.48
+                a, b, c, d = D(A0, f_, 0.48, corr, C_vue), D(B0, f_, 0.48, corr, C_vue), D(B0 + u_ * 0.96, f_, 0.48, corr, C_vue), D(A0 + u_ * 0.96, f_, 0.48, corr, C_vue)
+                q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
+            else:
+                p = np.array(ic['pos'], float) - fwd * 0.48
+                a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
+                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, float(min(max(ic['alpha'], 0.0), 1.0))] * 6
             vl = self.icone_vl.get(slot)
             if vl is None: vl = self.icone_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             out.append((tex, vl))
         return out
+
+    def _ancrer_icone(self, e, P, cam3d):
+        """Position d'une bulle d'icone (paquet 20) pour la camera de la visionneuse. Le moteur la pose au-dessus de la cible (1,294 au-dessus de ses pieds, mesure sur trois villageois) en coordonnees du MONDE, alors que
+        les personnages sont des panneaux de face a la camera : si la camera du joueur est inclinee ou tournee, la hauteur de la bulle par rapport a la tete change (1,294 x cos de l'inclinaison a l'ecran, contre une hauteur
+        de panneau fixe) et elle semble trop haute ou trop basse. Quand un personnage est sous la bulle (meme x, z), on garde donc l'ecart tel que la camera DU JEU le voit (composantes droite / haut / avant) et on le
+        rapporte au repere de la camera de la visionneuse : la bulle reste a la meme place par rapport a la tete (identique a P quand les deux cameras sont les memes). Sans personnage dessous (tonneau, jarre...) : P, ancre dans le monde."""
+        S = None; meilleur = 0.35
+        for sp in e.sprites.values():
+            pos = sp.get('pos')
+            if pos is None or len(pos) < 3 or not sp.get('vis', True): continue
+            dx, dz, dy = P[0] - pos[0], P[2] - pos[2], P[1] - pos[1]
+            if 0.3 < dy < 3.0 and math.hypot(dx, dz) < meilleur: meilleur = math.hypot(dx, dz); S = np.array(pos, float)
+        if S is None: return P
+        try: _, Dr, H, F = self._cadre_jeu(e)
+        except Exception: return P
+        d = P - S
+        return S + cam3d[0] * float(d @ Dr) + cam3d[1] * float(d @ H) + cam3d[2] * float(d @ F)
 
     def _carte_ports(self):
         """Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 24: liste des boutiques de la ville, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte."""
@@ -2332,6 +2356,56 @@ class Jeu(pyglet.window.Window):
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
             print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
 
+    def _dbg_proj(self, M, e, cam3d, a_dessiner, icones):
+        """(debogage, DQ_PROJ=n) pixels (x, y depuis le haut) des pieds / haut des panneaux des sprites et des bulles, toutes les n images."""
+        def px(P):
+            v = M @ np.array([P[0], P[1], P[2], 1.0]); return None if v[3] <= 1e-6 else (round(float((v[0] / v[3] * 0.5 + 0.5) * self.width), 1), round(float((1 - (v[1] / v[3] * 0.5 + 0.5)) * self.height), 1))
+        out = {}
+        for slot, f, vl in a_dessiner:
+            q = np.array(vl.position[:], float).reshape(-1, 3); out['s%d' % slot] = (px(q[0]), px(q[1]), px(q[2]), px(q[5]))       # coins : bas-gauche, bas-droit, haut-droit, haut-gauche
+        for slot, ic in sorted(e.icones.items()):
+            if ic['pos'] is not None: out['i%d' % slot] = (px(ic['pos']),)
+        for tex, vl in icones:
+            q = np.array(vl.position[:], float).reshape(-1, 3); out['bulle'] = (px(q[0]), px(q[1]), px(q[2]), px(q[5]))
+        print('PROJ n=%d' % self.n_boucle, out, flush=True)
+
+    def _correction_bords(self):
+        """Intensite (0 a 1) de la correction des bords : option --correction-bords (0 a 100), sinon variable d'environnement DQ_CORRECTION_BORDS (0 a 100), sinon le reglage `correction_bords` (0 / False = aucune, 1 / True = complete)."""
+        v = getattr(self.args, 'correction_bords', None)
+        if v is None and os.environ.get('DQ_CORRECTION_BORDS'):
+            try: v = float(os.environ['DQ_CORRECTION_BORDS'])
+            except ValueError: v = None
+        if v is None:
+            try: return min(1.0, max(0.0, float(self.reg['correction_bords'])))
+            except Exception: return 1.0
+        return min(1.0, max(0.0, float(v) / 100.0))
+
+    @staticmethod
+    def _decaler_profondeur(X, F, delta, t, C):
+        """Point X (d'un panneau parallele a l'ecran) rapproche de la camera de `delta` unites de profondeur. t = 0 : le long de l'axe de la camera (F), comme les sommets du panneau de la bulle Riseup dans Unity (Riseup.s_vtxDepth) ;
+        t = 1 : le long du rayon de vue (camera -> X) : meme point a l'ecran, meme profondeur (sinon le bord decale s'ecarte du centre de l'image de delta x ecart / profondeur : la bulle glisse de cote quand la camera est tournee). Entre les deux : melange lineaire."""
+        if t <= 0.0 or C is None: return X - F * delta
+        d = X - C; z = float(d @ F)
+        if z <= delta * 1.5: return X - F * delta                          # (tout contre la camera : pas de division par une profondeur nulle)
+        return X - ((1.0 - t) * delta) * F - (t * delta / z) * d
+
+    def _panneau_ville(self, p, r_, u_, f_, w, h, zb, zt, t, C):
+        """Les 4 sommets (bas gauche, bas droit, haut droit, haut gauche) du panneau d'un personnage de ville dont les pieds sont en p : un rectangle w x h parallele a l'ecran, dont le bas est recule de `zb` et le haut de `zt`
+        vers la camera (profondeur du panneau d'origine, qui penche de 36 degres). t = 0 : le panneau d'origine (decalages le long de l'axe de la camera). Defaut de l'original, rendu visible par le champ horizontal du 16/9
+        (le portrait du mobile en voyait bien moins) : le haut, plus proche, s'ecarte du centre de l'image (de zt x ecart / profondeur) et le sprite « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a
+        20 degres) ; de plus la hauteur a l'ecran se comprime vers le bas de l'image, d'ou un sprite trop large (jusqu'a 0,9 au lieu de 0,75). t = 1 : le panneau est reconstruit A L'ECRAN : meme position, meme hauteur
+        et memes profondeurs qu'avant (taille, recouvrements et z-buffer inchanges), mais bords verticaux et largeur = 0,72 x la hauteur a l'ecran (la proportion du panneau au centre de l'image : la largeur y est la
+        moyenne de celles du bas et du haut), donc le sprite garde ses proportions partout. Au centre de l'image, rien ne change. Entre les deux : melange lineaire des sommets. Camera inconnue ou panneau contre la camera : l'original."""
+        a, b = p - r_ * (w / 2), p + r_ * (w / 2)
+        orig = (a - f_ * zb, b - f_ * zb, b + u_ * h - f_ * zt, a + u_ * h - f_ * zt)
+        if t <= 0.0 or C is None: return orig
+        d = p - C; z = float(d @ f_)
+        if z <= zt * 1.5: return orig
+        xs, yb, yt = float(d @ r_) / (z - zb), float(d @ u_) / (z - zb), (float(d @ u_) + h) / (z - zt)      # a l'ecran (focale 1) : abscisse du centre du bas, ordonnees du bas et du haut du panneau d'origine
+        hw = 0.5 * (w / h) * (z - zt) / (z - 0.5 * (zb + zt)) * (yt - yb)                                    # demi-largeur a l'ecran : proportion (largeur moyenne / hauteur) du panneau d'origine au centre de l'image
+        new = [C + r_ * ((xs + sx * hw) * (z - dz)) + u_ * (ys * (z - dz)) + f_ * (z - dz) for sx, ys, dz in ((-1, yb, zb), (1, yb, zb), (1, yt, zt), (-1, yt, zt))]
+        return tuple(o + t * (n - o) for o, n in zip(orig, new))
+
     def _coupure_camera(self, e):
         """Pendant ce pas du moteur, la cible de la camera du jeu a-t-elle saute (coupure de scene, changement de carte) ? self.prec = etat du pas precedent."""
         pr = self.prec
@@ -2345,6 +2419,8 @@ class Jeu(pyglet.window.Window):
         e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
         r = lambda v: None if v is None else tuple(round(float(x), 1) for x in v)
         print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s poids=%.2f' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec), self.cam_poids), flush=True)
+        if os.environ.get('DQ_CAMV_SPR'):                                  # (debogage) + tous les sprites et les bulles d'icone
+            print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icones', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icones.items()}, flush=True)
 
     def _maj_titre(self):
         """Port 12 = fenetre de type 73 (Make_TitleTouch) : le moteur ne lui donne aucune case, « Touchez l'ecran » et le copyright sont dessines par Unity (TapToStart) ; le code 0 est CountReset."""
@@ -2485,6 +2561,7 @@ class Jeu(pyglet.window.Window):
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
         a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
         phi = self._lacet_eff() if cam3d is not None else 0.0
+        corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None          # correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
         rang = {}
         if champ:       # carte du monde : sprites a plat, tous a la meme hauteur ; le jeu les superpose par la hauteur z que le moteur envoie (3e valeur de la position), puis le plus au sud passe devant (un equipier au sud du heros est devant lui), puis l'emplacement le plus recent
             vus = [(float(s['pos'][2]) if len(s['pos']) > 2 else 0.0, float(s['pos'][1]), sl) for sl, s in e.sprites.items() if s['pos'] is not None]
@@ -2505,8 +2582,9 @@ class Jeu(pyglet.window.Window):
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
-                a, b = p - r_ * w / 2 - f_ * zb, p + r_ * w / 2 - f_ * zb
-                c, d = b + u_ * h - f_ * zh, a + u_ * h - f_ * zh
+                # Correction des bords (reglage « correction_bords », voir _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
+                # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
+                a, b, c, d = self._panneau_ville(p, r_, u_, f_, w, h, zb, zb + zh, corr, C_vue)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
                 a, b = p - dh * w / 2, p + dh * w / 2
@@ -2522,6 +2600,7 @@ class Jeu(pyglet.window.Window):
                 if cam3d is not None: ombres.append((slot, np.array(s['ombre_pos'], float) if s.get('ombre_sep') and s.get('ombre_pos') else p, al))
                 elif champ: ombres.append((slot, p, al))
         icones = self._icones(e, champ, bataille, dh, cam3d)
+        if os.environ.get('DQ_PROJ') and self.n_boucle % int(os.environ['DQ_PROJ']) == 0: self._dbg_proj(M, e, cam3d, a_dessiner, icones)
         self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
@@ -2691,6 +2770,7 @@ def main():
     ap.add_argument('--volume-musique', type=float, default=None, help='volume des musiques (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--volume-bruitages', type=float, default=None, help='volume des bruitages (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--plein-ecran', type=int, choices=(0, 1), default=None, help='1 = lance le jeu en plein ecran (fenetre creee directement en plein ecran), 0 = en fenetre ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
+    ap.add_argument('--correction-bords', type=int, default=None, choices=range(0, 101), metavar='0-100', help='sprites des villes : correction de l\'inclinaison vers l\'exterieur pres des bords gauche / droit de l\'ecran, en pourcentage (0 = aucune, comme avant ; 100 = complete) ; par defaut le reglage `correction_bords` (variable d\'environnement DQ_CORRECTION_BORDS pour comparer)')
     ap.add_argument('--msaa', type=int, default=None, help='anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap')
     ap.add_argument('--reglages', default=os.path.join(ici, 'reglages.json'), help='fichier des reglages du joueur (menu Echap : affichage, son, touches)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')

@@ -27,6 +27,7 @@ DEFAUT = {
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'camera_centree': True,       # villes, donjons, tours : la camera reste centree sur le heros meme pres du bord de la carte (le jeu et la visionneuse la bornent sinon : le bord de la carte resterait hors champ)
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
+    'correction_bords': True,     # villes, donjons, tours : les personnages ne penchent plus vers l'exterieur pres des bords gauche / droit de l'ecran (1 / True = corrige, 0 / False = comme avant ; une valeur entre 0 et 1 = correction partielle ; voir Jeu._panneau_ville)
     'plein_ecran': False,
     'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
     'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
@@ -137,6 +138,7 @@ class Reglages:
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
                 for k in BOOLEENS_SON_TEXTE:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
+                if not isinstance(self.v['correction_bords'], (bool, int, float)): self.v['correction_bords'] = DEFAUT['correction_bords']        # (0 a 1 accepte : correction partielle ; autre chose : valeur par defaut)
                 self.v['defilement_vitesse'] = int(round(self.v['defilement_vitesse']))
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
