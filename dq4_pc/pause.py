@@ -446,6 +446,8 @@ class Pause:
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec la molette : remet la distance de la caméra à 100 %   Avec un clic molette : remet aussi la position'
+        def inverse(lib, cle, aide):
+            d = self._choix(lib, [False, True], lambda: R[cle], lambda v: R.__setitem__(cle, v), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
@@ -454,6 +456,9 @@ class Pause:
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
                 *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance   Ctrl + clic molette : remet les deux   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
+                dict(t='sep', l='Caméra à la souris'),
+                inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
+                inverse('Inverser haut / bas', 'camera_inverser_hb', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens haut / bas   Non : glisser vers le haut incline comme la flèche haut   Les flèches du clavier ne changent pas"),
                 *[dict(t='sep', l=g, v=e) for g, e in GESTES_SOURIS],          # (lecture seule : lignes d'information, ni choisies ni cliquables)
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)'),

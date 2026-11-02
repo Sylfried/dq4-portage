@@ -17,7 +17,7 @@ HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'suivi_ca
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
                   'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'ecran_plein'}          # moniteur du plein ecran (#45, agent camera)
+HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera)
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
 AUTRES = {'boutons': False, 'croix': False, 'croix_taille': 1.7, 'boutons_taille': 1.4, 'boutons_pos': {'carte': [10, 5], 'menu': [3, 2.5], 'discussion': [0, 9], 'croix': [20, 9]},

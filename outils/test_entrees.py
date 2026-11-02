@@ -142,6 +142,30 @@ class Rotation(unittest.TestCase):
     def test_hauteur_nulle(self):
         self.assertTrue(all(math.isfinite(v) for v in self.piv(0.0, 0.0, 10, 10, h=0)))
 
+    def inv(self, gd, hb, dx, dy, lacet=0.0, angle=10.0, **kw): return EN.pivoter(lacet, angle, dx, dy, 720.0, self.A_MIN, self.A_MAX, kw.get('limite'), gd, hb)
+
+    def test_inversion_gauche_droite_seulement_sur_l_axe_horizontal(self):
+        for dx, dy in ((100, 0), (-60, 0), (100, 50), (-30, -80)):
+            normal = self.inv(False, False, dx, dy); inv = self.inv(True, False, dx, dy)
+            self.assertAlmostEqual(inv[0], -normal[0]); self.assertEqual(inv[1], normal[1])           # le lacet change de sens (de part et d'autre de 0), l'angle ne bouge pas
+            self.assertAlmostEqual(inv[0], self.inv(False, False, -dx, dy)[0])                          # = glisser de l'autre cote
+
+    def test_inversion_haut_bas_seulement_sur_l_axe_vertical(self):
+        for dx, dy in ((0, 100), (0, -60), (50, 100), (-30, -40)):
+            normal = self.inv(False, False, dx, dy); inv = self.inv(False, True, dx, dy)
+            self.assertEqual(inv[0], normal[0]); self.assertAlmostEqual(inv[1] - 10.0, -(normal[1] - 10.0))      # l'angle change de sens autour de sa valeur de depart, le lacet ne bouge pas
+            self.assertAlmostEqual(inv[1], self.inv(False, False, dx, -dy)[1])
+
+    def test_inversion_des_deux_axes_et_bornes_gardees(self):
+        n = self.inv(False, False, 80, 60); i = self.inv(True, True, 80, 60); j = self.inv(False, False, -80, -60)
+        self.assertAlmostEqual(i[0], j[0]); self.assertAlmostEqual(i[1], j[1])
+        self.assertEqual(self.inv(False, True, 0, -5000, angle=0.0)[1], self.A_MAX)                  # (haut / bas inverse : glisser vers le bas releve la camera, jusqu'a la meme borne)
+        self.assertEqual(self.inv(True, False, 5000, 0, lacet=0.0, limite=30.0)[0], -30.0)           # (gauche / droite inverse : la limite du lieu s'applique de l'autre cote)
+        self.assertGreater(n[0], 0.0)
+
+    def test_defaut_sans_inversion(self):
+        self.assertEqual(EN.pivoter(0.0, 0.0, 100, 50, 720.0, self.A_MIN, self.A_MAX), self.inv(False, False, 100, 50, angle=0.0))          # (les anciens appels sans les deux arguments : comme avant)
+
 
 class InfosF1(unittest.TestCase):
     def test_en_haut_a_droite_par_defaut(self):
@@ -217,10 +241,11 @@ class Faux:
         self.moteur = types.SimpleNamespace(etat=types.SimpleNamespace(partie=MO.PARTIE_VILLE if partie is None else partie, effet=None), msg_visible=False, menu_actif=lambda: None)
         self.pause = types.SimpleNamespace(ouvert=False); self.licence = None; self.sauv = None; self.titre = None; self._saisie_nom_en_cours = lambda: False; self.carte_ouverte = False; self.cam_bloquee = False; self.cam_limite = None
         self.hud = types.SimpleNamespace(croix_on=False); self.appui = None; self.molette = EN.GesteMolette(); self.lacet = 0.0; self.angle_cam = 0.0; self.height = 720
-        self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.touches = {}; self.reg = {'angle_camera': 0.0, 'distance_camera': 60}
-        self.zoom = 100.0 / 60; self.zooms = []; self._pret = True
+        self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.touches = {}; self.reg = {'angle_camera': 0.0, 'distance_camera': 60, 'camera_inverser_gd': False, 'camera_inverser_hb': False,
+                                                                                                         'vitesse_camera': 1.0, 'vitesse_accel': 1.5}
+        self.zoom = 100.0 / 60; self.zooms = []; self._pret = True; self.fixe_test = True; self.t_cam = None
         for k, v in kw.items(): setattr(self, k, v)
-        for nom in ('_terrain_libre', '_camera_pilotable', '_zoom_possible', 'recentrer_camera', '_ctrl_actif', '_molette_appui', '_molette_glisse', '_molette_relache', 'distance_par_defaut', 'on_mouse_scroll'):
+        for nom in ('_terrain_libre', '_camera_pilotable', '_zoom_possible', 'recentrer_camera', '_ctrl_actif', '_molette_appui', '_molette_glisse', '_molette_relache', 'distance_par_defaut', 'on_mouse_scroll', '_etat_axe', '_maj_camera'):
             setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
         self._tenue = lambda a: False
         self.regler_zoom = lambda z: self.zooms.append(round(100.0 / z))
@@ -263,6 +288,37 @@ class MoletteDansLeJeu(unittest.TestCase):
 
     def test_ctrl_molette_sur_la_carte_du_monde_remet_la_distance(self):
         j = Faux(partie=FE.MO.PARTIE_CHAMP); j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [100])
+
+    COMBOS = ((False, False), (True, False), (False, True), (True, True))
+
+    def glisse(self, gd, hb, ndy=-40):
+        j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb
+        j._molette_appui(500, 300, 0); j._molette_glisse(520, 300); j._molette_glisse(620, 300 + ndy)          # 100 px vers la droite, ndy vers le haut (y pyglet vers le haut)
+        return j
+
+    def test_inversion_du_glissement_dans_le_jeu_axe_par_axe(self):
+        base = self.glisse(False, False); self.assertGreater(base.lacet, 0.0); self.assertGreater(self.glisse(False, False, 40).angle_cam, 0.0)         # sans inversion : droite = lacet +, haut = angle +
+        for gd, hb in self.COMBOS:
+            j = self.glisse(gd, hb, 40); ref = self.glisse(False, False, 40)
+            self.assertAlmostEqual(j.lacet, -ref.lacet if gd else ref.lacet)                          # gauche / droite : le lacet change de sens exactement quand « Inverser gauche / droite » est a Oui
+            self.assertAlmostEqual(j.angle_cam, -ref.angle_cam if hb else ref.angle_cam)              # haut / bas : l'angle change de sens exactement quand « Inverser haut / bas » est a Oui
+            self.assertEqual(j.reg['angle_camera'], round(j.angle_cam, 2))                             # (l'angle est enregistre comme avant)
+
+    def test_inversion_ne_touche_pas_les_fleches_du_clavier(self):
+        """Fleches gauche / droite / haut / bas tenues 30 images (vraie `Jeu._maj_camera`) : meme lacet et meme angle quels que soient les deux reglages d'inversion."""
+        for tenue in ('cam_droite', 'cam_gauche', 'cam_haut', 'cam_bas'):
+            res = []
+            for gd, hb in self.COMBOS:
+                j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j._tenue = lambda a, t=tenue: a == t
+                for _ in range(30): j._maj_camera()
+                res.append((round(j.lacet, 6), round(j.angle_cam, 6)))
+            self.assertEqual(len(set(res)), 1, (tenue, res)); self.assertNotEqual(res[0], (0.0, 0.0), tenue)             # (la camera a bien bouge, et pareil dans les 4 cas)
+        j = Faux(); j._tenue = lambda a: a == 'cam_droite'; [j._maj_camera() for _ in range(30)]; self.assertGreater(j.lacet, 0.0)      # (la fleche droite tourne vers + : le sens d'origine du glissement vers la droite)
+
+    def test_inversion_sans_effet_sur_les_remises_a_zero(self):
+        for gd, hb in self.COMBOS:
+            j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j.clic(); self.assertTrue(all(a[0] for a in j.cam_axe.values()))
+            j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [100])
 
     def test_clic_suivi_d_un_deplacement_n_est_pas_un_clic(self):
         K = FE.pyglet.window.key

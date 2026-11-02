@@ -77,9 +77,12 @@ class GesteMolette:
         return 'tout' if (ctrl or ctrl_appui) else 'direction'
 
 
-def pivoter(lacet, angle, dx, dy, hauteur, a_min, a_max, limite=None):
+def pivoter(lacet, angle, dx, dy, hauteur, a_min, a_max, limite=None, inverser_gd=False, inverser_hb=False):
     """Glissement de (dx, dy) pixels (y vers le haut) -> (lacet, angle) en degres : memes grandeurs que les fleches de la camera. Le lacet reste entre -180 et 180 (et entre -limite et +limite si le lieu borne la rotation),
-    l'angle entre a_min et a_max."""
+    l'angle entre a_min et a_max. `inverser_gd` / `inverser_hb` (reglages « Inverser gauche / droite » et « Inverser haut / bas ») : le sens du glissement sur cet axe est inverse, l'autre axe ne change pas ;
+    les fleches du clavier ne passent pas par ici."""
+    if inverser_gd: dx = -dx
+    if inverser_hb: dy = -dy
     k = 1.0 / max(1.0, float(hauteur))
     lacet += dx * k * CAM_SOURIS_LACET
     lacet = max(-limite, min(limite, lacet)) if limite is not None else (lacet + 180.0) % 360.0 - 180.0          # (lieu borne : on s'arrete a la limite, on ne fait pas le tour ; sinon le lacet boucle comme celui des fleches)

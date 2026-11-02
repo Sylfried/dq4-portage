@@ -584,11 +584,12 @@ class Jeu(pyglet.window.Window):
         self.molette.appui(x, y, self._ctrl_actif(modifiers))
 
     def _molette_glisse(self, x, y):
-        """Bouton du milieu maintenu et pointeur deplace : la camera tourne (horizontal : autour du heros ; vertical : inclinaison), memes sens, bornes et reglage enregistre que les fleches (entrees.pivoter)."""
+        """Bouton du milieu maintenu et pointeur deplace : la camera tourne (horizontal : autour du heros ; vertical : inclinaison), memes sens par defaut, bornes et reglage enregistre que les fleches (entrees.pivoter) ;
+        les reglages « Inverser gauche / droite » et « Inverser haut / bas » inversent le sens du glissement sur leur axe (jamais celui des fleches du clavier)."""
         dx, dy = self.molette.deplacer(x, y)
         if not (dx or dy) or not self._camera_pilotable(): return
         for ax in self.cam_axe.values(): ax[0] = False                       # un glissement annule le recentrage anime en cours
-        self.lacet, a = EN.pivoter(self.lacet, self.angle_cam, dx, dy, self.height, CAM_ANGLE_MIN, CAM_ANGLE_MAX, self.cam_limite)
+        self.lacet, a = EN.pivoter(self.lacet, self.angle_cam, dx, dy, self.height, CAM_ANGLE_MIN, CAM_ANGLE_MAX, self.cam_limite, bool(self.reg['camera_inverser_gd']), bool(self.reg['camera_inverser_hb']))
         if a != self.angle_cam: self.angle_cam = a; self.reg['angle_camera'] = round(a, 2)
 
     def _molette_relache(self, modifiers):
