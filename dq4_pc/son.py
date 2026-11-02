@@ -80,6 +80,10 @@ BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur 
 BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
 SE_GRACE = 0.4               # secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
 SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
+# Musiques decodees d'avance (tache de fond, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache) : le decodage d'une musique longue prend plus d'une seconde (BGM 23, 113 s :
+# 1,15 s ici ; plus sur un PC lent), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 s apres l'avoir lancee (x3) : sans cela, la musique de la defaite (BGM 23, demandee quand tout le groupe est battu)
+# n'etait decodee qu'a ce moment-la, et l'arret du moteur, arrive avant la fin du decodage, la supprimait : le groupe mourait en silence. Les jingles (BGM 6, 8, 10, 13, 35 a 50) sont courts : 0,04 s chacun.
+BGM_PRECHARGES = (6, 8, 10, 13) + tuple(range(35, 51)) + (30, 23)
 
 # ---- categories de sons (menu Echap > Son). Unity ne connait que PlayBGM / PlaySE (classe Sound) : ni voix, ni canal « ME » a part. Les categories sont celles que le MOTEUR distingue par la facon de jouer un son :
 # musique (PlayBGM, avec boucle) ; jingles et fanfares (PlayBGM sans boucle : BGM 6, 8, 10, 13, 35 a 50 de 2,9 a 23,2 s, ou demande avec la reprise de la musique d'avant, 0x1000 | n = SoundManager::playRestart) ;
@@ -132,7 +136,9 @@ class Son:
         self.mix = Mixage(musique=volume_musique, effets=volume_bruitages)
         self.actif = actif; self.ok = False
         self.pool = ThreadPoolExecutor(max_workers=1)
+        self.pool_fond = ThreadPoolExecutor(max_workers=1)                 # prechargement des musiques : un fil a part, pour qu'il ne retarde jamais un son demande par le moteur
         self.dec = collections.OrderedDict(); self.jobs = {}
+        self.fond = []; self.epingles = set()                              # musiques a decoder d'avance (noms), noms gardes en memoire
         self.bgm = None; self.bgm_id = None; self.bgm_demande = None
         self.reprise = None; self.bgm_fin = None                           # jingle : musique a reprendre, heure de fin du jingle
         self.bgm_t0 = None; self.bgm_pos0 = 0.0; self.bgm_decalage = 0.0     # heure et position (secondes) du depart de la lecture ; position demandee pour la prochaine musique (chargement d'un etat)
@@ -169,16 +175,16 @@ class Son:
         d = self._octets(nom)
         if d is None: return None
         r = decoder_akb(d)
-        if r is not None and nom.startswith('SE'):                        # les bruitages sont petits : cache disque (les musiques se decodent en une fraction de seconde)
+        if r is not None and nom.startswith('SE'):                        # les bruitages sont petits : cache disque (une musique longue, elle, prend plus d'une seconde : voir BGM_PRECHARGES)
             try: np.savez(f, pcm=r['pcm'], p=np.array([r['frequence'], r['debut'], r['fin'], int(r['boucle'])], np.int64), v=np.array([r['volume']], np.float32))
             except Exception: pass
         return r
 
-    def _obtenir(self, nom, rappel):
+    def _obtenir(self, nom, rappel, fond=False):
         """Appelle rappel(donnees) : tout de suite si `nom` est deja decode, sinon depuis tick() quand la tache de fond a fini."""
         if nom in self.dec: self.dec.move_to_end(nom); rappel(self.dec[nom]); return
         if nom in self.jobs: self.jobs[nom][1].append(rappel); return
-        self.jobs[nom] = (self.pool.submit(self._decode_sur, nom), [rappel])
+        self.jobs[nom] = ((self.pool_fond if fond else self.pool).submit(self._decode_sur, nom), [rappel])
 
     def _decode_sur(self, nom):
         try: return self._decode(nom)
@@ -190,6 +196,22 @@ class Son:
         if not (self.ok and self.actif): return
         for i in ids: self._obtenir('SE%04d' % i, lambda r: None)
 
+    def precharger_musiques(self, ids=BGM_PRECHARGES):
+        """Musiques a decoder d'avance : une par image du jeu, seulement quand aucun autre decodage n'attend (la premiere musique du jeu passe donc la premiere) et une fois qu'une musique joue. Elles restent en memoire."""
+        if not (self.ok and self.ogg): return                                # (meme son coupe au depart : le prechargement attend qu'une musique joue)
+        for i in ids:
+            nom = 'BGM%02d' % i
+            self.epingles.add(nom)
+            if nom not in self.fond: self.fond.append(nom)
+
+    def _purger(self):
+        """Cache de decodage : 80 sons (hors musiques epinglees) et 400 Mo au plus ; les plus anciennement utilises partent les premiers."""
+        while True:
+            libres = [k for k in self.dec if k not in self.epingles]
+            if len(libres) <= 80 and sum(x['pcm'].nbytes for x in self.dec.values()) <= 400 * 2 ** 20: return
+            if not libres: return
+            del self.dec[libres[0]]
+
     # ---- appele a chaque image
     def tick(self):
         if not self.ok: return
@@ -197,9 +219,11 @@ class Son:
             if not fut.done(): continue
             r = fut.result(); del self.jobs[nom]
             if r is None: continue
-            self.dec[nom] = r
-            while len(self.dec) > 80 or sum(x['pcm'].nbytes for x in self.dec.values()) > 400 * 2 ** 20: self.dec.popitem(last=False)
+            self.dec[nom] = r; self._purger()
             for cb in rappels: cb(r)
+        if self.fond and not self.jobs and self.bgm is not None:             # rien d'autre a decoder et une musique joue : on avance le prechargement d'une musique
+            nom = self.fond.pop(0)
+            if nom not in self.dec: self._obtenir(nom, lambda r: None, fond=True)
         maintenant = time.time()
         if self.reprise is not None and self.bgm_fin is not None and maintenant >= self.bgm_fin:       # Sound.SystemUpdate : le jingle est fini, la musique d'avant reprend
             n = self.reprise; self.reprise = None; self.bgm_fin = None
@@ -383,8 +407,9 @@ class Son:
         return self.actif
 
     def fermer(self):
-        try: self.pool.shutdown(wait=False, cancel_futures=True)
-        except Exception: pass
+        for pool in (self.pool, self.pool_fond):
+            try: pool.shutdown(wait=False, cancel_futures=True)
+            except Exception: pass
         self.arreter_bgm()
 
 

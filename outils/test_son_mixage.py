@@ -157,5 +157,67 @@ class Lecture(unittest.TestCase):
         self.assertAlmostEqual(s.mix.vol['musique'], 0.3); self.assertAlmostEqual(s.mix.vol['effets'], 0.6)
 
 
+def attendre(s):
+    """Laisse finir les decodages de fond, puis tick() (le decodage tourne dans un fil)."""
+    for nom, (fut, rap) in list(s.jobs.items()): fut.result()
+    s.tick()
+
+
+class Precharge(unittest.TestCase):
+    """SN : les musiques que le moteur demande puis arrete aussitot en combat (BGM 23 : defaite du groupe ; jingles) sont decodees d'avance et gardees en memoire."""
+
+    def son(self):
+        s = nouveau_son(); s.decodes = []
+        def decode(nom): s.decodes.append(nom); return donnees(113.0 if nom == 'BGM23' else 4.0, nom == 'BGM03')       # (BGM 3 : la musique du moment, avec boucle)
+        s._decode = decode
+        return s
+
+    def test_rien_avant_la_premiere_musique(self):
+        s = self.son(); s.precharger_musiques((23, 47))
+        for _ in range(3): attendre(s)
+        self.assertEqual(s.decodes, [], 'tant qu\'aucune musique ne joue, rien n\'est decode d\'avance')
+        s.jouer_bgm(3); attendre(s)                                                 # la musique du jeu passe la premiere
+        self.assertEqual(s.decodes[0], 'BGM03'); self.assertIsNotNone(s.bgm)
+
+    def test_une_musique_a_la_fois_puis_toutes_en_memoire(self):
+        s = self.son(); s.jouer_bgm(3); attendre(s); s.precharger_musiques((47, 23, 9))
+        attendre(s); self.assertEqual(len(s.jobs), 1, 'une seule musique a la fois')
+        for _ in range(5): attendre(s)
+        self.assertEqual(s.decodes, ['BGM03', 'BGM47', 'BGM23', 'BGM09'], 'dans l\'ordre demande')
+        for nom in ('BGM47', 'BGM23', 'BGM09'): self.assertIn(nom, s.dec)
+
+    def test_pas_devant_un_decodage_demande(self):
+        s = self.son(); s.jouer_bgm(3); attendre(s); s.precharger_musiques((23,))
+        s.jouer_bgm(5)                                                              # decodage demande par le moteur : le prechargement attend
+        s.tick(); self.assertEqual(list(s.jobs), ['BGM05'], 'le prechargement ne passe pas devant un son demande')
+        for _ in range(4): attendre(s)
+        self.assertIn('BGM23', s.dec)
+
+    def test_epingles_jamais_chassees(self):
+        s = self.son(); s.jouer_bgm(3); attendre(s); s.precharger_musiques((23,))
+        for _ in range(3): attendre(s)
+        self.assertIn('BGM23', s.dec)
+        for i in range(200): s.dec['SE%04d' % (1000 + i)] = donnees(0.1, False)
+        s._purger()
+        self.assertIn('BGM23', s.dec, 'une musique epinglee reste')
+        self.assertLessEqual(len([k for k in s.dec if k not in s.epingles]), 80, 'le reste suit la regle des 80 sons')
+
+    def test_defaite_demandee_puis_arretee_est_jouee(self):
+        """Le moteur demande BGM 23 (tout le groupe est battu) : la musique part tout de suite, sans attendre un decodage que l'arret du moteur annulerait."""
+        s = self.son(); s.jouer_bgm(3); attendre(s); s.precharger_musiques((23,))
+        for _ in range(3): attendre(s)
+        s.jouer_bgm(SON.BGM_ARRET); self.assertIsNone(s.bgm)
+        s.jouer_bgm(23); self.assertIsNotNone(s.bgm, 'jouee dans l\'image meme de l\'ordre'); self.assertEqual(s.bgm_id, 23)
+        self.assertEqual(s.jobs, {})
+
+    def test_sans_prechargement_l_arret_annule_le_decodage(self):
+        """Ce que le prechargement evite : musique non decodee, ordre puis arret avant la fin du decodage -> rien ne joue."""
+        s = self.son(); s.jouer_bgm(23); s.jouer_bgm(SON.BGM_ARRET); attendre(s)
+        self.assertIsNone(s.bgm)
+
+    def test_desactive(self):
+        s = self.son(); s.ok = False; s.precharger_musiques((23,)); self.assertEqual(s.fond, [])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

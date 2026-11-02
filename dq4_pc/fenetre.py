@@ -222,7 +222,7 @@ class Jeu(pyglet.window.Window):
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
-        self.son.precharger(SE_COURANTS)
+        self.son.precharger(SE_COURANTS); self.son.precharger_musiques()
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
