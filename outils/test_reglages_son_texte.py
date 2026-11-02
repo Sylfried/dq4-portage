@@ -57,6 +57,13 @@ class Reglages(unittest.TestCase):
         r, _ = charger({'defilement_auto': False, 'defilement_vitesse': 1})                                   # rien n'etait impose : rien ne l'est apres la migration
         self.assertIs(r['defilement_force'], False)
 
+    def test_cran_comme_le_jeu_est_le_standard_du_moteur(self):
+        """Le cran « Normal » (4 lettres par image) est la vitesse standard du jeu : c'est la valeur que la regle de priorite du jeu (priorite_jeu.lettres_par_image) remplace par le reglage du joueur, et celle qui ne change rien."""
+        import priorite_jeu as PJ
+        self.assertEqual(RG.DEFAUT['vitesse_texte'], PJ.LETTRES_STANDARD)
+        self.assertIn(float(PJ.LETTRES_STANDARD), RG.VITESSES_TEXTE)
+        for v in RG.VITESSES_TEXTE: self.assertEqual(PJ.lettres_par_image(v, 400), 400, 'fenetres de combat : jamais touchees')
+
     def test_crans_du_defilement(self):
         self.assertEqual(RG.CRANS_DEFILEMENT, (0, 2, 3, 4))
         for code, cran in ((0, 0), (1, 2), (2, 2), (3, 3), (4, 4), (5, 2), (-1, 2), (None, 2), ('a', 2)): self.assertEqual(RG.cran_defilement(code), cran, code)

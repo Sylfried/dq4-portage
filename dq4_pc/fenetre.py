@@ -15,6 +15,7 @@ import ui_menu as UI
 import son as SON
 import effet_combat as EC
 import reglages as RG
+import priorite_jeu as PJ
 import pause as PA
 import hud_mobile as HM
 import etats as ET
@@ -983,7 +984,7 @@ class Jeu(pyglet.window.Window):
         if not e.cam_libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites: th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (sans heros, comme au titre : champ horizontal fixe de l'original)
-        th_v /= self.zoom                                                  # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...)
+        th_v /= PJ.facteur_effectif(self.zoom, e.cam_libre)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
         # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
         # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
         option = bool(self.reg['camera_centree'])
@@ -2398,12 +2399,13 @@ class Jeu(pyglet.window.Window):
 
     def _facteur_vitesse(self):
         """Facteur de vitesse de l'horloge du jeu quand le heros marche (reglages : vitesse de marche, accelerateur tant que sa touche est tenue). Seulement sur le terrain (ville, donjon, carte du monde),
-        direction tenue, sans message ni menu ni combat ni effet d'ecran. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
+        direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
+        if mo.drapeaux() & (MO.DRAPEAU_FONDU | MO.DRAPEAU_JOUEUR_VERROUILLE): return 1.0       # le jeu a la main (scene, evenement sans message, fondu) : son rythme est le sien, la direction tenue n'y change rien
         f = float(R['vitesse_marche'])
         if self._tenue('accel'): f *= float(R['vitesse_accel'])
         return max(0.25, min(8.0, f))
