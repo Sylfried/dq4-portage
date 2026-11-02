@@ -3009,15 +3009,18 @@ class Jeu(pyglet.window.Window):
             self._dessin_genre = 'noir (attente du combat)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self._dessiner_aide(); return
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
+        retenu = getattr(e, 'chargement', None) is not None                 # chargement de carte sous un ecran couvert, scene pas encore en place : on ne dessine que le noir et les fondus (Etat.maj_chargement)
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
         fond = e.fond
         if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
         self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
-        if (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
-            # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite)
-            self._dessin_genre = 'noir (scene pas arrivee)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+        if retenu or (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
+            # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite) ;
+            # ou chargement de carte pas encore complet (retenu) : le moteur n'a envoye que le decor, la camera et les personnages arrivent a l'image suivante
+            self._dessin_genre = 'noir (retenue du chargement)' if retenu else 'noir (scene pas arrivee)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+            if retenu: self.post.debut((0.0, 0.0, 0.0)); self.post.fin()                   # (prepare le rendu hors ecran sous le noir : sa creation ne retarde pas la 1re image visible)
             gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu(True)
             if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
                 self._maj_message(); self._dessiner_message(); self._dessiner_menus()

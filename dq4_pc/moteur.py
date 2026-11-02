@@ -23,6 +23,8 @@ ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque Game
 G_IS_AMAZON = 0x24f684                      # octet g_isAmazon du moteur : a 1, la case « Sauv. cloud » du menu de depart n'existe pas
 EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
 EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
+CHARGEMENT_COUVERT = 0.9                    # opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (Etat.chargement)
+CHARGEMENT_MIN, CHARGEMENT_PLACEMENT, CHARGEMENT_MAX = 1, 2, 6      # images du moteur apres le paquet 0 : au moins 1 (le moteur place la camera et les personnages a l'image suivante, sur 529 cartes), 2 au plus pour attendre les positions des personnages visibles, 6 : garde-fou (jamais d'attente plus longue)
 ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
 
@@ -93,6 +95,7 @@ class Etat:
         self.fondu = self._plan_fondu(); self.fondu_fond = self._plan_fondu()      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir. DEUX plans (Fade.l_fade, bit 14 de l'entier du paquet 9 = Fade.l_targetLayer) : 0 = « FadeForMenu » (shader Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris) ; 1 = « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres)
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
+        self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'img': image du paquet 0, 'n': images ecoulees, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
@@ -102,14 +105,16 @@ class Etat:
     def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0))
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
     def appliquer(self, paquets, lire_nom):
         self.maillages_vus = set()
+        couvert = max(self.fondu['a'], self.fondu_fond['a']) >= CHARGEMENT_COUVERT; charge = False; cam_vue = False      # ecran deja couvert par un fondu au moment du chargement de carte ?
         for t, a, f in paquets:
             if t == 0:
+                charge = True; cam_vue = False
                 self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0)      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
@@ -158,6 +163,8 @@ class Etat:
             elif t == 4 and a and len(f) >= 2:      # cmd_fld_rot : objet ; rotation x, y (z = 0)
                 self.objets_cmd.append(('rot', a[0] & 0xffff, tuple(f[:2])))
             elif t == 10 and a:
+                if charge: cam_vue = True
+                elif self.chargement is not None: self.chargement['cam'] = True
                 fl = list(f)
                 if a[0] & 1 and len(fl) >= 3: self.cam_pos = tuple(fl[:3]); fl = fl[3:]
                 if a[0] & 2 and len(fl) >= 3: self.cam_cible = tuple(fl[:3]); fl = fl[3:]
@@ -217,6 +224,9 @@ class Etat:
                     if s['pos'] is None and self.image - s.get('cree', 0) >= ORIGINE_APRES: s['pos'] = (0.0, 0.0, 0.0)       # le moteur n'envoie une position que si elle change de celle qu'il croit deja posee (son enregistrement du personnage : (0, 0, 0)) :
                                                                           # un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
                                                                           # du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
+        if charge:         # chargement de carte : dessin retenu (voir maj_chargement) si l'ecran est couvert, soit par un fondu deja la, soit par le fondu d'entree lance avec ce chargement (il repart de l'opacite 1)
+            if couvert or any(fd['a'] >= CHARGEMENT_COUVERT and fd['fin'] == 0.0 and fd['n'] >= 1 for fd in (self.fondu, self.fondu_fond)): self.chargement = {'img': self.image, 'n': 0, 'cam': cam_vue}
+            else: self.chargement = None
 
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
@@ -234,10 +244,23 @@ class Etat:
             if d <= 1: fd['a'] = 0.0; fd['n'] = 0; fd['pas'] = 0.0
             else: fd['a'] = 1.0; fd['pas'] = -1.0 / d; fd['n'] = d
 
+    def maj_chargement(self):
+        """Fin de la retenue du dessin apres un chargement de carte (une fois par image du moteur, apres `appliquer`). La visionneuse n'a vu que le paquet 0 (nouveau decor) a l'image du chargement : camera de la scene
+        d'avant, personnages sans position, ni teinte ni ordres d'objets ; le moteur envoie la camera (paquet 10) et les positions (paquet 13) a l'image suivante (59 cartes essayees, 529 cartes comptees : toujours le decalage 1).
+        Tant que `chargement` existe, la fenetre ne dessine que les plans de fondu (noir de l'ecran couvert) et les fondus d'entree sont suspendus (`tick_fondu`) : le fondu du jeu garde toute sa duree, il commence juste
+        une image plus tard, sur une scene complete. Prete : au moins CHARGEMENT_MIN image, camera recue, et personnages visibles tous places (au plus CHARGEMENT_PLACEMENT images d'attente) ; garde-fou CHARGEMENT_MAX."""
+        ch = self.chargement
+        if ch is None: return
+        ch['n'] = self.image - ch['img']
+        places = all(sp['pos'] is not None for sp in self.sprites.values() if sp.get('vis', True))
+        monde = self.partie != PARTIE_CHAMP or self.champ is not None      # carte du monde : attendre aussi ses tuiles (paquet 28)
+        if ch['n'] >= CHARGEMENT_MAX or (ch['n'] >= CHARGEMENT_MIN and monde and ch['cam'] and (places or ch['n'] >= CHARGEMENT_PLACEMENT)): self.chargement = None
+
     def tick_fondu(self):
         """FadePlane.Update : une fois par image du jeu, pour chacun des deux plans. Garde-fou (plan de devant seulement) : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert ;
         le plan de fond n'en a pas : le moteur le tient noir de lui-meme (titre de chapitre, 160 images) et le rouvre par une commande."""
         for fd, garde in ((self.fondu, True), (self.fondu_fond, False)):
+            if self.chargement is not None and fd['fin'] == 0.0 and fd['n'] >= 1: continue      # retenue du dessin apres un chargement : un fondu d'entree ne commence qu'avec la scene en place
             if fd['n'] >= 1:
                 fd['n'] -= 1
                 if fd['n'] < 1: fd['a'] = fd['fin']
@@ -687,6 +710,7 @@ class Moteur:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
         ac = self.etat.attente_charge
         if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
+        self.etat.maj_chargement()
         self.etat.tick_fondu()
         prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
