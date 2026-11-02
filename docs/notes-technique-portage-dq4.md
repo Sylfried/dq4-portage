@@ -1,6 +1,8 @@
 # Portage PC de DQ4 (Android) : notes techniques (état au 29/10/2026, soir)
 
 > **Numéros « issue #N » dans ces notes (relu le 02/11/2026)** : ce sont les numéros de l'ancien dépôt `dq4-pc`, qui numérote ses issues et ses pull requests ensemble (issues #1 à #37, #40, #41, #44, #45, #56, #57 ; PR #38, #39, #42, #43, #46 à #55, #58 à #79). `dq4-portage` n'a aucune issue : ses numéros (#1 à #46) sont des PR « Avance #N ». Plusieurs mentions « issue #38, #39, #42, #54 » ci-dessous désignent en fait des PR fermées de `dq4-pc`. Les « issue #53 » et « issue #55 » ont été remplacées par la PR de `dq4-portage` qui traite le sujet.
+>
+> **Règle du moteur (reformulée le 02/11/2026)** : le fichier `libdq4core.so` n'est jamais modifié ; la visionneuse n'y pose en mémoire que les correctifs et crochets listés dans la section « Écritures et crochets en mémoire du moteur », à la fin de ce fichier.
 
 ## Architecture du jeu
 - Unity 2022.3.62f3 (IL2CPP, ARM64 uniquement) + moteur C++ autonome `libdq4core.so` (2,4 Mo, 6 664 fonctions exportées avec noms conservés).
@@ -329,3 +331,58 @@ Résumé de l'enquête (le journal complet des paquets image par image n'est pas
 ## Avance #48 : faits techniques
 - **Identifiant du message affiché par un sort sans effet** : lire le champ de la table des actions ne suffit pas. Pour l'action 204 (Évac'), `actionParam_ + 0x48 * 204 + 0x14` contient 0xaae7e et le jeu affiche pourtant 0xc3d6d (valeur lue dans `UseActionParam + MAGIE_RESULTAT` juste après `execUse` ; mêmes lectures : actions 200 et 202 -> 0xc3d6b, action 196 -> 0xc3d71). Écrire 0xaae7e dans le résultat donne « ERROR 700030 » à l'écran. Méthode : un `print` temporaire dans le crochet `_apres`, jamais conservé.
 - **Navigation de l'historique** : géométrie en pixels depuis le haut du contenu ; la fenêtre montre, depuis le haut du contenu, de `hc - décalage - hv` à `hc - décalage` (décalage 0 = tout en bas). Décalage minimal pour voir un message = aligner son bord coupé sur le bord de la fenêtre ; premier / dernier message avec la marge de la liste.
+
+## Écritures et crochets en mémoire du moteur (02/11/2026, base b2899f4)
+**Règle (reformulée le 02/11/2026, décision 15 du rapport « ce qu'il reste », G-049)** : le fichier `libdq4core.so` n'est **jamais modifié** (il est lu dans l'APK, chargé en mémoire dans l'émulateur et jamais réécrit sur disque : aucun code de `dq4_pc/` n'écrit dans un APK ; Établi par `grep` des `open(…, 'w')`). En revanche la visionneuse pose **en mémoire** quelques correctifs ciblés et des crochets d'exécution. La règle « le moteur d'origine ne se modifie pas » signifie donc : le fichier reste intact, le comportement du jeu n'est changé que par les sites listés ici, et **tout nouveau correctif ou crochet s'ajoute à cette liste**. Méthode de relevé : `grep -n "mem_w(\|mem_write\|hook_add\|reg_write" dq4_pc/*.py` ; les numéros de ligne sont ceux de la base b2899f4 et dérivent quand les fichiers changent.
+
+**Décompte (relevé à la main sur le code courant)** : **22 crochets** `UC_HOOK_CODE` / `UC_HOOK_MEM_WRITE` (nombre vérifié à l'exécution en comptant les appels de `Uc.hook_add` pendant la création du moteur : 22 hors `emu_core.py`, plus 2 dans `emu_core.py` pour les imports et les accès mémoire invalides ; 4 écrivent un registre : S6 à S9 ; 18 lisent seulement : R1 à R9) ; **5 correctifs de code ou de données** (S1 à S5) ; **5 écritures qui jouent le rôle d'Unity** (U1 à U5) ; 1 restauration complète d'un état enregistré (E1) ; 1 redirection des fichiers de sauvegarde (F1). Soit **16 sites qui écrivent** (9 + 5 + 2), comme le dit le rapport, mais ce n'est pas la même liste : le tableau de `docs/audit/couverture.md` §4 (relevé à #42) comptait 13 sites qui écrivent et 3 qui lisent seulement, et ne connaissait pas les crochets ajoutés depuis (S7, S8, S9, R6, R7 et R9). `emu_core.py` (l'émulateur : mise en place de la machine, canari de pile, pile, tas, imports libc / OpenGL / fichiers, `emu_core.py:311-341` et les `h_*`) et `rencontres.py` (logique pure, sans accès à la mémoire) ne comptent pas ; le crochet des rencontres est dans `moteur.py`.
+
+**Verdict sur « aucun ne touche un scénario ni une variable de jeu »** : **Établi** (lecture de chaque site) pour les drapeaux de scénario, les variables d'événement, l'or, l'inventaire, la position du héros, l'état des coffres et des PNJ : aucun site ne les écrit. **Inexact si « variable de jeu » inclut toute valeur de la partie** : trois sites en changent une, voir S5 (option de la partie, imposée dès le lancement), S7 (PV et PM au niveau supérieur, **option de triche désactivée par défaut**) et S8 (compteur de rencontres aléatoires, **seulement quand la marche est accélérée au-delà de x1**). Les appels de fonctions du moteur (A1 à A3) changent aussi l'état du jeu, mais ce sont ceux que ferait Unity ou le jeu d'origine.
+
+### Correctifs de code ou de données et crochets qui écrivent (modifient le moteur)
+| Réf | Site dans le moteur | Rôle | Garde / quand | Fichier:ligne |
+|---|---|---|---|---|
+| S1 | `g_isAmazon` (`libdq4core + 0x24f684`), 1 octet ← 1 | retire la case « Sauv. cloud » du menu de départ (le jeu fait la même chose pour la version Amazon ; Google Play Games et le serveur Square Enix n'existent pas sur PC) | écrit à un offset fixe, **sans contrôle** ; à la création, puis après chaque chargement d'état | `moteur.py:442`, `607` |
+| S2 | `FieldData::drawSymbol` +0x44, +0x48, +0x4c : trois immédiats de `add` (192, 448, 788) portés à 1600 | les lieux de la carte du monde restent visibles sur toute la largeur 16/9 (le jeu ne les montre que dans la fenêtre portrait d'origine) | motif d'instruction vérifié avant d'écrire, sinon rien ; à la création (`moteur.py:434`) et après un état (`606`) | `moteur.py:611-623` |
+| S3 | `TownMenu_OPERATION_ROOT::menuUpdate` `0x16ef28` : `cmp w8, #7` → `cmp w8, #4095` | le bouton « Paramètres » du menu Divers n'ouvre plus les réglages d'origine : la visionneuse ouvre son menu Pause (voir R5) | instruction d'origine (`0x71001d1f`) vérifiée ; à la création et après un état | `moteur.py:630-635` |
+| S4 | vitesses de marche : `TownPlayerAction::walkSpeed` (819), `walkSpeed2` (655), `FieldPlayer::Speed` (12288), constantes `0x27520c` et `0x275210` (8192) | **remises à leur valeur d'origine** (un état enregistré par une ancienne version pendant une course les contenait majorées) ; la course accélère l'horloge du moteur, pas ces valeurs | au chargement d'un état seulement | `moteur.py:677-686` |
+| S5 | `status::g_Option + 5` (`OptionStatus.battleSpeed`, vitesse des messages de combat ; défaut du jeu : 2 = attente de 32 images) | la visionneuse **impose** cette valeur : 4 (à la main) en « Manuel », **0 (attente la plus courte, 12 images) pour les trois autres vitesses de combat, donc dès le lancement avec les réglages par défaut** (`RG.code_defilement`, `Jeu.appliquer_defilement` appelée à la création). La valeur du jeu (celle de la sauvegarde) est gardée dans `_defil_origine` et rendue si l'option est lâchée ; un changement fait par le jeu (chargement d'un journal, Paramètres d'origine) est repris comme nouveau réglage (R4) | écrite avant chaque image. **Supposé** (non essayé) : cette valeur fait partie de `OptionStatus`, donc elle est écrite dans une sauvegarde du jeu faite pendant qu'elle est imposée | `moteur.py:585`, `589`, `596` ; `fenetre.py:246`, `1027-1029` |
+| S6 | crochet `ui_MsgLoop + 0x128` (`sxth w20, w8`) : registre `x8` | vitesse du texte des dialogues du joueur (lettres par image) ; ne fait rien à la vitesse 4 (celle du jeu) ni pour une valeur fixée par le jeu (fenêtres de combat : 100) | instruction d'origine vérifiée, sinon rien | `moteur.py:496-497` |
+| S7 | crochet `HaveStatus::levelup(bool) + 0x3f8` (`tbz w20, #0`) : registre `x20` | option « PV et PM restaurés au niveau supérieur » : force le bit que `debugLevelup` met déjà, le moteur refait lui-même la remise à plein | seulement si l'option (menu Triches, **désactivée par défaut**) est active ; instruction vérifiée | `moteur.py:517-518` |
+| S8 | crochet `CountDown::exec + 0xc` (`str w8, [x0]`) : registre `x8` | rencontres aléatoires à marche accélérée : la perte du compteur par pas est multipliée par (1 + a) / (2 a) (voir `rencontres.py`) | seulement quand la vitesse de marche est > 1 (x1 : le jeu tel quel) ; instruction vérifiée | `moteur.py:538-539` |
+| S9 | crochet `UnitySetFade` (`0x17e120`) : registre `x0`, plus quatre crochets d'entrée / sortie sur `__cmd_fade_in::initialize` (`0x21b3c0`) et `__cmd_fade_out::initialize` (`0x21b43c`) qui ne notent qu'un drapeau Python | marque (bit `0x10000`, que le moteur n'utilise pas) le paquet 9 d'un fondu lancé par un script, pour que « Vitesse de transition » ne le raccourcisse pas | `UnitySetFade` vérifié (`mov w10, #9` à +8), sinon le réglage s'applique à tous les fondus | `moteur.py:564-567` |
+
+### Écritures qui jouent le rôle d'Unity (le moteur les attend d'Unity)
+| Réf | Site | Rôle | Fichier:ligne |
+|---|---|---|---|
+| U1 | bit 0 du premier mot du tampon de sortie (`outp[0]`, `Global.Flag`) | « un fondu est en cours » (`Fade.FadePlane.CheckFade`), levé et baissé à chaque image selon les deux plans de fondu | `moteur.py:747` |
+| U2 | bit 1 du même mot | « effet d'écran en cours » (`Capture.ScreenEffect`) pendant la cascade de début de combat ; la fenêtre le borne (`ATTENTE_CHARGE_MAX`) | `moteur.py:717` (appelé en `722` et `730`) |
+| U3 | bit 0 de l'octet `table[idx × 32 + 0x14]` d'un objet de carte (`table` = `[FLDObject + 8]`) | rappel « animation finie » (porte, coffre, jarre) après une durée lue dans les données, sinon `DUREE_ANIM` | `moteur.py:914` |
+| U4 | file de messages interface → moteur (`buf1`) ; remise à zéro de la file moteur → interface (`buf2`) | ce que fait `MenuPort.Send` : touches et clics de menu, saisie du nom ; seules les actions du joueur y passent | `moteur.py:881` (envoi), `845` (remise à zéro) |
+| U5 | tampon de paramètres du canevas de message, puis appel direct de `SDrawCTRL::CanvasSetup` | Unity crée ce canevas par un message de port (512 x 512) | `moteur.py:654-655` |
+
+### Autres écritures
+| Réf | Site | Rôle | Fichier:ligne |
+|---|---|---|---|
+| E1 | `etats.appliquer` : image de la bibliothèque, tas, données, TLS | chargement d'un état instantané demandé par le joueur (la version du fichier est vérifiée) ; suivi de `reappliquer_correctifs` (S1 à S4) | `etats.py:46-50` ; `moteur.py:603-609` |
+| F1 | `CoreJeu.h_fopen` / `h_fclose` | les fichiers `dataN.dat` ouverts en écriture par le moteur sont redirigés vers le dossier d'écriture (`--saves-ecriture`) ; les originaux ne sont ouverts qu'en lecture (Établi par la lecture du code ; non vérifié par somme de contrôle) | `moteur.py:65-84` |
+
+### Appels de fonctions du moteur (pas d'écriture directe)
+- **A1** retour à l'écran titre (`Moteur.retour_titre`, menu Pause > « Revenir à l'écran titre » après confirmation) : `profile::SaveLoad::killbank(4, 0)` (efface la banque 4, la sauvegarde automatique ; les fichiers que le moteur écrit vont dans le dossier d'écriture, F1), `PlayerManager::setLock(1)`, `Global::startTitle()` : ce que fait le bouton d'origine des Paramètres du jeu. `moteur.py:664-671`.
+- **A2** chargement d'un journal (`SaveLoad::loadbank`) et relecture du catalogue après un import (`getCatalogView`, `getCatalogRecent`, `getCatalogStatus`) : `moteur.py:918`, `923`, `933`.
+- **A3** initialisation (`DevInit`, `MenuPortInit`, `GameInit`, `moteur.py:436-441`), `GameUpdate` à chaque image avec le masque de touches (`moteur.py:756`) ; essais seulement : `Global::startField` et `startTown` (`moteur.py:662`, `675`), `BattleMenu_setHoppingNumbers` sous `DQ_CALLHOP` (`moteur.py:753`).
+
+### Crochets en lecture seule
+| Réf | Site | Ce qu'il lit | Fichier:ligne |
+|---|---|---|---|
+| R1 | `MenuPort::SetVisible` | si la fenêtre de message est affichée | `moteur.py:459` |
+| R2 | `FieldData::drawBlock` | l'objet qui porte la carte du monde | `moteur.py:465` |
+| R3 | `FLDObject::SetCommonAnimation` | l'objet animé en cours | `moteur.py:468` |
+| R4 | `OptionStatus::setBattleSpeed` | un changement de la vitesse des messages fait dans les Paramètres d'origine (rappel à la visionneuse) | `moteur.py:505` |
+| R5 | `TownMenu_OPERATION_ROOT::menuUpdate` `0x16ef28` | le bouton choisi (7 = « Paramètres ») : lève `demande_pause` | `moteur.py:643-644` |
+| R6 | `TextBuffer::cat` | chaque page de message, pour l'historique des dialogues | `historique.py:306` |
+| R7 | cinq fonctions de combat : `PartyStatus::startBattle`, `BattleActorManager2::execMonsterDeath`, `BattleExecDefeatMonster::initialize`, `BattleExecEscape::setup`, `Global::endBattle` | ennemis vaincus, or, expérience, pour l'historique des combats | `historique_combat.py:36-37`, `157` |
+| R8 | `UC_HOOK_MEM_WRITE` sur les curseurs d'écriture `0x258278` et `0x258280` et crochet sur `UnityGetPacket` | découpe les paquets moteur → Unity | `pktlog.py:11-14` |
+| R9 | les quatre crochets d'entrée / sortie des commandes de fondu de script (S9) | un drapeau Python | `moteur.py:566` |
+
+Les crochets d'historique (R6, R7) sont entourés de `try` (`Capteur._cat`, `CapteurCombat._crochet`) : une erreur ne doit pas arrêter le moteur. Les variables d'environnement `DQ_*` de débogage ne modifient pas le moteur, sauf `DQ_CALLHOP` (essai, A3).

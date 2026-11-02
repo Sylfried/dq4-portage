@@ -3,7 +3,7 @@
 Portage natif sur PC de **Dragon Quest IV (Android)**, à partir de la version déjà patchée en français. Premier objectif : un affichage **16/9** propre, avec les fenêtres, les menus, la souris (= tactile du mobile), la musique et les bruitages d'origine.
 
 ## Principe (« voie A »)
-Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par une couche Unity. On garde le moteur tel quel et on réécrit la couche Unity en Python :
+Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par une couche Unity. On garde le moteur d'origine et on réécrit la couche Unity en Python. Le fichier `libdq4core.so` n'est **jamais modifié** (il est lu dans l'APK et exécuté en mémoire), mais la visionneuse y pose en mémoire quelques correctifs ciblés et des crochets (lieux de la carte du monde en 16/9, bouton « Paramètres », vitesse du texte, vitesse des combats, marche accélérée, option de triche PV / PM…) : la liste complète, une ligne par site, est dans la section « Écritures et crochets en mémoire du moteur » de [`docs/notes-technique-portage-dq4.md`](docs/notes-technique-portage-dq4.md). Aucun ne touche un drapeau de scénario, l'or, l'inventaire ni la position du héros ; trois changent pourtant une valeur de la partie : la vitesse des messages de combat (une option du jeu, enregistrée dans ses sauvegardes), le compteur de rencontres aléatoires quand la marche est accélérée, et les PV / PM au niveau supérieur (option de triche, désactivée par défaut) :
 
 - `dq4_pc/emu_core.py` : chargeur ELF AArch64 + [Unicorn](https://www.unicorn-engine.org/) qui exécute `libdq4core.so` ;
 - `dq4_pc/moteur.py` / `pktlog.py` : pilotage du moteur (`GameUpdate`…), décodage des paquets moteur → Unity, file de messages des menus ;

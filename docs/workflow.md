@@ -30,6 +30,7 @@ Courts, au présent, préfixés : `feat:`, `fix:`, `docs:`, `refactor:`, `chore:
 - Projet séparé du patch FR : ne jamais toucher à ses fichiers (APK patchés, `*.mpt`, Excel, `DQ_Patch_FR.exe`, `build_exe.bat`).
 - Les sauvegardes de l'utilisateur ne sont jamais modifiées (les nouvelles vont dans `dq4_pc\sauvegardes`) ; les tests lisent une copie en lecture seule et écrivent dans `/tmp`.
 - Le jeu d'origine fait foi : ce que la visionneuse remplace doit coller au comportement du mobile, sauf demande contraire.
+- **Le moteur** : le fichier `libdq4core.so` n'est jamais modifié. En mémoire, seuls existent les correctifs ciblés et les crochets listés dans `docs/notes-technique-portage-dq4.md` (section « Écritures et crochets en mémoire du moteur ») ; **tout nouveau correctif ou crochet s'ajoute à cette liste**, avec sa garde (instruction d'origine vérifiée avant d'écrire) et son rôle. Aucun ne doit toucher un scénario, l'or, l'inventaire ni la position du héros sans accord de Sylfried.
 
 ## Délégation (30/10/2026)
 Sylfried laisse à Claude la gestion des issues (à l'époque dans `dq4-pc`), commits, pushs, pull requests et fusions (squash vers `main` ; la suppression des branches fusionnées attend la décision ci-dessus). Les fusions restent précédées d'une vérification en cloud ; les tests sur le PC de test se font sur les fichiers copiés avant ou pendant la PR.
