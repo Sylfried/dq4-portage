@@ -908,6 +908,8 @@ class Jeu(pyglet.window.Window):
 
     def _lieu(self):
         e = self.moteur.etat
+        if e.partie == MO.PARTIE_CASINO: return 'Casino : poker' if e.carte == 'ev04' else ('Casino : machine à sous' if e.carte == 'ev05' else 'Casino')          # (cartes ev04 / ev05 : voir Global::setMinigame)
+        if e.partie == MO.PARTIE_BESTIAIRE: return 'Bestiaire'
         return 'Carte du monde' if e.partie == MO.PARTIE_CHAMP else ('Combat' if e.partie == MO.PARTIE_COMBAT else (e.carte or '?'))
 
     def _etat_complet(self):
@@ -2467,7 +2469,7 @@ class Jeu(pyglet.window.Window):
         R = self.reg; mo = self.moteur; e = mo.etat
         if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True, self._attend_joueur())          # combat : « Vitesse des combats » seule (Normal, Rapide, Très rapide) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
-        if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
+        if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
         if mo.drapeaux() & (MO.DRAPEAU_FONDU | MO.DRAPEAU_JOUEUR_VERROUILLE): return 1.0       # le jeu a la main (scene, evenement sans message, fondu) : son rythme est le sien, la direction tenue n'y change rien
         f = float(R['vitesse_marche'])
