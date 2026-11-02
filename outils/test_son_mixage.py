@@ -219,5 +219,77 @@ class Precharge(unittest.TestCase):
         s = self.son(); s.ok = False; s.precharger_musiques((23,)); self.assertEqual(s.fond, [])
 
 
+class ProtectionJingle(unittest.TestCase):
+    """SN : un jeu accelere (combat x2, x3) enchaine les ordres de musique du moteur plus vite : la fanfare etait coupee (montee de niveau, BGM 47 de 3,1 s : 1,75 s a x3). Un ordre qui serait arrive apres le jingle
+    a vitesse normale attend l'heure ou il serait arrive (image du moteur, 30 par seconde) ou la fin du jingle ; sans image du moteur, rien ne change. Horloge simulee ; jingle = BGM 8 (5 s), musique = BGM 2 (boucle)."""
+
+    def setUp(self):
+        import types
+        self.h = 1000.0; self.ancien = SON.time
+        SON.time = types.SimpleNamespace(time=lambda: self.h)
+        self.s = nouveau_son()
+
+    def tearDown(self): SON.time = self.ancien
+
+    def ordre(self, v, e, dt=0.0):
+        self.h += dt; self.s.evenements([(37, v)], image_moteur=e); self.s.tick()
+
+    def avance(self, dt): self.h += dt; self.s.tick()
+
+    def lancer_jingle(self, v=8, e=100, relance=False):
+        s = self.s; self.ordre(2, 0); self.assertEqual(s.bgm_id, 2)
+        self.ordre(v | (SON.BGM_RELANCE if relance else 0), e); self.assertEqual(s.bgm_cat, 'jingles'); self.t0 = self.h
+
+    def test_vitesse_normale_rien_ne_change(self):
+        s = self.s; self.lancer_jingle()
+        self.ordre(SON.BGM_ARRET, 160, dt=2.0)                                      # image 160 = 2 s apres l'image 100 : l'heure qu'il est
+        self.assertIsNone(s.bgm); self.assertEqual(len(s.attente_bgm), 0)
+
+    def test_x3_arret_retenu_jusqu_a_l_heure_normale(self):
+        s = self.s; self.lancer_jingle()
+        self.ordre(SON.BGM_ARRET, 160, dt=0.7)                                      # a x3 : l'ordre de l'image 160 arrive a 0,7 s au lieu de 2 s
+        self.assertEqual(s.bgm_id, 8); self.assertIsNotNone(s.bgm); self.assertEqual(len(s.attente_bgm), 1)
+        self.avance(1.2); self.assertIsNotNone(s.bgm, '1,9 s : pas encore')
+        self.avance(0.15); self.assertIsNone(s.bgm, '2,05 s : l\'ordre part a l\'heure normale'); self.assertEqual(len(s.attente_bgm), 0)
+
+    def test_ordre_apres_la_fin_du_jingle_part_a_la_fin_du_jingle(self):
+        s = self.s; self.lancer_jingle()
+        self.ordre(SON.BGM_ARRET, 400, dt=1.0); self.ordre(2, 430, dt=0.1)               # images 400 et 430 : 10 s et 11 s apres (le jingle dure 5 s)
+        self.assertEqual(len(s.attente_bgm), 2)
+        self.avance(3.8); self.assertEqual(len(s.attente_bgm), 2, '4,9 s : le jingle joue encore')
+        self.avance(0.2)
+        self.assertEqual(len(s.attente_bgm), 0); self.assertEqual(s.bgm_id, 2, 'les ordres partent dans l\'ordre : arret puis musique 2'); self.assertEqual(s.bgm_cat, 'musique')
+
+    def test_bruitages_jamais_retenus(self):
+        s = self.s; self.lancer_jingle()
+        self.ordre(SON.BGM_ARRET, 300, dt=0.5); s.evenements([(35, 316)], image_moteur=301)
+        self.assertEqual([x.ident for x in s.se], [316])
+
+    def test_sans_image_du_moteur_ou_sans_jingle_ou_jingles_coupes(self):
+        s = self.s; self.lancer_jingle()
+        s.evenements([(37, SON.BGM_ARRET)]); self.assertIsNone(s.bgm, 'sans image du moteur : tout de suite')
+        self.ordre(2, 0); self.ordre(5, 10, dt=0.1); self.assertEqual(len(s.attente_bgm), 0, 'une musique avec boucle n\'est pas un jingle')
+        s.regler_mixage(actifs={'jingles': False}); self.ordre(8, 100); self.ordre(SON.BGM_ARRET, 500, dt=0.1)
+        self.assertIsNone(s.bgm, 'jingles coupes : rien a proteger')
+
+    def test_jingle_avec_reprise_puis_jingle_suivant(self):
+        s = self.s; self.lancer_jingle(relance=True); self.assertEqual(s.reprise, 2)
+        self.ordre(SON.BGM_RELANCE + 8, 400, dt=1.0)                                  # 2e fanfare, apres la fin de la 1re a vitesse normale
+        self.assertEqual(len(s.attente_bgm), 1); self.assertEqual(s.bgm_id, 8)
+        self.avance(4.1)
+        self.assertEqual(len(s.attente_bgm), 0); self.assertEqual(s.bgm_id, 8); self.assertEqual(s.reprise, 2, 'la musique d\'avant a repris, puis le 2e jingle l\'a gardee a reprendre (pas le 1er jingle)')
+
+    def test_pause_ne_libere_rien(self):
+        s = self.s; self.lancer_jingle()
+        self.ordre(SON.BGM_ARRET, 160, dt=0.5)
+        s.mettre_en_pause(True); self.avance(100.0); self.assertEqual(len(s.attente_bgm), 1)
+        s.mettre_en_pause(False); self.assertEqual(len(s.attente_bgm), 1, 'la pause decale les echeances')
+        self.avance(1.0); self.assertEqual(len(s.attente_bgm), 1); self.avance(0.6); self.assertEqual(len(s.attente_bgm), 0)
+
+    def test_chargement_d_un_etat_vide_la_file(self):
+        s = self.s; self.lancer_jingle(); self.ordre(SON.BGM_ARRET, 300, dt=0.2); self.assertEqual(len(s.attente_bgm), 1)
+        s.restaurer_bgm({'id': 2, 'pos': 0.0, 'reprise': None}); self.assertEqual(len(s.attente_bgm), 0); self.assertEqual(s.bgm_id, 2)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

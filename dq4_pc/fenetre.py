@@ -2776,7 +2776,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_FLAG') and self.n % int(os.environ['DQ_FLAG']) == 0: print('FLAG n=%d %#x partie=%s msg=%s menu=%s cam=%s>%s' % (self.n, mo.drapeaux(), mo.etat.partie, mo.msg_visible, mo.menu_actif(), None if mo.etat.cam_pos is None else tuple(round(float(x), 2) for x in mo.etat.cam_pos), None if mo.etat.cam_cible is None else tuple(round(float(x), 2) for x in mo.etat.cam_cible)), flush=True)
         if mo.etat.partie == MO.PARTIE_CHAMP and mo.etat.champ is not None: self._avancer_motifs()
         self.son.image = self.n
-        if mo.etat.sons: self.son.evenements(VC.sons_a_jouer(mo.etat.sons, self._se_images)); mo.etat.sons = []
+        if mo.etat.sons: self.son.evenements(VC.sons_a_jouer(mo.etat.sons, self._se_images), image_moteur=mo.images); mo.etat.sons = []
         self.son.tick()
         jeu = mo.options_jeu()[:2]
         if jeu != self._opt_son: self._opt_son = jeu; self.son.regler_mixage(jeu={'musique': SON.volume_option_jeu(jeu[0]), 'effets': SON.volume_option_jeu(jeu[1])})        # options « volume » de la fenetre Parametres du jeu
