@@ -183,6 +183,7 @@ class Donnees:
             cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
+        if not kids and {'MeshFilter', 'MeshRenderer'} <= set(self._components(rg)): kids[0] = rg          # decor d'un seul maillage porte par la RACINE (18 decors de combat : btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_*) : l'objet 0 de la carte est la racine elle-meme
         for o in objs:                                               # ChunkFile.readPosition (CCEB58) lit x, y, z puis NEGUE y (fneg) : la position d'un objet de la carte est (x, -y, z) ; sans cela les arbres et la ruine des reliefs
             o['pos'] = (o['pos'][0], -o['pos'][1], o['pos'][2])      # s'enfoncent (y du fichier = -hauteur du relief) ; c'est aussi la raison du « +1 » des coffres (fichier -0,5 -> monde +0,5)
         tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}; tfmt = {}
