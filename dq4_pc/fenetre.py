@@ -26,6 +26,7 @@ import entrees as EN
 import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
+import contours_decor as CD
 import fbx as FX
 import ciel_titre as CT
 import vitesse_combat as VC
@@ -225,7 +226,7 @@ class Jeu(pyglet.window.Window):
         self.son.precharger(SE_COURANTS)
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
-        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
+        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self._tex_contours = []; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
         self.fbx_cache = {}; self.fbx_lect = {}           # modeles 3D animes (fbx.py : le dragon du titre) : numero -> {'etat', 'm', ...} ; emplacement -> lecteur d'animation
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
@@ -1251,6 +1252,15 @@ class Jeu(pyglet.window.Window):
         out.sort(key=lambda o: o[0])
         return [o[1:] for o in out]
 
+    def _purger_contours(self, src, garde=CD.TEXTURES_GARDEES):
+        """Les textures de decor de combat agrandies x4 (contours_decor.py, 5,6 Mo avec leurs mipmaps) ne sont gardees que pour les derniers decors vus : les plus anciennes rendent leur place sur la carte graphique."""
+        while len(self._tex_contours) > garde:
+            for i, cle in enumerate(self._tex_contours):
+                if cle[0] != src: break
+            else: return
+            cle = self._tex_contours.pop(i); t = self.tex_gl.pop(cle, None)
+            if t is not None: t.delete()
+
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
         for x in self.carte_ext: x[1].delete()
@@ -1267,10 +1277,13 @@ class Jeu(pyglet.window.Window):
         self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
         self.palettes = OC.PalettesCarte(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
+        contours = nom.startswith('btl') and not os.environ.get('DQ_SANS_CONTOURS')        # decors de combat : silhouettes des arbres et montagnes adoucies (contours_decor.py) ; DQ_SANS_CONTOURS=1 : (test) texture d'origine
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
             if (src, key) not in self.tex_gl:
-                self.tex_gl[(src, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
+                arr = CD.pour_decor(c['textures'][key], key) if contours else c['textures'][key]
+                self.tex_gl[(src, key)] = t = self._tex(arr, True, 99); self._filtrer(t, self.lissage)
+                if arr is not c['textures'][key]: self._tex_contours.append((src, key)); self._purger_contours(src)
             vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', self.objets.cur[key].ravel()), tex_coords=('f', self.objets.uv(key).ravel()), colors=('f', self.objets.col(key).ravel()))
             self.carte_vl.append((self.tex_gl[(src, key)], vl, key)); self.carte_pos[key] = pos.copy()
         for key, dd in self.palettes.defs.items():                         # images de chaque animation de palette
