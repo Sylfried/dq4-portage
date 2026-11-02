@@ -38,6 +38,7 @@ MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0),
 # Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
 ETAT_NORMAL, ETAT_ENFONCE, ETAT_INVISIBLE, ETAT_GRISE, ETAT_INVERSE = 0, 1, 2, 3, 4
 LIBELLE_AUTO = 'Sauvegarde automatique'      # chaine 623 du jeu (patch FR) : l'etiquette de la plaque auto quand le moteur n'en envoie pas (il ne l'envoie qu'avec un data5.dat valide)
+TEXTE_GRIS = 3                               # MenuParts.TEXT_COLOR_GRAY : couleur de texte d'un bouton grise (palette du jeu)
 BOUTON_AUTO = 4                              # numero du bouton « Sauvegarde automatique » du menu de depart (type 53, cellule (4, 1) du moteur, banque 4 = data5.dat)
 
 
@@ -566,7 +567,21 @@ class Fenetre:
             if vide: pl['act'] = False; pl['_vide'] = True
             elif pl.pop('_vide', False): pl['act'] = True
 
+    def textes_grises(self):
+        """Texte gris (TEXT_COLOR_GRAY) sur les plaques de bouton grisees (etat 3), blanc de nouveau quand elles ne le sont plus. Le shader gris du jeu ne fait que retirer la couleur : sur la plaque grise du menu de depart
+        la difference ne se voit presque pas ; le texte gris montre qu'elle est inactive (choix de la visionneuse : le jeu, lui, ne change la couleur du texte que pour les boutons qui l'ont demande)."""
+        for pl in self.N.values():
+            if pl['buttonId'] is None or not pl['mats'] or pl['mats'][0].get('part') != 7: continue
+            for t in self.N.values():
+                if t['par'] != pl['id'] or t['text'] is None: continue
+                if pl['etat'] == ETAT_GRISE: t['tcol'] = TEXTE_GRIS; t['_gris'] = True
+                elif t.pop('_gris', False): t['tcol'] = 0
+
     def plaque_auto(self, bouton=BOUTON_AUTO, libelle=LIBELLE_AUTO):
+        """Menu de depart : plaque « Sauvegarde automatique » (voir _plaque_auto) puis texte gris des plaques grisees."""
+        self._plaque_auto(bouton, libelle); self.textes_grises()
+
+    def _plaque_auto(self, bouton=BOUTON_AUTO, libelle=LIBELLE_AUTO):
         """Menu de depart (type 53) : la plaque « Sauvegarde automatique » reste TOUJOURS visible, avec son etiquette ; sans sauvegarde auto elle est grisee (etat 3 : shader gris) donc inactive (`etat_actif` : ni survol, ni clic,
         ni validation au clavier ; le moteur, qui n'a pas de cellule 4 dans ce cas, ne recoit rien). Le jeu d'origine, lui, CACHE cette plaque (code 0 = 0 : cadre 215 / 216 puis SetActive(false)) ; la demande de l'utilisateur
         (grisee, jamais disparue) l'emporte. Avec DQ_AUTO_CACHEE : comportement d'origine. Idempotent (appelee a chaque image)."""

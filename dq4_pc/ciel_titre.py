@@ -6,7 +6,7 @@ l'une par rapport a l'autre) de 3 carreaux de 11,5 unites ; l'objet glisse de 0,
 le meme carreau apparaissait 3 a 6 fois de suite, tel quel (« on voit trop le fait que le pattern soit repetitif »).
 
 Solution (une seule idee) : la zone portrait centrale (largeur = hauteur x 9/16) reste EXACTEMENT le ciel d'origine ; de chaque cote, a partir de son bord, des bandes de meme geometrie que les rangees du ciel
-(memes y, z, memes couleurs de sommet) reprennent la texture avec une etirure horizontale qui varie en douceur le long de la bande (de 0,5 a 1,5 fois la taille d'origine, moyenne 1 : meme echelle d'ensemble), et un glissement vertical de la texture a l'interieur de chaque rangee (nul sur ses bords : les coutures entre rangees restent celles de l'original), avec des phases differentes a gauche et a droite : la meme forme de nuage n'apparait plus deux fois au meme endroit ni a la meme taille. L'etirure vaut 1 au bord de la zone :
+(memes y, z, memes couleurs de sommet) reprennent la texture avec une etirure horizontale qui varie en douceur le long de la bande (de 0,52 a 1,48 fois la taille d'origine, moyenne 1 : meme echelle d'ensemble), et un glissement vertical de la texture a l'interieur de chaque rangee (nul sur ses bords : les coutures entre rangees restent celles de l'original), avec des phases differentes a gauche et a droite : la meme forme de nuage n'apparait plus deux fois au meme endroit ni a la meme taille. L'etirure vaut 1 au bord de la zone :
 raccord continu, aucune couture. Les coordonnees de texture suivent le defilement de l'objet (le raccord au bord reste exact a chaque image).
 """
 import math
@@ -14,9 +14,9 @@ import numpy as np
 
 ASPECT_PORTRAIT = 0.5625              # SceneCamera.ASPECT_DEF : ecran portrait 450 x 800
 PAS_PAR_CARREAU = 16                  # colonnes de bande par carreau (11,5 unites) : l'etirure varie sur ~ 0,6 carreau, au moins 9 colonnes par ondulation
-ETIRURE = ((0.34, 0.61, 0.0), (0.20, 1.37, 1.7))        # (amplitude, longueur d'onde en carreaux, phase) des deux ondulations de l'etirure horizontale (somme des amplitudes < 1 : le sens de la texture ne s'inverse jamais)
+ETIRURE = ((0.30, 0.61, 0.0), (0.18, 1.37, 1.7))        # (amplitude, longueur d'onde en carreaux, phase) des deux ondulations de l'etirure horizontale (somme des amplitudes < 1 : le sens de la texture ne s'inverse jamais)
 PHASE_COTE = (0.0, 2.3)                                 # phases ajoutees a gauche (0) et a droite (1) : deux cotes differents
-GLISSE = ((0.09, 0.83, 0.5),)                           # idem pour le glissement vertical de la texture au milieu de chaque rangee (fraction de la hauteur du carreau) ; nul aux bords de la rangee : leur raccord est intact
+GLISSE = ((0.03, 1.9, 0.5),)                           # idem pour le glissement vertical de la texture au milieu de chaque rangee (fraction de la hauteur du carreau) ; nul aux bords de la rangee : leur raccord est intact
 SOUS_RANGEES = 4                                        # une rangee des bandes est decoupee en 4 pour suivre le glissement (nul au bord de la rangee, maximal au milieu)
 RAMPE = 0.6                                             # distance (en carreaux) sur laquelle l'effet monte de 0 a 1 (lissage cubique) : raccord sans cassure au bord de la zone
 import os
@@ -48,7 +48,7 @@ def _ondes(t, ondes, cote):
 
 def deformation(d, cote, periode=11.5):
     """Deformation de la texture a la distance `d` (unites du monde, tableau) du bord de la zone portrait, du `cote` 0 (gauche) ou 1 (droite).
-    -> (G, dv) : G = abscisse de texture parcourue, en unites du monde (G(0) = 0, G'(0) = 1, G' reste entre 0,46 et 1,54 : monotone, et d'ensemble G ~ d : meme echelle). dv = glissement vertical (fraction de texture, dv(0) = 0, dv'(0) = 0) : le
+    -> (G, dv) : G = abscisse de texture parcourue, en unites du monde (G(0) = 0, G'(0) = 1, G' reste entre 0,52 et 1,48 : monotone, et d'ensemble G ~ d : meme echelle). dv = glissement vertical (fraction de texture, dv(0) = 0, dv'(0) = 0) : le
     constructeur l'applique avec un profil en sin(pi t) sur la hauteur de chaque rangee, car les rangees du ciel sont empilees avec un decalage d'un demi-carreau et ne se raccordent que si leurs bords lisent la texture de v = 0 a 1."""
     d = np.asarray(d, float)
     pas = periode / 256.0

@@ -85,6 +85,12 @@ class TestPlaqueAuto(unittest.TestCase):
         fe = fenetre(); fe.param_str(0, 1, 'Continuer votre aventure'); fe.param_int(0, 0, UM.ETAT_GRISE); fe.code(0, 0); fe.plaque_auto()
         self.assertEqual(fe.N[20]['etat'], UM.ETAT_GRISE); self.assertEqual(texte(fe, 21), 'Continuer votre aventure'); self.assertNotIn(0, zones(fe))      # une plaque grisee par le moteur (aucune banque) : meme regle
 
+    def test_texte_gris_des_plaques_grisees(self):
+        fe = fenetre(); fe.param_str(0, 1, 'Continuer'); fe.param_int(0, 0, UM.ETAT_GRISE); fe.code(0, 0); fe.plaque_auto()
+        self.assertEqual(fe.N[21]['tcol'], UM.TEXTE_GRIS); self.assertEqual(fe.N[11]['tcol'], UM.TEXTE_GRIS)                # Continuer (grise par le moteur) et Sauvegarde automatique (grisee par la visionneuse)
+        fe.param_int(0, 0, UM.ETAT_NORMAL); fe.plaque_auto(); self.assertEqual(fe.N[21]['tcol'], 0); self.assertEqual(fe.N[11]['tcol'], UM.TEXTE_GRIS)
+        fe.param_str(4, 1, 'Sauvegarde automatique'); fe.code(0, 1); fe.plaque_auto(); self.assertEqual(fe.N[11]['tcol'], 0)    # la sauvegarde auto existe : texte normal
+
     def test_etat_envoye_par_le_moteur(self):
         fe = fenetre(); fe.param_int(0, 0, UM.ETAT_NORMAL); self.assertIn(0, zones(fe))
         for etat, attendu in ((UM.ETAT_ENFONCE, True), (UM.ETAT_INVISIBLE, False), (UM.ETAT_GRISE, False), (UM.ETAT_INVERSE, False), (UM.ETAT_NORMAL, True)):

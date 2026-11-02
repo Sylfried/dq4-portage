@@ -1,7 +1,7 @@
 """Test de la logique pure du ciel de l'ecran-titre en format large (`dq4_pc/ciel_titre.py` : sans fenetre, sans moteur, sans APK) :
 
   1. zone portrait (colonne 9:16 du milieu) : 1280 x 720 -> 405 px de large, centree ; 720 x 1280 -> toute la fenetre ; demi-largeur normalisee ;
-  2. deformation de la texture : G(0) = 0, pente 1 au bord, pente toujours entre 0,46 et 1,54 (jamais de retournement), echelle d'ensemble conservee, deterministe, differente a gauche et a droite,
+  2. deformation de la texture : G(0) = 0, pente 1 au bord, pente toujours entre 0,52 et 1,48 (jamais de retournement), echelle d'ensemble conservee, deterministe, differente a gauche et a droite,
      et le motif ne revient pas identique un carreau plus loin (c'est tout l'objet : « on voit trop le pattern repetitif ») ;
   3. analyse de l'objet « kumo » (reconstitue ici a l'identique : 4 rangees de 3 carreaux de 11,5, decalees d'un demi-carreau) : rangees, periode, u exact, refus des structures inattendues ;
   4. bandes : aucun sommet dans la zone portrait (le ciel d'origine y reste intact), raccord continu au bord (u et v du ciel d'origine, a toute position du defilement), memes sommets / couleurs que les rangees,
@@ -90,7 +90,7 @@ class TestDeformation(unittest.TestCase):
     def test_pente_bornee(self):
         for cote in (0, 1):
             G, _ = CT.deformation(self.d, cote); p = np.diff(G) / np.diff(self.d)
-            self.assertGreater(p.min(), 1 - 0.54 - 0.01); self.assertLess(p.max(), 1 + 0.54 + 0.01)       # jamais de retournement du motif, etirure de 0,46 a 1,54 au plus
+            self.assertGreater(p.min(), 1 - 0.48 - 0.01); self.assertLess(p.max(), 1 + 0.48 + 0.01)       # jamais de retournement du motif, etirure de 0,52 a 1,48 au plus
 
     def test_echelle_d_ensemble(self):
         for cote in (0, 1):
@@ -103,7 +103,7 @@ class TestDeformation(unittest.TestCase):
 
     def test_cotes_differents(self):
         (g0, v0), (g1, v1) = CT.deformation(self.d, 0), CT.deformation(self.d, 1)
-        self.assertGreater(np.abs(g0 - g1).max(), 0.5); self.assertGreater(np.abs(v0 - v1).max(), 0.05)                                                  # pas de symetrie gauche / droite
+        self.assertGreater(np.abs(g0 - g1).max(), 0.5); self.assertGreater(np.abs(v0 - v1).max(), 0.02)                                                  # pas de symetrie gauche / droite
 
     def test_le_motif_ne_revient_pas_identique(self):
         """Un carreau (11,5) plus loin, le motif est lu a une abscisse de texture differente : sans etirure G(d + 11,5) - G(d) = 11,5 partout (repetition exacte)."""
@@ -243,7 +243,7 @@ class TestBandes(unittest.TestCase):
             haut = np.isclose(Pb[:, 1], ra.haut[0], atol=1e-4) & np.isclose(Pb[:, 2], ra.haut[1], atol=1e-4)
             self.assertTrue(np.allclose(Ub[bas, 1], ra.bas[2], atol=1e-5)); self.assertTrue(np.allclose(Ub[haut, 1], ra.haut[2], atol=1e-5))
             mil = ~(bas | haut); interieur = max(interieur, float(np.abs(Ub[mil, 1] - np.interp(Pb[mil, 1], [ra.bas[0], ra.haut[0]], [ra.bas[2], ra.haut[2]])).max()))
-        self.assertGreater(interieur, 0.04); self.assertLess(interieur, 0.12)
+        self.assertGreater(interieur, 0.015); self.assertLess(interieur, 0.04)
 
     def test_cle_de_cache(self):
         asp = 16 / 9; M = camera_titre(asp)
