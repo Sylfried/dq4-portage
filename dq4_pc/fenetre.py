@@ -17,6 +17,7 @@ import effet_combat as EC
 import reglages as RG
 import priorite_jeu as PJ
 import pause as PA
+import historique as HI
 import hud_mobile as HM
 import etats as ET
 import avant_partie as AP
@@ -170,7 +171,7 @@ class Jeu(pyglet.window.Window):
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
         self.carte_ext = []; self.ciel_ext = None; self._M_ville = None; self._aspect_ville = 16 / 9; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
-        self.pause = PA.Pause(self)
+        self.pause = PA.Pause(self); self.historique = HI.Historique(getattr(args, 'historique', None))          # historique des messages (fichier a cote de la visionneuse, voir historique.py)
         if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
         cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)       # (l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
         self.mode_fen = self._creer_fenetre(args, cfg, RG.mode_fenetre_valide(getattr(args, 'plein_ecran', 0)))        # mode memorise : la fenetre est creee directement dans ce mode, logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
@@ -586,7 +587,7 @@ class Jeu(pyglet.window.Window):
 
     def on_close(self):
         if not self._pret: self._ferme = True; return           # fermeture pendant les logos : le constructeur s'arrete
-        self.reg.enregistrer(); self.son.fermer()
+        self.reg.enregistrer(); self.historique.enregistrer(True); self.son.fermer()
         p = getattr(self, 'prepa_proc', None)
         if p is not None:
             try: p.stdin.close()
@@ -615,6 +616,7 @@ class Jeu(pyglet.window.Window):
             return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'vit_combat': self.changer_vitesse_combat(); return pyglet.event.EVENT_HANDLED          # Normal -> Rapide -> Très rapide (en combat comme ailleurs)
+        if self.reg.action_de(symbol) == 'historique' and self.titre is None and self.moteur.etat.partie in (MO.PARTIE_VILLE, MO.PARTIE_COMBAT, MO.PARTIE_CHAMP): self.pause.ouvrir('historique'); return pyglet.event.EVENT_HANDLED          # touche de l'historique des messages (meme pendant un message : le moteur s'arrete comme avec le menu Echap)
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if self._tenue('modif'):
@@ -2606,6 +2608,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        self.historique.maj(mo, self.objets.objs if self.objets is not None else None, self.noms)          # messages de cette image -> historique (voir historique.py)
         if mo.demande_pause: mo.demande_pause = False; self.pause.ouvrir()          # bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Moteur._detourner_parametres)
         self._maj_titre()
         for code, *_ in mo.ui.systeme:
@@ -3077,6 +3080,7 @@ def main():
     ap.add_argument('--correction-bords', type=int, default=None, choices=range(0, 101), metavar='0-100', help="(debogage) correction de l'inclinaison des sprites des villes pres des bords gauche / droit de l'ecran, en pourcentage : 0 = aucune (le panneau d'origine, penche vers l'exterieur), 100 = complete ; par defaut toujours complete, ce n'est plus un reglage du joueur (variable d'environnement DQ_CORRECTION_BORDS pour la meme chose)")
     ap.add_argument('--msaa', type=int, default=None, help='anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap')
     ap.add_argument('--reglages', default=os.path.join(ici, 'reglages.json'), help='fichier des reglages du joueur (menu Echap : affichage, son, touches)')
+    ap.add_argument('--historique', default=os.path.join(ici, 'historique_messages.json'), help='fichier de l\'historique des messages (a cote de la visionneuse, jamais dans le dossier des sauvegardes)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
     ap.add_argument('--shots-effet', default=None, help='(test) captures a ces images de l\'effet de debut de combat : "1,10,30,..."')
     ap.add_argument('--shots-combat', default=None, help='(test) captures intermediaires a ces images de combat : "30,60,..."')

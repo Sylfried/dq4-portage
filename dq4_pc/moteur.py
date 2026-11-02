@@ -4,6 +4,7 @@ import numpy as np
 import emu_core as T
 import priorite_jeu as PJ
 from pktlog import PacketLog
+from historique import Capteur
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
 PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
@@ -381,6 +382,7 @@ class Moteur:
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         self._crochets_texte()
         self._crochets_fondu()
+        self.capteur = Capteur(self)             # historique des messages : crochets sur TextBuffer::cat et sur l'objet fouille (installes avant la premiere image : Unicorn garde les blocs deja traduits)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
 
