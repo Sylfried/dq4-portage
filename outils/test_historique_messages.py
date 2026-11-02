@@ -523,7 +523,7 @@ class TestPause(unittest.TestCase):
         self.pauses = []
         J = types.SimpleNamespace(reg=RG.Reglages(None), historique=h, width=1280, height=720, souris=None, args=types.SimpleNamespace(cache='/inexistant'),
                                   pause_jeu=lambda oui: self.pauses.append(oui), son=types.SimpleNamespace(actif=True, ecoute=False))
-        J.reg.enregistrer = lambda: None; J.regler_fondu = lambda v: None
+        J.reg.enregistrer = lambda: None; J.regler_fondu = lambda v: None; J.regler_vitesse_combat = lambda v: None; J.appliquer_texte = lambda: None          # (la page Commandes porte la section « Défilement du texte »)
         return J, PA.Pause(J)
 
     def test_h_ouvre_puis_combats_puis_ferme(self):
