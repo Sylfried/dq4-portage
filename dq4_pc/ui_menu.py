@@ -135,6 +135,8 @@ class MiseEnPage:
 # (`<Make_NameButton>b__0`, 0xD08BE8 : les rangees 0 a nombre - 1 sont activees et posees en `depart - pas x rang`, les autres sont desactivees jusqu'a la 6e). L'exporteur ne peut pas jouer cette fonction (« List index »).
 NOMS_PRESETS = ((4, 382.0, 67.0), (5, 382.0, 67.0), (5, 434.0, 67.0), (6, 434.0, 67.0), (5, 412.0, 67.0))
 NOMS_DEPART, NOMS_PAS = 382.0, 67.0         # mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
+COUT_FICHE_X_MAX = 214.0              # fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
+DESC_FICHE_X_MAX = 148.0              # fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
 
 
 def uv_icone(info, no, decal):
@@ -296,6 +298,8 @@ class Fenetre:
                     elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
+        if self.typ == 7 and no == 1: nd['wrap_x'] = DESC_FICHE_X_MAX; nd['wrap_n'] = 2        # description d'un sort : le cadre du bas montre 2 lignes ; au-dela, le texte est recoupe a la largeur du cadre (Rendu._recoupe)
+        if self.typ == 7 and no == 2: nd['fit_x'] = COUT_FICHE_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Rendu._texte
         ts = nd['text'].get('tabSize')
         if ts and self.noms_liste and '\t' in s: s = s.replace('\t', ' ' * max(0, int(round(ts))))        # TextMesh.tabSize : une tabulation vaut tabSize fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » de la liste des magies) ; la police du jeu n'a pas de glyphe pour « \t » : elle comptait pour rien et le nombre collait a l'etiquette (limite a la liste des magies : les autres fenetres a tabSize, types 20, 31, 33, 34, 35, 39, ne sont pas verifiees)
         nd['text']['text'] = s; nd['vu'] = True
@@ -1005,15 +1009,32 @@ class Rendu:
         if col == 1: return r[1] - r[0] - 2 * self.MARGE_PLAQUE                                      # texte centre : la plaque entiere
         return (r[1] - self.MARGE_PLAQUE - xa) if col == 0 else (xa - r[0] - self.MARGE_PLAQUE)      # texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
 
+    def _recoupe(self, lignes, dispo, bm, u, ts, s, emy):
+        """Description plus haute que son cadre (le texte francais d'un sort a 3 ou 4 lignes de ~20 caracteres, coupees pour un cadre plus etroit, le cadre n'en montre que 2 et la 3e sortait de l'ecran) : les retours a la
+        ligne sont remplaces par des espaces et le texte est recoupe a la largeur `dispo` (unites). Si le resultat n'a pas moins de lignes qu'avant, le texte est laisse tel quel."""
+        px = max(6, int(round(emy * s)))
+        def larg(x):
+            x = re.sub(r'@c\d', '', x)
+            return bm.largeur(x) * u * ts if bm else (self.textes.ligne(x, px)[1] - 4) / s * ts
+        out = []; cur = ''
+        for w in ' '.join(l.strip() for l in lignes).split():
+            essai = cur + ' ' + w if cur else w
+            if cur and larg(essai) > dispo: out.append(cur); cur = w
+            else: cur = essai
+        if cur: out.append(cur)
+        return out if len(out) < len(lignes) else lignes
+
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
-        lignes = t['text'].split('\n'); N = len(lignes)
+        lignes = t['text'].split('\n')
         bm = self.textes.bitmap                                         # police d'origine (SE-GARRIR) : 1 px de police = characterSize * 0.1 unite ; sinon GMaruGoPro-M rendue par Pillow
         u = t['characterSize'] * 0.1
         if bm: emy = u; pas = bm.interligne * u * t['lineSpacing']; asc = bm.ascent * u
         else: emy = TAILLE_POLICE * u; pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = nd['tscale']
+        if nd.get('wrap_x') is not None and len(lignes) > nd.get('wrap_n', 2): lignes = self._recoupe(lignes, nd['wrap_x'] - nd['pos'][0], bm, u, ts, s, emy)       # description plus haute que son cadre
+        N = len(lignes)
         row = t['anchor'] // 3; col = t['anchor'] % 3
         hb = N * pas                                                    # hauteur du bloc de texte
         haut = zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0)       # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
@@ -1046,7 +1067,8 @@ class Rendu:
             if ex and ex[0] <= xa <= ex[1]:
                 dispo = {0: ex[1] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - ex[0] - self.MARGE_PLAQUE}[col]
                 if dispo < 0.4 * bl: dispo = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
-        if dispo and bl > dispo and not bm:                              # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
+        if nd.get('fit_x') is not None and col == 0: dispo = nd['fit_x'] - nd['pos'][0]      # limite posee par la fenetre (ligne de cout de la fiche d'un sort) : le cadre n'est pas un element de la fenetre
+        if dispo and bl > dispo and (not bm or nd.get('fit_x') is not None):      # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
             f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue

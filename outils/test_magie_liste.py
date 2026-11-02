@@ -10,6 +10,8 @@ visible et cliquable : un toucher y envoyait au moteur un sort inexistant (<ERR 
   3. le code 6 rejoue (ou arrive apres les codes de rangee) ne decale pas deux fois ; un preset inconnu est ignore ; revenir au preset 0 remet les rangees en place ;
   4. la ligne de cout « Cout en PM:<tab>  2 » (TextMesh.tabSize 8) : la tabulation devient 8 espaces dans la liste des magies seulement (un texte sans tabulation ou sans tabSize ne change pas).
 
+  4 bis. la ligne de cout de la fiche d'un sort (type 7, texte 2) porte la limite droite de son cadre (Rendu._texte la comprime pour qu'elle y tienne) ; les autres textes de la fiche ne le sont pas.
+
 Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seule, le moteur ecrit dans un dossier temporaire ; groupe de l'emplacement 1 : Ragnar sans PM et Doc, 30 PM, qui sait « Premiers secours ») :
   5. liste de Doc : une seule rangee, « Premiers secours », code de rangee 2, rangees 1 a 3 cachees ;
   6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : les messages de soin mais AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) ;
@@ -126,6 +128,52 @@ class TestLigneDeCout(unittest.TestCase):
         fe.params[(0, 1)] = {'id': 0, 'no': 1, 'parts': 1, 'base': 2}
         fe.parts[1]['ib'].append({'k': 'text', 'go': 301, 'variant': 0})
         fe.param_str(0, 1, 'a\tb'); self.assertEqual(fe.N[301]['text']['text'], 'a\tb')
+
+
+class TestFicheDuSort(unittest.TestCase):
+    """Fiche d'un sort (Make_MagicInfo, type 7) : « Cout en PM 10/ 30 » (FR) est plus long que « MP Cost 10/ 30 » et sortait de son cadre : la ligne de cout (texte 2) porte la limite droite de son cadre (fit_x) : Rendu._texte la comprime pour qu'elle y tienne
+    meme avec la police d'origine ; le nom, la description et « Lancer » gardent leur mise en page."""
+    def fenetre(self):
+        def texte(nid, ancre): return {'id': nid, 'par': 1, 'pos': [75.0, 12.0, 103.0], 'act': True, 'text': {'font': 'font', 'characterSize': 9.945, 'text': None, 'anchor': ancre, 'alignment': 0, 'lineSpacing': 0.88}, 'mats': []}
+        t = {'name': 'Make_MagicInfo()', 'err': None, 'nodes': [{'id': 1, 'par': None, 'pos': [0.0, 0.0, 0.0], 'act': True, 'mats': []}] + [texte(10 + k, 0) for k in range(4)],
+             'parts': [{'node': 1, 'ib': [{'k': 'text', 'go': 10 + k, 'variant': 0} for k in range(4)]}], 'params': [{'id': 0, 'no': k, 'parts': 0, 'base': k} for k in range(4)], 'codes': [], 'builds': []}
+        return UM.Fenetre(types.SimpleNamespace(types={'7': t}, infos=[], cadres=[], hdr={'lang': {'hiro': 1.0}}, pousse=(0.0, 0.0)), 7)
+
+    def test_seule_la_ligne_de_cout_est_marquee(self):
+        fe = self.fenetre()
+        for no, s in enumerate(('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')): fe.param_str(0, no, s)
+        self.assertEqual([fe.N[10 + k].get('fit_x') for k in range(4)], [None, None, UM.COUT_FICHE_X_MAX, None])
+        self.assertEqual(fe.N[12]['text']['text'], 'Coût en PM  2/ 30')           # le texte lui-meme n'est pas modifie
+
+    def test_la_description_porte_la_largeur_de_son_cadre(self):
+        fe = self.fenetre()
+        for no, s in enumerate(('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')): fe.param_str(0, no, s)
+        self.assertEqual([(fe.N[10 + k].get('wrap_x'), fe.N[10 + k].get('wrap_n')) for k in range(4)], [(None, None), (UM.DESC_FICHE_X_MAX, 2), (None, None), (None, None)])
+        self.assertEqual(fe.N[11]['text']['text'], "Restaure au moins 30\r\nPV d'un seul allié.")           # le texte du moteur n'est pas modifie (c'est le rendu qui recoupe)
+
+
+class TestRecoupeDescription(unittest.TestCase):
+    """Rendu._recoupe : la description francaise d'un sort a 3 ou 4 lignes (cadre de 2) est recoupee a la largeur du cadre (police fictive : 9 unites par caractere, cadre de 361 unites = 40 caracteres)."""
+    DISPO = 148.0 + 213.0
+    def recoupe(self, texte):
+        r = object.__new__(UM.Rendu)
+        r.textes = types.SimpleNamespace(bitmap=types.SimpleNamespace(largeur=lambda x: 9.0 * len(x)))
+        return r._recoupe(texte.split('\n'), self.DISPO, r.textes.bitmap, 1.0, 1.0, 1.0, 9.0)
+
+    def test_quatre_lignes_en_deux(self):
+        for t in ("Permet de sortir\r\nimmédiatement des\r\ndonjons, grottes et\r\ntours.", "Génère une aura\r\nsacrée qui éloigne les\r\nmonstres les plus\r\nfaibles."):
+            out = self.recoupe(t)
+            self.assertEqual(len(out), 2, out)
+            self.assertEqual(' '.join(out), ' '.join(l.strip() for l in t.split('\n')))          # aucun mot perdu ni ajoute
+            self.assertTrue(all(9.0 * len(l) <= self.DISPO for l in out), out)
+
+    def test_trois_lignes_en_deux(self):
+        out = self.recoupe("Ressuscite un allié\r\nmort en lui octroyant\r\nla moitié de ses PV.")
+        self.assertEqual(len(out), 2, out)
+
+    def test_pas_plus_de_lignes_qu_avant(self):
+        t = "a" * 30 + "\r\n" + "b" * 30 + "\r\n" + "c" * 30                                      # 3 lignes de 30 : recoupees a 40 elles feraient encore 3 lignes : texte laisse tel quel
+        self.assertEqual(self.recoupe(t), t.split('\n'))
 
 
 def _stat(mo, i):
