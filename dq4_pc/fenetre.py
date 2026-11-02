@@ -30,6 +30,7 @@ import fbx as FX
 import ciel_titre as CT
 import vitesse_combat as VC
 import teinte_carte as TC
+import suivi_charge as SV
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -179,6 +180,7 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
 
 class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
+        SV.noter('demarrage', largeur=args.largeur, hauteur=args.hauteur, plein_ecran=getattr(args, 'plein_ecran', 0), shot=bool(args.shot))
         self._journal_logo = False
         self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self.bureau = None; self._en_bascule = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; taille du bureau ; bascule fenetre / plein ecran en cours
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
@@ -252,6 +254,7 @@ class Jeu(pyglet.window.Window):
         self.fixe_test = bool(args.shot) and not os.environ.get('DQ_TEMPS_REEL')         # (test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
         pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._pret = True
+        SV.noter('constructeur termine')
 
     # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, a la resolution du bureau : l'affichage du moniteur ne change jamais)
     TITRE_FENETRE = 'Dragon Quest IV - portage PC (essai)'
@@ -277,9 +280,15 @@ class Jeu(pyglet.window.Window):
                 print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True)
                 continue
             self.mode_fen = mode
+            SV.noter('fenetre creee (cachee)', mode=mode, taille='%dx%d' % (self.width, self.height))
+            if SV.ACTIF:
+                for ev in ('on_resize', 'on_show', 'on_hide', 'on_expose', 'on_move', 'on_activate', 'on_deactivate'):
+                    self.push_handlers(**{ev: (lambda *a, _e=ev: SV.noter('evenement ' + _e, args=a))})
             try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
+            SV.noter('image noire presentee (fenetre cachee)')
             self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
+            SV.noter('fenetre montree', taille='%dx%d' % (self.width, self.height))
             return mode
 
     def _init_ui(self):
@@ -311,11 +320,12 @@ class Jeu(pyglet.window.Window):
         if len(self.ap_fich) < len(AP.RESSOURCES) and not args.sans_preparation: AP.preparer(args.apk, args.cache, log=lambda *a: print(*a, flush=True)); self.ap_fich = AP.chemins(args.cache)      # premiere fois : les images du titre sont extraites avant les logos (le moteur se charge pendant ce temps)
         logos = AP.Logos(self.ap_fich) if self.ap_fich and not args.sans_logos and (args.logos or (not args.shot and not args.slot)) else None
         if logos is not None and not logos.ok: logos = None
-        t0 = time.perf_counter()
+        t0 = time.perf_counter(); nb_logo = 0; pire_logo = 0.0
+        SV.noter('boucle des logos', logos=logos is not None)
         while (logos is not None and not logos.fini) or fil.is_alive():
             if self._ferme: sys.exit(0)
             self.switch_to(); self.dispatch_events()
-            t = time.perf_counter(); dt = min(t - t0, 0.1); t0 = t
+            t = time.perf_counter(); pire_logo = max(pire_logo, t - t0); dt = min(t - t0, 0.1); t0 = t; nb_logo += 1
             gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); gl.glViewport(0, 0, *self.get_framebuffer_size())
             if logos is not None and not logos.fini:
                 if self._logo_touche: logos.toucher()
@@ -325,6 +335,7 @@ class Jeu(pyglet.window.Window):
             self.flip()
             if not self._journal_logo: self._journal_logo = True; self._journal_fenetre('1re image affichée (logos)')
         fil.join()
+        SV.noter('logos et moteur termines', images=nb_logo, pire_ecart_ms=round(1000 * pire_logo))
         if 'e' in res: raise res['e']
         self.moteur = res['m']; self.moteur.duree_anim = self._duree_anim
 
@@ -335,6 +346,7 @@ class Jeu(pyglet.window.Window):
             self.switch_to(); gl.glClearColor(0, 0, 0, 1); self.clear()
             self.flip(); self.dispatch_events()
         except Exception: pass
+        SV.noter('attente (image noire)', texte=texte)
 
     # ---- textures
     def _anisotropie(self):
@@ -1252,6 +1264,7 @@ class Jeu(pyglet.window.Window):
         return [o[1:] for o in out]
 
     def _charger_carte(self, nom):
+        t_charge = time.perf_counter()
         for vl in self.carte_vl: vl[1].delete()
         for x in self.carte_ext: x[1].delete()
         if self.ciel_ext and self.ciel_ext['vl'] is not None: self.ciel_ext['vl'].delete()
@@ -1288,6 +1301,7 @@ class Jeu(pyglet.window.Window):
         self.carte_nom = nom
         self.fond_decor = self._fond_combat(c) if nom.startswith('btl_') else None
         print('carte %s : %d groupes' % (nom, len(self.carte_vl)), flush=True)
+        SV.noter('carte chargee', nom=nom, groupes=len(self.carte_vl), ms=round(1000 * (time.perf_counter() - t_charge)))
 
     def _ciel_titre(self, c, src):
         """Ecran-titre : le ciel (carreaux de nuages identiques qui glissent) est concu pour l'ecran portrait ; en 16/9 ses bords entreraient dans le champ et le meme carreau se repeterait 3 a 6 fois.
@@ -2666,13 +2680,26 @@ class Jeu(pyglet.window.Window):
         self._nb_dessins = getattr(self, '_nb_dessins', 0) + 1
         if self._nb_dessins == 1: self._journal_fenetre('1re image du jeu')
         if self._nb_dessins <= 90 or self._nb_dessins % 120 == 0: self._verifier_taille_reelle()
-        sauve = self._interpoler(); t0 = time.perf_counter()
+        sauve = self._interpoler(); t0 = time.perf_counter(); self._dessin_genre = '?'
         try: self._dessiner()
         finally:
             for obj, nom, ancien, attr in sauve:
                 if attr: setattr(obj, nom, ancien)
                 else: obj[nom] = ancien
             self._mesure('dessin', t0)
+            if SV.ACTIF: self._suivre_dessin(t0)
+
+    def _suivre_dessin(self, t0):
+        """(diagnostic, DQ_SUIVI) une ligne par image dessinee pendant les 12 premieres images et pendant les 16 images qui suivent un chargement de carte ou un changement de partie : ce qui a ete dessine (`_dessin_genre` :
+        scene, noir de chargement...), l'etat de la scene (camera, personnages places), l'opacite des deux plans de fondu, la retenue du dessin (`Etat.chargement`)."""
+        e = self.moteur.etat; cle = (e.cartes_chargees, e.partie)
+        if cle != getattr(self, '_suivi_cle', None): self._suivi_cle = cle; self._suivi_n = 0
+        n = getattr(self, '_suivi_n', 99)
+        if self._nb_dessins <= 12 or n < 16:
+            places = sum(1 for sp in e.sprites.values() if sp['pos'] is not None)
+            SV.noter('dessin', n=self._nb_dessins, img=self.moteur.images, genre=self._dessin_genre, partie=hex(e.partie), carte=e.carte, chargee=self.carte_nom, camera=SV.arrondi(e.cam_pos, 1), personnages='%d/%d' % (places, len(e.sprites)),
+                     fondu='%.2f/%d' % (e.fondu['a'], e.fondu['n']), fond='%.2f/%d' % (e.fondu_fond['a'], e.fondu_fond['n']), retenu=getattr(e, 'chargement', None) is not None, ms=round(1000 * (time.perf_counter() - t0), 1))
+        self._suivi_n = n + 1
 
     def _entrees(self, p):
         """Touches et clics de ce pas du moteur -> (p, decl) : boutons tenus et boutons qui viennent d'etre presses, tels que le moteur les veut (menu qui a la saisie : tout passe par `_saisie_menu`, p = decl = 0).
@@ -2976,9 +3003,9 @@ class Jeu(pyglet.window.Window):
                 dv = [float(v) * self.n_boucle for v in os.environ['DQ_CARTE_DEPL'].split(',')]
                 e.cam_pos = tuple(a + b for a, b in zip(e.cam_pos, dv)); e.cam_cible = tuple(a + b for a, b in zip(e.cam_cible, dv))
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
-        if e.effet is not None and self.effet_tex_prete: self._dessiner_effet(e.effet); self._dessiner_aide(); return
+        if e.effet is not None and self.effet_tex_prete: self._dessin_genre = 'effet'; self._dessiner_effet(e.effet); self._dessiner_aide(); return
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
-            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self._dessiner_aide(); return
+            self._dessin_genre = 'noir (attente du combat)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self._dessiner_aide(); return
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
         if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
@@ -2989,12 +3016,13 @@ class Jeu(pyglet.window.Window):
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
         if (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
             # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite)
-            gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+            self._dessin_genre = 'noir (scene pas arrivee)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
             gl.glViewport(0, 0, *self.get_framebuffer_size()); self._dessiner_fondu(True)
             if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
                 self._maj_message(); self._dessiner_message(); self._dessiner_menus()
             self._dessiner_fondu(); self._dessiner_aide(); return
-        if not champ and not bataille and (e.cam_pos is None or (e.cam_cible is None and not camera_libre(e))): self._dessiner_aide(); return
+        if not champ and not bataille and (e.cam_pos is None or (e.cam_cible is None and not camera_libre(e))): self._dessin_genre = 'rien (pas de camera)'; self._dessiner_aide(); return
+        self._dessin_genre = 'scene'
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
