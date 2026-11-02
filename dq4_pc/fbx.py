@@ -83,7 +83,10 @@ class ModeleFbx:
         for nom, t, w in poses: vals.append({(i, genre): cb.valeur(t) for i, genre, cb in self.clips[nom]['courbes']})
         for cle in set().union(*[v.keys() for v in vals]):
             i, genre = cle
-            cibles[genre][i] = sum(w * v.get(cle, repos[genre][i]) for (_, _, w), v in zip(poses, vals)) / wtot
+            termes = [(w, np.asarray(v.get(cle, repos[genre][i]), float)) for (_, _, w), v in zip(poses, vals)]
+            if genre == 'rot' and len(termes) > 1:                  # q et -q sont la meme rotation : on melange du meme cote de la sphere (chemin le plus court), sinon la moyenne s'annule ou fait un demi-tour
+                ref = termes[0][1]; termes = [(w, x if float(np.dot(x, ref)) >= 0 else -x) for w, x in termes]
+            cibles[genre][i] = sum(w * x for w, x in termes) / wtot
         return p, q, s
 
     def sommets(self, M_obj, poses):
