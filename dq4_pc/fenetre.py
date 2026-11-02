@@ -24,6 +24,7 @@ import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
 import fbx as FX
+import ciel_titre as CT
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -177,7 +178,7 @@ class Jeu(pyglet.window.Window):
         self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self._modes = None; self.bureau = None; self._en_bascule = False; self._restaure_a_la_sortie = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; modes du moniteur, taille du bureau
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
-        self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
+        self.carte_ext = []; self.ciel_ext = None; self._M_ville = None; self._aspect_ville = 16 / 9; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
         res_demandee = (args.largeur, args.hauteur)            # resolution du reglage avant d'etre ramenee a l'ecran : le plein ecran exclusif la veut telle quelle (le moniteur peut afficher plus que la zone utile d'une fenetre)
@@ -1186,7 +1187,8 @@ class Jeu(pyglet.window.Window):
     def _charger_carte(self, nom):
         for vl in self.carte_vl: vl[1].delete()
         for x in self.carte_ext: x[1].delete()
-        self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
+        if self.ciel_ext and self.ciel_ext['vl'] is not None: self.ciel_ext['vl'].delete()
+        self.ciel_ext = None; self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
         try:
             c = self.donnees.carte(src)
@@ -1213,20 +1215,52 @@ class Jeu(pyglet.window.Window):
                 self.pam_gl[key].append(self.tex_gl[(src, key, k)])
         self.objets.sale = set(); self.objets.sale_uv = set(); self.objets.sale_col = set()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
-        if nom == 'ev01':      # ecran-titre : le ciel (carreaux de nuages identiques qui glissent) est concu pour l'ecran portrait ; en 16/9 ses bords entreraient dans le champ : deux copies decalees de sa largeur le prolongent des deux cotes
-            for iobj, nm in self.noms.items():
-                if 'kumo' not in nm.lower(): continue
-                for key, deb, n in self.plages.get(iobj, []):
-                    if key not in c['textures']: continue
-                    cur = self.objets.cur[key][deb:deb + n]; larg = float(cur[:, 0].max() - cur[:, 0].min())
-                    for dx in (-larg, larg):
-                        vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', (cur + np.array([dx, 0, 0], np.float32)).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
-                        self.carte_ext.append((self.tex_gl[(src, key)], vl, key, deb, n, dx))
+        if nom == 'ev01': self._ciel_titre(c, src)         # ecran-titre : ciel prolonge de part et d'autre de la zone portrait
         allp = np.concatenate([g[0] for g in c['groupes'].values()]) if c['groupes'] else np.zeros((1, 3), np.float32)
         self.bornes_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
         self.carte_nom = nom
         self.fond_decor = self._fond_combat(c) if nom.startswith('btl_') else None
         print('carte %s : %d groupes' % (nom, len(self.carte_vl)), flush=True)
+
+    def _ciel_titre(self, c, src):
+        """Ecran-titre : le ciel (carreaux de nuages identiques qui glissent) est concu pour l'ecran portrait ; en 16/9 ses bords entreraient dans le champ et le meme carreau se repeterait 3 a 6 fois.
+        Solution : la zone portrait garde le ciel d'origine ; de chaque cote, des bandes de meme geometrie dont la texture est etiree de facon variable (ciel_titre.py : raccord continu au bord de la zone, defilement suivi).
+        Secours (structure inattendue, ou DQ_CIEL_COPIES : ancien comportement, pour comparer) : deux copies du ciel decalees de sa largeur, qui prolongent le motif tel quel."""
+        for iobj, nm in self.noms.items():
+            if 'kumo' not in nm.lower(): continue
+            for key, deb, n in self.plages.get(iobj, []):
+                if key not in c['textures']: continue
+                if not os.environ.get('DQ_CIEL_COPIES'):
+                    try:
+                        cl = CT.CielLarge(self.carte_pos[key][deb:deb + n], self.objets.uv(key)[deb:deb + n], self.objets.col(key)[deb:deb + n])
+                        self.ciel_ext = {'ciel': cl, 'tex': self.tex_gl[(src, key)], 'key': key, 'deb': deb, 'vl': None, 'nv': 0}
+                        continue
+                    except Exception as ex: print('Ciel du titre : %s (copies decalees a la place)' % ex, flush=True)
+                cur = self.objets.cur[key][deb:deb + n]; larg = float(cur[:, 0].max() - cur[:, 0].min())
+                for dx in (-larg, larg):
+                    vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', (cur + np.array([dx, 0, 0], np.float32)).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
+                    self.carte_ext.append((self.tex_gl[(src, key)], vl, key, deb, n, dx))
+
+    def _tracer_ciel(self, r, net_o):
+        """Bandes de ciel de l'ecran-titre (apres le decor opaque, meme plan que le ciel d'origine : decalage de profondeur pour passer devant sa partie hors de la zone portrait). Toute erreur : on garde le ciel d'origine seul."""
+        c = self.ciel_ext
+        if c is None or self._M_ville is None: return
+        try:
+            key = c['key']; phi = float(self.objets.cur[key][c['deb'], 0] - self.carte_pos[key][c['deb'], 0])
+            b = c['ciel'].bandes(self._M_ville, self._aspect_ville, phi)
+            if b is None: return
+            P, U, C = b; n = len(P)
+            if c['vl'] is None or c['nv'] != n:
+                if c['vl'] is not None: c['vl'].delete()
+                c['vl'] = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', P.ravel()), tex_coords=('f', U.ravel()), colors=('f', C.ravel())); c['nv'] = n
+            else: c['vl'].position[:] = P.ravel(); c['vl'].tex_coords[:] = U.ravel(); c['vl'].colors[:] = C.ravel()
+            t = r.get(key, c['tex']) if r else c['tex']
+            gl.glEnable(gl.GL_POLYGON_OFFSET_FILL); gl.glPolygonOffset(0.0, -DECOR_BIAIS * (len(self.carte_vl) + 2))
+            self.prog['net'] = net_o if (r is None or key not in r) else 0.0; self.prog['tsize'] = (float(t.width), float(t.height)); self._tracer(t, c['vl'])
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+        except Exception as ex:
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL); self.ciel_ext = None
+            print('Ciel du titre (bandes) desactive : %s' % ex, flush=True)
 
     def _calcul_hd_decor(self, arrs, algo):
         """(tache de fond) textures de decor agrandies par l'algorithme HD du mode de F2 (x8, plafonne a 4096 px de cote). Le bord est repete en boucle avant l'agrandissement : les textures se raccordent."""
@@ -1287,6 +1321,7 @@ class Jeu(pyglet.window.Window):
             if pas == 0:
                 for tex, vl, key, deb, n, dx in self.carte_ext:
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
+                if self.ciel_ext is not None: self._tracer_ciel(r, net_o)
         if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
@@ -2852,7 +2887,7 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            self._tracer_decor(True); self._M_ville = M
+            self._M_ville = M; self._aspect_ville = aspect; self._tracer_decor(True)
             if e.fbx: self._tracer_fbx(e)               # modeles 3D animes (le dragon du titre) : meme file que le decor opaque
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
