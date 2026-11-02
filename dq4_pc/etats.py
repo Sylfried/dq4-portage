@@ -57,8 +57,8 @@ def appliquer(m, d):
     if not hasattr(m.ui, 'degats'): m.ui.degats = []              # etat enregistre par une version plus ancienne (avant les nombres de degats)
     m.images = p['images']; m.anims = p['anims']; m.msg_visible = p['msg_visible']; m.fielddata = p['fielddata']; m.fldobj = p['fldobj']
     m._grille = p['grille']; m._grille_img = p['grille_img']; m.msgs_ui = p['msgs_ui']
-    m.remettre_vitesses()                                         # un etat enregistre par une ancienne version pendant une course contient des vitesses de heros majorees
-    m.patcher_parametres()                                        # (le bouton « Paramètres » du menu Divers ouvre le menu Pause : un etat enregistre avant ce detournement a remis l'instruction d'origine)
+    m.reappliquer_correctifs()                                    # vitesses de heros d'origine (un etat enregistre par une ancienne version pendant une course les contient majorees), bouton « Paramètres » -> menu Pause (un etat enregistre
+                                                                  # avant ce detournement a remis l'instruction d'origine), fenetre des lieux elargie et « Sauv. cloud » retiree (idem : l'image d'origine est rechargee ci-dessus)
     m.pk.begin()
     return pickle.loads(d['viewer']) if d.get('viewer') else None
 

@@ -36,6 +36,7 @@ DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'
 HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
 TBZ_W20_0 = 0x36000094
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
+ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
 
 class Silencieux:
@@ -123,7 +124,7 @@ class Etat:
                     if i in self.symboles: self.symboles[i]['vis'] = False
                 elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
-                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True, 'ech': 1.0}
+                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True, 'ech': 1.0, 'cree': self.image}
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
@@ -208,7 +209,11 @@ class Etat:
                     fl = fl[1:]
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
                 if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
-                if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
+                if flags & 0x4000 and len(a) > 1:
+                    s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
+                    if s['pos'] is None and self.image - s.get('cree', 0) >= ORIGINE_APRES: s['pos'] = (0.0, 0.0, 0.0)       # le moteur n'envoie une position que si elle change de celle qu'il croit deja posee (son enregistrement du personnage : (0, 0, 0)) :
+                                                                          # un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
+                                                                          # du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
 
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
@@ -501,6 +506,14 @@ class Moteur:
         """(test) (message ouvert, etat de ui_MsgLoop, lettre courante, fin de ligne, vitesse du type de fenetre)."""
         c = self.core; g = lambda off: struct.unpack('<H', c.mem(self.L + off, 2))[0]
         return c.mem(self.L + MSG_ACTIF, 1)[0], g(MSG_ETAT), g(MSG_COURANT), g(MSG_FIN), g(MSG_VITESSE)
+
+    def reappliquer_correctifs(self):
+        """Remet les correctifs que la visionneuse pose dans la memoire du moteur (fenetre des lieux elargie, pas de « Sauv. cloud », bouton « Paramètres », vitesses de marche d'origine). Appelee apres le chargement d'un etat
+        (etats.appliquer) : l'image d'origine de la bibliotheque est rechargee d'abord, et un etat enregistre par une version qui n'avait pas encore un correctif ne le contient pas. Chacun est idempotent."""
+        self._elargir_symboles()
+        self.core.mem_w(self.L + G_IS_AMAZON, b'\x01')
+        self.remettre_vitesses()
+        self.patcher_parametres()
 
     def _elargir_symboles(self):
         """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
