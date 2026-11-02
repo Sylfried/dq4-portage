@@ -48,6 +48,22 @@ def par_libelle(p, lib):
 
 
 class Racine(unittest.TestCase):
+class Intertitres(unittest.TestCase):
+    """Liste deroulante « Interface à modifier » : les intertitres de groupe (« Écran tactile », « Dialogues »...) sont discrets, jamais en or (l'or est celui de la valeur courante)."""
+    def test_intertitres_ni_or_ni_aussi_grands_que_les_valeurs(self):
+        t, c = PA.style_intertitre(20.0)
+        self.assertLess(t, 20.0 * 0.9); self.assertNotEqual(c, PA.OR); self.assertNotEqual(c[:3], PA.BLANC[:3])               # plus petit, ni or ni blanc
+        lum = lambda x: 0.3 * x[0] + 0.59 * x[1] + 0.11 * x[2]
+        self.assertLess(lum(c), lum(PA.BLANC) * 0.7); self.assertLess(c[2], c[0])                                              # terne (moins lumineux que le blanc) mais encore un gris dore (pas un gris neutre)
+        self.assertLess(c[0] - c[2], 60); self.assertLess(lum(c), lum(PA.OR) - 40)                                             # (et nettement moins vif que l'or de la valeur courante)
+        self.assertEqual(PA.OR, (255, 235, 4, 255))                                                                            # l'or reste celui de la valeur courante
+
+    def test_le_code_de_la_liste_utilise_le_style_des_intertitres(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc', 'pause.py'), encoding='utf-8').read()
+        i = src.index('if self._entete(vals[j]):'); bloc = src[i:i + 700]
+        self.assertIn('style_intertitre(fs)', bloc); self.assertNotIn(', OR)', bloc)                                           # l'intertitre n'est plus dessine en or
+
+
     def test_entrees(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         for ancien in ('Vitesse de défilement du texte', 'Texte et défilement'): self.assertNotIn(ancien, libs)             # plus de page du texte : ses deux options sont dans Commandes

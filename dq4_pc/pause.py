@@ -18,6 +18,13 @@ NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 # Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
+INTERTITRE = (146, 140, 112, 255); FILET_INTERTITRE = (72, 69, 54)          # intertitres de groupe des listes deroulantes (« Écran tactile », « Dialogues »...) : gris dore terne, plus petits ; l'or (OR) est reserve a la valeur courante
+TAILLE_INTERTITRE = 0.76                                                   # (fraction de la taille des valeurs)
+
+
+def style_intertitre(fs):
+    """(taille, couleur) d'un intertitre de groupe d'une liste deroulante : plus petit que les valeurs et d'un gris dore terne, jamais en or (l'or marque la valeur courante)."""
+    return fs * TAILLE_INTERTITRE, INTERTITRE
 JAUNE = OR[:3]; CLAIR = (236, 236, 232)
 SANS = object()                                  # « pas de valeur par defaut » (None et False sont des valeurs possibles)
 NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_JEU, mesuree sur les fenetres du jeu)
@@ -1341,9 +1348,9 @@ class Pause:
         self.zones_pop = []; y = y1 - 10 * k
         for j in range(top, top + nvis):
             yb = y - ih; courant = vals[j] == en['get']()
-            if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en or, sans zone de clic
-                et = self._et(noms[j], fs * 0.92, OR); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
-                pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=(120, 110, 40)).draw(); y -= ih; continue
+            if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en gris dore terne et plus petit (l'or est celui de la valeur courante), sans zone de clic
+                taille_i, coul_i = style_intertitre(fs); et = self._et(noms[j], taille_i, coul_i); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
+                pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=FILET_INTERTITRE).draw(); y -= ih; continue
             if self.mode_souris:                                                               # souris : la valeur sous le pointeur est assombrie (plaque enfoncee), sans encadrement
                 if self._pointeur_dans((x0 + 6 * k, yb, x1 - 6 * k - lb, yb + ih)): self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True)
             elif j == cur: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)                       # clavier : curseur dore
