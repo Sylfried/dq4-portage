@@ -2712,12 +2712,13 @@ class Jeu(pyglet.window.Window):
             if SV.ACTIF: self._suivre_dessin(t0)
 
     def _absorber_blocage(self, t0):
-        """Une image longue (> 2 pas du moteur) dans les images qui suivent un chargement de carte (textures du decor et des personnages, shaders : premiere image d'une scene) ne doit pas etre rattrapee : sans cela le moteur
-        refait d'un coup jusqu'a 3 pas (VC.avancer), et le fondu d'entree saute d'autant (a l'ecran : l'image apparait deja a moitie fondue). L'horloge du moteur repart de zero ; le temps du blocage est perdu (ecran de chargement)."""
+        """Une image tres longue (plus de 4 pas du moteur : 133 ms) parmi les 3 qui suivent un chargement de carte (textures du decor et des personnages, shaders, rendu hors ecran : premiere image d'une scene) ne doit pas
+        etre rattrapee : sans cela le moteur refait d'un coup 3 pas (VC.avancer) et le fondu d'entree saute d'autant (a l'ecran : l'image apparait deja a moitie fondue). L'horloge du moteur repart de zero ; le temps
+        du blocage est perdu (ecran de chargement). Limites : une machine lente (images de 100 ms et plus) ne fige pas le jeu, seul un vrai blocage est absorbe, au plus 3 fois par chargement."""
         e = self.moteur.etat; cle = e.cartes_chargees
         if cle != getattr(self, '_absorb_cle', None): self._absorb_cle = cle; self._absorb_n = 0
         self._absorb_n += 1
-        if self._absorb_n <= 6 and time.perf_counter() - t0 > 2 * PAS_MOTEUR: self.t_boucle = None
+        if self._absorb_n <= 3 and time.perf_counter() - t0 > 4 * PAS_MOTEUR: self.t_boucle = None
 
     def _suivre_dessin(self, t0):
         """(diagnostic, DQ_SUIVI) une ligne par image dessinee pendant les 12 premieres images et pendant les 16 images qui suivent un chargement de carte ou un changement de partie : ce qui a ete dessine (`_dessin_genre` :

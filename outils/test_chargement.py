@@ -145,11 +145,16 @@ class Absorption(unittest.TestCase):
         for _ in range(5): F.Jeu._absorber_blocage(j, time.perf_counter() - 0.004)
         self.assertEqual(j.t_boucle, 5.0)
 
+    def test_machine_lente(self):
+        j = self.faux()
+        for _ in range(3): F.Jeu._absorber_blocage(j, time.perf_counter() - 0.10)
+        self.assertEqual(j.t_boucle, 5.0, 'des images de 100 ms (machine lente) ne sont pas des blocages : le jeu ne se fige pas')
+
     def test_seulement_les_premieres_images_d_une_carte(self):
         j = self.faux()
-        for _ in range(6): F.Jeu._absorber_blocage(j, time.perf_counter())
+        for _ in range(3): F.Jeu._absorber_blocage(j, time.perf_counter())
         F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
-        self.assertEqual(j.t_boucle, 5.0, 'plus de 6 images apres le chargement : un ralentissement ordinaire reste soumis au rattrapage normal')
+        self.assertEqual(j.t_boucle, 5.0, 'plus de 3 images apres le chargement : un ralentissement ordinaire reste soumis au rattrapage normal')
         j.moteur.etat.cartes_chargees = 2
         F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
         self.assertIsNone(j.t_boucle, 'nouvelle carte : le compte repart')
