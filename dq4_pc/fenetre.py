@@ -1605,7 +1605,7 @@ class Jeu(pyglet.window.Window):
             if a(q): return q
         return port
 
-    def _saisie_menu(self, port, decl):
+    def _saisie_menu(self, port, decl, pages=0):
         """Touches -> menu actif, comme MenuPort.Send d'Unity : [1, numero de bouton, manette] (manette du jeu : bas 1, haut 2, droite 4, gauche 8, A 16, B 32).
         Menu a curseur du moteur (message 2 : colonnes x lignes, ex. Oui / Non) : les touches lui sont transmises, il deplace son curseur (messages 4) et valide ;
         gauche/droite sur une seule colonne = precedent/suivant. Menu tactile (boutons sans curseur du moteur) : curseur local deplace d'apres la position des boutons, A = toucher."""
@@ -1615,12 +1615,20 @@ class Jeu(pyglet.window.Window):
         fe = self.ui_g.f.get(port) if self.ui_g else None
         z = {b: ((x0 + x1) / 2, (z0 + z1) / 2) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}
         if not f.get('grille') and len(z) <= 1 and self._saisie_pas(port, f, fe, z, decl): return          # menu de saisie numerique (mise, jetons, montant) : fleches = colonnes et ▲ / ▼
+        if pages and not f.get('grille') and len({round(c[0] / 20.0) for c in z.values()}) >= 2:          # L / R (page precedente / suivante) dans une liste a plusieurs colonnes (bestiaire) : gauche / droite y changent de colonne, ce sont donc les fleches ◀ ▶ de page de la fenetre qui sont pressees
+            fl = self._fleche_page(port, 8 if pages & 1 else 4)
+            if fl: mo.envoyer_menu(fl[0], 1, fl[1], 8 if pages & 1 else 4); self.menu_relacher = fl[0]; self.son.jouer_se(SE_BOUTON); return
         if f.get('grille') or len(z) < 1:
             for bit, pad in dirs:
                 if decl & bit:
+                    if bit in (MO.GAUCHE, MO.DROITE) and not f.get('grille') and self._fleche_page(port, pad):         # fenetre sans bouton de validation mais avec ses fleches de page (fiche du bestiaire) : gauche / droite les pressent
+                        fl = self._fleche_page(port, pad); mo.envoyer_menu(fl[0], 1, fl[1], pad); self.menu_relacher = fl[0]; self.son.jouer_se(SE_BOUTON); return
                     if bit in (MO.GAUCHE, MO.DROITE) and (f.get('grille') or (1, 1, 1))[0] < 2: pad = 2 if bit == MO.GAUCHE else 1
                     mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; return
-            if decl & MO.A: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+            if decl & MO.A:
+                act = next((b for b, pd, *_ in (fe.boutons() if fe else []) if pd & 0x800), None)          # « Action » de la fiche du bestiaire (manette 0x800) : la seule fenetre qui en a un
+                if act is not None and not f.get('grille'): mo.envoyer_menu(port, 1, act, 0x800); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+                else: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
             elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
             return
         cle = (port, f['ordre']); cur = self.cur_local.get(cle)
@@ -1638,6 +1646,14 @@ class Jeu(pyglet.window.Window):
         if decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
         elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
         elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+
+    def _fleche_page(self, port, pad):
+        """Fleche de page ◀ (manette 8) ou ▶ (manette 4) de la fenetre `port` : (port, numero de bouton), ou None. Les fleches de quantite des boutiques (types 58, 59, 63 : une par rangee) n'en sont pas."""
+        fe = self.ui_g.f.get(port) if self.ui_g else None
+        if fe is None or fe.typ in (58, 59, 63): return None
+        for b, pd, *_ in fe.boutons():
+            if pd & pad: return (port, b)
+        return None
 
     def _pas_colonnes(self, fe):
         """Colonnes ▲ / ▼ d'un menu de saisie numerique (mise de la machine a sous et du poker, jetons, montant de la banque, pari de l'arene : Make_Casino_*, Make_Bank*) : numeros de bouton >= 0 qui ont
@@ -2642,7 +2658,7 @@ class Jeu(pyglet.window.Window):
         if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
             f_port = mo.ui.f.get(port)
-            self._saisie_menu(port, decl | (MO.A if fr['menu'] else 0) | (MO.B if fr['carte'] and f_port and f_port.get('type') == 25 else 0) | (MO.GAUCHE if fr['L'] else 0) | (MO.DROITE if fr['R'] else 0))        # L / R = gauche / droite (page precedente / suivante des menus a une colonne)
+            self._saisie_menu(port, decl | (MO.A if fr['menu'] else 0) | (MO.B if fr['carte'] and f_port and f_port.get('type') == 25 else 0) | (MO.GAUCHE if fr['L'] else 0) | (MO.DROITE if fr['R'] else 0), (1 if fr['L'] else 0) | (2 if fr['R'] else 0))        # L / R = gauche / droite (page precedente / suivante des menus a une colonne)
             p = decl = 0
         elif self.titre is not None:                       # ecran-titre : seul A valide (Espace, Entree ou toucher) ; ni marche, ni camera
             p = decl = MO.A if (decl & MO.A or fr['menu']) else 0
@@ -2976,7 +2992,8 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            self._M_ville = M; self._aspect_ville = aspect; self._tracer_decor(True)
+            self._M_ville = M; self._aspect_ville = aspect
+            if e.partie != MO.PARTIE_BESTIAIRE: self._tracer_decor(True)          # bestiaire : la carte de la ville reste chargee (aucun paquet 0) mais la camera du livre, a 83 unites, n'en voit qu'une tranche (l'eglise, au bord du plan lointain) derriere la liste et la fiche : le livre ne montre que le monstre (paquets 21 / 22)
             if e.fbx: self._tracer_fbx(e)               # modeles 3D animes (le dragon du titre) : meme file que le decor opaque
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
