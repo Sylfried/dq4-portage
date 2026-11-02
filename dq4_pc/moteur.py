@@ -120,7 +120,7 @@ class Etat:
                     if i in self.symboles: self.symboles[i]['vis'] = False
                 elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
-                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True}
+                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True, 'ech': 1.0}
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
@@ -200,7 +200,9 @@ class Etat:
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue
-                if flags & 0x800: fl = fl[1:]
+                if flags & 0x800 and fl:                # cmd_chara (D12EA8) : bit 11 = Chara.SetScale(echelle) : Transform.localScale = 1,8 x echelle sur le panneau du personnage (pas sur son ombre)
+                    if s['pos'] is not None: s['ech'] = float(fl[0])      # (la 1re mise a jour d'un personnage, celle qui le place, porte une valeur de depart sans suite : 0,0253 a 0,08 puis 1,0 en une image ; observee sur 529 cartes, 1062 personnages : ignoree)
+                    fl = fl[1:]
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
                 if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
                 if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff

@@ -2905,10 +2905,12 @@ class Jeu(pyglet.window.Window):
             if cam3d is not None:
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
-                r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
+                k = 1.0 if os.environ.get('DQ_SANS_ECHELLE') else min(max(float(s.get('ech', 1.0)), 0.0), 8.0)          # paquet 13, bit 11 : Chara.SetScale (Transform.localScale du panneau, pieds fixes) ; 1,0 presque partout, 0,738 pour le heros et son equipier dans mlb1a, 0,952 dans ev07 (le reste : valeurs de depart d'une image)
+                wk, hk = w * k, h * k
+                r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
                 # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
                 # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
-                a, b, c, d = self._panneau_ville(p, r_, u_, f_, w, h, zb, zb + zh, corr, C_vue)
+                a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
                 a, b = p - dh * w / 2, p + dh * w / 2
