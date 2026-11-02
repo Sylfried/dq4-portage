@@ -80,10 +80,10 @@ BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur 
 BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
 SE_GRACE = 0.4               # secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
 SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
-# Musiques decodees d'avance (tache de fond, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache) : le decodage d'une musique longue prend plus d'une seconde (BGM 23, 113 s :
-# 1,15 s ici ; plus sur un PC lent), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 s apres l'avoir lancee (x3) : sans cela, la musique de la defaite (BGM 23, demandee quand tout le groupe est battu)
-# n'etait decodee qu'a ce moment-la, et l'arret du moteur, arrive avant la fin du decodage, la supprimait : le groupe mourait en silence. Les jingles (BGM 6, 8, 10, 13, 35 a 50) sont courts : 0,04 s chacun.
 IMAGES_MOTEUR_PAR_S = 30.0   # images du moteur par seconde a vitesse normale (un pas du moteur = 1/30 s)
+# Musiques decodees d'avance (tache de fond, un fil a part, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache ; 59 Mo en tout) : le decodage d'une musique longue prend du temps
+# (BGM 23, 113 s : 0,6 a 1,2 s ici, plus sur un PC lent ; les jingles : 0,01 a 0,14 s), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 a 3,9 s apres l'avoir lancee (x3) : sans cela, la musique
+# de la defaite (BGM 23, demandee quand tout le groupe est battu) n'etait decodee qu'a ce moment-la (elle partait en retard, et un arret du moteur arrive avant la fin du decodage la supprimait : le groupe mourait en silence).
 BGM_PRECHARGES = (6, 8, 10, 13) + tuple(range(35, 51)) + (30, 23)
 
 # ---- categories de sons (menu Echap > Son). Unity ne connait que PlayBGM / PlaySE (classe Sound) : ni voix, ni canal « ME » a part. Les categories sont celles que le MOTEUR distingue par la facon de jouer un son :
