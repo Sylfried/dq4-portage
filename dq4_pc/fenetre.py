@@ -109,7 +109,6 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
-TITRE_HAUT = 0.3                  # ecran-titre (carte ev01) : decalage vertical de la scene en coordonnees d'ecran normalisees (+1 = demi-hauteur vers le haut)
 FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
@@ -982,7 +981,7 @@ class Jeu(pyglet.window.Window):
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
         if not e.cam_libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
-            if prof > 1.0 and 0 in e.sprites: th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (sans heros, comme au titre : champ horizontal fixe de l'original)
+            if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
         th_v /= self.zoom                                                  # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...)
         # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
         # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
@@ -1034,7 +1033,7 @@ class Jeu(pyglet.window.Window):
             fw = np.array([math.sin(lacet) * math.cos(tang), -math.sin(tang), math.cos(lacet) * math.cos(tang)]); haut = np.array([0.0, 1.0, 0.0])
             pos = pos + fw * DIST_ADJ_VILLE
         M, droite = matrice(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=e.cam_near or VILLE_NEAR, f=(e.cam_far or VILLE_FAR) + (0.05 * self.n_boucle if os.environ.get('DQ_ZDEBUG') else 0.0), haut=haut)      # (test) DQ_ZDEBUG : le plan lointain change a chaque image : seules les surfaces en z-fighting changent d'une image a l'autre
-        yoff = (e.cam_yoff or 0.0) + (float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT)) if self.carte_nom == 'ev01' else 0.0)       # titre : le groupe logo + ile est releve pour etre centre dans le 16/9
+        yoff = e.cam_yoff or 0.0
         if yoff:
             Ty = np.eye(4); Ty[1, 3] = yoff; M = Ty @ M              # SceneCamera.s_yOffset
         self._cadre_vue = (np.array(pos, float), droite, np.cross(fw, droite), fw)
@@ -1154,7 +1153,7 @@ class Jeu(pyglet.window.Window):
             if slot not in e.maillages_vus: continue                # mode immediat : pas de paquet cette image = pas dessine
             mid = e.modeles.get(slot)
             if mid is None: continue
-            credits = ville and mid == 8905 and self.carte_nom == 'ev01'          # ecran-titre : les textes des credits (Yuji Horii...), avant le logo
+            credits = ville and mid == 8905 and self.carte_nom == 'ev01'          # ecran-titre : les textes des credits (Yuji Horii...), avant le logo ; poses par le moteur, sans correction (1 pour 1 avec le mobile)
             if credits and os.environ.get('DQ_SANS_CREDITS'): continue            # (test) sans les credits : la difference avec la capture normale donne leur position exacte
             st = e.mesh_etat.get(slot) or {'shader': 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}
             if not st['vis']: continue
@@ -1164,7 +1163,6 @@ class Jeu(pyglet.window.Window):
             P = V[ix]
             xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
-            if credits: xyz = xyz + self._decalage_credits(mid, P, st['off'], Rb, xyz)           # centre le bloc de texte de la page au milieu de la zone de dessin
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
             coul = np.c_[np.ones((len(ix), 3), np.float32) * np.array(st['col'], np.float32), alpha].astype(np.float32)           # Material.color (paquet 25) x couleur de sommet
@@ -1293,7 +1291,6 @@ class Jeu(pyglet.window.Window):
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     # ---- modeles 3D animes (FbxObject d'Unity : paquets 31 et 32 du moteur ; voir fbx.py)
-    TITRE_DRAGON_HAUT = 0.0           # ecran-titre : decalage vertical du dragon (meme unite que TITRE_HAUT) ; 0 = cadrage d'origine du jeu, 0,3 = releve comme le logo (le dragon ne montrerait alors que ses griffes) ; DQ_FBX_DY pour essayer
 
     def _fbx_pret(self, no):
         """Modele 3D numero `no` pret a etre dessine ({'m': fbx.ModeleFbx, 'vl', 'tex'...}), None tant qu'il se lit (tache de fond : le cache disque, ou le paquet de donnees la premiere fois) ou s'il n'est pas gere."""
@@ -1318,12 +1315,6 @@ class Jeu(pyglet.window.Window):
         """Modeles 3D de la scene (e.fbx) : pose = position / rotation / echelle du moteur (paquet 32), animation jouee depuis son lancement (images du moteur : 30 Hz, fraction de pas comprise), couleur = Material.color.
         Shader Custom/ImdChara : couleur du sommet x _Color x texture, fusion alpha, ZWrite, ZTest LEqual, Cull Back, file Geometry (avec le decor opaque, avant les personnages et les effets-maillages)."""
         tf = max(0.0, self.moteur.images - 2.0 + self.alpha)           # image du moteur affichee : celle du pas precedent + alpha (voir _interpoler)
-        M0 = None
-        if self.carte_nom == 'ev01':                                   # titre : le dragon n'est pas releve avec le groupe logo + ile (il sortirait de l'ecran) : decalage propre, en coordonnees d'ecran normalisees
-            dy = float(os.environ.get('DQ_FBX_DY', self.TITRE_DRAGON_HAUT)) - float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT))
-            if dy:
-                M0 = self.prog['mvp']; Ty = np.eye(4); Ty[1, 3] = dy
-                Mn = np.array(M0, float).reshape(4, 4).T; self.prog['mvp'] = tuple(float(x) for x in (Ty @ Mn).T.ravel())
         for k in [k for k in self.fbx_lect if k not in e.fbx]: del self.fbx_lect[k]
         for slot, mod in sorted(e.fbx.items()):
             if not mod['vis']: continue
@@ -1340,51 +1331,13 @@ class Jeu(pyglet.window.Window):
             vl = r['vl']; vl.position[:] = V[m.tri.ravel()].ravel(); vl.colors[:] = np.tile(np.array(mod['col'], np.float32), r['n'])
             self.prog['cutoff'] = 0.0; self.prog['net'] = 1.0 if self.lissage else 0.0; self.prog['tsize'] = (float(m.tex.shape[1]), float(m.tex.shape[0]))
             self._dom_lie = None
-            if os.environ.get('DQ_FBX_CULL', '1') == '1': gl.glEnable(gl.GL_CULL_FACE); gl.glCullFace(gl.GL_BACK)          # Custom/ImdChara : Cull Back (lu dans le shader) ; sans, des faces internes (tete, ailes) recouvrent le visage ; DQ_FBX_CULL=0 pour essayer sans
+            cull = os.environ.get('DQ_FBX_CULL', '1')                   # Custom/ImdChara : Cull Back (lu dans le shader) ; DQ_FBX_CULL=0 : sans culling, 2 : sens inverse (l'ancien, faux : on voyait l'interieur du dragon) pour comparer
+            if cull != '0':
+                gl.glEnable(gl.GL_CULL_FACE); gl.glCullFace(gl.GL_BACK)
+                gl.glFrontFace(gl.GL_CCW if cull == '2' else gl.GL_CW)         # Unity : face avant = triangle dans le sens horaire a l'ecran (main gauche), l'inverse du defaut d'OpenGL ; sans cela on ne dessinait que les faces arrieres (l'interieur du dragon : visage vu de l'interieur, corps vu de dos)
             self._tracer(r['tex'], vl)
-            gl.glDisable(gl.GL_CULL_FACE)
-        if M0 is not None: self.prog['mvp'] = M0
+            gl.glDisable(gl.GL_CULL_FACE); gl.glFrontFace(gl.GL_CCW)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['cutoff'] = 0.05
-
-    # ---- ecran-titre : textes des credits (modele 8905 : « Yuji Horii », « Akira Toriyama »... une page apres l'autre)
-    _credits_cache = {}
-
-    def _decalage_credits(self, mid, P, off, Rb, xyz):
-        """Vecteur monde (le long du haut de la camera) qui amene le centre vertical du bloc de texte visible des credits au milieu de la zone de dessin (ordonnee d'ecran normalisee 0, quel que soit le format de la fenetre),
-        comme le groupe logo + ile. La scene du titre est relevee de TITRE_HAUT (pour centrer le logo) : sans cette correction les credits, poses par le moteur bas dans l'image d'origine, se retrouvent trop hauts.
-        Le centre est celui de l'ENCRE (pixels non transparents de chaque ligne de texte, lus dans la texture d'origine), pas celui des quadrilateres. Toute erreur : aucun decalage."""
-        try:
-            if os.environ.get('DQ_CREDITS_ORIGINE'): return np.zeros(3, np.float32)             # (test) credits tels que le moteur les pose
-            M = getattr(self, '_M_ville', None); orig = self.cb_tex.get((mid, 0))
-            if M is None or orig is None or len(P) % 6: return np.zeros(3, np.float32)
-            cle = (mid, P.tobytes(), float(off[0]), float(off[1]))
-            y_c = self._credits_cache.get(cle)
-            if y_c is None:
-                arr = orig['arr']; H, W = arr.shape[:2]; yy = []; zz = []
-                for q in P.reshape(-1, 6, 5):                                    # un quadrilatere = 6 sommets (u, v - 1, x, y, z) dans le repere de la camera
-                    v0, v1 = float(q[:, 1].min()), float(q[:, 1].max())
-                    if v1 - v0 < 1e-6: continue
-                    ya, yb = float(q[q[:, 1] == v0][:, 3].mean()), float(q[q[:, 1] == v1][:, 3].mean())        # ordonnee locale aux bords bas / haut de la texture du quadrilatere
-                    r0 = int(min(max(np.floor(-(v1 + off[1]) * H), 0), H)); r1 = int(min(max(np.ceil(-(v0 + off[1]) * H), 0), H))
-                    c0 = int(min(max(np.floor((q[:, 0].min() + off[0]) * W), 0), W)); c1 = int(min(max(np.ceil((q[:, 0].max() + off[0]) * W), 0), W))
-                    if r1 <= r0 or c1 <= c0: continue
-                    lig = np.flatnonzero((arr[r0:r1, c0:c1, 3] > 32).any(1))
-                    if not len(lig): continue
-                    for r in (r0 + lig[0], r0 + lig[-1] + 1):                    # rangees d'encre extremes -> ordonnee locale (v = -rangee / H - decalage, interpolation lineaire sur le quadrilatere)
-                        v = -r / H - off[1]; yy.append(ya + (v - v0) / (v1 - v0) * (yb - ya))
-                    zz.append(float(q[:, 4].mean()))
-                if not yy: return np.zeros(3, np.float32)
-                y_c = (min(yy) + max(yy)) / 2, float(np.mean(zz))
-                if len(self._credits_cache) > 64: self._credits_cache.clear()
-                self._credits_cache[cle] = y_c
-            haut = Rb[:, 1].astype(float); pos = xyz[0].astype(float) - Rb.astype(float) @ P[0, 2:5].astype(float)             # position du maillage (xyz = pos + Rb x sommet local)
-            c = M @ np.append(pos + Rb.astype(float) @ np.array([0.0, y_c[0], y_c[1]]), 1.0)                 # centre du bloc, en coordonnees de clip (la scene du titre est deja relevee de TITRE_HAUT dans M)
-            pente = float(M[1, :3] @ haut)                                      # variation de la coordonnee de clip y par unite de deplacement le long du haut de la camera (la profondeur ne change pas)
-            if abs(pente) < 1e-9: return np.zeros(3, np.float32)
-            return (haut * (-c[1] / pente)).astype(np.float32)
-        except Exception as ex:
-            if not getattr(self, '_credits_err', False): self._credits_err = True; print('Credits du titre non centres : %s' % ex, flush=True)
-            return np.zeros(3, np.float32)
 
     def _fond_combat(self, c):
         """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
