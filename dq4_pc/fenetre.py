@@ -30,6 +30,7 @@ import fbx as FX
 import ciel_titre as CT
 import vitesse_combat as VC
 import teinte_carte as TC
+import ecrans as EK          # choix du moniteur du plein ecran (logique pure : ecrans.py)
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -270,7 +271,7 @@ class Jeu(pyglet.window.Window):
         for mode in range(demande, -1, -1):
             try:
                 self._echec_simule(mode)
-                if mode == 1: super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False)
+                if mode == 1: self._creer_plein_ecran(cfg)
                 else: super().__init__(args.largeur, args.hauteur, caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, visible=False)
             except Exception as ex:
                 if mode == 0: raise
@@ -281,6 +282,18 @@ class Jeu(pyglet.window.Window):
             except Exception: pass
             self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
             return mode
+
+    def _creer_plein_ecran(self, cfg):
+        """Fenetre creee en plein ecran, sur le moniteur choisi dans les reglages (« Écran du plein écran » ; automatique ou introuvable : l'ecran principal, la fenetre n'existant pas encore). Si le systeme refuse ce moniteur,
+        le plein ecran est retente sans lui (ecran par defaut de pyglet)."""
+        ecran = None
+        try:
+            if self.reg['ecran_plein'] is not None: ecran = self._ecran_pour_plein()[0]
+        except Exception as ex: print("Écran du plein écran illisible (%r) : écran principal" % (ex,), flush=True)
+        if ecran is not None:
+            try: super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False, screen=ecran); self._noter_zone_plein(); return
+            except Exception as ex: print("Plein écran impossible sur l'écran choisi (%r) : écran principal" % (ex,), flush=True)
+        super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False); self._noter_zone_plein()
 
     def _init_ui(self):
         """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
@@ -752,16 +765,22 @@ class Jeu(pyglet.window.Window):
 
     def regler_infos(self, oui): self.aide = bool(oui)
 
-    def regler_plein_ecran(self, oui):
-        """Interrupteur « Plein écran » du menu Echap, F11 et Alt + Entree : passe de la fenetre au plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas) et inversement, en une seule
-        bascule (voir _poser_plein_ecran). Le mode obtenu est memorise dans les reglages (`mode_fenetre`). A toute erreur : etat de depart conserve, dit dans la console et par un message a l'ecran. -> vrai si la fenetre est en plein ecran."""
+    def regler_plein_ecran(self, oui, deplacer=False):
+        """Interrupteur « Plein écran » du menu Echap, F11 et Alt + Entree : passe de la fenetre au plein ecran (fenetre sans bordure a la resolution du moniteur, l'affichage du moniteur ne change pas) et inversement, en une seule
+        bascule (voir _poser_plein_ecran). Le moniteur du plein ecran est celui des reglages (« Écran du plein écran » : voir _ecran_pour_plein). `deplacer` : deja en plein ecran, passe sur le moniteur choisi (meme etape).
+        Le mode obtenu est memorise dans les reglages (`mode_fenetre`). A toute erreur : etat de depart conserve, dit dans la console et par un message a l'ecran. -> vrai si la fenetre est en plein ecran."""
         cible = 1 if oui else 0; R = self.reg
-        if cible == self.mode_fen: R['mode_fenetre'] = cible; return self.est_plein
+        if cible == self.mode_fen and not (deplacer and cible == 1): R['mode_fenetre'] = cible; return self.est_plein
         if self._en_bascule: return self.est_plein
         self._en_bascule = True
         try:
             erreur = None
-            try: self._poser_plein_ecran(cible == 1)
+            try:
+                ecran = None
+                if cible == 1:
+                    ecran, _, etat = self._ecran_pour_plein()
+                    if etat != 'choisi' and ecran is not None and not self.fullscreen and self._deja_sur(ecran): ecran = None          # (aucun moniteur impose et c'est deja celui de pyglet : set_fullscreen(True) comme avant)
+                self._poser_plein_ecran(cible == 1, ecran)
             except Exception as ex: erreur = ex
             self.mode_fen = 1 if self.fullscreen else 0           # (l'etat reel de la fenetre)
             R['mode_fenetre'] = self.mode_fen
@@ -776,26 +795,29 @@ class Jeu(pyglet.window.Window):
         """F11 / Alt + Entree : fenetre <-> plein ecran."""
         return self.regler_plein_ecran(not self.est_plein)
 
-    def _poser_plein_ecran(self, plein):
+    def _poser_plein_ecran(self, plein, ecran=None):
         """La bascule, en une seule etape (pyglet : un set_fullscreen, qui sur Windows cache la fenetre, change son style et sa taille, puis la remontre et la replace) :
         - la taille de la fenetre est memorisee avant de la quitter (`taille_fenetre`, la position l'est par pyglet) et rendue d'un coup en y revenant, jamais par un etat intermediaire (plus de set_fullscreen(False) suivi de set_fullscreen(True)) ;
         - la fenetre est cachee AVANT, donc remontree une seule fois, a sa taille et a sa place definitives, et non pas montree au mauvais endroit puis deplacee ;
         - une image du jeu est dessinee a la taille definitive pendant qu'elle est cachee (les tampons du rendu hors ecran, postfx.py, ne sont refaits que si la taille a change, une seule fois, ici : plus de reconstruction forcee a chaque
           bascule), puis affichee, puis la fenetre est montree et la meme image redessinee aussitot (au cas ou le systeme n'aurait pas gardé celle de la fenetre cachee) : aucune trame de taille instable ni de tampon vide.
+        `ecran` : objet Screen de pyglet du plein ecran (None : celui que pyglet a deja). Deja en plein ecran, un autre `ecran` deplace la fenetre sur ce moniteur (meme etape : cachee, un set_fullscreen, une image, montree) ;
+        le moniteur de depart est retabli si le deplacement echoue.
         Leve une erreur si le mode n'a pas pu etre pris (l'etat de depart est alors retabli). DQ_BASCULE_SIMPLE=1 : (debogage) un set_fullscreen sans rien d'autre, comme avant."""
         avant = bool(self.fullscreen)
-        if avant == plein: return
+        if avant == plein and not (plein and ecran is not None and not self._deja_sur(ecran)): return
         if not avant: self.taille_fenetre = (int(self.width), int(self.height))          # (la taille de la fenetre, a retrouver au retour)
+        ecran_avant = getattr(self, 'screen', None) if avant else None              # (le moniteur a retrouver si le deplacement echoue)
         taille = ajuster_taille(*self.taille_fenetre)              # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
-        if os.environ.get('DQ_BASCULE_SIMPLE'): self._mettre_plein(plein, taille); self._echec_simule(1 if plein else 0); return
+        if os.environ.get('DQ_BASCULE_SIMPLE'): self._mettre_plein(plein, taille, ecran); self._echec_simule(1 if plein else 0); return
         cachee = False; erreur = None
         try:
             if getattr(self, '_visible', True): cachee = True; self.set_visible(False)          # (cachee avant l'appel : un masquage a moitie reussi est quand meme suivi d'un set_visible(True))
-            self._mettre_plein(plein, taille)
+            self._mettre_plein(plein, taille, ecran)
             self._echec_simule(1 if plein else 0)          # (test : l'echec arrive apres le changement, pour essayer le retour a l'etat de depart)
         except Exception as ex:
             erreur = ex
-            try: self._mettre_plein(avant, taille)          # (retour a l'etat de depart, fenetre toujours cachee)
+            try: self._mettre_plein(avant, taille, ecran_avant)          # (retour a l'etat de depart, fenetre toujours cachee, sur le moniteur de depart)
             except Exception as ex2: print("Retour à l'état de départ impossible (%r)" % (ex2,), flush=True)
         self._image_de_bascule()
         if cachee:
@@ -804,13 +826,21 @@ class Jeu(pyglet.window.Window):
             else: self._image_de_bascule()          # (supposé : le systeme peut ne pas garder ce qui est affiche pendant que la fenetre est cachee ; la meme image est redessinee des qu'elle est visible, sans attendre la boucle)
         if erreur is not None: raise erreur
 
-    def _mettre_plein(self, plein, taille):
-        """Le set_fullscreen de la bascule (un seul appel) ; en revenant en fenetre sans position memorisee (lancee en plein ecran), la fenetre est centree sur le bureau."""
-        if plein: self.set_fullscreen(True)
+    def _mettre_plein(self, plein, taille, ecran=None):
+        """Le set_fullscreen de la bascule (un seul appel), sur le moniteur `ecran` (objet Screen de pyglet ; None : celui que la fenetre a). En revenant en fenetre elle retrouve sa taille (`taille`) et sa place d'avant
+        (position memorisee par pyglet, sur son moniteur d'origine, quel que soit celui du plein ecran) ; sans position memorisee (lancee en plein ecran) ou si son moniteur n'est plus la, elle est centree sur le moniteur
+        du plein ecran."""
+        if plein:
+            if ecran is not None: self.set_fullscreen(True, screen=ecran)
+            else: self.set_fullscreen(True)
+            self._noter_zone_plein()
         else:
-            self.set_fullscreen(False, *taille)
-            if not getattr(self, '_windowed_location', None) and self.bureau:
-                try: self.set_location(max(0, (self.bureau[0] - self.width) // 2), max(32, (self.bureau[1] - self.height) // 2))
+            self.set_fullscreen(False, width=int(taille[0]), height=int(taille[1]))          # (la signature de pyglet : set_fullscreen(plein, screen, mode, width, height))
+            loc = getattr(self, '_windowed_location', None); zone = getattr(self, 'zone_plein', None) or ((0, 0) + tuple(self.bureau) if self.bureau else None)
+            vus = self._lire_ecrans(True)[1]
+            if loc and zone and vus and EK.ecran_de((loc[0], loc[1], self.width, self.height), vus) is None: loc = None          # (son moniteur a ete debranche : elle serait hors de tous les ecrans)
+            if not loc and zone:
+                try: self.set_location(int(zone[0] + max(0, (zone[2] - self.width) // 2)), int(zone[1] + max(32, (zone[3] - self.height) // 2)))
                 except Exception as ex: print('Fenêtre non centrée (%r)' % (ex,), flush=True)
         if sys.platform == 'win32' and not plein: self._verifier_taille_reelle()          # (Windows peut reduire la fenetre sans prevenir)
 
@@ -825,6 +855,73 @@ class Jeu(pyglet.window.Window):
             print("Image de la bascule impossible (%r) : noir" % (ex,), flush=True)
             try: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
+
+    # ---- moniteur du plein ecran (reglage `ecran_plein`, page Affichage : « Écran du plein écran » ; logique pure dans ecrans.py)
+    def _lire_ecrans(self, frais=False):
+        """-> (objets Screen de pyglet, descriptions de ecrans.lister) des moniteurs detectes (`display.get_screens()`). La liste est gardee 1,5 s (la page Affichage la lit a chaque image et, sous Windows, l'enumeration interroge le
+        systeme) ; `frais` la relit (bascule, changement de choix). Illisible -> ([], [])."""
+        t = time.perf_counter(); c = getattr(self, '_ecrans_cache', None)
+        if c is not None and not frais and t - c[0] < 1.5: return c[1], c[2]
+        try:
+            ecrans = list((getattr(self, 'display', None) or pyglet.display.get_display()).get_screens())
+            res = (t, ecrans, EK.lister(ecrans))
+        except Exception as ex:
+            print('Moniteurs illisibles (%r)' % (ex,), flush=True); res = (t, [], [])
+        self._ecrans_cache = res
+        return res[1], res[2]
+
+    def _indice_ecran_fenetre(self, desc):
+        """Indice (dans `desc`) du moniteur ou se trouve la fenetre (celui de son centre) ; None si elle n'existe pas encore ou si sa place est illisible."""
+        try:
+            x, y = self.get_location(); return EK.ecran_de((x, y, self.width, self.height), desc)
+        except Exception: return None
+
+    def _ecran_pour_plein(self, frais=True):
+        """-> (objet Screen de pyglet, description, etat) du moniteur du plein ecran : celui des reglages s'il est branche (etat 'choisi' ; retrouve par ecrans.retrouver : nom, indice et dimensions), sinon celui ou se trouve la fenetre
+        (etats 'auto' : aucun choix, 'absent' : le moniteur enregistre n'est plus la), a defaut le principal. (None, None, etat) si les moniteurs sont illisibles : pyglet garde alors le sien. Ne leve jamais d'erreur."""
+        ecrans, desc = self._lire_ecrans(frais)
+        try:
+            i, etat = EK.cible(self.reg['ecran_plein'], desc, self._indice_ecran_fenetre(desc))
+            if i is None: return None, None, etat
+            return ecrans[desc[i]['source']], desc[i], etat
+        except Exception as ex:
+            print('Moniteur du plein écran illisible (%r)' % (ex,), flush=True); return None, None, EK.AUTO
+
+    def _deja_sur(self, ecran):
+        """La fenetre (en plein ecran) est-elle deja sur ce moniteur ? (meme position et memes dimensions que le moniteur de pyglet.)"""
+        try:
+            ec = self.screen; return (ec.x, ec.y, ec.width, ec.height) == (ecran.x, ecran.y, ecran.width, ecran.height)
+        except Exception: return False
+
+    def _noter_zone_plein(self):
+        """Memorise le rectangle du moniteur du plein ecran (centrage au retour en fenetre quand la fenetre n'a pas de place d'avant : lancee en plein ecran)."""
+        try: ec = self.screen; self.zone_plein = (int(ec.x), int(ec.y), int(ec.width), int(ec.height))
+        except Exception: pass
+
+    def valeurs_ecran(self): return EK.valeurs_liste(self.reg['ecran_plein'], self._lire_ecrans()[1])
+    def valeur_ecran(self): return EK.valeur_choisie(self.reg['ecran_plein'], self._lire_ecrans()[1])
+    def nom_ecran(self, v): return EK.nom_valeur(v, self.reg['ecran_plein'], self._lire_ecrans()[1])
+
+    def note_ecran(self):
+        """Note rouge de la ligne « Écran du plein écran » : le moniteur enregistre n'est plus branche, ou il n'y en a qu'un."""
+        desc = self._lire_ecrans()[1]
+        if EK.valeur_choisie(self.reg['ecran_plein'], desc) == EK.ABSENT: return "Écran absent : l'écran de la fenêtre sert"
+        return 'Un seul écran détecté' if len(desc) <= 1 else ''
+
+    def regler_ecran_plein(self, v):
+        """Page Affichage, « Écran du plein écran » : `v` = EK.AUTO (l'ecran ou se trouve la fenetre), l'indice d'un moniteur detecte, ou EK.ABSENT (l'ecran enregistre qui n'est plus la : rien ne change). Le choix est enregistre
+        (ecrans.memoriser : indice, position, dimensions, nom) et sert a chaque entree en plein ecran (F11, Alt + Entree, interrupteur). Deja en plein ecran : la fenetre passe aussitot sur ce moniteur, en une seule etape."""
+        desc = self._lire_ecrans(True)[1]
+        if v == EK.AUTO: self.reg['ecran_plein'] = None
+        else:
+            d = next((d for d in desc if d['indice'] == v), None) if isinstance(v, int) and not isinstance(v, bool) else None
+            if d is None: return
+            self.reg['ecran_plein'] = EK.memoriser(d)
+        if self.est_plein and not self._en_bascule:
+            try:
+                ecran = self._ecran_pour_plein()[0]
+                if ecran is not None and not self._deja_sur(ecran): self.regler_plein_ecran(True, deplacer=True)          # (deja sur ce moniteur, ou aucun moniteur connu : rien a faire)
+            except Exception as ex: print('Changement de moniteur impossible : %r' % (ex,), flush=True)
 
     def _raccourci_fenetre(self, symbol, modifiers):
         """F11 ou Alt + Entree, de n'importe ou (logos, titre, jeu, menu Echap, saisie du nom, combat) : bascule fenetre <-> plein ecran. La touche est avalee (ni validation, ni action du jeu) et, avec Alt, Alt ne vaut plus
@@ -852,7 +949,8 @@ class Jeu(pyglet.window.Window):
         try:
             ec = self.screen; fb = self.get_framebuffer_size()
             nom = ('fenêtre', 'PLEIN ÉCRAN')[self.mode_fen] + ('' if bool(self.fullscreen) == (self.mode_fen > 0) else ' [INCOHÉRENT : fullscreen=%s]' % self.fullscreen)
-            print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d' % (quand, nom, self.width, self.height, fb[0], fb[1], ec.width, ec.height), flush=True)
+            n = EK.ecran_de((ec.x, ec.y, ec.width, ec.height), self._lire_ecrans()[1]); n = '' if n is None else ' (écran %d)' % (n + 1)
+            print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d%s' % (quand, nom, self.width, self.height, fb[0], fb[1], ec.width, ec.height, n), flush=True)
         except Exception as ex: print('Fenêtre (%s) : état illisible (%r)' % (quand, ex), flush=True)
 
     def regler_son(self, oui):

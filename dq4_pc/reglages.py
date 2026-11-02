@@ -1,6 +1,7 @@
 """Reglages du joueur (menu Echap) : affichage, son, touches. Enregistres dans reglages.json (a cote de fenetre.py, ignore par git)."""
 import json, os
 import pyglet
+import ecrans as EC
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
@@ -38,6 +39,7 @@ DEFAUT = {
     'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
+    'ecran_plein': None,          # moniteur du plein ecran : None = automatique (l'ecran ou se trouve la fenetre) ; sinon l'ecran choisi, enregistre avec son indice, sa position, ses dimensions et son nom (voir ecrans.py) pour le retrouver au lancement suivant ; un ecran qui n'est plus branche : l'ecran de la fenetre sert
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
@@ -214,6 +216,7 @@ class Reglages:
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                self.v['ecran_plein'] = EC.valide(self.v['ecran_plein'])          # (moniteur du plein ecran : une description propre ou None = automatique)
                 self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre'])          # (2 = ancien plein ecran exclusif -> 1)
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:

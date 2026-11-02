@@ -13,6 +13,7 @@ import hd as HD
 import hud_mobile as HM
 import entrees as EN
 import ui_historique as UH
+import ecrans as EK
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -255,6 +256,7 @@ class Pause:
 
     def _nom_valeur(self, label, v):
         if label == 'Interface à modifier': return self.nom_cible(v)
+        if label == 'Écran du plein écran': return self.J.nom_ecran(v)
         n = self.noms.get(label, {}).get(v)
         if n is not None: return n
         if isinstance(v, bool): return 'Oui' if v else 'Non'
@@ -292,7 +294,9 @@ class Pause:
         res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, note=lambda: 'Sans effet en plein écran' if J.est_plein else '', defaut=tuple(RG.DEFAUT['resolution']))
         res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution du bureau"
         if J.est_plein: res['moins'] = res['plus'] = lambda: None            # (ligne grisee : ni les fleches ni Entree ne la changent)
-        return [fen, res,
+        ecr = self._choix('Écran du plein écran', J.valeurs_ecran(), J.valeur_ecran, J.regler_ecran_plein, note=J.note_ecran, defaut=EK.AUTO)          # (moniteur du plein ecran : voir Jeu.regler_ecran_plein)
+        ecr['aide'] = "Moniteur utilisé en plein écran (F11, Alt + Entrée, interrupteur)   Automatique : celui où se trouve la fenêtre   En plein écran, le changement est immédiat   Au retour en fenêtre, la fenêtre revient là où elle était"
+        return [fen, ecr, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
                 self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode), defaut=RG.DEFAUT['mode_sprites']),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
