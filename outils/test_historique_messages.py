@@ -6,6 +6,7 @@ Verifie : nettoyage du texte (le « *: » des paroles sans nom est garde), coupu
 relu a l'ouverture, retrait par l'etoile, fichier corrompu / entrees invalides / version inconnue), pages d'un message (notees quand le joueur les a lues), messages de combat jamais ranges dans les dialogues,
 combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets (Dialogues, Combats : plus d'onglet Favoris), case « Favoris seulement » (clavier, souris, conservee d'un onglet a l'autre,
 favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
+Taille unique des boites (la boite de dialogue du jeu : 1, 2 ou 3 lignes, dialogue ou combat ; une page de plus au-dela de 3 lignes).
 `remplir(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
 """
 import json, os, shutil, struct, sys, tempfile, types, unittest
@@ -346,11 +347,14 @@ def remplir(h):
          ('Aubergiste', 'Bienvenue ! Que puis-je pour vous ?'), ('Aubergiste', 'Merci, et à bientôt !'), ('Alena', 'Hé, attendez-moi ! Je viens avec vous !'),
          (None, '*: Cette grotte est dangereuse, vous savez. Des monstres rôdent dans les profondeurs.'), (None, 'Ragnar fouille la jarre.\nIl a trouvé 12 pièces d\'or !'),
          ('Prêtre', 'Que la Déesse veille sur vous, mon enfant. Souhaitez-vous sauvegarder votre aventure ?'), (None, 'Ragnar a trouvé une Herbe médicinale.'),
-         (None, '*: On dit qu\'il y a un trésor au fond de la grotte, mais personne n\'en est jamais revenu.'), (None, '*: Bonjour, voyageur !')]
+         (None, '*: On dit qu\'il y a un trésor au fond de la grotte, mais personne n\'en est jamais revenu.'), (None, '*: Bonjour, voyageur !'),
+         ('Roi Bastien', 'Les enfants ont disparu en une seule nuit, sans qu\'un seul garde ait rien vu. Fouillez le village, interrogez chaque habitant et n\'oubliez pas la forêt.'),
+         (None, 'Ragnar a trouvé une Potion.\nRagnar a trouvé une Herbe médicinale.\nRagnar a trouvé 25 pièces d\'or.')]
     t = 400
     for i, (nom, texte) in enumerate(L): t += 300 if i % 5 else 1800; h.ajouter(texte, nom, t)
     for i, (en, g, x, issue) in enumerate([([('Gluant', 3, 3)], 21, 38, 'victoire'), ([('Chauve-souris', 2, 2), ('Gluant', 1, 1)], 14, 25, 'victoire'), ([('Golem', 2, 1)], 0, 0, 'fuite'),
-                                           ([('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1)], 96, 210, 'victoire'), ([('Dragon bleu', 1, 0)], 0, 0, 'defaite')]):
+                                           ([('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1)], 96, 210, 'victoire'), ([('Dragon bleu', 1, 0)], 0, 0, 'defaite'),
+                                           ([('Gluant', 3, 3), ('Chauve-souris', 2, 2), ('Golem', 1, 1), ('Mage-fantôme', 2, 2), ('Glacyclone', 4, 4), ('Dragon bleu', 1, 1)], 250, 480, 'victoire')]):
         h.ajouter_combat(combat(t=600 + 4000 * i, issue=issue, ennemis=[{'nom': n, 'total': a, 'vaincus': b} for n, a, b in en], or_=g, xp=x))
     for e in (h.dialogues[2], h.dialogues[10], h.combats[3]): h.basculer_favori(e)
 
@@ -364,6 +368,100 @@ def vue(n=20, vis=5, combats=0):
     P.J = types.SimpleNamespace(historique=h, reg=RG.Reglages(None), height=720)
     v = UH.VueHistorique(P); v.entrer(); v.vis = vis; v.appels = appels
     return v
+
+
+class TestBoite(unittest.TestCase):
+    """Taille unique des boites de l'historique : la boite de dialogue du jeu (3 lignes), que le texte fasse 1, 2 ou 3 lignes, dialogue ou combat ; au-dela de 3 lignes : une page de plus."""
+    @staticmethod
+    def mes(t): return 9.0 * len(t)                                            # largeur d'une chaine (unites) : 9 par caractere
+
+    def vue_boites(self, elements, fin=None, haut=900.0):
+        """Boites calculees comme dessiner() les place (sans GL) : police du systeme simulee (P._et), echelle 1."""
+        v = vue(0, 5); v.elements = elements; v.fin = len(elements) - 1 if fin is None else fin
+        v.P._et = lambda t, taille: types.SimpleNamespace(content_width=self.mes(t) / 0.9)
+        B = UH.Boite(); return v, B, v._blocs(None, B, 1.0, 20.0, 0.0, haut, 12.0, 4.0)
+
+    @staticmethod
+    def dialogue(n, texte, nom=None): return HI.Element(n, HI.TYPE_DIALOGUE, 0, nom=nom, texte=texte)
+
+    def test_dimensions_du_jeu(self):
+        B = UH.Boite(); self.assertEqual((B.LARG, B.HAUT, B.LIGNES, B.PAS), (452.0, 126.0, 3, 28.0)); self.assertEqual((B.ONGLET_L, B.ONGLET_H), (246.0, 32.0))
+        self.assertEqual([B.base(i) for i in range(3)], [B.BASE_1, B.BASE_1 + 28.0, B.BASE_1 + 56.0])
+        self.assertLess(B.base(2), B.HAUT)                                         # la 3e ligne tient dans le cadre
+        self.assertGreater(B.largeur_texte(), 400)
+
+    def test_dimensions_lues_dans_la_mise_en_page(self):
+        import test_nom_dialogue as N
+        B = UH.Boite.depuis(N.faux_ml()); self.assertEqual((B.LARG, B.HAUT, B.ONGLET_L, B.ONGLET_H, B.x0, B.z0, B.win), (452.0, 126.0, 246.0, 32.0, -223.0, -251.0, (0.0, 10.0, 86.0)))
+        self.assertEqual((UH.Boite.depuis(None).LARG, UH.Boite.depuis(object()).HAUT), (452.0, 126.0))               # (mise en page absente ou inutilisable : valeurs mesurees)
+
+    def test_dimensions_des_vrais_cadres(self):
+        import test_nom_dialogue as N, ui_menu as UM
+        l, c = os.path.join(N.CACHE, 'ui_layout.json'), os.path.join(N.CACHE, 'ui_frameData.bin')
+        if not (os.path.exists(l) and os.path.exists(c)): self.skipTest('cache d\'interface absent')
+        B = UH.Boite.depuis(UM.MiseEnPage(l, c)); d = UH.Boite()
+        self.assertEqual((B.LARG, B.HAUT, B.ONGLET_L, B.ONGLET_H), (d.LARG, d.HAUT, d.ONGLET_L, d.ONGLET_H)); self.assertEqual(B.texte_ech, UH.TEXTE_ECH)
+
+    def test_echelle_de_la_boite_du_jeu(self):
+        """Meme echelle que les fenetres du jeu a l'ecran : H / 800 x UI_ZOOM (fenetre.py) ; reduite si la fenetre de la visionneuse est trop etroite."""
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc', 'fenetre.py'), encoding='utf-8').read()
+        import re; zoom = float(re.search(r'^UI_ZOOM = ([0-9.]+)', src, re.M).group(1)); self.assertEqual(UH.ECHELLE_BOITE, zoom)
+        B = UH.Boite(); self.assertAlmostEqual(B.echelle(720, 1280, 0.8), 720 / 800 * zoom); self.assertLess(B.echelle(720, 500, 0.8), 720 / 800 * zoom)
+
+    def test_meme_cadre_pour_une_deux_trois_lignes(self):
+        els = [self.dialogue(1, 'Oui.'), self.dialogue(2, 'Une ligne.\nDeux lignes.'), self.dialogue(3, 'Une.\nDeux.\nTrois.'), self.dialogue(4, 'Bonjour !', 'Alena'),
+               self.dialogue(5, 'Une.\nDeux.\nTrois.', 'Roi Bastien')]
+        v, B, blocs = self.vue_boites(els)
+        self.assertEqual(len(blocs), 5); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})               # hauteur du cadre : une seule valeur
+        self.assertEqual([len(b[6]) for b in reversed(blocs)], [1, 2, 3, 1, 3])                                  # (le texte, lui, garde ses lignes)
+        self.assertEqual([b[5] for b in reversed(blocs)], [0.0, 0.0, 0.0, B.ONGLET_H, B.ONGLET_H])               # l'onglet du nom s'ajoute au-dessus, seulement avec un nom
+
+    def test_texte_de_plus_de_trois_lignes_une_page_de_plus(self):
+        long = self.dialogue(1, 'a\nb\nc\nd\ne\nf\ng', 'Alena'); v, B, blocs = self.vue_boites([long])
+        self.assertEqual(len(blocs), 3); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0}); self.assertEqual([b[6] for b in reversed(blocs)], [['a', 'b', 'c'], ['d', 'e', 'f'], ['g']])
+        self.assertEqual([b[5] for b in reversed(blocs)], [B.ONGLET_H, 0.0, 0.0])                                 # le nom n'est que sur la premiere page
+        self.assertEqual({(b[0], b[2]) for b in blocs}, {(0, 3)})
+
+    def test_dialogue_coupe_a_la_largeur_de_la_boite(self):
+        B = UH.Boite(); mot = 'mot '; texte = (mot * 60).strip(); r = UH.rangees_de(self.dialogue(1, texte), self.mes, B.largeur_texte())
+        self.assertTrue(all(self.mes(l) <= B.largeur_texte() for l in r)); self.assertEqual(' '.join(r), texte)
+
+    def combat(self, ennemis, issue='victoire'):
+        return HI.Element(1, HI.TYPE_COMBAT, 0, ennemis=[{'nom': n, 'total': a, 'vaincus': b} for n, a, b in ennemis], or_=21, xp=38, issue=issue)
+
+    def test_combat_courant_tient_dans_une_boite(self):
+        B = UH.Boite()
+        for en in ([('Gluant', 3, 3)], [('Chauve-souris', 2, 2), ('Gluant', 1, 1)], [('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1), ('Golem', 1, 1)]):
+            e = self.combat(en); p = UH.paginer(UH.rangees_de(e, self.mes, B.largeur_texte()), True, B.LIGNES)
+            self.assertEqual(len(p), 1, en); self.assertLessEqual(len(p[0]) + 1, B.LIGNES)                          # (+ l'entete : issue et heure)
+            self.assertTrue(p[0][-1].startswith('Or'))                                                          # l'or et l'experience : derniere rangee
+
+    def test_combat_defaite_ou_fuite_sans_gain(self):
+        B = UH.Boite(); e = self.combat([('Golem', 2, 1)], 'fuite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Golem : 1 vaincu sur 2'])
+
+    def test_combat_trop_long_une_page_de_plus_et_meme_cadre(self):
+        en = [('Monstre numéro %d' % i, 3, 3) for i in range(12)]; e = self.combat(en)
+        v, B, blocs = self.vue_boites([e]); self.assertGreater(len(blocs), 1)
+        self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})
+        pages = [b[6] for b in reversed(blocs)]; self.assertLessEqual(len(pages[0]) + 1, B.LIGNES); self.assertTrue(all(len(p) <= B.LIGNES for p in pages[1:]))
+        self.assertTrue(pages[-1][-1].startswith('Or'))                                                           # le gain est dans la derniere page
+
+    def test_combat_sans_ennemi_connu(self):
+        B = UH.Boite(); e = self.combat([], 'defaite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Ennemis inconnus'])
+
+    def test_empilement_et_defilement_par_element(self):
+        els = [self.dialogue(i, 'Texte %d.' % i, 'Alena' if i % 2 else None) for i in range(10)]
+        v, B, blocs = self.vue_boites(els, haut=500.0)
+        ys = [b[3] for b in blocs]; self.assertEqual(ys, sorted(ys)); self.assertEqual(ys[0], 0.0)                 # de bas en haut, sans trou ni chevauchement
+        for a, b in zip(blocs, blocs[1:]): self.assertGreaterEqual(b[3] - (a[3] + a[4] + a[5]), 12.0 - 1e-9)
+        self.assertLessEqual(blocs[-1][3] + blocs[-1][4] + blocs[-1][5], 500.0); self.assertEqual(v.vis, len(blocs)); self.assertLess(len(blocs), 10)
+        self.assertEqual(blocs[0][0], 9)                                                                          # le plus recent en bas
+
+    def test_cadre_trop_haut_pour_la_liste_garde_au_moins_une_boite(self):
+        v, B, blocs = self.vue_boites([self.dialogue(1, 'a')], haut=10.0); self.assertEqual(len(blocs), 1); self.assertEqual(v.vis, 1)
+
+    def test_page_sans_texte(self):
+        self.assertEqual(UH.paginer([], False), [[]]); self.assertEqual(UH.paginer([], True), [[]]); self.assertEqual(UH.paginer(['a', 'b', 'c'], True), [['a', 'b'], ['c']]); self.assertEqual(UH.paginer(['a', 'b', 'c'], False), [['a', 'b', 'c']])
 
 
 class TestVue(unittest.TestCase):
