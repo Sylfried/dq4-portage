@@ -13,6 +13,7 @@ import hd as HD
 import hud_mobile as HM
 import entrees as EN
 import ui_historique as UH
+import ecrans as EK
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -36,6 +37,12 @@ ICONE_RETOUR = (352, 224, 384, 256)               # icone du bouton retour du je
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
+# gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; « Ctrl » = la « Touche speciale » des reglages (Ctrl par defaut)
+GESTES_SOURIS = (('Molette', 'Zoom : rapproche ou éloigne la caméra'),
+                 ('Ctrl + molette', 'Distance de la caméra par défaut (100 %)'),
+                 ('Clic molette + déplacement', 'Tourne et incline la caméra'),
+                 ('Clic molette', 'Position de la caméra par défaut'),
+                 ('Ctrl + clic molette', 'Distance et position par défaut'))
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
 NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
@@ -262,6 +269,7 @@ class Pause:
 
     def _nom_valeur(self, label, v):
         if label == 'Interface à modifier': return self.nom_cible(v)
+        if label == 'Écran du plein écran': return self.J.nom_ecran(v)
         n = self.noms.get(label, {}).get(v)
         if n is not None: return n
         if isinstance(v, bool): return 'Oui' if v else 'Non'
@@ -299,14 +307,16 @@ class Pause:
         res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, note=lambda: 'Sans effet en plein écran' if J.est_plein else '', defaut=tuple(RG.DEFAUT['resolution']))
         res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution du bureau"
         if J.est_plein: res['moins'] = res['plus'] = lambda: None            # (ligne grisee : ni les fleches ni Entree ne la changent)
-        return [fen, res,
+        ecr = self._choix('Écran du plein écran', J.valeurs_ecran(), J.valeur_ecran, J.regler_ecran_plein, note=J.note_ecran, defaut=EK.AUTO)          # (moniteur du plein ecran : voir Jeu.regler_ecran_plein)
+        ecr['aide'] = "Moniteur utilisé en plein écran (F11, Alt + Entrée, interrupteur)   Automatique : celui où se trouve la fenêtre   En plein écran, le changement est immédiat   Au retour en fenêtre, la fenêtre revient là où elle était"
+        return [fen, ecr, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
                 self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode), defaut=RG.DEFAUT['mode_sprites']),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
                 self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Limité à x%d par cette carte graphique' % J.post.max_msaa if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa else '', defaut=RG.DEFAUT['msaa']),
                 self._choix('Suréchantillonnage', [1.0, 1.5, 2.0], lambda: R['echelle_rendu'], set_('echelle_rendu'), defaut=RG.DEFAUT['echelle_rendu']),
                 self._curs('Luminosité', lambda: R['luminosite'], lambda v: R.__setitem__('luminosite', v), 0.5, 1.5, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['luminosite']),
-                dict(self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])), aide='Molette de la souris : zoom   Ctrl + clic molette : remet 100 %'),
+                dict(self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])), aide='Molette de la souris : zoom   Ctrl + molette : remet 100 %   Ctrl + clic molette : remet 100 % et la position de la caméra'),
                 self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v), defaut=RG.DEFAUT['camera_centree']),
                 dict(t='act', l='Interface', ok=self._aller('interface'), sous=True)]          # (editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
 
@@ -449,7 +459,9 @@ class Pause:
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
-        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à 100 %'
+        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec la molette : remet la distance de la caméra à 100 %   Avec un clic molette : remet aussi la position'
+        def inverse(lib, cle, aide):
+            d = self._choix(lib, [False, True], lambda: R[cle], lambda v: R.__setitem__(cle, v), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
@@ -457,7 +469,11 @@ class Pause:
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
-                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la direction   Ctrl + clic molette : remet le zoom   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
+                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance   Ctrl + clic molette : remet les deux   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
+                dict(t='sep', l='Caméra à la souris'),
+                inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
+                inverse('Inverser haut / bas', 'camera_inverser_hb', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens haut / bas   Non : glisser vers le haut incline comme la flèche haut   Les flèches du clavier ne changent pas"),
+                *[dict(t='sep', l=g, v=e) for g, e in GESTES_SOURIS],          # (lecture seule : lignes d'information, ni choisies ni cliquables)
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)'),
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
@@ -1164,6 +1180,10 @@ class Pause:
             coul = GRIS if en.get('off') or muet else BLANC
             base = ybas + rh / 2 - 0.45 * fs                                                  # texte centre dans le bouton
             lx = x0 + 52 * k
+            if en['t'] == 'sep' and en.get('v'):                                               # ligne d'information (geste de la souris) : le geste a gauche, son effet a droite en gris, sans plaque, ni selection, ni zone de clic
+                et = self._et(en['l'], fs, BLANC); et.x = lx; et.y = base; et.draw()
+                ev = self._ajuster(en['v'], fs, GRIS, xr - 24 * k - (lx + et.content_width)); ev.x = xr - ev.content_width; ev.y = base; ev.draw()
+                continue
             if en['t'] == 'sep':                                                              # intertitre : au centre de la fenetre
                 et = self._et(en['l'], fs, OR); et.x = x0 + (pw - et.content_width) / 2; et.y = base; et.draw()
                 self.zones.append((plx, ybas + 3 * k, plx + plw, ytop - 3 * k, idx))

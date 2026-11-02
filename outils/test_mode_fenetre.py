@@ -167,14 +167,24 @@ class Raccourcis(unittest.TestCase):
         self.assertEqual(j.bascules, 0); self.assertIn(K.F11, j.avalees)                   # (avalee quand meme : pas de validation)
 
 
+class FauxEcran:
+    """Un moniteur de pyglet (x, y, width, height, name, is_primary)."""
+    def __init__(self, x, y, w, h, nom='', principal=False): self.x, self.y, self.width, self.height, self.name, self.is_primary = x, y, w, h, nom, principal
+    def get_monitor_name(self): return self.name
+
+
 class FausseFenetre:
-    """Les appels que la bascule fait a la fenetre pyglet, dans l'ordre (`journal`), avec l'etat qu'ils changent. `echec` : nom de l'appel qui leve une erreur (une fois)."""
-    def __init__(self, FE, plein=False, taille=(1280, 720), bureau=(1920, 1080), echec=None):
-        self.journal = []; self.fullscreen = plein; self._visible = True; self.width, self.height = (bureau if plein else taille)
+    """Les appels que la bascule fait a la fenetre pyglet, dans l'ordre (`journal`), avec l'etat qu'ils changent. `echec` : nom de l'appel qui leve une erreur (une fois). `ecrans` : les moniteurs (FauxEcran ; defaut : un seul,
+    le bureau) ; `ecran` : celui de la fenetre pour pyglet (`screen`, defaut le premier)."""
+    def __init__(self, FE, plein=False, taille=(1280, 720), bureau=(1920, 1080), echec=None, ecrans=None, ecran=0):
+        self.journal = []; self.fullscreen = plein; self._visible = True
+        self._ecrans = ecrans or [FauxEcran(0, 0, bureau[0], bureau[1], principal=True)]; self.screen = self._ecrans[ecran]
+        self.display = types.SimpleNamespace(get_screens=lambda: list(self._ecrans)); self.width, self.height = ((self.screen.width, self.screen.height) if plein else taille)
         self.bureau = bureau; self.echec = echec; self._windowed_location = None if plein else (100, 80); self._windowed_size = taille
         self.taille_fenetre = taille; self.mode_fen = 1 if plein else 0; self._pret = True; self._en_bascule = False; self.reg = RG.Reglages(None)
         self.toasts = []; self.post = types.SimpleNamespace(cle=('cle', 1))
-        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
+        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein',
+                    'regler_ecran_plein', 'valeurs_ecran', 'valeur_ecran', 'nom_ecran', 'note_ecran'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
         self._echec_simule = FE.Jeu._echec_simule; self.bureau_ = bureau
         self._verifier_taille_reelle = lambda: self.journal.append('verifier')
         self.toast = lambda t, d=3.0: self.toasts.append(t)
@@ -189,11 +199,17 @@ class FausseFenetre:
 
     def set_visible(self, v=True): self._piege('visible(%s)' % bool(v)); self._visible = bool(v)
 
-    def set_fullscreen(self, plein=True, *taille):
-        self._piege('set_fullscreen(%s%s)' % (bool(plein), ',%dx%d' % taille if taille else ''))
-        if not self.fullscreen: self._windowed_size = (self.width, self.height); self._windowed_location = (100, 80)
-        self.fullscreen = bool(plein)
-        if plein: self.width, self.height = self.bureau
+    def get_location(self): return (self.screen.x, self.screen.y) if self.fullscreen else (self._windowed_location or (0, 0))
+
+    def set_fullscreen(self, fullscreen=True, screen=None, mode=None, width=None, height=None):
+        """La signature de pyglet 2.1 : (fullscreen, screen, mode, width, height)."""
+        taille = (width, height) if width is not None else ()
+        self._piege('set_fullscreen(%s%s%s)' % (bool(fullscreen), ',%dx%d' % taille if taille else '', ',écran %d' % (self._ecrans.index(screen) + 1) if screen is not None else ''))
+        if not self.fullscreen: self._windowed_size = (self.width, self.height); self._windowed_location = self._windowed_location or (100, 80)
+        self.fullscreen = bool(fullscreen)
+        if fullscreen:
+            if screen is not None: self.screen = screen
+            self.width, self.height = self.screen.width, self.screen.height
         else: self.width, self.height = (taille if taille else self._windowed_size); self._windowed_location = self._windowed_location or None
 
     def set_location(self, x, y): self._piege('set_location(%d,%d)' % (x, y)); self._windowed_location = (x, y)
@@ -285,7 +301,7 @@ class Bascule(unittest.TestCase):
 
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Plein écran » = simple interrupteur Oui / Non, « Résolution » grisee en plein ecran, plus de « Lissage des textures » ni de « Correction des bords des sprites »."""
-    ORDRE = ['Plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Centrer la caméra sur le joueur', 'Interface']
+    ORDRE = ['Plein écran', 'Écran du plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Centrer la caméra sur le joueur', 'Interface']
 
     @classmethod
     def setUpClass(cls):
@@ -298,7 +314,8 @@ class PageAffichage(unittest.TestCase):
         J = types.SimpleNamespace(reg=reg, mode_fen=int(plein), mode=4, zoom=1.0, post=types.SimpleNamespace(max_msaa=None), est_plein=plein,
                                   resolutions=lambda: [(1280, 720), (1920, 1080)], resolution_courante=lambda: (1920, 1080),
                                   regler_resolution=lambda v: appels.append(('res', v)), regler_plein_ecran=lambda v: appels.append(('plein', v)),
-                                  regler_mode=lambda v: None, regler_distance=lambda v: None)
+                                  regler_mode=lambda v: None, regler_distance=lambda v: None,
+                                  valeurs_ecran=lambda: ['auto', 0], valeur_ecran=lambda: 'auto', nom_ecran=lambda v: str(v), note_ecran=lambda: '', regler_ecran_plein=lambda v: appels.append(('ecran', v)))
         return self.PA.Pause(J)._e_affichage(), appels
 
     def test_ordre(self):
@@ -316,7 +333,7 @@ class PageAffichage(unittest.TestCase):
 
     def test_resolution_grisee_en_plein_ecran(self):
         for plein in (False, True):
-            e, appels = self.page(plein); r = e[1]
+            e, appels = self.page(plein); r = e[2]
             self.assertEqual(bool(r['off']), plein, 'plein %s' % plein)
             self.assertEqual(bool(r['note']()), plein)                                         # (la note rouge explique pourquoi)
             r['plus'](); self.assertEqual(len(appels), 0 if plein else 1)                      # grisee : les fleches ne changent rien

@@ -92,6 +92,23 @@ class TestCameraVille(unittest.TestCase):
         for dt in (1 / 30, 1 / 60, 1 / 144):
             for f in (1.0, 1.5, 2.0, 3.0, 4.0): self.assertLess(self.course(dt, f), 1e-6, 'dt=1/%d x%s' % (round(1 / dt), f))
 
+    def test_pente_sans_glissement_vertical(self):
+        """Escaliers, rampes, ponts, echelles (retour #45 : « effet de descente ou de montee de la camera ») : le jeu d'origine suit la hauteur du heros a l'identique (TownCamera::execute : setTarget(joueur) a chaque pas,
+        position = cible + (0 ; 28,89 ; -27), aucun amortissement en Y ; mesure sur la rampe de `ckf4` : cible Y = heros Y - 0,047 et camera Y = heros Y + 28,89 au pas pres) et la visionneuse n'ajoute AUCUN lissage en Y :
+        le heros reste au meme point de l'image (NDC y) pendant la montee, a l'arret, a toute cadence (images interpolees entre deux pas) et quel que soit le regime de la camera (option de centrage ou non)."""
+        for option in (True, False):
+            for dt in (1 / 30, 1 / 60, 1 / 144):
+                HORLOGE[0] = 0.0; j = faux_jeu(option=option); ys = []; y_prec = None
+                for pas in range(60):
+                    hy = 0.047 + (min(pas, 30) * 0.113 if pas < 45 else 3.39 - (pas - 44) * 0.16)             # monte de 0,113 par pas (45 degres a la marche), s'arrete, puis redescend plus vite (course)
+                    a = 0.0
+                    while a < 1.0 - 1e-9:
+                        a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
+                        HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
+                        M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1])
+                    y_prec = hy
+                self.assertLess(max(ys) - min(ys), 1e-9, 'option=%s dt=1/%d' % (option, round(1 / dt)))
+
     def test_camera_menee_sans_bornes(self):
         """Le moteur mene la camera loin de la carte (la grenouille sort par l'est) : le rendu est celui du moteur, avec ou sans l'option de centrage, bornes de la visionneuse ou non."""
         for option in (True, False):
