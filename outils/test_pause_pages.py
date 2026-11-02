@@ -1,4 +1,4 @@
-"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »).
+"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »), Triches (ex-« Jeu »).
 
     python3 outils/test_pause_pages.py
 
@@ -51,7 +51,8 @@ class Racine(unittest.TestCase):
     def test_entrees(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         for ancien in ('Vitesse de défilement du texte', 'Texte et défilement'): self.assertNotIn(ancien, libs)             # plus de page du texte : ses deux options sont dans Commandes
-        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Jeu', 'Commandes', "Revenir à l'écran titre"])
+        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Commandes', 'Triches', "Revenir à l'écran titre"])
+        self.assertNotIn('Jeu', libs); self.assertEqual(libs.index('Triches'), libs.index('Commandes') + 1)                # « Triches » (ex-« Jeu ») : juste sous « Commandes »
         self.assertFalse(hasattr(p, '_e_texte'))
 
 
@@ -165,20 +166,23 @@ class SectionDefilement(unittest.TestCase):
         for ancien in ('Défilement automatique', 'Vitesse de défilement', 'Messages en combat', 'Rétablir le réglage du jeu'): self.assertNotIn(ancien, ls)
 
 
-class PageJeu(unittest.TestCase):
+class PageTriches(unittest.TestCase):
     LIB = 'PV et PM restaurés au niveau supérieur'
 
     def test_option_desactivee_par_defaut_avec_retablissement(self):
-        """Page « Jeu » : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non."""
-        J, p = menu('jeu'); x = par_libelle(p, self.LIB)
+        """Page « Triches » (ex-« Jeu ») : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non."""
+        J, p = menu('triches'); x = par_libelle(p, self.LIB)
         self.assertEqual(x['vals'], [True, False]); self.assertFalse(J.reg['soin_niveau']); self.assertTrue(x['est_defaut']())
         x['set'](True); self.assertTrue(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertFalse(x['est_defaut']())
         x['defaut'](); self.assertFalse(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertTrue(x['est_defaut']())
         self.assertTrue(x.get('aide'))
 
     def test_une_ligne_et_entree_de_la_racine(self):
-        J, p = menu('jeu'); self.assertEqual([e['l'] for e in p._entrees()], [self.LIB])
-        p.pile = ['racine']; e = next(e for e in p._entrees() if e['l'] == 'Jeu'); e['ok'](); self.assertEqual(p.ecran, 'jeu')
+        J, p = menu('triches'); self.assertEqual([e['l'] for e in p._entrees()], [self.LIB])
+        p.pile = ['racine']; e = next(e for e in p._entrees() if e['l'] == 'Triches'); e['ok'](); self.assertEqual(p.ecran, 'triches')
+        self.assertFalse(hasattr(p, '_e_jeu')); self.assertNotIn('Jeu', [e['l'] for e in p._entrees()])
+        with open(PA.__file__, encoding='utf-8') as f: src = f.read()
+        self.assertIn("titres['triches'] = 'Triches'", src); self.assertNotIn("_aller('jeu')", src)                                          # titre de la page : « Triches »
 
     def test_reglage_enregistre(self):
         J = FauxJeu(); J.reg['soin_niveau'] = True; J.reg.enregistrer()

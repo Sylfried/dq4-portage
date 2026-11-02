@@ -878,11 +878,11 @@ class Jeu(pyglet.window.Window):
         if cat in ('general', 'effets') and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
         elif cat in ('general', 'interface'): self.son.jouer_se(SE_BOUTON)
 
-    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Vitesse de defilement du texte)
+    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Commandes > Defilement du texte)
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def appliquer_jeu(self):
-        """Page « Jeu » du menu Echap : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
+        """Page « Triches » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
