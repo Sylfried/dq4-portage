@@ -5,7 +5,8 @@
   3. vitesse de marche : jamais acceleree dans le casino et le bestiaire (les fleches tenues y servent aux menus) ;
   4. Echap : bouton retour de la fenetre ouverte (manette 0x20) dans le casino et le bestiaire, sinon menu Echap ;
   5. menus de saisie numerique au clavier (mise de la machine a sous, du poker, jetons, arene) : colonnes, ▲ / ▼, validation, retour ;
-  6. code de fenetre a masque de bits (poker : zones tactiles des cartes et « Donner », valeur 63 hors du tableau exporte).
+  6. code de fenetre a masque de bits (poker : zones tactiles des cartes et « Donner », valeur 63 hors du tableau exporte) ;
+  7. combat de l'arene : fenetre « Quitter » sans validation, A tourne la page du message.
 
     python3 outils/test_casino_bestiaire.py        (Linux sans ecran : pyglet en mode « headless »)
 """
@@ -141,6 +142,31 @@ class EchapRetour(unittest.TestCase):
 
     def test_aucun_menu(self):
         j, fe = faux_jeu_menu(SLOT); j.moteur.menu_actif = lambda: None; self.assertFalse(j._echap_retour())
+
+
+class ArenePageMessage(unittest.TestCase):
+    """Combat de l'arene : la seule fenetre ouverte est « Quitter » (type 71, un bouton de manette 0x400). A tourne la page du message (la fenetre n'a pas de bouton de validation) et
+    la fenetre n'est pas une attente du joueur (la vitesse des combats s'applique au combat de l'arene)."""
+    def jeu(self, boutons, grille=None, partie=MO.PARTIE_COMBAT):
+        j, fe = faux_jeu_menu(boutons, 71, partie); j.moteur.ui.f[12]['grille'] = grille
+        j._quitter_seul = functools.partial(F.Jeu._quitter_seul, j); j._attend_joueur = functools.partial(F.Jeu._attend_joueur, j); j.moteur.ui.msg = {}
+        return j
+
+    def test_quitter_seul(self):
+        j = self.jeu([b(0, 0x400, 0, 62)]); self.assertTrue(F.sans_validation(j.moteur, j.ui_g, 12)); self.assertTrue(j._quitter_seul(12))
+
+    def test_fenetre_a_validation(self):
+        j = self.jeu([b(0, 0x10, 0, 0), b(-1, 0x20, 200, 0)]); self.assertFalse(j._quitter_seul(12), 'un bouton A : la touche lui appartient')
+
+    def test_oui_non_du_moteur(self):
+        self.assertFalse(self.jeu([], grille=(1, 2, 2))._quitter_seul(12), 'curseur du moteur (Oui / Non) : A est la sienne')
+
+    def test_hors_combat(self):
+        self.assertFalse(self.jeu([b(0, 0x400, 0, 62)], partie=MO.PARTIE_CASINO)._quitter_seul(12), 'la regle ne vaut qu\'en combat')
+
+    def test_sans_fenetre_de_menu(self):
+        j = self.jeu([b(0, 0x400, 0, 62)]); j.ui_g = None; self.assertFalse(j._quitter_seul(12))
+        j = self.jeu([b(0, 0x400, 0, 62)]); self.assertFalse(j._quitter_seul(99))
 
 
 class CodeMasque(unittest.TestCase):

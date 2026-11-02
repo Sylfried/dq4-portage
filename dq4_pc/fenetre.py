@@ -155,6 +155,13 @@ def camera_libre(e):
     return bool(e.cam_libre or (getattr(e, 'partie', None) == MO.PARTIE_CASINO and e.cam_rot is not None))
 
 
+def sans_validation(mo, ui_g, port):
+    """Fenetre ouverte sans bouton de validation (manette 0x10) ni curseur du moteur (Oui / Non) : elle n'a rien a faire de la touche A (ex. « Quitter » de l'arene des monstres, un seul bouton de retour 0x400)."""
+    if ui_g is None: return False
+    f = mo.ui.f.get(port); fe = ui_g.f.get(port)
+    return bool(f and fe and not f.get('grille') and not any(b[1] & 0x10 for b in fe.boutons()))
+
+
 def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
     pos = np.array(cam, float); fw = np.array(cible, float) - pos; fw /= np.linalg.norm(fw)
     droite = np.cross(haut, fw); droite /= np.linalg.norm(droite); haut = np.cross(fw, droite)
@@ -1596,6 +1603,10 @@ class Jeu(pyglet.window.Window):
         cand = [q for q, f in mo.ui.f.items() if q > 1 and f['vis'] and f['cases'] and q in self.ui_g.f and n(q) > 1]
         return max(cand, key=lambda q: mo.ui.f[q]['ordre']) if cand else port
 
+    def _quitter_seul(self, port):
+        """Fenetre « Quitter » de l'arene des monstres (type 71) : en combat, sans bouton de validation ni curseur du moteur."""
+        return self.moteur.etat.partie == MO.PARTIE_COMBAT and sans_validation(self.moteur, self.ui_g, port)
+
     def _port_pour_manette(self, port, pad):
         """Port qui recoit la touche de manette `pad` (haut 2, bas 1, droite 4, gauche 8, A 16, B 32) : celui du menu actif s'il a un bouton pour elle, sinon la fenetre visible la plus recente qui en a un.
         Menu Divers : le moteur donne la saisie a la fenetre « Sauvegarde rapide », mais le bouton retour est dans la liste et les fleches de page dans une troisieme fenetre."""
@@ -2657,6 +2668,7 @@ class Jeu(pyglet.window.Window):
             elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
         port = None if carte or self.sauv is not None else mo.menu_actif()
         if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None
+        if port is not None and mo.msg_visible and decl & MO.A and self._quitter_seul(port): port = None          # arene (combat) : la seule fenetre ouverte est « Quitter » (manette 0x400) et A doit tourner la page du message (touche du terrain pour le moteur)
         if port is not None: port = self._port_clavier(port)      # critere memoire seul : le message d'abord
         if port is not None and self.menu_relacher is None: self._survol_pas()
         if port is not None:                               # un menu attend les touches : elles lui sont envoyees, pas au terrain
