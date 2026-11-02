@@ -20,7 +20,15 @@ NOMS = ('carte', 'menu', 'discussion')
 CROIX = 'croix'
 COMBAT = 'combat'                            # bouton « Vitesse de combat » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
 BOUTONS = NOMS + (COMBAT,)                   # tous les boutons rectangulaires
-NOMS_ED = BOUTONS + (CROIX,)                 # elements places dans l'editeur d'interface
+NOMS_ED = BOUTONS + (CROIX,)                 # tous les elements places dans l'editeur d'interface
+NOMS_ED_ECRAN = NOMS + (CROIX,)              # interface « Boutons et croix de l'ecran » : Carte, Commandes, Discussion et la croix (le bouton de vitesse de combat a sa propre interface)
+NOMS_ED_VITESSE = (COMBAT,)                  # interface « Combat : bouton de vitesse »
+
+
+def noms_ed(cible):
+    """Elements de l'editeur d'interface de la cible choisie (reglages.CIBLE_ECRAN, reglages.CIBLE_VITESSE) ; vide pour une autre interface."""
+    return NOMS_ED_VITESSE if cible == 'bouton_vitesse' else NOMS_ED_ECRAN if cible == 'boutons' else ()
+
 DEFAUT = {'carte': (0.4, 1), 'menu': (0.4, 12), 'discussion': (0.4, 14), COMBAT: (0.4, 8)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas ; vitesse des combats entre les deux : a gauche des fenetres de combat (colonne portrait centree), elle n'en cache aucune
 DECL = {'carte': 0x1000, 'menu': 0x800, 'discussion': 0x400}
 ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
@@ -153,9 +161,9 @@ class Boutons:
         self.croix_on = False; self.cv = (0.0, 0.0); self.art = None      # croix tenue par la souris ; position de la souris relative au centre (rayon de l'anneau = 1) ; textures
 
     # ---- geometrie
-    def echelle(self):
-        """Pixels par unite de l'interface d'origine (800 de haut), reglage « Taille des boutons » compris."""
-        return self.J.height / 800.0 * float(self.J.reg['boutons_taille'])
+    def echelle(self, nom=None):
+        """Pixels par unite de l'interface d'origine (800 de haut), reglage « Taille des boutons » compris (le bouton de vitesse de combat : sa propre taille)."""
+        return self.J.height / 800.0 * float(self.J.reg['bouton_vitesse_taille' if nom == COMBAT else 'boutons_taille'])
 
     def taille(self):
         return PLAQUE_DQ['carte'][0] * self.echelle()
@@ -164,7 +172,7 @@ class Boutons:
         """Rattachement du bouton de vitesse de combat a la boite du bas (dict x, y, w, h en pixels, calcule par la fenetre : bord gauche et bord bas de la boite, taille de la plaque « Fuir »), ou None : hors combat, dans
         l'editeur, quand le joueur l'a place lui-meme, ou tant qu'aucune boite n'a ete vue (position de la grille)."""
         J = self.J; a = getattr(J, 'ancre_combat', None)
-        if a is None or self.edition or COMBAT in J.reg['boutons_pos']: return None
+        if a is None or self.edition or J.reg['bouton_vitesse_pos']: return None
         from moteur import PARTIE_COMBAT
         return a if J.moteur.etat.partie == PARTIE_COMBAT else None
 
@@ -172,16 +180,16 @@ class Boutons:
         """(largeur, hauteur) en pixels : plaque d'origine d'un bouton (72 x 64, 63 x 56,8...) ou diametre de l'anneau de la croix."""
         if nom == CROIX: c = self.diametre_croix(); return c, c
         if nom == COMBAT:
-            a = self.ancre()
-            if a and a.get('w'): return a['w'], a['h']              # meme plaque que « Fuir »
-        w, h, _ = PLAQUE_DQ[nom]; k = self.echelle(); return w * k, h * k
+            a = self.ancre(); t = float(self.J.reg['bouton_vitesse_taille'])
+            if a and a.get('w'): return a['w'] * t, a['h'] * t       # meme plaque que « Fuir » (a la taille du reglage du bouton)
+        w, h, _ = PLAQUE_DQ[nom]; k = self.echelle(nom); return w * k, h * k
 
     def diametre_croix(self):
         """Diametre de l'anneau de la croix en pixels : echelle de l'interface d'origine, option « Taille de la croix » du jeu, reglage du portage."""
         return self.J.height / 800.0 * DIAM_CROIX * ECHELLE_CROIX[self.J.moteur.taille_croix()] * float(self.J.reg['croix_taille'])
 
     def case(self, nom):
-        p = self.J.reg['boutons_pos'].get(nom)
+        p = self.J.reg['bouton_vitesse_pos'] if nom == COMBAT else self.J.reg['boutons_pos'].get(nom)
         if p and len(p) == 2: return tuple(p)
         if nom == CROIX:                                   # d'origine : en bas a droite, a une demi-case du bord
             c = self.diametre_croix(); return (COLS - c * COLS / self.J.width - 0.6, LIGNES - c * LIGNES / self.J.height - 0.6)
@@ -210,9 +218,10 @@ class Boutons:
     def visibles(self):
         """Boutons a montrer : ceux que le moteur autorise (hors menu Echap, combat, effets d'ecran) ; en combat, le seul bouton de vitesse des combats (hors ecran noir et fondu au noir)."""
         J = self.J
-        if not J.reg['boutons'] or J.pause.ouvert or J.moteur.etat.effet is not None: return ()
+        if J.pause.ouvert or J.moteur.etat.effet is not None: return ()
         from moteur import PARTIE_COMBAT
-        if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if combat_visible(J.moteur.etat) else ()
+        if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if J.reg['bouton_vitesse'] and combat_visible(J.moteur.etat) else ()        # (le bouton de vitesse a son propre reglage d'affichage)
+        if not J.reg['boutons']: return ()
         if J.carte_ouverte: return ()                                                  # carte ouverte : plus de bouton a l'ecran (le bouton « mode » et le retour sont ceux de la fenetre de la carte, type 22)
         f = J.moteur.drapeaux()
         if (f & (8 | 0x30047)) != 8: return ()
@@ -231,8 +240,8 @@ class Boutons:
         return n if n and self.sous(x, y, visibles) == n else None
 
     # ---- edition des positions
-    def prendre(self, x, y):
-        n = self.sous(x, y, NOMS_ED)
+    def prendre(self, x, y, noms=NOMS_ED):
+        n = self.sous(x, y, noms)
         if n: rx, ry = self.rect(n)[:2]; self.pris = (n, x - rx, y - ry)
         return n
 
@@ -244,6 +253,7 @@ class Boutons:
         if self.J.reg['boutons_aimant']: col, lig = float(round(col)), float(round(lig))
         else: col, lig = round(col, 2), round(lig, 2)
         col = min(max(0.0, col), COLS - w * COLS / W); lig = min(max(0.0, lig), LIGNES - h * LIGNES / H)
+        if n == COMBAT: self.J.reg['bouton_vitesse_pos'] = [col, lig]; return
         pos = dict(self.J.reg['boutons_pos']); pos[n] = [col, lig]; self.J.reg['boutons_pos'] = pos
 
     def poser(self): self.pris = None
@@ -298,11 +308,11 @@ class Boutons:
             s = self.spr[(nom, n)] = pyglet.sprite.Sprite(t)
         return s, n
 
-    def _plaque(self, x, y, w, h, enfonce):
+    def _plaque(self, x, y, w, h, enfonce, nom=None):
         """Plaque d'origine du bouton (feuille « Button », partie 7, 9 tranches a coins de 16 unites, image « appuyee » quand le bouton est enfonce), comme les boutons des fenetres du jeu : Rendu.plaque.
         -> False sans les menus d'origine (le repli dessine le fond)."""
         r = getattr(self.J, 'ui_rendu', None)
-        return bool(r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), enfonce, coin=COIN_PLAQUE * self.echelle()))
+        return bool(r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), enfonce, coin=COIN_PLAQUE * self.echelle(nom)))
 
     def _fleches_combat(self, x, y, w, h):
         """Vitesse de combat en fleches, sans libelle : un triangle creux (gris) en Manuel, puis un, deux ou trois triangles pleins (Normal : blanc ; Rapide : jaune ; Tres rapide : orange, plus chaud quand ca accelere), comme le
@@ -363,11 +373,11 @@ class Boutons:
             fond = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); fond.opacity = 110; fond.draw()
             if grille: tracer_grille(W, H)
         for nom in BOUTONS:
-            if nom not in visibles and not edition: continue
+            if nom not in visibles: continue
             x, y, w, h = self.rect(nom); actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
             if nom == COMBAT:                                    # comme la plaque « Fuir » : un petit cadre de fenetre du jeu (fond noir translucide, cadre en cinq traits) qui porte la plaque du bouton
                 k = h / 56.0; cadre(x, y, w, h, k, 0.0, (0, 0, 0), OPACITE_JEU); m = 5.0 * k
-                vrai = self._plaque(x + m, y + m, w - 2 * m, h - 2 * m, actif)
+                vrai = self._plaque(x + m, y + m, w - 2 * m, h - 2 * m, actif, nom)
                 if not vrai: cadre(x + m, y + m, w - 2 * m, h - 2 * m, k, 0.45 if actif else 0.0)
             else:
                 vrai = self._plaque(x, y, w, h, actif)
@@ -381,7 +391,7 @@ class Boutons:
             if edition:
                 pyglet.shapes.Box(x, y, w, h, thickness=2, color=(255, 235, 130)).draw()
                 et = self.J._etiq(LIBELLE[nom], max(11.0, h / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + w / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + h + 4, H - et.content_height - 2); et.draw()
-        if CROIX in visibles or edition:
+        if CROIX in visibles:
             self._croix(edition)
             if edition:
                 x, y, c, _ = self.rect(CROIX); actif = self.pris is not None and self.pris[0] == CROIX

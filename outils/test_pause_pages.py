@@ -24,6 +24,7 @@ class FauxSon:
 
 class FauxJeu:
     """Ce que le menu Pause demande a la fenetre."""
+    def noms_fenetres(self): return {'BattleRoot': [1], 'BattleAction': [2], 'RootMenu': [3], 'Status': [4]}
     def __init__(self):
         self.reg = RG.Reglages(os.path.join(tempfile.mkdtemp(prefix='pause_test_'), 'reglages.json'))
         self.son = FauxSon(); self.args = types.SimpleNamespace(cache='/inexistant'); self.width, self.height = 1280, 720; self.souris = None
@@ -47,7 +48,6 @@ def par_libelle(p, lib):
     return next(e for e in p._entrees() if e['l'] == lib)
 
 
-class Racine(unittest.TestCase):
 class Intertitres(unittest.TestCase):
     """Liste deroulante « Interface à modifier » : les intertitres de groupe (« Écran tactile », « Dialogues »...) sont discrets, jamais en or (l'or est celui de la valeur courante)."""
     def test_intertitres_ni_or_ni_aussi_grands_que_les_valeurs(self):
@@ -64,6 +64,7 @@ class Intertitres(unittest.TestCase):
         self.assertIn('style_intertitre(fs)', bloc); self.assertNotIn(', OR)', bloc)                                           # l'intertitre n'est plus dessine en or
 
 
+class Racine(unittest.TestCase):
     def test_entrees(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         for ancien in ('Vitesse de défilement du texte', 'Texte et défilement'): self.assertNotIn(ancien, libs)             # plus de page du texte : ses deux options sont dans Commandes
@@ -253,6 +254,38 @@ class Survol(unittest.TestCase):
     def test_plus_de_cadre_jaune_dans_le_code_de_la_page(self):
         with open(PA.__file__, encoding='utf-8') as f: src = f.read()
         self.assertNotIn('JAUNE if sel', src); self.assertNotIn(', JAUNE)', src.replace('color=JAUNE)', ''))
+
+
+class ListeInterface(unittest.TestCase):
+    """Liste « Interface à modifier » : bouton de vitesse de combat dans son propre element du groupe « Combat », avec ses propres reglages."""
+    def test_groupes(self):
+        J, p = menu('interface'); v = p.cibles()
+        ecran = v[v.index('#Écran tactile') + 1:v.index('#Dialogues')]; self.assertEqual(ecran, ['boutons'])                  # « Boutons et croix de l'écran » reste seul dans son groupe
+        i = v.index('#Combat'); self.assertEqual(v[i + 1], 'bouton_vitesse')                                                   # le bouton de vitesse : premier element du groupe « Combat »
+        self.assertEqual(v[i + 1:i + 4], ['bouton_vitesse', 'BattleRoot', 'BattleAction'])
+        self.assertEqual(p.nom_cible('bouton_vitesse'), 'Combat : bouton de vitesse'); self.assertEqual(p.nom_cible('boutons'), "Boutons et croix de l'écran")
+        self.assertEqual(sum(1 for x in v if x == 'bouton_vitesse'), 1)
+
+    def test_page_du_bouton_de_vitesse(self):
+        J, p = menu('interface'); p.cible = RG.CIBLE_VITESSE; libs = [e['l'] for e in p._entrees()]
+        self.assertIn('Taille du bouton', libs); self.assertIn('Replacer sous la boîte de combat', libs); self.assertIn("Afficher cette interface à l'écran", libs)
+        for autre in ('Taille des boutons', 'Afficher la croix', 'Taille de la croix', 'Position horizontale'): self.assertNotIn(autre, libs)
+        p.cible = RG.CIBLE_ECRAN; libs = [e['l'] for e in p._entrees()]
+        self.assertIn('Taille des boutons', libs); self.assertIn('Afficher la croix', libs); self.assertNotIn('Taille du bouton', libs)
+
+    def test_reglages_propres_au_bouton(self):
+        J, p = menu('interface'); R = J.reg; p.cible = RG.CIBLE_VITESSE
+        p._poser_visible(RG.CIBLE_VITESSE, False); self.assertEqual((R['bouton_vitesse'], R['boutons']), (False, True)); self.assertFalse(p._visible(RG.CIBLE_VITESSE)); self.assertTrue(p._visible(RG.CIBLE_ECRAN))
+        p._poser_visible(RG.CIBLE_ECRAN, False); p._poser_visible(RG.CIBLE_VITESSE, True); self.assertEqual((R['bouton_vitesse'], R['boutons']), (True, False))
+        e = par_libelle(p, 'Taille du bouton'); e['plus'](); e['plus'](); self.assertAlmostEqual(R['bouton_vitesse_taille'], 1.2); self.assertEqual(R['boutons_taille'], 1.0); e['defaut'](); self.assertEqual(R['bouton_vitesse_taille'], 1.0)
+        R['bouton_vitesse_pos'] = [3.0, 4.0]; par_libelle(p, 'Replacer sous la boîte de combat')['ok'](); self.assertEqual(R['bouton_vitesse_pos'], [])
+        R['bouton_vitesse_pos'] = [3.0, 4.0]; R['boutons_pos'] = {'carte': [1, 1]}; par_libelle(p, 'Rétablir cette interface')['ok']()
+        self.assertEqual((R['bouton_vitesse_pos'], R['bouton_vitesse_taille'], R['bouton_vitesse'], R['boutons_pos']), ([], 1.0, True, {'carte': [1, 1]}))      # la remise ne touche que le bouton
+
+    def test_editeur_montre_le_bon_element(self):
+        import hud_mobile as HM
+        self.assertEqual(HM.noms_ed(RG.CIBLE_ECRAN), ('carte', 'menu', 'discussion', HM.CROIX)); self.assertEqual(HM.noms_ed(RG.CIBLE_VITESSE), (HM.COMBAT,)); self.assertEqual(HM.noms_ed('msg'), ())
+        self.assertNotIn(HM.COMBAT, HM.noms_ed(RG.CIBLE_ECRAN))                                                               # plus dans « Boutons et croix de l'écran »
 
 
 if __name__ == '__main__':

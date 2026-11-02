@@ -38,7 +38,7 @@ TAILLE_JEU = 1.0                                  # echelle des textes en police
 MSAA_CHOIX = (0, 2, 4, 8)
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
-NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
+NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
                  'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Money': 'Argent', 'Pageing': 'Flèches de page',
                  'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'OperationItemList': 'Actions sur les objets',
                  'Status': 'Statut du personnage', 'Chapter2Status': 'Chapitre 2 : statut', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Ordre de l'équipe : boutons",
@@ -58,10 +58,11 @@ GROUPES_INTERFACE = (("Écran tactile", ('boutons',)),
                      ("Équipe et statut", ('Status', 'Chapter2Status', 'MemberShift', 'MemberShiftButton')),
                      ("Divers", ('NameButton', 'BCInfo', 'Senreki', 'MonsterEncyclopedia')),
                      ("Cartes", ('CityMap', 'WorldLargeMap', 'MapButton', 'ShopMap')),
-                     ("Combat", ('BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
+                     ("Combat", ('bouton_vitesse', 'BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
                      ("Boutiques et banque", ('ShopRoot', 'ShopBuy', 'ShopBuyInfo', 'ShopSellItemList', 'ShopSellItemInfo', 'TorunekoMiseban', 'BankDeposit', 'BankDraw')),
                      ("Églises", ('ChurchRoot', 'ChurchWork')),
                      ("Casino", ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
+INTERFACES_PROPRES = (RG.CIBLE_ECRAN, 'msg', RG.CIBLE_VITESSE)         # interfaces de l'editeur qui ne sont pas des fenetres Make_* du moteur : boutons et croix de l'ecran, dialogues, bouton de vitesse de combat
 ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
 SANS_EDITION = RG.FENETRES_RETIREES
 DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu sans bouger (secondes) avant qu'il se souleve ; en dessous, sans bouger, c'est un appui court (replier / deplier)
@@ -314,7 +315,7 @@ class Pause:
         """Valeurs de la liste « Interface a modifier » : les elements modifiables par groupe (GROUPES_INTERFACE), chaque groupe precede de son intertitre (« #Dialogues ») ; seules les fenetres du jeu qui ont une mise en page y figurent."""
         noms = self.J.noms_fenetres(); out = []; vus = set()
         for titre, ids in GROUPES_INTERFACE:
-            l = [i for i in ids if i in ('boutons', 'msg') or i in noms]; vus.update(ids)
+            l = [i for i in ids if i in INTERFACES_PROPRES or i in noms]; vus.update(ids)
             if l: out += [ENTETE + titre] + l
         reste = sorted((n for n in noms if n not in vus and n not in RG.FENETRES_RETIREES), key=lambda n: n.lower())
         return out + ([ENTETE + 'Autres'] + reste if reste else [])
@@ -339,11 +340,13 @@ class Pause:
 
     def _visible(self, c):
         """L'interface c est-elle affichee a l'ecran ? Boutons et croix : reglage 'boutons' ; fenetre du jeu : absente de la liste des interfaces masquees. Chaque interface a son propre reglage."""
+        if c == RG.CIBLE_VITESSE: return bool(self.J.reg['bouton_vitesse'])
         return bool(self.J.reg['boutons']) if c == RG.CIBLE_ECRAN else c not in self.J.reg['interface_masquees']
 
     def _poser_visible(self, c, v):
         R = self.J.reg
         if c == RG.CIBLE_ECRAN: R['boutons'] = v; return
+        if c == RG.CIBLE_VITESSE: R['bouton_vitesse'] = v; return
         l = [n for n in R['interface_masquees'] if n != c]
         if not v: l.append(c)
         R['interface_masquees'] = l
@@ -357,6 +360,9 @@ class Pause:
             e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
             e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v), defaut=RG.DEFAUT['croix']))
             e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
+        elif c == RG.CIBLE_VITESSE:                                                   # bouton de vitesse de combat : sa taille ; sa position se regle en le glissant (ou « Replacer sous la boîte »)
+            e.append(self._curs('Taille du bouton', lambda: R['bouton_vitesse_taille'], lambda v: R.__setitem__('bouton_vitesse_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['bouton_vitesse_taille']))
+            e.append(dict(t='act', l='Replacer sous la boîte de combat', ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient collé au coin bas gauche de la boîte du bas (position d'origine) ; glisse-le pour le placer ailleurs"))
         else:
             e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[0]),
                   self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[1]),
@@ -364,7 +370,8 @@ class Pause:
         e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v), defaut=RG.DEFAUT['boutons_aimant']),            # (pour toutes les interfaces)
               self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v), defaut=RG.DEFAUT['grille_edition'])]
         cette = dict(t='act', l='Rétablir cette interface', ok=self._remettre_cette)
-        cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu ne changent pas" if c == RG.CIBLE_ECRAN
+        cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu et le bouton de vitesse de combat ne changent pas" if c == RG.CIBLE_ECRAN
+                         else "Remet le bouton de vitesse de combat comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas" if c == RG.CIBLE_VITESSE
                          else "Remet cette fenêtre comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas")
         toutes = dict(t='act', l='Rétablir toutes les interfaces', ok=self._tout_remettre, aide="Remet toutes les interfaces comme dans le jeu, ainsi que la grille, l'aimantation et la place de ce panneau")
         e += [cette, toutes, dict(t='act', l='Terminer', ok=self.retour)]
@@ -778,7 +785,7 @@ class Pause:
         if self.ecran == 'interface' and i is None and self.saisie is None:       # editeur : hors du panneau, un clic saisit l'element choisi (un bouton de l'ecran, ou la fenetre montree en apercu)
             c = self.cadre_panneau
             if not (c and c[0] <= x <= c[2] and c[1] <= y <= c[3]):
-                if self.cible == 'boutons': self.J.hud.prendre(x, y)
+                if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE): self.J.hud.prendre(x, y, HM.noms_ed(self.cible))
                 else: self.drag = (x, y, list(self._ov()), self.rect_apercu)
             return
         if self.saisie is not None:                                   # un clic ailleurs que sur la valeur en cours de saisie la valide
@@ -1011,9 +1018,9 @@ class Pause:
         `masque` : l'element n'est pas dessine en jeu : toute l'interface masquee (« Afficher cette interface a l'ecran » = Non : boutons, croix, fenetre) ou, pour la croix seule, « Afficher la croix » = Non.
         `masculin` : accord de l'etiquette « Masquée » (boutons : « Masqué »)."""
         R = self.J.reg
-        if self.cible == RG.CIBLE_ECRAN:
-            tout = not R['boutons']; out = []
-            for n in HM.NOMS_ED:
+        if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE):
+            tout = not self._visible(self.cible); out = []
+            for n in HM.noms_ed(self.cible):
                 x, y, w, h = self.J.hud.rect(n); out.append((x, y, x + w, y + h, tout or (n == HM.CROIX and not R['croix']), n != HM.CROIX))
             return out
         return [tuple(self.rect_apercu) + (not self._visible(self.cible), False)] if self.rect_apercu else []
@@ -1043,7 +1050,7 @@ class Pause:
     def _apercu(self):
         """Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran."""
         J = self.J; self.rect_apercu = None
-        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS_ED, True, J.reg['grille_edition'])              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
+        if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE): J.hud.dessiner(HM.noms_ed(self.cible), True, J.reg['grille_edition'])              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
         else:
             voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
             if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
