@@ -422,8 +422,9 @@ class Pause:
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None)); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
-        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à zéro'
+        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à 100 %'
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
+        infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
@@ -437,7 +438,7 @@ class Pause:
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
                 dict(t='sep', l='Autres'),
-                modif, T('infos'),
+                modif, infos,
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
 
     def _chemin_etat(self, n): return self.J.chemin_etat(n)

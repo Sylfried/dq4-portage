@@ -1955,6 +1955,7 @@ class Jeu(pyglet.window.Window):
         le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _survol_pas)."""
         if not self._pret: return
         self.souris = (x, y)
+        if self.molette.en_cours: self.molette.annuler()                  # (un mouvement sans bouton enfonce : le relachement du bouton du milieu est passe inapercu, hors de la fenetre ou pendant une perte de focus ; le geste est abandonne)
         if not self.garde_souris.bouge((x, y)): return                # simple tremblement apres l'usage du clavier : ni le mode, ni la selection ne changent (ecart cumule depuis la derniere touche, voir entrees.GardeSouris)
         self.dernier_peripherique = 'souris'
         if self.pause.ouvert: self.pause.survol(x, y); return
@@ -2446,7 +2447,7 @@ class Jeu(pyglet.window.Window):
 
     def _touches_test(self):
         """(test) touches pressees a une image de boucle n, ou "cN+k" = k images de boucle apres que le combat a atteint N images : 'n:NOM' (NOM = nom de touche pyglet ;
-        +NOM / -NOM = maintenue / relachee ; @x@y = clic de souris ; %x%y &x&y *x*y = appui / glisser / relachement du bouton du milieu) ; captures '<shot>_<n>.png' ; la derniere capture quitte."""
+        +NOM / -NOM = maintenue / relachee ; @x@y = clic de souris (@x@y@2 : survol seul) ; %x%y &x&y *x*y = appui / glisser / relachement du bouton du milieu) ; captures '<shot>_<n>.png' ; la derniere capture quitte."""
         a = self.args
         def instant(n):                                         # numero d'image de boucle ou l'evenement n a lieu (None si pas encore connu)
             if isinstance(n, int): return n

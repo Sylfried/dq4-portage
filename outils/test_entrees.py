@@ -160,6 +160,55 @@ class InfosF1(unittest.TestCase):
         self.assertEqual(EN.zone_infos(1920, 1080, True, 1.12, 'gauche')[0], 'droite')
 
 
+try:
+    import reglages as RG
+    import pause as PA
+except Exception as ex:          # pause.py a besoin de pyglet (sans affichage : l'import seul suffit)
+    PA = None
+
+
+@unittest.skipIf(PA is None, 'pause.py non importable ici')
+class PauseSourisApresClavier(unittest.TestCase):
+    """Menu Echap : une touche remet la selection au clavier ; la souris reprend la main au premier vrai mouvement (pas apres un tremblement), un clic aussitot."""
+    LIGNES = [(500.0, 400.0 - 40 * i, 780.0, 436.0 - 40 * i, i) for i in range(6)]          # six lignes de 36 px, la premiere en haut
+
+    def pause(self, pos=(640.0, 300.0)):
+        garde = EN.GardeSouris()
+        jeu = types.SimpleNamespace(reg=RG.Reglages(None), hud=types.SimpleNamespace(pris=None, poser=lambda: None), width=1280, height=720, souris=pos, garde_souris=garde,
+                                    son=types.SimpleNamespace(ecoute=False, ecouter=lambda b: None, tick=lambda: None), touches={}, pause_jeu=lambda oui: None)
+        P = PA.Pause(jeu); P.ouvert = True; P.pile = ['racine']; P.zones = list(self.LIGNES); P.pos_souris = pos; P.sel['racine'] = 0; P.mode_souris = False
+        return P
+
+    def test_lent_un_pixel_par_evenement(self):
+        P = self.pause(); P.touche(pyglet.window.key.F5); self.assertFalse(P.mode_souris)             # une touche (sans effet) : retour au clavier
+        for i in range(1, 12):                                                                        # le pointeur descend d'un pixel par evenement, de y = 300 (ligne 2, entre 276 et 320 : la ligne 3 est entre 236 et 276)
+            P.survol(640.0, 300.0 - i)
+            if P.mode_souris: break
+        self.assertTrue(P.mode_souris); self.assertLessEqual(i, 5)                                    # au 4e pixel : aucune attente
+        P.survol(640.0, 250.0)
+        self.assertEqual(P._zone(640.0, 250.0)[0], P.sel['racine'])                                   # la selection suit le pointeur
+
+    def test_tremblement_ne_change_rien(self):
+        P = self.pause(); P.touche(pyglet.window.key.F5); avant = P.sel['racine']
+        for p in [(641, 300), (640, 301), (639, 299), (640, 300)] * 20: P.survol(*p)
+        self.assertFalse(P.mode_souris); self.assertEqual(P.sel['racine'], avant)
+
+    def test_clic_agit_tout_de_suite(self):
+        P = self.pause(); P.touche(pyglet.window.key.F5)
+        P.clic(640.0, 250.0, 1)                                                                       # clic gauche juste apres la touche
+        self.assertTrue(P.mode_souris); self.assertEqual(P.sel['racine'], P._zone(640.0, 250.0)[0])
+
+    def test_pointeur_hors_fenetre_le_premier_mouvement_compte(self):
+        P = self.pause(); P.sortie(); P.touche(pyglet.window.key.F5); P.survol(641.0, 250.0)
+        self.assertTrue(P.mode_souris)
+
+    def test_ouverture_au_clavier_la_souris_au_repos_ne_prend_rien(self):
+        P = self.pause(); P.ouvert = False; P.ouvrir()
+        P.survol(640.0, 300.0); P.survol(641.0, 300.0)
+        self.assertFalse(P.mode_souris)
+        P.survol(660.0, 300.0); self.assertTrue(P.mode_souris)
+
+
 class Faux:
     """Un `Jeu` minimal : les vraies methodes de fenetre.Jeu (liees a cet objet) travaillent sur un etat factice."""
     def __init__(self, partie=None, **kw):
