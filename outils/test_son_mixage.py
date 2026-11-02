@@ -106,6 +106,21 @@ class Lecture(unittest.TestCase):
         s.regler_mixage(actifs={'musique': True, 'effets': True})
         self.assertAlmostEqual(s.bgm.volume, 0.8); self.assertAlmostEqual(s.se[0].p.volume, 0.5)
 
+    def test_bruitage_tout_juste_lance_jamais_libere_par_les_pas_suivants(self):
+        """Marche acceleree : le moteur fait plusieurs pas (donc plusieurs tick()) a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village ; un lecteur qui ne se
+        dit pas encore « en lecture » ne doit pas faire perdre le bruitage. Passe le delai de grace, un lecteur arrete est libere comme avant."""
+        s = nouveau_son(); s.jouer_se(316); x = s.se[0]
+        x.p.playing = False                                                  # (le lecteur ne s'annonce pas encore)
+        for _ in range(8): s.tick()                                          # huit pas a la suite
+        self.assertEqual(len(s.se), 1); self.assertFalse(x.p.supprime)
+        x.debut -= SON.SE_GRACE + 0.01; s.tick()                             # delai de grace passe : lecteur arrete = bruitage libere
+        self.assertEqual(s.se, []); self.assertTrue(x.p.supprime)
+
+    def test_bruitage_en_lecture_garde_jusqu_a_sa_fin(self):
+        s = nouveau_son(); s.jouer_se(316); x = s.se[0]
+        x.debut -= 10.0; s.tick(); self.assertEqual(len(s.se), 1)             # en lecture : garde
+        x.fin = 0.0; s.tick(); self.assertEqual(s.se, [])                    # duree depassee : libere
+
     def test_boucle_coupee_puis_rouverte(self):
         s = nouveau_son(); s.regler_mixage(actifs={'effets': False})
         s.jouer_se(500)

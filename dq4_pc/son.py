@@ -78,6 +78,7 @@ def decoder_akb(d):
 
 BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur - 0x1000) avec reprise : la musique en cours est memorisee et reprise (depuis le debut) quand ce morceau est fini (jingle)
 BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
+SE_GRACE = 0.4               # secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
 SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
 
 # ---- categories de sons (menu Echap > Son). Unity ne connait que PlayBGM / PlaySE (classe Sound) : ni voix, ni canal « ME » a part. Les categories sont celles que le MOTEUR distingue par la facon de jouer un son :
@@ -120,8 +121,8 @@ class Mixage:
 
 class _SE:
     """Un bruitage en cours : identifiant, lecteur, heure de fin, categorie, volume propre du fichier."""
-    __slots__ = ('ident', 'p', 'fin', 'cat', 'propre')
-    def __init__(self, ident, p, fin, cat, propre): self.ident, self.p, self.fin, self.cat, self.propre = ident, p, fin, cat, propre
+    __slots__ = ('ident', 'p', 'fin', 'cat', 'propre', 'debut')
+    def __init__(self, ident, p, fin, cat, propre, debut=None): self.ident, self.p, self.fin, self.cat, self.propre = ident, p, fin, cat, propre; self.debut = time.time() if debut is None else debut
 
 
 class Son:
@@ -205,7 +206,7 @@ class Son:
             self.arreter_bgm(); self.jouer_bgm(n)
         vivants = []
         for x in self.se:                                                  # un bruitage termine (ou depasse sa duree) est libere
-            if maintenant < x.fin and x.p.playing: vivants.append(x)
+            if maintenant < x.fin and (x.p.playing or maintenant - x.debut < SE_GRACE): vivants.append(x)
             else:
                 try: x.p.delete()
                 except Exception: pass
