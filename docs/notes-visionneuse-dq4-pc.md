@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Suivi dans les issues du dépôt (menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites…).
+Il n'y a plus de suivi par issues : `dq4-portage` n'en a aucune (l'ancienne liste « menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites… » renvoyait aux issues de l'ancien dépôt `dq4-pc`, écrite quand le suivi se faisait là). Le reste à faire est dans `docs/reprise.md` (§6, sujets ouverts), dans `docs/audit/rapport_reste_a_faire.md` (décisions, oublis, bugs connus, points non vérifiés) et, pour la dernière avance, dans les rubriques « À trancher par Sylfried » et « Non vérifié (#45) » plus bas.
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
