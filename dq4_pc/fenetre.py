@@ -878,11 +878,11 @@ class Jeu(pyglet.window.Window):
         if cat in ('general', 'effets') and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
         elif cat in ('general', 'interface'): self.son.jouer_se(SE_BOUTON)
 
-    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Vitesse de defilement du texte)
+    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Commandes > Defilement du texte)
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def appliquer_jeu(self):
-        """Page « Jeu » du menu Echap : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
+        """Page « Triches » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
@@ -1539,7 +1539,7 @@ class Jeu(pyglet.window.Window):
                         print('CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s' % (self.moteur.images, g, self.moteur.ui.msg, self.moteur.params_message()), flush=True)
             m = self.moteur.ui.msg; typ = m['type']
             if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
-            self.ui_msg.regler(typ, m['y'], m['feed'])
+            self.ui_msg.regler(typ, m['y'], m['feed'], m.get('qui', ''))
             return
         a = self.moteur.lire_message()
         if a is None: self.msg_img = None; return
@@ -2562,7 +2562,7 @@ class Jeu(pyglet.window.Window):
         return True
 
     def changer_vitesse_combat(self, source='touche'):
-        """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la page Texte le relit), est enregistre et gouverne aussi le
+        """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
         defilement des messages (Manuel : a la main). Sans le bouton a l'ecran (masque, ou hors combat), un message bref annonce la nouvelle vitesse."""
         v = RG.combat_suivant(self.reg['vitesse_combat']); self.reg['vitesse_combat'] = v; self.appliquer_defilement(); self.reg.enregistrer()
         if source == 'touche' and not self.hud.visibles(): self.toast('Vitesse de combat : %s' % RG.NOMS_VITESSE_COMBAT[v])

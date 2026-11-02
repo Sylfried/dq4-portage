@@ -18,6 +18,13 @@ NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 # Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
+INTERTITRE = (146, 140, 112, 255); FILET_INTERTITRE = (72, 69, 54)          # intertitres de groupe des listes deroulantes (« Écran tactile », « Dialogues »...) : gris dore terne, plus petits ; l'or (OR) est reserve a la valeur courante
+TAILLE_INTERTITRE = 0.76                                                   # (fraction de la taille des valeurs)
+
+
+def style_intertitre(fs):
+    """(taille, couleur) d'un intertitre de groupe d'une liste deroulante : plus petit que les valeurs et d'un gris dore terne, jamais en or (l'or marque la valeur courante)."""
+    return fs * TAILLE_INTERTITRE, INTERTITRE
 JAUNE = OR[:3]; CLAIR = (236, 236, 232)
 SANS = object()                                  # « pas de valeur par defaut » (None et False sont des valeurs possibles)
 NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_JEU, mesuree sur les fenetres du jeu)
@@ -31,7 +38,7 @@ TAILLE_JEU = 1.0                                  # echelle des textes en police
 MSAA_CHOIX = (0, 2, 4, 8)
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
-NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
+NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
                  'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Money': 'Argent', 'Pageing': 'Flèches de page',
                  'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'OperationItemList': 'Actions sur les objets',
                  'Status': 'Statut du personnage', 'Chapter2Status': 'Chapitre 2 : statut', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Ordre de l'équipe : boutons",
@@ -51,10 +58,11 @@ GROUPES_INTERFACE = (("Écran tactile", ('boutons',)),
                      ("Équipe et statut", ('Status', 'Chapter2Status', 'MemberShift', 'MemberShiftButton')),
                      ("Divers", ('NameButton', 'BCInfo', 'Senreki', 'MonsterEncyclopedia')),
                      ("Cartes", ('CityMap', 'WorldLargeMap', 'MapButton', 'ShopMap')),
-                     ("Combat", ('BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
+                     ("Combat", ('bouton_vitesse', 'BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
                      ("Boutiques et banque", ('ShopRoot', 'ShopBuy', 'ShopBuyInfo', 'ShopSellItemList', 'ShopSellItemInfo', 'TorunekoMiseban', 'BankDeposit', 'BankDraw')),
                      ("Églises", ('ChurchRoot', 'ChurchWork')),
                      ("Casino", ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
+INTERFACES_PROPRES = (RG.CIBLE_ECRAN, 'msg', RG.CIBLE_VITESSE)         # interfaces de l'editeur qui ne sont pas des fenetres Make_* du moteur : boutons et croix de l'ecran, dialogues, bouton de vitesse de combat
 ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
 SANS_EDITION = RG.FENETRES_RETIREES
 DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu sans bouger (secondes) avant qu'il se souleve ; en dessous, sans bouger, c'est un appui court (replier / deplier)
@@ -215,9 +223,8 @@ class Pause:
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
-                dict(t='act', l='Vitesse de défilement du texte', ok=self._aller('texte'), sous=True),
-                dict(t='act', l='Jeu', ok=self._aller('jeu'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
+                dict(t='act', l='Triches', ok=self._aller('triches'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
     def _choix(self, label, valeurs, get, set_, off=False, note=None, defaut=SANS, retablir=None, est_defaut=None):
@@ -308,7 +315,7 @@ class Pause:
         """Valeurs de la liste « Interface a modifier » : les elements modifiables par groupe (GROUPES_INTERFACE), chaque groupe precede de son intertitre (« #Dialogues ») ; seules les fenetres du jeu qui ont une mise en page y figurent."""
         noms = self.J.noms_fenetres(); out = []; vus = set()
         for titre, ids in GROUPES_INTERFACE:
-            l = [i for i in ids if i in ('boutons', 'msg') or i in noms]; vus.update(ids)
+            l = [i for i in ids if i in INTERFACES_PROPRES or i in noms]; vus.update(ids)
             if l: out += [ENTETE + titre] + l
         reste = sorted((n for n in noms if n not in vus and n not in RG.FENETRES_RETIREES), key=lambda n: n.lower())
         return out + ([ENTETE + 'Autres'] + reste if reste else [])
@@ -333,11 +340,13 @@ class Pause:
 
     def _visible(self, c):
         """L'interface c est-elle affichee a l'ecran ? Boutons et croix : reglage 'boutons' ; fenetre du jeu : absente de la liste des interfaces masquees. Chaque interface a son propre reglage."""
+        if c == RG.CIBLE_VITESSE: return bool(self.J.reg['bouton_vitesse'])
         return bool(self.J.reg['boutons']) if c == RG.CIBLE_ECRAN else c not in self.J.reg['interface_masquees']
 
     def _poser_visible(self, c, v):
         R = self.J.reg
         if c == RG.CIBLE_ECRAN: R['boutons'] = v; return
+        if c == RG.CIBLE_VITESSE: R['bouton_vitesse'] = v; return
         l = [n for n in R['interface_masquees'] if n != c]
         if not v: l.append(c)
         R['interface_masquees'] = l
@@ -351,6 +360,9 @@ class Pause:
             e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
             e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v), defaut=RG.DEFAUT['croix']))
             e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
+        elif c == RG.CIBLE_VITESSE:                                                   # bouton de vitesse de combat : sa taille ; sa position se regle en le glissant (ou « Replacer sous la boîte »)
+            e.append(self._curs('Taille du bouton', lambda: R['bouton_vitesse_taille'], lambda v: R.__setitem__('bouton_vitesse_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['bouton_vitesse_taille']))
+            e.append(dict(t='act', l='Replacer sous la boîte de combat', ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient collé au coin bas gauche de la boîte du bas (position d'origine) ; glisse-le pour le placer ailleurs"))
         else:
             e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[0]),
                   self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[1]),
@@ -358,7 +370,8 @@ class Pause:
         e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v), defaut=RG.DEFAUT['boutons_aimant']),            # (pour toutes les interfaces)
               self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v), defaut=RG.DEFAUT['grille_edition'])]
         cette = dict(t='act', l='Rétablir cette interface', ok=self._remettre_cette)
-        cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu ne changent pas" if c == RG.CIBLE_ECRAN
+        cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu et le bouton de vitesse de combat ne changent pas" if c == RG.CIBLE_ECRAN
+                         else "Remet le bouton de vitesse de combat comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas" if c == RG.CIBLE_VITESSE
                          else "Remet cette fenêtre comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas")
         toutes = dict(t='act', l='Rétablir toutes les interfaces', ok=self._tout_remettre, aide="Remet toutes les interfaces comme dans le jeu, ainsi que la grille, l'aimantation et la place de ce panneau")
         e += [cette, toutes, dict(t='act', l='Terminer', ok=self.retour)]
@@ -404,17 +417,18 @@ class Pause:
                 self._ligne_son('Bruitages', 'volume_bruitages', 'effets', cle('bruitages_actifs'), "Effets sonores du jeu : combats, sorts, objets, pas...   Sans les sons de l'interface (ligne du dessous)   Un bruitage d'essai est joué quand tu changes le volume"),
                 self._ligne_son('Interface', 'volume_interface', 'interface', cle('interface_active'), "Bip des pages de message, validation des menus et des boutons   Un son de bouton est joué quand tu changes le volume")]
 
-    def _e_texte(self):
-        """Vitesse d'ecriture des dialogues, puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat)."""
+    def _defilement_texte(self):
+        """Section « Défilement du texte » de la page Commandes (juste sous la section Vitesses ; elle etait la page « Vitesse de defilement du texte » du menu racine) : « Vitesse du texte » (vitesse d'ecriture des dialogues),
+        puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat)."""
         J, R = self.J, self.J.reg
         vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()), defaut=RG.DEFAUT['vitesse_texte'])
         vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal » : comme dans le jeu d\'origine'
         cb = self._choix('Vitesse de combat', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], J.regler_vitesse_combat, defaut=RG.DEFAUT['vitesse_combat'])
-        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche des Commandes, bouton à l'écran)"
-        return [vt, cb]
+        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche « Changer la vitesse en combat », bouton à l'écran)"
+        return [dict(t='sep', l='Défilement du texte'), vt, cb]
 
-    def _e_jeu(self):
-        """Options de jeu (regles) : PV et PM restaures a chaque niveau gagne (desactive = comme le jeu d'origine)."""
+    def _e_triches(self):
+        """Page « Triches » (ex-« Jeu »), juste sous « Commandes » dans le menu racine : les modificateurs des regles du jeu, desactives par defaut (= comme le jeu d'origine) ; pour l'instant PV et PM restaures a chaque niveau gagne."""
         J, R = self.J, self.J.reg
         sn = self._choix('PV et PM restaurés au niveau supérieur', [True, False], lambda: R['soin_niveau'], lambda v: (R.__setitem__('soin_niveau', v), J.appliquer_jeu()), defaut=RG.DEFAUT['soin_niveau'])
         sn['aide'] = "Quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (au maximum qu'il vient d'atteindre)   Non : comme le jeu d'origine, la montée de niveau ne soigne pas"
@@ -429,7 +443,7 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat » ; le reglage de la vitesse de combat est dans la page Texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Six sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
@@ -439,7 +453,7 @@ class Pause:
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
-        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la page Texte)   " + self.AIDE_TOUCHE
+        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la section Défilement du texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
@@ -449,6 +463,7 @@ class Pause:
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
                 vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
                 accel, vit_acc, tch_cb,
+                *self._defilement_texte(),
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('historique'),
                 dict(t='sep', l='Autres'),
@@ -770,7 +785,7 @@ class Pause:
         if self.ecran == 'interface' and i is None and self.saisie is None:       # editeur : hors du panneau, un clic saisit l'element choisi (un bouton de l'ecran, ou la fenetre montree en apercu)
             c = self.cadre_panneau
             if not (c and c[0] <= x <= c[2] and c[1] <= y <= c[3]):
-                if self.cible == 'boutons': self.J.hud.prendre(x, y)
+                if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE): self.J.hud.prendre(x, y, HM.noms_ed(self.cible))
                 else: self.drag = (x, y, list(self._ov()), self.rect_apercu)
             return
         if self.saisie is not None:                                   # un clic ailleurs que sur la valeur en cours de saisie la valide
@@ -1003,9 +1018,9 @@ class Pause:
         `masque` : l'element n'est pas dessine en jeu : toute l'interface masquee (« Afficher cette interface a l'ecran » = Non : boutons, croix, fenetre) ou, pour la croix seule, « Afficher la croix » = Non.
         `masculin` : accord de l'etiquette « Masquée » (boutons : « Masqué »)."""
         R = self.J.reg
-        if self.cible == RG.CIBLE_ECRAN:
-            tout = not R['boutons']; out = []
-            for n in HM.NOMS_ED:
+        if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE):
+            tout = not self._visible(self.cible); out = []
+            for n in HM.noms_ed(self.cible):
                 x, y, w, h = self.J.hud.rect(n); out.append((x, y, x + w, y + h, tout or (n == HM.CROIX and not R['croix']), n != HM.CROIX))
             return out
         return [tuple(self.rect_apercu) + (not self._visible(self.cible), False)] if self.rect_apercu else []
@@ -1035,7 +1050,7 @@ class Pause:
     def _apercu(self):
         """Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran."""
         J = self.J; self.rect_apercu = None
-        if self.cible == 'boutons': J.hud.dessiner(HM.NOMS_ED, True, J.reg['grille_edition'])              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
+        if self.cible in (RG.CIBLE_ECRAN, RG.CIBLE_VITESSE): J.hud.dessiner(HM.noms_ed(self.cible), True, J.reg['grille_edition'])              # seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
         else:
             voile = pyglet.shapes.Rectangle(0, 0, J.width, J.height, color=(0, 0, 0)); voile.opacity = 90; voile.draw()
             if J.reg['grille_edition']: HM.tracer_grille(J.width, J.height)
@@ -1064,7 +1079,7 @@ class Pause:
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
-        titres['texte'] = 'Vitesse de défilement du texte'; titres['jeu'] = 'Jeu'
+        titres['triches'] = 'Triches'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -1091,7 +1106,7 @@ class Pause:
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr + (36 * k if ecr == 'son' else 0.0))          # (son : plus le bouton muet)
-        if ecr in ('texte', 'jeu'): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
+        if ecr == 'triches': pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
@@ -1340,9 +1355,9 @@ class Pause:
         self.zones_pop = []; y = y1 - 10 * k
         for j in range(top, top + nvis):
             yb = y - ih; courant = vals[j] == en['get']()
-            if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en or, sans zone de clic
-                et = self._et(noms[j], fs * 0.92, OR); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
-                pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=(120, 110, 40)).draw(); y -= ih; continue
+            if self._entete(vals[j]):                                                          # intertitre de groupe : au centre de la liste, en gris dore terne et plus petit (l'or est celui de la valeur courante), sans zone de clic
+                taille_i, coul_i = style_intertitre(fs); et = self._et(noms[j], taille_i, coul_i); et.x = x0 + (w - lb - et.content_width) / 2; et.y = yb + (ih - fs * 1.33) / 2 + 5 * k; et.draw()
+                pyglet.shapes.Rectangle(x0 + 14 * k, yb + 3 * k, w - lb - 28 * k, max(1, int(k)), color=FILET_INTERTITRE).draw(); y -= ih; continue
             if self.mode_souris:                                                               # souris : la valeur sous le pointeur est assombrie (plaque enfoncee), sans encadrement
                 if self._pointeur_dans((x0 + 6 * k, yb, x1 - 6 * k - lb, yb + ih)): self._plaque(x0 + 6 * k, yb + 2 * k, w - 12 * k - lb, ih - 4 * k, k * 0.8, True)
             elif j == cur: self._curseur(x0 + 8 * k, yb + ih / 2, 22 * k)                       # clavier : curseur dore

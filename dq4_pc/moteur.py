@@ -257,7 +257,7 @@ class Interface:
     que le message suivant du port est le texte de cette case ; [4,i] curseur sur la ligne i ; [12,ligne,x] et [10,..] reglages."""
     def __init__(self):
         self.f = {}; self.attente = {}; self.ordre = 0
-        self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page
+        self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0, 'qui': '', 'qui_att': False}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page, nom de l'interlocuteur (« qui ») ; qui_att : le paquet suivant du port porte ce nom
         self.degats = []           # nombres de degats a faire sauter sur les monstres : (monstre, hauteur, degats), vides par la visionneuse
         self.systeme = []          # messages du port 0 adresses a l'hote : (code, arguments...) ; 999 = quitter (MenuPortSendQuit), 6 = portail, 4 / 5 = volumes, 7 = taille du nom, 8 = manette
         self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
@@ -271,12 +271,18 @@ class Interface:
             for port, a in liste:
                 if port in (0, 1) or port >= 12: print('MSG image %s port %d %s' % (getattr(self, 'image', '?'), port, a[:10]), flush=True)
         for port, a in liste:
-            if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement
+            if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement, 4 nom de l'interlocuteur
+                if self.msg['qui_att']:                         # [4, 1] a annonce un nom : le paquet suivant du port en est le texte (un entier par caractere, comme les textes des cases des menus)
+                    self.msg['qui_att'] = False; self.msg['qui'] = ''.join(chr(v & 0xffff) for v in a if v).strip()
+                    continue
                 if len(a) >= 2:
                     c, v = a[0], a[1]
                     if c == 0: self.msg['type'] = v
                     elif c == 1: self.msg['feed'] = (v & 0xffff) == 1
                     elif c == 3: self.msg['y'] = v
+                    elif c == 4:                                # [4, 0] : pas de nom (cadre sans onglet) ; [4, 1] : le nom suit (cadre avec onglet, seulement pour la fenetre du terrain : MenuMessage.NoticeReceive, commande 4)
+                        if (v & 0xffff) != 0: self.msg['qui_att'] = True
+                        else: self.msg['qui'] = ''
                 continue
             if port == 0:
                 if len(a) >= 2 and a[0] == 0: self.systeme.append(tuple(a[1:]))
@@ -386,7 +392,7 @@ class Moteur:
             port = uc.reg_read(c.XREG[0]) & 0xffffffffffff
             if port and port == struct.unpack('<Q', c.mem(self.L + OBJ_MESSAGE + 0x30, 8))[0]:
                 self.msg_visible = bool(uc.reg_read(c.XREG[1]) & 0xff)
-                if not self.msg_visible: self._acc_texte = 0.0
+                if not self.msg_visible: self._acc_texte = 0.0; self.ui.msg['qui'] = ''; self.ui.msg['qui_att'] = False        # MenuMessage.SetVisible(false) efface le texte du nom (m_who)
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999

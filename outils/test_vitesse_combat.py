@@ -69,7 +69,7 @@ class Reglage(unittest.TestCase):
         self.assertEqual(r['touches']['vit_combat'], [None, None]); self.assertEqual(r['touches']['carte'], ['V', None])
 
     def test_classement_interface(self):
-        self.assertNotIn('vitesse_combat', RG.CLES_INTERFACE)                                         # un reglage de jeu, pas d'interface ; la position du bouton est dans 'boutons_pos'
+        self.assertNotIn('vitesse_combat', RG.CLES_INTERFACE)                                         # un reglage de jeu, pas d'interface ; le bouton a sa propre interface (RG.CIBLE_VITESSE : bouton_vitesse, _taille, _pos)
 
 
 class Facteur(unittest.TestCase):
@@ -303,7 +303,7 @@ class BoutonDeLEcran(unittest.TestCase):
         plan = lambda **k: dict(dict(a=0.0, fin=0.0, pas=0.0, n=0, col=(0, 0, 0), noir=0), **k)
         f = fondu or {}
         etat = types.SimpleNamespace(partie=MOd.PARTIE_COMBAT if partie is None else partie, effet=effet, attente_charge=attente, fondu=plan(**f.get('devant', {})), fondu_fond=plan(**f.get('fond', {})))
-        J = types.SimpleNamespace(width=W, height=H, reg={'boutons': boutons, 'croix': True, 'boutons_taille': 1.0, 'croix_taille': 1.0, 'boutons_pos': pos or {}, 'boutons_aimant': True},
+        J = types.SimpleNamespace(width=W, height=H, reg={'boutons': True, 'bouton_vitesse': boutons, 'bouton_vitesse_taille': 1.0, 'bouton_vitesse_pos': pos or [], 'croix': True, 'boutons_taille': 1.0, 'croix_taille': 1.0, 'boutons_pos': {}, 'boutons_aimant': True},
                                   pause=types.SimpleNamespace(ouvert=pause), carte_ouverte=carte, args=types.SimpleNamespace(cache='/inexistant'))
         J.moteur = types.SimpleNamespace(etat=etat, drapeaux=lambda: flag, taille_croix=lambda: 1)
         return J, HM.Boutons(J)
@@ -316,7 +316,7 @@ class BoutonDeLEcran(unittest.TestCase):
         J, b = self.faux(partie=14); self.assertNotIn(HM.COMBAT, b.visibles())
 
     def test_masque_comme_les_autres(self):
-        self.assertEqual(self.faux(boutons=False)[1].visibles(), ())                                               # « Afficher cette interface » = Non
+        self.assertEqual(self.faux(boutons=False)[1].visibles(), ())                                               # « Afficher cette interface » = Non (celle du bouton de vitesse : « Combat : bouton de vitesse »)
         self.assertEqual(self.faux(pause=True)[1].visibles(), ())                                                  # menu Pause ouvert
 
     def test_pas_pendant_l_ecran_noir_ni_les_fondus_au_noir(self):
@@ -344,9 +344,9 @@ class BoutonDeLEcran(unittest.TestCase):
 
     def test_deplacable_dans_l_editeur_et_retablissable(self):
         J, b = self.faux(); x, y, w, h = b.rect(HM.COMBAT); self.assertIn(HM.COMBAT, HM.NOMS_ED)
-        self.assertEqual(b.prendre(x + 5, y + 5), HM.COMBAT); b.deplacer(x + 5 + 400, y + 5 - 100); b.poser()
-        self.assertIn(HM.COMBAT, J.reg['boutons_pos']); x2, y2, _, _ = b.rect(HM.COMBAT); self.assertGreater(x2, x + 300); self.assertLess(y2, y)
-        r = RG.Reglages(None); r['boutons_pos'] = dict(J.reg['boutons_pos']); r.remettre_interface(RG.CIBLE_ECRAN); self.assertEqual(r['boutons_pos'], {})        # « Rétablir cette interface » le remet en place
+        self.assertEqual(b.prendre(x + 5, y + 5, HM.noms_ed(RG.CIBLE_VITESSE)), HM.COMBAT); b.deplacer(x + 5 + 400, y + 5 - 100); b.poser()
+        self.assertEqual(len(J.reg['bouton_vitesse_pos']), 2); self.assertEqual(J.reg['boutons_pos'], {}); x2, y2, _, _ = b.rect(HM.COMBAT); self.assertGreater(x2, x + 300); self.assertLess(y2, y)        # (position propre : plus dans 'boutons_pos')
+        r = RG.Reglages(None); r['bouton_vitesse_pos'] = list(J.reg['bouton_vitesse_pos']); r.remettre_interface(RG.CIBLE_VITESSE); self.assertEqual(r['bouton_vitesse_pos'], [])        # « Rétablir cette interface » le remet en place
 
     def test_libelle_de_l_editeur(self):
         self.assertEqual(HM.LIBELLE[HM.COMBAT], 'Vitesse de combat')

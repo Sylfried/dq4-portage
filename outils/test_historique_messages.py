@@ -4,10 +4,12 @@
 
 Verifie : nettoyage du texte (le « *: » des paroles sans nom est garde), coupure des lignes, doublons, bornes de taille, mise en forme des combats, favoris (seuls conserves : fichier ecrit tout de suite,
 relu a l'ouverture, retrait par l'etoile, fichier corrompu / entrees invalides / version inconnue), pages d'un message (notees quand le joueur les a lues), messages de combat jamais ranges dans les dialogues,
-combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets, touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
+combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets (Dialogues, Combats : plus d'onglet Favoris), case « Favoris seulement » (clavier, souris, conservee d'un onglet a l'autre,
+favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
+Taille unique des boites (la boite de dialogue du jeu : 1, 2 ou 3 lignes, dialogue ou combat ; une page de plus au-dela de 3 lignes).
 `remplir(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
 """
-import json, os, struct, sys, tempfile, types, unittest
+import json, os, shutil, struct, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
 import pyglet
@@ -122,6 +124,8 @@ class TestFavoris(unittest.TestCase):
         self.assertEqual((h2.favoris[0].nom, h2.favoris[0].texte), ('Alena', 'Voici l\'histoire.'))
         self.assertEqual((h2.favoris[1].ennemis, h2.favoris[1].or_, h2.favoris[1].xp, h2.favoris[1].issue), ([{'nom': 'Gluant', 'total': 3, 'vaincus': 3}], 21, 38, 'victoire'))
         self.assertEqual(h2.liste('favoris'), h2.favoris)
+        self.assertEqual([f.fav for f in h2.liste('dialogues', True)], [f.fav for f in h2.favoris if f.type == 'd'])          # « Favoris seulement » : les favoris du fichier, du type de la liste (aussi ceux d'une session precedente)
+        self.assertEqual([f.type for f in h2.liste('combats', True)], ['c'] * len([f for f in h2.favoris if f.type == 'c'])); self.assertEqual(h2.liste('dialogues'), [])
         self.assertEqual(len({e.n for e in h2.favoris + h2.dialogues}), 2)
 
     def test_copie_independante(self):
@@ -343,11 +347,14 @@ def remplir(h):
          ('Aubergiste', 'Bienvenue ! Que puis-je pour vous ?'), ('Aubergiste', 'Merci, et à bientôt !'), ('Alena', 'Hé, attendez-moi ! Je viens avec vous !'),
          (None, '*: Cette grotte est dangereuse, vous savez. Des monstres rôdent dans les profondeurs.'), (None, 'Ragnar fouille la jarre.\nIl a trouvé 12 pièces d\'or !'),
          ('Prêtre', 'Que la Déesse veille sur vous, mon enfant. Souhaitez-vous sauvegarder votre aventure ?'), (None, 'Ragnar a trouvé une Herbe médicinale.'),
-         (None, '*: On dit qu\'il y a un trésor au fond de la grotte, mais personne n\'en est jamais revenu.'), (None, '*: Bonjour, voyageur !')]
+         (None, '*: On dit qu\'il y a un trésor au fond de la grotte, mais personne n\'en est jamais revenu.'), (None, '*: Bonjour, voyageur !'),
+         ('Roi Bastien', 'Les enfants ont disparu en une seule nuit, sans qu\'un seul garde ait rien vu. Fouillez le village, interrogez chaque habitant et n\'oubliez pas la forêt.'),
+         (None, 'Ragnar a trouvé une Potion.\nRagnar a trouvé une Herbe médicinale.\nRagnar a trouvé 25 pièces d\'or.')]
     t = 400
     for i, (nom, texte) in enumerate(L): t += 300 if i % 5 else 1800; h.ajouter(texte, nom, t)
     for i, (en, g, x, issue) in enumerate([([('Gluant', 3, 3)], 21, 38, 'victoire'), ([('Chauve-souris', 2, 2), ('Gluant', 1, 1)], 14, 25, 'victoire'), ([('Golem', 2, 1)], 0, 0, 'fuite'),
-                                           ([('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1)], 96, 210, 'victoire'), ([('Dragon bleu', 1, 0)], 0, 0, 'defaite')]):
+                                           ([('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1)], 96, 210, 'victoire'), ([('Dragon bleu', 1, 0)], 0, 0, 'defaite'),
+                                           ([('Gluant', 3, 3), ('Chauve-souris', 2, 2), ('Golem', 1, 1), ('Mage-fantôme', 2, 2), ('Glacyclone', 4, 4), ('Dragon bleu', 1, 1)], 250, 480, 'victoire')]):
         h.ajouter_combat(combat(t=600 + 4000 * i, issue=issue, ennemis=[{'nom': n, 'total': a, 'vaincus': b} for n, a, b in en], or_=g, xp=x))
     for e in (h.dialogues[2], h.dialogues[10], h.combats[3]): h.basculer_favori(e)
 
@@ -361,6 +368,100 @@ def vue(n=20, vis=5, combats=0):
     P.J = types.SimpleNamespace(historique=h, reg=RG.Reglages(None), height=720)
     v = UH.VueHistorique(P); v.entrer(); v.vis = vis; v.appels = appels
     return v
+
+
+class TestBoite(unittest.TestCase):
+    """Taille unique des boites de l'historique : la boite de dialogue du jeu (3 lignes), que le texte fasse 1, 2 ou 3 lignes, dialogue ou combat ; au-dela de 3 lignes : une page de plus."""
+    @staticmethod
+    def mes(t): return 9.0 * len(t)                                            # largeur d'une chaine (unites) : 9 par caractere
+
+    def vue_boites(self, elements, fin=None, haut=900.0):
+        """Boites calculees comme dessiner() les place (sans GL) : police du systeme simulee (P._et), echelle 1."""
+        v = vue(0, 5); v.elements = elements; v.fin = len(elements) - 1 if fin is None else fin
+        v.P._et = lambda t, taille: types.SimpleNamespace(content_width=self.mes(t) / 0.9)
+        B = UH.Boite(); return v, B, v._blocs(None, B, 1.0, 20.0, 0.0, haut, 12.0, 4.0)
+
+    @staticmethod
+    def dialogue(n, texte, nom=None): return HI.Element(n, HI.TYPE_DIALOGUE, 0, nom=nom, texte=texte)
+
+    def test_dimensions_du_jeu(self):
+        B = UH.Boite(); self.assertEqual((B.LARG, B.HAUT, B.LIGNES, B.PAS), (452.0, 126.0, 3, 28.0)); self.assertEqual((B.ONGLET_L, B.ONGLET_H), (246.0, 32.0))
+        self.assertEqual([B.base(i) for i in range(3)], [B.BASE_1, B.BASE_1 + 28.0, B.BASE_1 + 56.0])
+        self.assertLess(B.base(2), B.HAUT)                                         # la 3e ligne tient dans le cadre
+        self.assertGreater(B.largeur_texte(), 400)
+
+    def test_dimensions_lues_dans_la_mise_en_page(self):
+        import test_nom_dialogue as N
+        B = UH.Boite.depuis(N.faux_ml()); self.assertEqual((B.LARG, B.HAUT, B.ONGLET_L, B.ONGLET_H, B.x0, B.z0, B.win), (452.0, 126.0, 246.0, 32.0, -223.0, -251.0, (0.0, 10.0, 86.0)))
+        self.assertEqual((UH.Boite.depuis(None).LARG, UH.Boite.depuis(object()).HAUT), (452.0, 126.0))               # (mise en page absente ou inutilisable : valeurs mesurees)
+
+    def test_dimensions_des_vrais_cadres(self):
+        import test_nom_dialogue as N, ui_menu as UM
+        l, c = os.path.join(N.CACHE, 'ui_layout.json'), os.path.join(N.CACHE, 'ui_frameData.bin')
+        if not (os.path.exists(l) and os.path.exists(c)): self.skipTest('cache d\'interface absent')
+        B = UH.Boite.depuis(UM.MiseEnPage(l, c)); d = UH.Boite()
+        self.assertEqual((B.LARG, B.HAUT, B.ONGLET_L, B.ONGLET_H), (d.LARG, d.HAUT, d.ONGLET_L, d.ONGLET_H)); self.assertEqual(B.texte_ech, UH.TEXTE_ECH)
+
+    def test_echelle_de_la_boite_du_jeu(self):
+        """Meme echelle que les fenetres du jeu a l'ecran : H / 800 x UI_ZOOM (fenetre.py) ; reduite si la fenetre de la visionneuse est trop etroite."""
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc', 'fenetre.py'), encoding='utf-8').read()
+        import re; zoom = float(re.search(r'^UI_ZOOM = ([0-9.]+)', src, re.M).group(1)); self.assertEqual(UH.ECHELLE_BOITE, zoom)
+        B = UH.Boite(); self.assertAlmostEqual(B.echelle(720, 1280, 0.8), 720 / 800 * zoom); self.assertLess(B.echelle(720, 500, 0.8), 720 / 800 * zoom)
+
+    def test_meme_cadre_pour_une_deux_trois_lignes(self):
+        els = [self.dialogue(1, 'Oui.'), self.dialogue(2, 'Une ligne.\nDeux lignes.'), self.dialogue(3, 'Une.\nDeux.\nTrois.'), self.dialogue(4, 'Bonjour !', 'Alena'),
+               self.dialogue(5, 'Une.\nDeux.\nTrois.', 'Roi Bastien')]
+        v, B, blocs = self.vue_boites(els)
+        self.assertEqual(len(blocs), 5); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})               # hauteur du cadre : une seule valeur
+        self.assertEqual([len(b[6]) for b in reversed(blocs)], [1, 2, 3, 1, 3])                                  # (le texte, lui, garde ses lignes)
+        self.assertEqual([b[5] for b in reversed(blocs)], [0.0, 0.0, 0.0, B.ONGLET_H, B.ONGLET_H])               # l'onglet du nom s'ajoute au-dessus, seulement avec un nom
+
+    def test_texte_de_plus_de_trois_lignes_une_page_de_plus(self):
+        long = self.dialogue(1, 'a\nb\nc\nd\ne\nf\ng', 'Alena'); v, B, blocs = self.vue_boites([long])
+        self.assertEqual(len(blocs), 3); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0}); self.assertEqual([b[6] for b in reversed(blocs)], [['a', 'b', 'c'], ['d', 'e', 'f'], ['g']])
+        self.assertEqual([b[5] for b in reversed(blocs)], [B.ONGLET_H, 0.0, 0.0])                                 # le nom n'est que sur la premiere page
+        self.assertEqual({(b[0], b[2]) for b in blocs}, {(0, 3)})
+
+    def test_dialogue_coupe_a_la_largeur_de_la_boite(self):
+        B = UH.Boite(); mot = 'mot '; texte = (mot * 60).strip(); r = UH.rangees_de(self.dialogue(1, texte), self.mes, B.largeur_texte())
+        self.assertTrue(all(self.mes(l) <= B.largeur_texte() for l in r)); self.assertEqual(' '.join(r), texte)
+
+    def combat(self, ennemis, issue='victoire'):
+        return HI.Element(1, HI.TYPE_COMBAT, 0, ennemis=[{'nom': n, 'total': a, 'vaincus': b} for n, a, b in ennemis], or_=21, xp=38, issue=issue)
+
+    def test_combat_courant_tient_dans_une_boite(self):
+        B = UH.Boite()
+        for en in ([('Gluant', 3, 3)], [('Chauve-souris', 2, 2), ('Gluant', 1, 1)], [('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1), ('Golem', 1, 1)]):
+            e = self.combat(en); p = UH.paginer(UH.rangees_de(e, self.mes, B.largeur_texte()), True, B.LIGNES)
+            self.assertEqual(len(p), 1, en); self.assertLessEqual(len(p[0]) + 1, B.LIGNES)                          # (+ l'entete : issue et heure)
+            self.assertTrue(p[0][-1].startswith('Or'))                                                          # l'or et l'experience : derniere rangee
+
+    def test_combat_defaite_ou_fuite_sans_gain(self):
+        B = UH.Boite(); e = self.combat([('Golem', 2, 1)], 'fuite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Golem : 1 vaincu sur 2'])
+
+    def test_combat_trop_long_une_page_de_plus_et_meme_cadre(self):
+        en = [('Monstre numéro %d' % i, 3, 3) for i in range(12)]; e = self.combat(en)
+        v, B, blocs = self.vue_boites([e]); self.assertGreater(len(blocs), 1)
+        self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})
+        pages = [b[6] for b in reversed(blocs)]; self.assertLessEqual(len(pages[0]) + 1, B.LIGNES); self.assertTrue(all(len(p) <= B.LIGNES for p in pages[1:]))
+        self.assertTrue(pages[-1][-1].startswith('Or'))                                                           # le gain est dans la derniere page
+
+    def test_combat_sans_ennemi_connu(self):
+        B = UH.Boite(); e = self.combat([], 'defaite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Ennemis inconnus'])
+
+    def test_empilement_et_defilement_par_element(self):
+        els = [self.dialogue(i, 'Texte %d.' % i, 'Alena' if i % 2 else None) for i in range(10)]
+        v, B, blocs = self.vue_boites(els, haut=500.0)
+        ys = [b[3] for b in blocs]; self.assertEqual(ys, sorted(ys)); self.assertEqual(ys[0], 0.0)                 # de bas en haut, sans trou ni chevauchement
+        for a, b in zip(blocs, blocs[1:]): self.assertGreaterEqual(b[3] - (a[3] + a[4] + a[5]), 12.0 - 1e-9)
+        self.assertLessEqual(blocs[-1][3] + blocs[-1][4] + blocs[-1][5], 500.0); self.assertEqual(v.vis, len(blocs)); self.assertLess(len(blocs), 10)
+        self.assertEqual(blocs[0][0], 9)                                                                          # le plus recent en bas
+
+    def test_cadre_trop_haut_pour_la_liste_garde_au_moins_une_boite(self):
+        v, B, blocs = self.vue_boites([self.dialogue(1, 'a')], haut=10.0); self.assertEqual(len(blocs), 1); self.assertEqual(v.vis, 1)
+
+    def test_page_sans_texte(self):
+        self.assertEqual(UH.paginer([], False), [[]]); self.assertEqual(UH.paginer([], True), [[]]); self.assertEqual(UH.paginer(['a', 'b', 'c'], True), [['a', 'b'], ['c']]); self.assertEqual(UH.paginer(['a', 'b', 'c'], False), [['a', 'b', 'c']])
 
 
 class TestVue(unittest.TestCase):
@@ -398,17 +499,18 @@ class TestVue(unittest.TestCase):
     def test_onglets(self):
         K = pyglet.window.key; v = vue(n=6, combats=3)
         self.assertEqual((len(v.elements), v.elements[0].type), (6, 'd'))
+        self.assertEqual([n for n, _ in UH.ONGLETS], ['Dialogues', 'Combats'])                                   # plus d'onglet « Favoris » : c'est une case a cocher
         v.touche(K.RIGHT); self.assertEqual((v.onglet, len(v.elements), v.elements[0].type, v.sel), (UH.O_COMBATS, 3, 'c', 2))
-        v.touche(K.RIGHT); self.assertEqual((v.onglet, v.elements), (UH.O_FAVORIS, []))
         v.touche(K.RIGHT); self.assertEqual((v.onglet, len(v.elements)), (UH.O_DIALOGUES, 6))                    # retour au premier
-        v.touche(K.LEFT); self.assertEqual(v.onglet, UH.O_FAVORIS)
+        v.touche(K.LEFT); self.assertEqual(v.onglet, UH.O_COMBATS)
 
     def test_touche_h_en_cycle(self):
         K = pyglet.window.key; v = vue(n=3, combats=2)
         self.assertEqual(v.onglet, UH.O_DIALOGUES)
         self.assertTrue(v.touche(K.H)); self.assertEqual(v.onglet, UH.O_COMBATS); self.assertNotIn('fermer', v.appels)       # 2e appui : les combats
         self.assertTrue(v.touche(K.H)); self.assertEqual(v.appels[-1], 'fermer')                                              # 3e appui : ferme tout
-        v.onglet = UH.O_FAVORIS; v.touche(K.H); self.assertEqual(v.appels.count('fermer'), 2)                                 # depuis les favoris aussi
+        v.basculer_filtre(); self.assertTrue(v.touche(K.H)); self.assertEqual(v.appels.count('fermer'), 2)                      # « Favoris seulement » coche : le cycle de H ne change pas (ici sur les combats : ferme)
+        v.changer_onglet(UH.O_DIALOGUES); v.touche(K.H); self.assertEqual((v.onglet, v.favoris_seuls, v.appels.count('fermer')), (UH.O_COMBATS, True, 2))
 
     def test_fermeture(self):
         K = pyglet.window.key; v = vue()
@@ -439,30 +541,76 @@ class TestVue(unittest.TestCase):
 
     def test_clic_onglet_et_retour(self):
         M = pyglet.window.mouse; v = vue(n=3, combats=2)
-        v.zones_onglet = [(0, 0, 10, 10, 0), (20, 0, 30, 10, 1), (40, 0, 50, 10, 2)]
+        v.zones_onglet = [(0, 0, 10, 10, 0), (20, 0, 30, 10, 1)]
         v.clic(25, 5, M.LEFT); self.assertEqual((v.onglet, len(v.elements)), (UH.O_COMBATS, 2))
-        v.clic(45, 5, M.LEFT); self.assertEqual(v.onglet, UH.O_FAVORIS)
+        v.clic(5, 5, M.LEFT); self.assertEqual(v.onglet, UH.O_DIALOGUES)
         v.clic(500, 500, M.RIGHT); self.assertEqual(v.appels[-1], 'retour')                                      # clic droit : retour
         v.zone_ret = (60, 0, 70, 10); v.clic(65, 5, M.LEFT); self.assertEqual(v.appels.count('retour'), 2)
 
-    def test_onglet_favoris(self):
-        K = pyglet.window.key; v = vue(n=3, combats=1); h = v.J.historique
-        v.etoile(0); v.etoile(2); v.changer_onglet(UH.O_COMBATS); v.etoile(0)                                       # deux dialogues et un combat en favori
-        v.changer_onglet(UH.O_FAVORIS)
-        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2), ('c', 3)]); self.assertEqual(v.sel, 2)
-        v.touche(K.RETURN)                                                                                        # etoile retiree depuis la liste des favoris : l'element disparait
-        self.assertEqual([e.fav for e in v.elements], [1, 2]); self.assertEqual(v.sel, 1); self.assertEqual(len(h.favoris), 2)
-        self.assertIsNone(h.combats[0].fav)                                                                        # et l'element de la session perd son etoile
-        v.touche(K.RETURN); v.touche(K.RETURN); self.assertEqual((v.elements, v.sel), ([], 0)); self.assertEqual(h.favoris, [])
+    def test_filtre_favoris_seulement(self):
+        """Case « Favoris seulement » : ne garde, dans l'onglet ouvert, que ses favoris ; l'etoile retire l'element de la liste filtree ; la case reste cochee quand on change d'onglet."""
+        K = pyglet.window.key; v = vue(n=3, combats=2); h = v.J.historique
+        self.assertFalse(v.favoris_seuls)
+        v.etoile(0); v.etoile(2); v.changer_onglet(UH.O_COMBATS); v.etoile(1); v.changer_onglet(UH.O_DIALOGUES)       # deux dialogues et un combat en favori
+        self.assertEqual(len(v.elements), 3)                                                                      # (case decochee : toute la session)
+        self.assertTrue(v.basculer_filtre())
+        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2)]); self.assertEqual((v.sel, v.fin), (1, 1))      # les favoris de l'onglet, dans l'ordre ou ils ont ete mis
+        v.changer_onglet(UH.O_COMBATS)                                                                            # le filtre est conserve d'un onglet a l'autre
+        self.assertTrue(v.favoris_seuls); self.assertEqual([(e.type, e.fav) for e in v.elements], [('c', 3)])
+        v.changer_onglet(UH.O_DIALOGUES); v.touche(K.RETURN)                                                       # etoile retiree : l'element disparait de la liste filtree
+        self.assertEqual([e.fav for e in v.elements], [1]); self.assertEqual(v.sel, 0); self.assertEqual(len(h.favoris), 2)
+        self.assertIsNone(h.dialogues[2].fav); self.assertEqual(len(v.elements), 1)                                # (et l'element de la session perd son etoile)
+        v.touche(K.RETURN); self.assertEqual((v.elements, v.sel), ([], 0)); self.assertEqual([f.type for f in h.favoris], ['c'])
+        v.touche(K.RETURN); self.assertFalse(v.etoile())                                                           # liste vide : rien a basculer
+        self.assertFalse(v.basculer_filtre()); self.assertEqual(len(v.elements), 3)                                # case decochee : toute la session de nouveau
+
+    def test_filtre_au_clavier_a_la_souris_et_par_la_touche_carte(self):
+        K = pyglet.window.key; M = pyglet.window.mouse; v = vue(n=4)
+        v.etoile(1); v.touche(K.F); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)       # F : coche
+        v.touche(K.F); self.assertFalse(v.favoris_seuls); self.assertEqual(len(v.elements), 4)                   # F : decoche
+        v.touche(K.M); self.assertTrue(v.favoris_seuls)                                                           # la touche Carte (M) fait de meme
+        v.zone_filtre = (100, 100, 200, 130); v.clic(150, 115, M.LEFT); self.assertFalse(v.favoris_seuls)         # clic sur la case : decoche
+        v.clic(150, 115, M.LEFT); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1); self.assertTrue(v.P.mode_souris)
+        v.clic(300, 115, M.LEFT); self.assertTrue(v.favoris_seuls)                                                # (a cote de la case : rien)
+        self.assertTrue(v.touche(K.F))                                                                             # (la touche est consommee : rien n'arrive au jeu)
+
+    def test_filtre_garde_l_element_choisi_et_defile(self):
+        K = pyglet.window.key; v = vue(n=30, vis=5)
+        for i in (3, 10, 11, 12, 20, 25, 26): v.etoile(i)
+        v.aller(11); v.touche(K.F)
+        self.assertEqual(len(v.elements), 7); self.assertEqual(v.courant().texte, 'm11')                         # l'element choisi, s'il est un favori, reste choisi
+        v.touche(K.HOME); self.assertEqual((v.sel, v.fin), (0, 4)); v.touche(K.END); self.assertEqual((v.sel, v.fin), (6, 6))
+        v.molette(1); self.assertEqual(v.fin, 4); v.decaler(100); self.assertEqual(v.fin, 6)                       # molette et glissement bornes a la liste filtree
+        v.touche(K.PAGEUP); self.assertEqual(v.sel, 0)
+        v.touche(K.F); self.assertEqual(len(v.elements), 30)                                                       # decoche : la liste complete
+        v.aller(7); v.touche(K.F); self.assertEqual((v.sel, v.courant().texte), (6, 'm26'))                         # l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree
+
+    def test_favoris_des_sessions_precedentes(self):
+        """Les favoris du fichier (sessions precedentes) ne sont pas dans la session : seule la case « Favoris seulement » les montre, avec leur etoile."""
+        d = tempfile.mkdtemp(prefix='fav_'); self.addCleanup(shutil.rmtree, d, True); f = os.path.join(d, 'fav.json'); h = nouveau(f)
+        h.ajouter('Hier.', 'Alena', 100); h.ajouter_combat(combat(t=50)); h.basculer_favori(h.dialogues[0]); h.basculer_favori(h.combats[0])
+        P = types.SimpleNamespace(mode_souris=False, pos_souris=None, retour=lambda: None, fermer=lambda: None, _repeter=lambda *a: None)
+        P.J = types.SimpleNamespace(historique=nouveau(f), reg=RG.Reglages(None), height=720)                    # nouvelle session : lit le fichier
+        v = UH.VueHistorique(P); v.entrer()
+        self.assertEqual((v.elements, v.sel), ([], 0))
+        v.touche(pyglet.window.key.F); self.assertEqual([(e.nom, e.texte, e.fav) for e in v.elements], [('Alena', 'Hier.', 1)])
+        v.changer_onglet(UH.O_COMBATS); self.assertEqual([(e.type, e.fav) for e in v.elements], [('c', 2)])
+        v.touche(pyglet.window.key.RETURN); self.assertEqual(v.elements, []); self.assertEqual([e.type for e in P.J.historique.favoris], ['d'])      # etoile retiree : le fichier suit
+
+    def test_vide_avec_le_filtre(self):
+        v = vue(n=2); self.assertIn('Aucun dialogue', UH.VIDES['dialogues']); v.basculer_filtre()
+        self.assertEqual(v.elements, []); self.assertIn('Favoris seulement', UH.VIDES_FAVORIS['dialogues']); self.assertIn('Favoris seulement', UH.VIDES_FAVORIS['combats'])
+        self.assertEqual(set(UH.VIDES_FAVORIS), {c for _, c in UH.ONGLETS}); self.assertEqual(set(UH.VIDES), {c for _, c in UH.ONGLETS})
 
     def test_rechargement_a_chaque_ouverture(self):
         v = vue(n=2); v.J.historique.ajouter('Nouveau.', None, 10 ** 6); v.entrer()
         self.assertEqual((len(v.elements), v.sel, v.fin), (3, 2, 2)); v.entrer(UH.O_COMBATS); self.assertEqual(v.onglet, UH.O_COMBATS); v.entrer(99); self.assertEqual(v.onglet, UH.O_DIALOGUES)
+        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre (pas enregistre sur disque)
 
     def test_heure_et_onglets_suivants(self):
         self.assertEqual(UH.heure_jeu(60 * (3600 + 5 * 60 + 12)), '1:05:12'); self.assertEqual(UH.heure_jeu(-5), '0:00:00')
-        self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS), UH.touche_suivante(UH.O_FAVORIS)), (UH.O_COMBATS, None, None))
-        self.assertEqual((UH.onglet_suivant(2), UH.onglet_suivant(0, -1)), (0, 2))
+        self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS)), (UH.O_COMBATS, None))
+        self.assertEqual((UH.onglet_suivant(1), UH.onglet_suivant(0, -1)), (0, 1))
 
 
 class TestPause(unittest.TestCase):
@@ -473,7 +621,7 @@ class TestPause(unittest.TestCase):
         self.pauses = []
         J = types.SimpleNamespace(reg=RG.Reglages(None), historique=h, width=1280, height=720, souris=None, args=types.SimpleNamespace(cache='/inexistant'),
                                   pause_jeu=lambda oui: self.pauses.append(oui), son=types.SimpleNamespace(actif=True, ecoute=False))
-        J.reg.enregistrer = lambda: None; J.regler_fondu = lambda v: None
+        J.reg.enregistrer = lambda: None; J.regler_fondu = lambda v: None; J.regler_vitesse_combat = lambda v: None; J.appliquer_texte = lambda: None          # (la page Commandes porte la section « Défilement du texte »)
         return J, PA.Pause(J)
 
     def test_h_ouvre_puis_combats_puis_ferme(self):

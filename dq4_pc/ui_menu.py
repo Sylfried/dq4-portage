@@ -651,30 +651,46 @@ class Fenetre:
         return True
 
 
+CADRE_AVEC_NOM = 191                          # frameData du cadre de dialogue AVEC onglet de nom (192 = sans onglet : celui du type 0 de ui_layout.json)
+QUI_POS = (-104.5, 4.0, -104.0)               # MenuMessage.m_who : position locale du TextMesh du nom ; la hauteur s'y ajoute BIAS_FONT_Y (= lang['dy'], ajoute par Rendu._texte)
+QUI_TAILLE = 10.0                             # characterSize du TextMesh du nom (celui des dialogues vaut 10,4975)
+
+
 class FenetreMessage:
     """Fenetre de message du jeu (MenuMessage) : cadre (frameData) + canevas de texte dessine par le moteur + curseur de fin de page.
     Le canevas est une texture 512 x 512 qui boucle ; le defilement `[3, y]` decale l'origine verticale de ses UV de (y & 0x1ff) / 512."""
     def __init__(self, ml):
         self.ml = ml; self.d = ml.message; self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
-        self.type = -1; self.y = 0; self.feed = False; self.N = {}
+        self.type = -1; self.y = 0; self.feed = False; self.N = {}; self.qui = ''; self.avec_nom = False; self._base = None
+        self.typ = -1; self.t = 0                                    # (pour Rendu._texte, qui lit ces deux champs des fenetres de menu : numero de type, image de la mise en page)
         self.regler(0, 0, False)
 
     @staticmethod
     def _nd(nid, pos, vtx, uv, tris, mat):
         return dict(id=nid, par=None, pos=pos, act=True, mats=[mat], vtx=vtx, uv=uv, sub={'0': tris}, text=None, buttonId=None, etat=0, tcol=0, tscale=1.0)
 
-    def regler(self, typ, y, feed):
-        """typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page."""
+    def regler(self, typ, y, feed, qui=''):
+        """typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page, qui = nom de l'interlocuteur ('' : aucun).
+        MenuMessage.NoticeReceive, commande 4 : le nom n'est montre que sur la fenetre du terrain (m_nowType == 0) ; le cadre devient alors frameData 191 (le meme que 192 + un onglet colle au bord haut-gauche, souligne)
+        et le TextMesh « m_who » recoit le nom. Les cotes servant a poser la fenetre (etendue(), bas()) restent ceux du cadre sans onglet : l'onglet depasse vers le haut, il ne decale rien."""
         ts = self.d['types']; t = ts[typ] if 0 <= typ < len(ts) else ts[0]
         fm = self.d.get('frame_mats') or [{'sheet': 0, 'part': 4}]
-        if typ != self.type:
-            self.type = typ; w = t['win']; cv = t['canvas']; fl = t['feed_local']; fd = self.d['feed']
+        qui = (qui or '').strip(); avec = bool(qui) and typ == 0 and len(self.ml.cadres) > CADRE_AVEC_NOM
+        if typ != self.type or avec != self.avec_nom:
+            self.type = typ; self.avec_nom = avec; w = t['win']; cv = t['canvas']; fl = t['feed_local']; fd = self.d['feed']
+            fmesh = self._base = t['frame_mesh']
+            if avec: c = self.ml.cadres[CADRE_AVEC_NOM]; fmesh = dict(vtx=c['vtx'], uv=c['uv'], tris=c['tri'])
             self.N = {
-                'cadre': self._nd('cadre', list(w), t['frame_mesh']['vtx'], t['frame_mesh']['uv'], t['frame_mesh']['tris'], dict(sheet=fm[0]['sheet'], part=fm[0]['part'], color=None)),
+                'cadre': self._nd('cadre', list(w), fmesh['vtx'], fmesh['uv'], fmesh['tris'], dict(sheet=fm[0]['sheet'], part=fm[0]['part'], color=None)),
                 'canevas': self._nd('canevas', [w[0], w[1] + 4.0, w[2]], [[v[0], v[2]] for v in cv['vtx']], [list(u) for u in cv['uv']], cv['tris'], dict(sheet='msg', color=[1, 1, 1, 1])),
                 'curseur': self._nd('curseur', [w[0] + fl[0], w[1] + fl[1] + 6.0, w[2] + fl[2]], fd['vtx'], fd['uv'], fd['tris'], dict(sheet=fd['mats'][0]['sheet'], part=fd['mats'][0]['part'], color=None)),
             }
-            self.uv0 = [list(u) for u in cv['uv']]
+            if avec:                                                  # TextMesh « m_who » : position locale (-104,5 ; 4 ; BIAS_FONT_Y - 104), taille 10, ancre « haut centre », texte centre, blanc
+                nd = self._nd('qui', [w[0] + QUI_POS[0], w[1] + QUI_POS[1], w[2] + QUI_POS[2] + self.ml.hdr['lang']['dy']], [], [], {}, None)
+                nd['mats'] = []; nd['text'] = dict(text=qui, characterSize=QUI_TAILLE, lineSpacing=1.0, anchor=1, alignment=1, font=0); self.N['qui'] = nd
+            self.uv0 = [list(u) for u in cv['uv']]; self._ty = None
+        if avec: self.N['qui']['text']['text'] = qui
+        self.qui = qui if avec else ''; self.t += 1
         self.N['curseur']['act'] = bool(feed); self.feed = bool(feed)
         if y != self.y or typ != getattr(self, '_ty', None):
             self.y = y; self._ty = typ
@@ -687,12 +703,24 @@ class FenetreMessage:
 
     def etendue(self):
         c = self.N.get('cadre')
-        return (c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx'])) if c and c['vtx'] else None
+        if not c or not c['vtx']: return None
+        vt = self._base['vtx'] if self.avec_nom else c['vtx']          # (l'onglet du nom ne compte pas : le Oui/Non et l'echelle gardent la place du cadre sans onglet)
+        return (c['pos'][2] + min(v[1] for v in vt), c['pos'][2] + max(v[1] for v in vt))
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas du cadre."""
         c = self.N.get('cadre')
         return c['pos'][2] + min(v[1] for v in c['vtx']) if c and c['vtx'] else 0.0
+
+    def etendue_x(self):
+        """(gauche, droite) du cadre, unites d'interface (Rendu._texte : limites dans lesquelles un texte doit tenir)."""
+        c = self.N.get('cadre')
+        return (c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx'])) if c and c['vtx'] else None
+
+    def rects(self):
+        c = self.N.get('cadre')
+        if not c or not c['vtx']: return []
+        return [(c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx']))]
 
 
 class PoliceBitmap:
