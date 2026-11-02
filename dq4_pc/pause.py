@@ -211,7 +211,7 @@ class Pause:
 
     def _e_racine(self):
         return [dict(t='act', l='Reprendre', ok=self.fermer),
-                dict(t='act', l='Historique des messages', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
+                dict(t='act', l='Historique', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),

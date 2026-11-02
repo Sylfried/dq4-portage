@@ -15,7 +15,7 @@ TOUCHES_DEF = {
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
            ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
-           ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique des messages'),
+           ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule fenetre / plein ecran (comme Alt + Entree) : non reattribuables
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
