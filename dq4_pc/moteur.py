@@ -3,6 +3,7 @@ import os, re, struct, zipfile, unicorn
 import numpy as np
 import emu_core as T
 import priorite_jeu as PJ
+import pose_couchee as PC
 from pktlog import PacketLog
 from historique import Capteur
 from historique_combat import CapteurCombat
@@ -96,13 +97,14 @@ class Etat:
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
+        self.dort_haut = 0.0                          # paquet 17 (Chara.SetSleepNear) : hauteur du corps des personnages couches (composante Y de s_lieOffset, statique de Chara : elle survit aux changements de carte) ; 0 tant que le moteur n'a rien envoye
         self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
     def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0))
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('dort_haut', 0.0)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
@@ -131,6 +133,18 @@ class Etat:
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
+            elif t == 16 and a:                     # cmd_chara_sleep_pose (D132FC) : personnage = v & 0xff ; bits 8-9 : Chara.SetSleepPose(bit 8) ; bit 10 : Chara.SetSleepDir(v >> 12) (voir pose_couchee.py)
+                v = a[0]; s = self.sprites.get(v & 0xff)
+                if s is not None:
+                    if v & 0x300:
+                        s['dort'] = bool(v & 0x100)
+                        if s['dort']: s['dort_rot'] = (0.0, 0)          # SetSleepPose(vrai) : quadrant 0, rotation identite (la direction suit dans le meme paquet)
+                    if v & 0x400: s['dort_rot'] = PC.direction_paquet(v)
+            elif t == 17 and len(a) >= 2:           # cmd_chara_sleep_near (D133E4) : (defNear, decalage) ; Chara.SetSleepNear : hauteur du corps couche
+                self.dort_haut = PC.hauteur_paquet(a[1])
+            elif t == 18 and a:                     # cmd_chara_pose (D13474) : v = personnage | numero << 8 : Chara.SetTexture(numero) = le personnage change de feuille de sprites (TownCharacterDraw::changePose)
+                s = self.sprites.get(a[0] & 0xff)
+                if s is not None and (a[0] >> 8) >= 0: s['id'] = (a[0] >> 8) | (s['id'] & 4096)
             elif t == 15 and a:                     # cmd_chara_shadow (D13150) : personnage = v & 0xff ; bits 8-9 : ombre visible (bit 8) ; bits 10-11 : ombre separee (bit 10) ; bit 12 : position de l'ombre (3 flottants,
                 v = a[0]; s = self.sprites.get(v & 0xff)        # SetShadowPosition) ; bit 13 : opacite (SetShadowAlpha) ; bit 14 : position de l'ombre sur la carte du monde (SetFieldShadowPosition)
                 if s is not None:
