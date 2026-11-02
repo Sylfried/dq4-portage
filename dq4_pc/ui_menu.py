@@ -296,6 +296,8 @@ class Fenetre:
                     elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
+        ts = nd['text'].get('tabSize')
+        if ts and self.noms_liste and '\t' in s: s = s.replace('\t', ' ' * max(0, int(round(ts))))        # TextMesh.tabSize : une tabulation vaut tabSize fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » de la liste des magies) ; la police du jeu n'a pas de glyphe pour « \t » : elle comptait pour rien et le nombre collait a l'etiquette (limite a la liste des magies : les autres fenetres a tabSize, types 20, 31, 33, 34, 35, 39, ne sont pas verifiees)
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
