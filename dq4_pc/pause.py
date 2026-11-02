@@ -215,7 +215,6 @@ class Pause:
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
-                dict(t='act', l='Vitesse de défilement du texte', ok=self._aller('texte'), sous=True),
                 dict(t='act', l='Jeu', ok=self._aller('jeu'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
@@ -404,14 +403,15 @@ class Pause:
                 self._ligne_son('Bruitages', 'volume_bruitages', 'effets', cle('bruitages_actifs'), "Effets sonores du jeu : combats, sorts, objets, pas...   Sans les sons de l'interface (ligne du dessous)   Un bruitage d'essai est joué quand tu changes le volume"),
                 self._ligne_son('Interface', 'volume_interface', 'interface', cle('interface_active'), "Bip des pages de message, validation des menus et des boutons   Un son de bouton est joué quand tu changes le volume")]
 
-    def _e_texte(self):
-        """Vitesse d'ecriture des dialogues, puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat)."""
+    def _defilement_texte(self):
+        """Section « Défilement du texte » de la page Commandes (juste sous la section Vitesses ; elle etait la page « Vitesse de defilement du texte » du menu racine) : « Vitesse du texte » (vitesse d'ecriture des dialogues),
+        puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat)."""
         J, R = self.J, self.J.reg
         vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()), defaut=RG.DEFAUT['vitesse_texte'])
         vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal » : comme dans le jeu d\'origine'
         cb = self._choix('Vitesse de combat', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], J.regler_vitesse_combat, defaut=RG.DEFAUT['vitesse_combat'])
-        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche des Commandes, bouton à l'écran)"
-        return [vt, cb]
+        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche « Changer la vitesse en combat », bouton à l'écran)"
+        return [dict(t='sep', l='Défilement du texte'), vt, cb]
 
     def _e_jeu(self):
         """Options de jeu (regles) : PV et PM restaures a chaque niveau gagne (desactive = comme le jeu d'origine)."""
@@ -429,7 +429,7 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat » ; le reglage de la vitesse de combat est dans la page Texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Six sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
@@ -439,7 +439,7 @@ class Pause:
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
-        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la page Texte)   " + self.AIDE_TOUCHE
+        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la section Défilement du texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
@@ -449,6 +449,7 @@ class Pause:
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
                 vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
                 accel, vit_acc, tch_cb,
+                *self._defilement_texte(),
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('historique'),
                 dict(t='sep', l='Autres'),
@@ -1064,7 +1065,7 @@ class Pause:
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
-        titres['texte'] = 'Vitesse de défilement du texte'; titres['jeu'] = 'Jeu'
+        titres['jeu'] = 'Jeu'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -1091,7 +1092,7 @@ class Pause:
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr + (36 * k if ecr == 'son' else 0.0))          # (son : plus le bouton muet)
-        if ecr in ('texte', 'jeu'): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
+        if ecr == 'jeu': pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h

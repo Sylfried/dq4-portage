@@ -1,4 +1,4 @@
-"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Vitesse de defilement du texte, Commandes (vitesses x1 a x4).
+"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »).
 
     python3 outils/test_pause_pages.py
 
@@ -48,10 +48,11 @@ def par_libelle(p, lib):
 
 
 class Racine(unittest.TestCase):
-    def test_entree_renommee(self):
+    def test_entrees(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
-        self.assertIn('Vitesse de défilement du texte', libs); self.assertNotIn('Texte et défilement', libs)
-        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Vitesse de défilement du texte', 'Jeu', 'Commandes', "Revenir à l'écran titre"])
+        for ancien in ('Vitesse de défilement du texte', 'Texte et défilement'): self.assertNotIn(ancien, libs)             # plus de page du texte : ses deux options sont dans Commandes
+        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Jeu', 'Commandes', "Revenir à l'écran titre"])
+        self.assertFalse(hasattr(p, '_e_texte'))
 
 
 class PageSon(unittest.TestCase):
@@ -112,31 +113,56 @@ class PageSon(unittest.TestCase):
         x['ok'](); J.appels.clear(); x['ok'](); self.assertIn(('apercu', 'effets'), J.appels, 'le son revient : on l\'entend'); self.assertIn('mixage', J.appels)
 
 
-class PageTexte(unittest.TestCase):
-    def test_lignes(self):
-        _, p = menu('texte'); e = p._entrees()
-        self.assertEqual([x['l'] for x in e], ['Vitesse du texte', 'Vitesse de combat'])
-        self.assertNotIn('sep', [x['t'] for x in e], 'plus de sections')
-        for ancien in ('Défilement automatique', 'Vitesse de défilement', 'Messages en combat', 'Rétablir le réglage du jeu'): self.assertNotIn(ancien, [x['l'] for x in e])
+class SectionDefilement(unittest.TestCase):
+    """Commandes > « Défilement du texte » : « Vitesse du texte » et « Vitesse de combat » (ex-page « Vitesse de défilement du texte » du menu racine), nouvelle section juste sous « Vitesses »."""
+
+    @staticmethod
+    def lignes(p): return p._entrees()
+
+    def test_section_sous_les_vitesses(self):
+        _, p = menu('commandes'); e = self.lignes(p); ls = [(x['t'], x['l']) for x in e]
+        i = ls.index(('sep', 'Défilement du texte'))
+        self.assertEqual(ls[i + 1:i + 3], [('choix', 'Vitesse du texte'), ('choix', 'Vitesse de combat')]); self.assertEqual(e[i + 3]['t'], 'sep')          # deux options, puis la section suivante
+        self.assertEqual(ls[i + 3], ('sep', 'Actions du jeu'))
+        k = ls.index(('sep', 'Vitesses')); self.assertLess(k, i)
+        self.assertEqual([t for t, _ in ls[k + 1:i]].count('sep'), 0, 'aucune section entre « Vitesses » et « Défilement du texte » : elle est juste dessous')
+        self.assertEqual(ls[i - 1], ('touche', 'Changer la vitesse en combat'))                                                                          # (derniere ligne des vitesses)
+        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])
+
+    def test_plus_de_page_texte(self):
+        _, p = menu('racine'); self.assertNotIn('texte', [e['l'] for e in p._entrees()])
+        with open(PA.__file__, encoding='utf-8') as f: src = f.read()
+        self.assertNotIn("_aller('texte')", src); self.assertNotIn("titres['texte']", src)
 
     def test_noms(self):
-        _, p = menu('texte')
+        _, p = menu('commandes')
         vt = par_libelle(p, 'Vitesse du texte')
         self.assertEqual([p._nom_valeur('Vitesse du texte', v) for v in vt['vals']], ['Très lent', 'Lent', 'Assez lent', 'Normal', 'Rapide', 'Très rapide', 'Instantané'])
         cb = par_libelle(p, 'Vitesse de combat')
         self.assertEqual([p._nom_valeur('Vitesse de combat', v) for v in cb['vals']], ['Manuel', 'Normal', 'Rapide', 'Très rapide'])
         self.assertEqual(cb['vals'], [0.0, 1.0, 2.0, 3.0])
 
+    def test_vitesse_du_texte(self):
+        J, p = menu('commandes'); vt = par_libelle(p, 'Vitesse du texte')
+        self.assertEqual((vt['get'](), vt['v']()), (4.0, 'Normal')); self.assertTrue(vt['est_defaut']())
+        vt['set'](16.0); self.assertEqual(J.reg['vitesse_texte'], 16.0); self.assertEqual(J.appels[-1], 'texte'); self.assertFalse(vt['est_defaut']())        # la fenetre est prevenue
+        vt['defaut'](); self.assertEqual(J.reg['vitesse_texte'], 4.0); self.assertEqual(J.appels[-1], 'texte'); self.assertTrue(vt['est_defaut']())
+        self.assertTrue(vt.get('aide'))
+
     def test_choix_change_la_vitesse_et_le_defilement(self):
-        """« Vitesse de combat » : le menu previent la fenetre (qui impose aussi le defilement : 4 en Manuel, 2 sinon) ; la liste boucle ; ↺ remet Normal."""
-        J, p = menu('texte'); cb = par_libelle(p, 'Vitesse de combat')
+        """« Vitesse de combat » : le menu previent la fenetre (qui impose aussi le defilement : 4 en Manuel, 2 sinon) ; la liste boucle ; ↺ remet Normal (au clavier : la ligne est choisie dans la page Commandes)."""
+        J, p = menu('commandes'); cb = par_libelle(p, 'Vitesse de combat')
         self.assertEqual((cb['get'](), cb['v']()), (1.0, 'Normal')); self.assertTrue(cb['est_defaut']())
-        p.sel['texte'] = 1; p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 2.0)
+        p.sel['commandes'] = [x['l'] for x in p._entrees()].index('Vitesse de combat'); p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 2.0)
         p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 3.0)
         p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 0.0)                                       # (la liste boucle) Très rapide -> Manuel
         self.assertEqual(J.appels[-1], ('combat', 4)); self.assertFalse(cb['est_defaut']())
         cb['defaut'](); self.assertEqual(J.reg['vitesse_combat'], 1.0); self.assertEqual(J.appels[-1], ('combat', 2)); self.assertTrue(cb['est_defaut']())      # ↺ : Normal
         self.assertTrue(cb.get('aide')); self.assertNotIn('x2', cb['aide'])
+
+    def test_pas_d_ancien_reglage(self):
+        _, p = menu('commandes'); ls = [x.get('l') for x in p._entrees()]
+        for ancien in ('Défilement automatique', 'Vitesse de défilement', 'Messages en combat', 'Rétablir le réglage du jeu'): self.assertNotIn(ancien, ls)
 
 
 class PageJeu(unittest.TestCase):
@@ -172,11 +198,12 @@ class PageCommandes(unittest.TestCase):
         self.assertNotIn("Vitesse de l'accélérateur", [e.get('l') for e in p._entrees()])                                                                                       # (ancien libelle : renomme)
 
     def test_touche_de_vitesse_de_combat(self):
-        """Commandes : plus de reglage de vitesse de combat (il est dans la page Texte), seulement la touche « Changer la vitesse en combat », juste sous le multiplicateur de l'accelerateur."""
+        """Commandes > Vitesses : pas de reglage de vitesse de combat (il est dans la section « Défilement du texte », juste dessous), seulement la touche « Changer la vitesse en combat », juste sous le multiplicateur de l'accelerateur."""
         J, p = menu('commandes'); e = p._entrees(); ls = [x['l'] for x in e]
         i = ls.index("Multiplicateur de l'accélérateur"); self.assertEqual(ls[i - 1], "Touche d'accélérateur")
-        self.assertEqual(ls[i + 1], 'Changer la vitesse en combat'); self.assertEqual(e[i + 2]['t'], 'sep')       # (puis la section suivante)
-        for ancien in ('Vitesse des combats', 'Vitesse de combat', 'Touche de vitesse des combats'): self.assertNotIn(ancien, ls)
+        self.assertEqual(ls[i + 1], 'Changer la vitesse en combat'); self.assertEqual(e[i + 2]['t'], 'sep'); self.assertEqual(ls[i + 2], 'Défilement du texte')      # (puis la section suivante)
+        self.assertEqual(ls.count('Vitesse de combat'), 1)                                                         # (un seul reglage : dans la section Défilement du texte, pas dans Vitesses)
+        for ancien in ('Vitesse des combats', 'Touche de vitesse des combats'): self.assertNotIn(ancien, ls)
         t = par_libelle(p, 'Changer la vitesse en combat'); self.assertEqual((t['t'], t['act']), ('touche', 'vit_combat')); self.assertEqual(t['v'], ['V', '—'])
         self.assertIn('Manuel', t['aide']); self.assertNotIn('x2', t['aide'])
 
