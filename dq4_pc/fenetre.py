@@ -985,21 +985,26 @@ class Jeu(pyglet.window.Window):
         ax, ay, az = e.cam_rot
         return rot_unity(-ax, -(ay + 180.0), az)
 
+    def _libre(self, e):
+        """Camera libre : position + rotation (comme en combat), pas de cible. Paquet 11 bit 7 (scenes, titre) ; casino : le moteur envoie la position et la rotation (paquet 10, masque 5) sans paquet 11."""
+        return e.cam_libre or (e.partie == MO.PARTIE_CASINO and e.cam_rot is not None)
+
     def _camera_ville(self, e, aspect):
         """Camera d'une ville comme Unity (SceneCamera.Update, mode avec cible) : LookAt(position, cible), tangage - lookDownAdjust, puis avance de distanceAdjust le long de l'axe.
         Projection : champ HORIZONTAL fov x 4/3 fixe, hauteur deduite de l'ecran portrait d'origine (0,5625). En 16/9 on garde la meme hauteur de champ que sur mobile
         et on montre plus de decor sur les cotes : la bande centrale de la fenetre est exactement l'image du telephone."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
+        libre = self._libre(e); mini = e.partie in MO.PARTIES_MINIJEU       # mini = casino / bestiaire : le cadrage est celui du jeu (ni zoom, ni centrage, ni bornes 16/9, ni rotation du joueur)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
-        if not e.cam_libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
+        if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
-        th_v /= PJ.facteur_effectif(self.zoom, e.cam_libre)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
+        th_v /= PJ.facteur_effectif(self.zoom, libre or mini)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
         # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
         # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
         option = bool(self.reg['camera_centree'])
-        centre = option and not e.cam_libre and not self.cam_jeu               # centrage actif
+        centre = option and not libre and not self.cam_jeu               # centrage actif
         dec = (0.0, 0.0)
         if centre:                                                        # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart (garde-fou : position du heros perimee)
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
@@ -1022,7 +1027,7 @@ class Jeu(pyglet.window.Window):
         self.cam_poids += (poids_cible - self.cam_poids) * a
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
-        if self.bornes_x is not None and self.cam_poids < 0.999:
+        if self.bornes_x is not None and self.cam_poids < 0.999 and not mini:
             # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ (progressivement quand l'option cesse de valoir, pas de saut)
             fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
             if abs(fv[2]) > 0.95:
@@ -1030,15 +1035,15 @@ class Jeu(pyglet.window.Window):
                 lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
                 cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
                 d = (cx - cib[0]) * (1.0 - self.cam_poids); pos[0] += d; cib[0] += d
-        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
-        if lacet_a and not (e.cam_libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
+        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
+        if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
             pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
-        if angle_a and not (e.cam_libre and e.cam_rot is not None):       # fleches haut / bas : la camera tourne autour de la cible, en hauteur (0 = comme le jeu)
+        if angle_a and not (libre and e.cam_rot is not None):       # fleches haut / bas : la camera tourne autour de la cible, en hauteur (0 = comme le jeu)
             dist = float(np.linalg.norm(cib - pos)); f0 = (cib - pos) / (dist or 1.0)
             la = math.atan2(f0[0], f0[2]); tg = min(math.radians(85.0), max(math.radians(5.0), math.asin(-f0[1]) + math.radians(angle_a)))
             pos = cib - np.array([math.sin(la) * math.cos(tg), -math.sin(tg), math.cos(la) * math.cos(tg)]) * dist
-        if e.cam_libre and e.cam_rot is not None:                         # camera libre (paquet 11, bit 7) : position + angles, comme en combat
+        if libre and e.cam_rot is not None:                         # camera libre (paquet 11, bit 7) : position + angles, comme en combat
             R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
         else:
             fw = cib - pos; fw /= np.linalg.norm(fw)
@@ -1055,7 +1060,7 @@ class Jeu(pyglet.window.Window):
     def _cadre_jeu(self, e):
         """(position, droite, haut, avant) de la camera de la ville telle que le jeu d'origine la place (meme calcul que _camera_ville, SANS le zoom, le centrage, la rotation et l'inclinaison de la visionneuse)."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
-        if e.cam_libre and e.cam_rot is not None:
+        if self._libre(e) and e.cam_rot is not None:
             R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
         else:
             fw = cib - pos; fw /= np.linalg.norm(fw)
@@ -2846,7 +2851,7 @@ class Jeu(pyglet.window.Window):
             if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
                 self._maj_message(); self._dessiner_message(); self._dessiner_menus()
             self._dessiner_fondu(); self._dessiner_aide(); return
-        if not champ and not bataille and (e.cam_pos is None or e.cam_cible is None): self._dessiner_aide(); return
+        if not champ and not bataille and (e.cam_pos is None or (e.cam_cible is None and not self._libre(e))): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
@@ -2935,7 +2940,7 @@ class Jeu(pyglet.window.Window):
             self._tracer(f['t'], vl)       # comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
         self.prog['net'] = 2.0 if (pp or not self.lissage) else 1.0; self.prog['tsize'] = (32.0, 32.0)
         for tex, vl in icones: self._tracer(tex, vl)                          # bulles d'icone (Riseup), devant les personnages
-        if not champ and not bataille and e.maillages and e.partie == MO.PARTIE_VILLE and cam3d is not None:
+        if not champ and not bataille and e.maillages and e.partie in (MO.PARTIE_VILLE,) + MO.PARTIES_MINIJEU and cam3d is not None:
             # effets-maillages de la ville (paquets 21, 22 : sort Morph, eclaboussures, coups d'epee du prologue, credits et logo du titre), tournes vers la camera. Ils passent APRES les personnages (Custom/Chara : file Transparent,
             # 3000) : DssaChara Transparent+100, DssaMonster0 +150, DssaMonster1 +200, DssaCharaTransparent Overlay-150 (3850, ZTest Always : devant tout, comme les bulles Riseup, de la meme file). Avant, ils etaient dessines
             # avant les personnages : un personnage cache a l'effet qui le recouvre (le nuage du sort Morph passait « derriere » Elisa).
