@@ -20,6 +20,7 @@ import hud_mobile as HM
 import etats as ET
 import avant_partie as AP
 import saisie_nom as SN
+import entrees as EN
 import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
@@ -196,13 +197,13 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette(); self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
-        self.aide = bool(self.reg['infos']); self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a gauche + cadre noir translucide
+        self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
         self.t_demarrage = time.time(); self.etiq_conseil = pyglet.text.Label(self._texte_conseil(), font_name=POLICES, font_size=11, color=(255, 255, 255, 200), x=10, y=8, anchor_x='left', anchor_y='bottom')
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
@@ -557,17 +558,55 @@ class Jeu(pyglet.window.Window):
         except AttributeError:
             vl.draw(gl.GL_TRIANGLES)
 
+    def _zoom_possible(self):
+        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre."""
+        mo = self.moteur
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
+
+    def _camera_pilotable(self):
+        """La camera se tourne a la main (fleches, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde), sauf lieu ou le jeu interdit de la tourner (cam_bloquee). Memes conditions que _maj_camera."""
+        return self._terrain_libre() and self.moteur.etat.partie == MO.PARTIE_VILLE and not self.cam_bloquee and self.licence is None and self.sauv is None and not self._saisie_nom_en_cours()
+
+    def recentrer_camera(self):
+        """Remet la direction de la camera (rotation et inclinaison) par defaut, par l'animation de recentrage : touche speciale + touche de camera, ou clic molette."""
+        for ax in self.cam_axe.values(): ax[0] = True; ax[1] = True
+
+    def _ctrl_actif(self, modifiers):
+        """Ctrl tenu : le modificateur de la souris ou la « Touche speciale » des reglages."""
+        return bool(modifiers & pyglet.window.key.MOD_CTRL) or self._tenue('modif')
+
     def on_mouse_scroll(self, x, y, sx, sy):
         """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.molette(sy); return
         if self.licence is not None: self.licence.defiler(-sy * 60.0); return
-        if self.moteur.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and sy and not self.moteur.msg_visible and self.moteur.menu_actif() is None: self.regler_zoom(self.zoom * 1.1 ** sy)
+        if sy and self._zoom_possible(): self.regler_zoom(self.zoom * 1.1 ** sy)
+
+    def _molette_appui(self, x, y, modifiers):
+        """Bouton du milieu enfonce : un clic (remise de la direction de la camera ; avec Ctrl, du zoom) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
+        if self.hud.croix_on or self.appui or not (self._camera_pilotable() or self._zoom_possible()): self.molette.annuler(); return
+        self.molette.appui(x, y, self._ctrl_actif(modifiers))
+
+    def _molette_glisse(self, x, y):
+        """Bouton du milieu maintenu et pointeur deplace : la camera tourne (horizontal : autour du heros ; vertical : inclinaison), memes sens, bornes et reglage enregistre que les fleches (entrees.pivoter)."""
+        dx, dy = self.molette.deplacer(x, y)
+        if not (dx or dy) or not self._camera_pilotable(): return
+        for ax in self.cam_axe.values(): ax[0] = False                       # un glissement annule le recentrage anime en cours
+        self.lacet, a = EN.pivoter(self.lacet, self.angle_cam, dx, dy, self.height, CAM_ANGLE_MIN, CAM_ANGLE_MAX, self.cam_limite)
+        if a != self.angle_cam: self.angle_cam = a; self.reg['angle_camera'] = round(a, 2)
+
+    def _molette_relache(self, modifiers):
+        """Bouton du milieu relache sans avoir glisse : clic = direction de la camera remise en place ; Ctrl + clic = zoom remis a la distance par defaut (sans toucher a la direction)."""
+        agir = self.molette.relacher(self._ctrl_actif(modifiers))
+        if agir == 'direction' and self._camera_pilotable(): self.recentrer_camera()
+        elif agir == 'zoom' and self._zoom_possible(): self.regler_zoom(100.0 / float(RG.DEFAUT['distance_camera']))
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
-        """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris."""
+        """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris ; bouton du milieu : rotation de la camera."""
         if not self._pret: return
         self.souris = (x, y)                                          # (pendant un appui, pyglet n'envoie plus on_mouse_motion : la position sert a savoir si le doigt est toujours sur le bouton)
+        M = pyglet.window.mouse
+        if boutons & M.MIDDLE and not boutons & M.LEFT: self._molette_glisse(x, y); return
         if self.pause.ouvert: self.pause.glisser(x, y)
         elif self.licence is not None: self.licence.glisse and self.licence.glisser(y)
         elif self.hud.croix_on: self.hud.croix_glisser(x, y)
@@ -604,6 +643,7 @@ class Jeu(pyglet.window.Window):
         if self._raccourci_fenetre(symbol, modifiers): return pyglet.event.EVENT_HANDLED          # F11 / Alt + Entree : de n'importe ou (logos, titre, jeu, menu Echap)
         if symbol in (K.LALT, K.RALT): self.alt_cand = True                # Alt seul = discussion de groupe, au relachement (voir on_key_release et _fronts)
         if not self._pret: self._logo_touche = True; return pyglet.event.EVENT_HANDLED
+        self.garde_souris.clavier(self.souris)                             # le clavier a la main : le survol ne reprend qu'au premier vrai mouvement du pointeur (un clic reprend la main aussitot)
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
         self.dernier_peripherique = 'clavier'
         if self._saisie_nom_en_cours(): self.saisie_nom.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED          # saisie du nom : le clavier lui appartient
@@ -867,7 +907,7 @@ class Jeu(pyglet.window.Window):
         self.acc = 0.0; self.t_boucle = None
         if not oui:
             self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}; self.survol = None; self.appui = None; self.survol_nd = None
-            self.souris_gel = self.souris                      # le pointeur ne choisit rien dans les menus du jeu tant qu'il n'a pas vraiment bouge (la selection au clavier ne doit pas sauter)
+            self.garde_souris.clavier(self.souris)             # le pointeur ne choisit rien dans les menus du jeu tant qu'il ne s'est pas ecarte de sa position d'avant (la selection au clavier ne doit pas sauter ; voir entrees.GardeSouris)
 
     def quitter(self):
         self.close(); pyglet.app.exit()
@@ -1665,12 +1705,8 @@ class Jeu(pyglet.window.Window):
         return l
 
     def _marge_aide(self):
-        """Largeur disponible pour les lignes d'aide : la marge a gauche de la colonne d'interface (portrait 450 x 800 centre), pour ne pas cacher les fenetres du jeu."""
-        if self.ui_rendu and self.args.ui_pos == 'centre':
-            return int(max(260, (self.width - 450 * self.height / 800.0 * UI_ZOOM) / 2 - 16))
-        if self.ui_rendu and self.args.ui_pos == 'droite':
-            return int(max(260, self.width - 450 * self.height / 800.0 * UI_ZOOM - 16))
-        return int(max(260, self.width - 20))
+        """(cote, largeur) du bloc d'infos de F1 : en haut a DROITE de l'ecran par defaut ; largeur = la marge libre a cote de la colonne d'interface (portrait 450 x 800 centre), pour ne pas cacher les fenetres du jeu (voir entrees.zone_infos)."""
+        return EN.zone_infos(self.width, self.height, bool(self.ui_rendu), UI_ZOOM, self.args.ui_pos)
 
     def _curseur(self, port):
         """Bouton en surbrillance du menu actif : curseur du moteur (messages 4) ou, sans curseur du moteur, curseur local des fleches."""
@@ -1891,7 +1927,8 @@ class Jeu(pyglet.window.Window):
         """Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler."""
         M = pyglet.window.mouse; mo = self.moteur
         if not self._pret: self._logo_touche = True; return
-        self.dernier_peripherique = 'souris'
+        self.dernier_peripherique = 'souris'; self.garde_souris.clic(); self.souris = (x, y)             # un clic agit toujours, aussitot : la souris a la main
+        if bouton == M.MIDDLE: self._molette_appui(x, y, modifiers); return                                # bouton du milieu : la camera seulement (jamais un clic de menu, de message ou de bouton)
         if self.pause.ouvert: self.pause.clic(x, y, bouton); return
         if self._saisie_nom_en_cours(): self.saisie_nom.clic(x, y, bouton); return
         if self.sauv is not None: self.sauv.clic(x, y, bouton); return
@@ -1917,14 +1954,13 @@ class Jeu(pyglet.window.Window):
         """Survol de la souris : le bouton sous le pointeur est selectionne comme avec les fleches. Menu tactile (curseur local) : immediat ; menu a curseur du moteur :
         le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _survol_pas)."""
         if not self._pret: return
-        self.souris = (x, y); self.dernier_peripherique = 'souris'
+        self.souris = (x, y)
+        if not self.garde_souris.bouge((x, y)): return                # simple tremblement apres l'usage du clavier : ni le mode, ni la selection ne changent (ecart cumule depuis la derniere touche, voir entrees.GardeSouris)
+        self.dernier_peripherique = 'souris'
         if self.pause.ouvert: self.pause.survol(x, y); return
         if self._saisie_nom_en_cours(): self.saisie_nom.survol(x, y); return
         if self.sauv is not None: self.sauv.hover(x, y); return
         if self.licence is not None: self.licence.survol = self.licence.zone(x, y); return
-        if self.souris_gel is not None:
-            if abs(x - self.souris_gel[0]) + abs(y - self.souris_gel[1]) < 6: return
-            self.souris_gel = None
         if not self.ui_rendu or self.appui: return
         mo = self.moteur
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h and (h[0] >= 0 or self._est_bouton(port, h[3]))]
@@ -1957,6 +1993,7 @@ class Jeu(pyglet.window.Window):
     def on_mouse_release(self, x, y, bouton, modifiers):
         """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
         if not self._pret: return
+        if bouton == pyglet.window.mouse.MIDDLE: self._molette_relache(modifiers); return
         if self.pause.ouvert: self.pause.relache(x, y, bouton); return
         if self.licence is not None: self.licence.glisse = None; return
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
@@ -2342,8 +2379,7 @@ class Jeu(pyglet.window.Window):
             return
         acc = self._tenue('accel')                                                                                # camera acceleree : touche d'accelerateur tenue (comme la course)
         if self._tenue('modif') and (g or d or h or b):                                                            # touche modificatrice + touche de la camera : retour animé a la vue d'origine, dans toutes les directions (les touches tenues ensuite ne font plus rien)
-            for ax in self.cam_axe.values(): ax[0] = True; ax[1] = True
-            sl = sa = 0
+            self.recentrer_camera(); sl = sa = 0
         else: sl = self._etat_axe('lacet', g, d); sa = self._etat_axe('angle', b, h)
         vit_m = vit * (float(self.reg['vitesse_accel']) if acc else 1.0)                                            # acceleration : rotation et inclinaison a la main plus rapides (le recentrage garde sa vitesse)
         if sl:
@@ -2410,7 +2446,7 @@ class Jeu(pyglet.window.Window):
 
     def _touches_test(self):
         """(test) touches pressees a une image de boucle n, ou "cN+k" = k images de boucle apres que le combat a atteint N images : 'n:NOM' (NOM = nom de touche pyglet ;
-        +NOM / -NOM = maintenue / relachee ; @x@y = clic de souris) ; captures '<shot>_<n>.png' ; la derniere capture quitte."""
+        +NOM / -NOM = maintenue / relachee ; @x@y = clic de souris ; %x%y &x&y *x*y = appui / glisser / relachement du bouton du milieu) ; captures '<shot>_<n>.png' ; la derniere capture quitte."""
         a = self.args
         def instant(n):                                         # numero d'image de boucle ou l'evenement n a lieu (None si pas encore connu)
             if isinstance(n, int): return n
@@ -2427,6 +2463,9 @@ class Jeu(pyglet.window.Window):
             elif nom[0] == '!': x, y = [int(t) for t in nom[1:].split('!')]; self.on_mouse_motion(x, self.height - y, 0, 0); self.on_mouse_press(x, self.height - y, pyglet.window.mouse.LEFT, 0)      # !x!y : appui sans relachement automatique (relachement : ~@x@y)
             elif nom[0] == '~': x, y = [int(t) for t in nom[2:].split('@')]; self.on_mouse_release(x, self.height - y, pyglet.window.mouse.LEFT, 0)
             elif nom[0] == '^': x, y = [int(t) for t in nom[1:].split('^')]; self.on_mouse_drag(x, self.height - y, 0, 0, pyglet.window.mouse.LEFT, 0)      # ^x^y : souris deplacee bouton enfonce
+            elif nom[0] == '%': x, y = [int(t) for t in nom[1:].split('%')]; self.on_mouse_motion(x, self.height - y, 0, 0); self.on_mouse_press(x, self.height - y, pyglet.window.mouse.MIDDLE, 0)      # %x%y : appui du bouton du milieu (la molette) ; &x&y : pointeur deplace bouton du milieu enfonce ; *x*y : relachement
+            elif nom[0] == '&': x, y = [int(t) for t in nom[1:].split('&')]; self.on_mouse_drag(x, self.height - y, 0, 0, pyglet.window.mouse.MIDDLE, 0)
+            elif nom[0] == '*': x, y = [int(t) for t in nom[1:].split('*')]; self.on_mouse_release(x, self.height - y, pyglet.window.mouse.MIDDLE, 0)
             elif nom[0] == '$': self.dispatch_event('on_text', nom[1:])                                                                                   # $texte : caracteres tapes
             elif nom[0] in '+-': self.dispatch_event('on_key_press' if nom[0] == '+' else 'on_key_release', getattr(pyglet.window.key, nom[1:]), self._mod_alt_test())
             else: self.dispatch_event('on_key_press', getattr(pyglet.window.key, nom), self._mod_alt_test()); a.touches_test.append((n + 3, '-' + nom))       # appui court : relache 3 images plus tard
@@ -2997,24 +3036,27 @@ class Jeu(pyglet.window.Window):
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
 
     def _dessiner_aide(self):
-        """Lignes d'information en haut a gauche (F1). Dessinees aussi pendant les ecrans noirs et l'effet de debut de combat : sans cela elles clignotent a chaque changement de scene."""
-        if not self.aide: return
+        """Lignes d'information (F1), en haut a droite par defaut. Dessinees aussi pendant les ecrans noirs et l'effet de debut de combat : sans cela elles clignotent a chaque changement de scene."""
+        if not self.aide: self.aide_larg = 0.0; return
         self._infos()
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         stats = self.stats and bool(self.ecarts)
         if stats:
             if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | moteur %.1f pas/s (%.1f ms) | pire image %.0f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), (len(self.pas_t) - 1) / max(1e-6, self.pas_t[-1] - self.pas_t[0]) if len(self.pas_t) > 2 else 0.0, self.dt_moteur * 1000, max(self.ecarts) * 1000, self.dt_dessin * 1000)
         lignes = [self.etiquette, self.etiq_hd] + ([self.etiq_stats] if stats else [])
-        marge = self._marge_aide()
+        cote, marge = self._marge_aide()
+        if (cote, marge) != self.aide_cle: self.aide_cle = (cote, marge); self.aide_larg = 0.0          # (fenetre redimensionnee, plein ecran, autre disposition : la largeur est recalculee)
         y = self.height - 10
         for l in lignes:                                 # lignes d'information empilees, a la ligne dans la marge laissee libre par la colonne d'interface
             if l.width != marge: l.width = marge
             l.y = y; y -= l.content_height + 3
         bas = y - 3                                       # cadre noir translucide derriere le texte (lisible sur le decor)
-        self.cadre_aide.x, self.cadre_aide.y = 4, bas
-        self.cadre_aide.width, self.cadre_aide.height = max(l.content_width for l in lignes) + 16, self.height - 4 - bas
+        self.aide_larg = max(self.aide_larg, max(l.content_width for l in lignes) + 16)       # (la largeur ne fait que croitre tant que F1 reste affiche : le bord gauche du bloc, colle a droite, et le texte ne bougent pas quand un chiffre change)
+        x0 = self.width - 4 - self.aide_larg if cote == 'droite' else 4
+        self.cadre_aide.x, self.cadre_aide.y = x0, bas
+        self.cadre_aide.width, self.cadre_aide.height = self.aide_larg, self.height - 4 - bas
         self.cadre_aide.draw()
-        for l in lignes: l.draw()
+        for l in lignes: l.x = x0 + 6; l.draw()
 
 
 def trouver_defauts():

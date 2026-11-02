@@ -11,6 +11,7 @@ from pyglet import gl
 import reglages as RG
 import hd as HD
 import hud_mobile as HM
+import entrees as EN
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -173,6 +174,7 @@ class Pause:
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
         self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None
+        self._garde().clavier(self.pos_souris)                    # la selection est au clavier tant que le pointeur ne s'est pas vraiment deplace (ecart cumule depuis son point d'ouverture : entrees.GardeSouris)
         if page: self.pile = [page]; self.sel[page] = 2           # ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
         self.J.pause_jeu(True)
 
@@ -288,7 +290,7 @@ class Pause:
                 self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Limité à x%d par cette carte graphique' % J.post.max_msaa if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa else ''),
                 self._choix('Suréchantillonnage', [1.0, 1.5, 2.0], lambda: R['echelle_rendu'], set_('echelle_rendu')),
                 self._curs('Luminosité', lambda: R['luminosite'], lambda v: R.__setitem__('luminosite', v), 0.5, 1.5, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['luminosite']),
-                self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])),
+                dict(self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])), aide='Molette de la souris : zoom   Ctrl + clic molette : remet 100 %'),
                 self._choix('Correction des bords des sprites', [True, False], lambda: R['correction_bords'] not in (0, False), lambda v: R.__setitem__('correction_bords', v)),
                 self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v)),
                 dict(t='act', l='Interface', ok=self._aller('interface'), sous=True)]          # (editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
@@ -420,13 +422,13 @@ class Pause:
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None)); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
-        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro'
+        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à zéro'
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
-                T('cam_haut'), T('cam_bas'), T('cam_gauche'), T('cam_droite'),
+                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la direction   Ctrl + clic molette : remet le zoom   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les combats, les menus et les messages gardent leur vitesse)'),
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
@@ -520,7 +522,7 @@ class Pause:
     def touche(self, symbol, modifiers=0):
         """True si la touche est consommee (le menu est ouvert)."""
         K = pyglet.window.key; R = self.J.reg
-        self.mode_souris = False                                  # une touche : retour a la selection au clavier (curseur dore)
+        self.mode_souris = False; self._garde().clavier(self.pos_souris)       # une touche : retour a la selection au clavier (curseur dore), le pointeur reprend la main au premier vrai mouvement (ou au clic)
         if self.capture is not None: self._capturer(symbol); return True
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
@@ -666,9 +668,17 @@ class Pause:
             if x0 <= x <= x1 and y0 <= y <= y1: return i, (x - x0) / max(1.0, x1 - x0)
         return None, 0.0
 
+    def _garde(self):
+        """Memoire clavier / souris de la fenetre (Jeu.garde_souris), ou la notre quand le menu est essaye sans fenetre."""
+        g = getattr(self.J, 'garde_souris', None)
+        if g is None: g = self.__dict__.setdefault('_garde_locale', EN.GardeSouris())
+        return g
+
     def survol(self, x, y):
-        p = self.pos_souris; self.pos_souris = (x, y)
-        if p is None or abs(x - p[0]) + abs(y - p[1]) < 3: return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
+        """Le pointeur bouge. Au clavier, la selection ne change que si le pointeur s'est ecarte de plus de EN.TOLERANCE_SOURIS pixels de l'endroit ou il etait a la derniere touche (ecart CUMULE : avant, le test portait sur
+        un evenement a l'autre, et une souris qui envoie des mouvements de 1 a 2 pixels ne reprenait jamais la main avant un clic ou un geste tres rapide) ; ensuite la selection suit le pointeur."""
+        self.pos_souris = (x, y)
+        if not self.mode_souris and not self._garde().bouge((x, y)): return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
         self.mode_souris = True
         if self.popup is not None:
             for (x0, y0, x1, y1, i) in self.zones_popup:
