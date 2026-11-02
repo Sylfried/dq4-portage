@@ -101,7 +101,8 @@ class Raccourcis(unittest.TestCase):
     def faux_jeu(self):
         FE = self.FE
         j = types.SimpleNamespace(avalees=set(), alt_cand=False, alt_tap=False, reg=RG.Reglages(None), touches=self.K.KeyStateHandler(), act_prec={}, n=0, _pret=True, combo=[False, False],
-                                  pause=types.SimpleNamespace(ouvert=False, capture=None, touche=lambda sym, mods: True), _en_bascule=False, post=object(), sauv=None, licence=None, dernier_peripherique='', bascules=0, annulations=0)
+                                  pause=types.SimpleNamespace(ouvert=False, capture=None, touche=lambda sym, mods: True), _en_bascule=False, post=object(), sauv=None, licence=None, dernier_peripherique='', bascules=0, annulations=0,
+                                  souris=(0, 0), garde_souris=__import__('entrees').GardeSouris())          # (souris / garde_souris : Jeu.on_key_press memorise la position du pointeur a chaque touche)
         j.basculer_exclusif = lambda: setattr(j, 'bascules', j.bascules + 1)
         j._tenue = lambda a: FE.Jeu._tenue(j, a); j._saisie_nom_en_cours = lambda: False; j._num_etat = FE.Jeu._num_etat; j._raccourci_fenetre = lambda sym, mods: FE.Jeu._raccourci_fenetre(j, sym, mods)
         j.annuler_chargement = lambda: setattr(j, 'annulations', j.annulations + 1)
