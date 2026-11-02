@@ -5,6 +5,7 @@ import numpy as np
 import fld
 
 DATAPACK = 'assets/bin/Data/datapack.unity3d'
+TEX_BLANCHE = 'blanche'                 # cle de la texture blanche 4 x 4 des materiaux sans texture (voir Donnees._texture)
 
 
 def _quat_mat(x, y, z, w):
@@ -100,7 +101,11 @@ class Donnees:
                     return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y), col, genre
         except Exception as ex:
             self.log('  texture illisible: %s' % ex)
-        return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
+            return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
+        # materiau SANS texture (aucune texture dans ses TexEnvs : 21 cartes de lieux, 10 decors de combat) : Unity echantillonne la texture blanche par defaut, la surface est donc dessinee en couleur de sommet x _Color
+        # (sol sombre, eau...). Avant, la surface etait absente de la visionneuse (groupe sans texture ignore au dessin).
+        tex_out[TEX_BLANCHE] = np.full((4, 4, 4), 255, np.uint8)
+        return TEX_BLANCHE, (1.0, 1.0), (0.0, 0.0), col, 'trans' if col[3] != 1.0 else 'normal'
 
     def _components(self, g):
         out = {}
@@ -133,7 +138,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte9_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte10_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -178,6 +183,7 @@ class Donnees:
             cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
             m = re.match(r'(\d+)_', cg.m_Name)
             if m: kids[int(m.group(1))] = cg
+        if not kids and {'MeshFilter', 'MeshRenderer'} <= set(self._components(rg)): kids[0] = rg          # decor d'un seul maillage porte par la RACINE (18 decors de combat : btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_*) : l'objet 0 de la carte est la racine elle-meme
         for o in objs:                                               # ChunkFile.readPosition (CCEB58) lit x, y, z puis NEGUE y (fneg) : la position d'un objet de la carte est (x, -y, z) ; sans cela les arbres et la ruine des reliefs
             o['pos'] = (o['pos'][0], -o['pos'][1], o['pos'][2])      # s'enfoncent (y du fichier = -hauteur du relief) ; c'est aussi la raison du « +1 » des coffres (fichier -0,5 -> monde +0,5)
         tex = {}; acc = {}; lens = {}; plages = {}; noms = {}; tnom = {}; tfmt = {}
@@ -207,7 +213,10 @@ class Donnees:
                 for q in plp_obj.get(o['i'], ()):
                     if q['nom'] in tnom.get(key, '').rsplit('.', 1)[0]:
                         key = self._groupe_pam(q, pams[q['pam']], tex, pamdef) or key; break
-                mcol = np.array(mc, np.float32)                       # FldObject : fld_*.vert : couleur du sommet x _Color du materiau
+                # FldObject.save_org_color (init_fld, RVA 0xCD811C) : _OrgColor = (1, 1, 1, alpha de _Color) ; FldObject.update_material_color (a chaque image, 0xCD79F4) : Material.color = _OrgColor x FldObject.m_color
+                # (teinte du paquet 33, blanc par defaut). La couleur RGB de _Color enregistree dans l'asset n'est donc JAMAIS utilisee en jeu (elle rendait noirs les cedres, sous-bois et arbres du decor de
+                # nuit des combats : _Color = 0, 0, 0) ; seul son alpha compte. Shader fld_*.vert : couleur du sommet x _Color.
+                mcol = np.array((1.0, 1.0, 1.0, mc[3]), np.float32)
                 if genre == 'trans' and key is not None:               # materiau transparent : groupe a part, trace apres le decor opaque dans la file 3000 + priorite (FldObject.set_priority)
                     gk = ('tr', o['prio'], key)
                     if gk not in tex and key in tex: tex[gk] = tex[key]
@@ -342,7 +351,7 @@ class Donnees:
             mat = mref.deref_parse_as_object(); sh = mat.m_Shader.deref_parse_as_object().m_ParsedForm.m_Name
             if sh != 'Custom/ImdChara': raise ValueError('shader non gere : %s' % sh)
             cles.add(self._texture(mref, tex, tnom, tfmt)[0])
-        if len(cles) != 1 or None in cles: raise ValueError('textures : %s' % cles)
+        if len(cles) != 1 or None in cles or TEX_BLANCHE in cles: raise ValueError('textures : %s' % cles)          # (modele 3D sans texture : refuse comme avant, la texture blanche ne sert qu'au decor des cartes)
         mesh = smr.m_Mesh.deref_parse_as_object(); h = MeshHandler(mesh); h.process()
         v = np.array(h.m_Vertices, np.float32).reshape(-1, 3); n = len(v)
         uv = np.array(h.m_UV0, np.float32).reshape(n, -1)[:, :2]
@@ -390,7 +399,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte9_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte10_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
@@ -398,10 +407,10 @@ class Donnees:
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte8_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte9_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre ; carte9_ : surfaces sans texture et decors portes par la racine absents), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-8]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-9]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 

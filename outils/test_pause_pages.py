@@ -27,15 +27,14 @@ class FauxJeu:
     def __init__(self):
         self.reg = RG.Reglages(os.path.join(tempfile.mkdtemp(prefix='pause_test_'), 'reglages.json'))
         self.son = FauxSon(); self.args = types.SimpleNamespace(cache='/inexistant'); self.width, self.height = 1280, 720; self.souris = None
-        self.appels = []; self.fondu = None; self.code_defilement = 2
+        self.appels = []; self.fondu = None
     def regler_son(self, oui): self.son.actif = bool(oui)
     def appliquer_mixage(self): self.appels.append('mixage')
     def apercu_son(self, cat): self.appels.append(('apercu', cat))
     def regler_fondu(self, v): self.fondu = v
     def appliquer_texte(self): self.appels.append('texte')
-    def defilement_actuel(self): return self.reg['defilement_combat'] if self.reg['defilement_force'] else RG.cran_defilement(self.code_defilement)
-    def regler_defilement(self, code): self.reg['defilement_combat'] = RG.cran_defilement(code); self.reg['defilement_force'] = True
-    def retablir_defilement(self): self.reg['defilement_force'] = False
+    def appliquer_jeu(self): self.appels.append('jeu')
+    def regler_vitesse_combat(self, v): self.reg['vitesse_combat'] = RG.cran_combat(v); self.appels.append(('combat', RG.code_defilement(v)))
     def pause_jeu(self, oui): pass
 
 
@@ -52,7 +51,7 @@ class Racine(unittest.TestCase):
     def test_entree_renommee(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         self.assertIn('Vitesse de défilement du texte', libs); self.assertNotIn('Texte et défilement', libs)
-        self.assertEqual(libs, ['Reprendre', 'Historique des messages', 'États', 'Affichage', 'Son', 'Vitesse de défilement du texte', 'Commandes', "Revenir à l'écran titre"])
+        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Vitesse de défilement du texte', 'Jeu', 'Commandes', "Revenir à l'écran titre"])
 
 
 class PageSon(unittest.TestCase):
@@ -116,29 +115,49 @@ class PageSon(unittest.TestCase):
 class PageTexte(unittest.TestCase):
     def test_lignes(self):
         _, p = menu('texte'); e = p._entrees()
-        self.assertEqual([x['l'] for x in e][:2], ['Vitesse du texte', 'Messages en combat'])
+        self.assertEqual([x['l'] for x in e], ['Vitesse du texte', 'Vitesse de combat'])
         self.assertNotIn('sep', [x['t'] for x in e], 'plus de sections')
-        self.assertNotIn('Défilement automatique', [x['l'] for x in e]); self.assertNotIn('Vitesse de défilement', [x['l'] for x in e])
+        for ancien in ('Défilement automatique', 'Vitesse de défilement', 'Messages en combat', 'Rétablir le réglage du jeu'): self.assertNotIn(ancien, [x['l'] for x in e])
 
     def test_noms(self):
         _, p = menu('texte')
         vt = par_libelle(p, 'Vitesse du texte')
         self.assertEqual([p._nom_valeur('Vitesse du texte', v) for v in vt['vals']], ['Très lent', 'Lent', 'Assez lent', 'Normal', 'Rapide', 'Très rapide', 'Instantané'])
-        cb = par_libelle(p, 'Messages en combat')
-        self.assertEqual([p._nom_valeur('Messages en combat', v) for v in cb['vals']], ['Rapide', 'Moyen', 'Lent', 'Manuel'])
-        self.assertEqual(cb['vals'], [0, 2, 3, 4])                                     # OptionStatus.battleSpeed : attente de 12 / 32 / 42 images, 4 = a la main
+        cb = par_libelle(p, 'Vitesse de combat')
+        self.assertEqual([p._nom_valeur('Vitesse de combat', v) for v in cb['vals']], ['Manuel', 'Normal', 'Rapide', 'Très rapide'])
+        self.assertEqual(cb['vals'], [0.0, 1.0, 2.0, 3.0])
 
-    def test_choix_impose_la_valeur_puis_rien_tant_qu_on_ne_touche_pas(self):
-        J, p = menu('texte'); J.code_defilement = 3
-        cb = par_libelle(p, 'Messages en combat')
-        self.assertEqual(cb['get'](), 3); self.assertIs(J.reg['defilement_force'], False)       # affiche la valeur de la sauvegarde sans rien imposer
-        J.code_defilement = 1; self.assertEqual(par_libelle(p, 'Messages en combat')['get'](), 2)   # cran 1 (22 images) : affiche comme Moyen
-        self.assertIs(J.reg['defilement_force'], False)
-        p.sel['texte'] = 1; p.touche(K.RIGHT)                                          # Moyen -> Lent
-        self.assertEqual((J.reg['defilement_combat'], J.reg['defilement_force']), (3, True))
-        p.touche(K.RIGHT); self.assertEqual(J.reg['defilement_combat'], 4)             # Lent -> Manuel
-        p.touche(K.RIGHT); self.assertEqual(J.reg['defilement_combat'], 0)             # (la liste boucle) Manuel -> Rapide
-        par_libelle(p, 'Rétablir le réglage du jeu')['ok'](); self.assertIs(J.reg['defilement_force'], False)
+    def test_choix_change_la_vitesse_et_le_defilement(self):
+        """« Vitesse de combat » : le menu previent la fenetre (qui impose aussi le defilement : 4 en Manuel, 2 sinon) ; la liste boucle ; ↺ remet Normal."""
+        J, p = menu('texte'); cb = par_libelle(p, 'Vitesse de combat')
+        self.assertEqual((cb['get'](), cb['v']()), (1.0, 'Normal')); self.assertTrue(cb['est_defaut']())
+        p.sel['texte'] = 1; p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 2.0)
+        p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 3.0)
+        p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 0.0)                                       # (la liste boucle) Très rapide -> Manuel
+        self.assertEqual(J.appels[-1], ('combat', 4)); self.assertFalse(cb['est_defaut']())
+        cb['defaut'](); self.assertEqual(J.reg['vitesse_combat'], 1.0); self.assertEqual(J.appels[-1], ('combat', 2)); self.assertTrue(cb['est_defaut']())      # ↺ : Normal
+        self.assertTrue(cb.get('aide')); self.assertNotIn('x2', cb['aide'])
+
+
+class PageJeu(unittest.TestCase):
+    LIB = 'PV et PM restaurés au niveau supérieur'
+
+    def test_option_desactivee_par_defaut_avec_retablissement(self):
+        """Page « Jeu » : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non."""
+        J, p = menu('jeu'); x = par_libelle(p, self.LIB)
+        self.assertEqual(x['vals'], [True, False]); self.assertFalse(J.reg['soin_niveau']); self.assertTrue(x['est_defaut']())
+        x['set'](True); self.assertTrue(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertFalse(x['est_defaut']())
+        x['defaut'](); self.assertFalse(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertTrue(x['est_defaut']())
+        self.assertTrue(x.get('aide'))
+
+    def test_une_ligne_et_entree_de_la_racine(self):
+        J, p = menu('jeu'); self.assertEqual([e['l'] for e in p._entrees()], [self.LIB])
+        p.pile = ['racine']; e = next(e for e in p._entrees() if e['l'] == 'Jeu'); e['ok'](); self.assertEqual(p.ecran, 'jeu')
+
+    def test_reglage_enregistre(self):
+        J = FauxJeu(); J.reg['soin_niveau'] = True; J.reg.enregistrer()
+        self.assertTrue(RG.Reglages(J.reg.chemin)['soin_niveau'])
+        J.reg.v['soin_niveau'] = 'oui'; J.reg.enregistrer(); self.assertFalse(RG.Reglages(J.reg.chemin)['soin_niveau'])        # valeur invalide : retour au defaut (Non)
 
 
 class PageCommandes(unittest.TestCase):
@@ -152,20 +171,14 @@ class PageCommandes(unittest.TestCase):
         x = par_libelle(p, "Multiplicateur de l'accélérateur"); self.assertEqual(x['t'], 'curs'); self.assertAlmostEqual(x['v'] and J.reg['vitesse_accel'], 1.5)    # l'accelerateur garde son curseur
         self.assertNotIn("Vitesse de l'accélérateur", [e.get('l') for e in p._entrees()])                                                                                       # (ancien libelle : renomme)
 
-    def test_vitesse_des_combats(self):
-        """Ligne « Vitesse des combats » : juste sous les lignes de l'accelerateur (touche, multiplicateur), meme forme que les choix x1 a x4, libelles Normal / Rapide / Tres rapide, defaut Normal ; sa touche suit."""
+    def test_touche_de_vitesse_de_combat(self):
+        """Commandes : plus de reglage de vitesse de combat (il est dans la page Texte), seulement la touche « Changer la vitesse en combat », juste sous le multiplicateur de l'accelerateur."""
         J, p = menu('commandes'); e = p._entrees(); ls = [x['l'] for x in e]
         i = ls.index("Multiplicateur de l'accélérateur"); self.assertEqual(ls[i - 1], "Touche d'accélérateur")
-        self.assertEqual(ls[i + 1], 'Vitesse des combats'); self.assertEqual(ls[i + 2], 'Touche de vitesse des combats'); self.assertEqual(e[i + 3]['t'], 'sep')       # (puis la section suivante)
-        x = par_libelle(p, 'Vitesse des combats'); self.assertEqual(x['t'], 'choix'); self.assertTrue(x['liste']); self.assertEqual(x['vals'], [1.0, 2.0, 3.0])
-        self.assertEqual([p._nom_valeur('Vitesse des combats', v) for v in x['vals']], ['Normal', 'Rapide', 'Très rapide'])
-        self.assertEqual(x['v'](), 'Normal'); self.assertEqual(J.reg['vitesse_combat'], 1.0)
-        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (2.0, 'Rapide'))
-        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (3.0, 'Très rapide'))
-        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (1.0, 'Normal'))                  # la liste boucle
-        x['moins'](); self.assertEqual(J.reg['vitesse_combat'], 3.0)
-        self.assertTrue(x.get('aide')); self.assertNotIn('x2', x['aide'])
-        t = par_libelle(p, 'Touche de vitesse des combats'); self.assertEqual((t['t'], t['act']), ('touche', 'vit_combat')); self.assertEqual(t['v'], ['V', '—'])
+        self.assertEqual(ls[i + 1], 'Changer la vitesse en combat'); self.assertEqual(e[i + 2]['t'], 'sep')       # (puis la section suivante)
+        for ancien in ('Vitesse des combats', 'Vitesse de combat', 'Touche de vitesse des combats'): self.assertNotIn(ancien, ls)
+        t = par_libelle(p, 'Changer la vitesse en combat'); self.assertEqual((t['t'], t['act']), ('touche', 'vit_combat')); self.assertEqual(t['v'], ['V', '—'])
+        self.assertIn('Manuel', t['aide']); self.assertNotIn('x2', t['aide'])
 
     def test_changement_de_valeur(self):
         J, p = menu('commandes')

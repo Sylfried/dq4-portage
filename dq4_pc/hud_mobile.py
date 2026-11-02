@@ -1,5 +1,7 @@
 """Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe, et la croix (manette tactile, utilisable a la souris).
-En combat, seul le bouton propre au portage « Vitesse des combats » (Normal, Rapide, Tres rapide ; clic = vitesse suivante) est montre : pas de bouton equivalent dans le jeu mobile, il n'envoie rien au moteur.
+En combat, seul le bouton propre au portage « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide ; clic = vitesse suivante) est montre : pas de bouton equivalent dans le jeu mobile, il n'envoie rien au moteur.
+Il est rattache au coin inferieur gauche de la boite du bas (commandes ou message), comme le bouton « Fuir » l'est au coin inferieur droit des commandes, et n'a pas de libelle : des fleches disent la vitesse
+(triangle creux : Manuel ; un triangle : Normal ; deux : Rapide ; trois : Tres rapide). Un joueur qui le deplace dans l'editeur d'interface le garde a l'endroit choisi.
 
 Le jeu d'origine les dessine dans la couche Unity (TouchPad : « Map Button » = touche 0x1000, « Command Button » = 0x800, « Talk Button » = 0x400 ; icones 3, 4 et 15 de la feuille
 MenuTexture, rangee de 32 px a y = 224). Le moteur dit quand ils sont visibles par le mot Global.Flag (premier mot de sa sortie) : (Flag & (8 | 0x30047)) == 8 (pad present, ni verrou du
@@ -16,13 +18,13 @@ from pyglet import gl
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
 NOMS = ('carte', 'menu', 'discussion')
 CROIX = 'croix'
-COMBAT = 'combat'                            # bouton « Vitesse des combats » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
+COMBAT = 'combat'                            # bouton « Vitesse de combat » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
 BOUTONS = NOMS + (COMBAT,)                   # tous les boutons rectangulaires
 NOMS_ED = BOUTONS + (CROIX,)                 # elements places dans l'editeur d'interface
 DEFAUT = {'carte': (0.4, 1), 'menu': (0.4, 12), 'discussion': (0.4, 14), COMBAT: (0.4, 8)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas ; vitesse des combats entre les deux : a gauche des fenetres de combat (colonne portrait centree), elle n'en cache aucune
 DECL = {'carte': 0x1000, 'menu': 0x800, 'discussion': 0x400}
 ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
-LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion', COMBAT: 'Vitesse des combats', CROIX: 'Croix'}
+LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion', COMBAT: 'Vitesse de combat', CROIX: 'Croix'}
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
 # Plaques des boutons (TouchPad.CreateMenuButton 0xD2377C : plaque (t x 40 + 32) x (t x 32 + 32) pour une taille t) en unites de l'interface d'origine (450 x 800) : (largeur, hauteur, cote de l'icone = 48 x taille d'icone)
 PLAQUE_DQ = {'carte': (72.0, 64.0, 57.6), 'menu': (72.0, 64.0, 57.6), 'discussion': (63.0, 56.8, 48.0), COMBAT: (118.0, 60.0, 0.0)}      # (le bouton de vitesse des combats n'a pas d'icone : plaque plus large qui porte « Vitesse » et la vitesse courante)
@@ -158,9 +160,20 @@ class Boutons:
     def taille(self):
         return PLAQUE_DQ['carte'][0] * self.echelle()
 
+    def ancre(self):
+        """Rattachement du bouton de vitesse de combat a la boite du bas (dict x, y, w, h en pixels, calcule par la fenetre : bord gauche et bord bas de la boite, taille de la plaque « Fuir »), ou None : hors combat, dans
+        l'editeur, quand le joueur l'a place lui-meme, ou tant qu'aucune boite n'a ete vue (position de la grille)."""
+        J = self.J; a = getattr(J, 'ancre_combat', None)
+        if a is None or self.edition or COMBAT in J.reg['boutons_pos']: return None
+        from moteur import PARTIE_COMBAT
+        return a if J.moteur.etat.partie == PARTIE_COMBAT else None
+
     def dims(self, nom):
         """(largeur, hauteur) en pixels : plaque d'origine d'un bouton (72 x 64, 63 x 56,8...) ou diametre de l'anneau de la croix."""
         if nom == CROIX: c = self.diametre_croix(); return c, c
+        if nom == COMBAT:
+            a = self.ancre()
+            if a and a.get('w'): return a['w'], a['h']              # meme plaque que « Fuir »
         w, h, _ = PLAQUE_DQ[nom]; k = self.echelle(); return w * k, h * k
 
     def diametre_croix(self):
@@ -176,7 +189,11 @@ class Boutons:
 
     def rect(self, nom):
         """(x, y, largeur, hauteur) en pixels, origine en bas a gauche."""
-        W, H = self.J.width, self.J.height; w, h = self.dims(nom); col, lig = self.case(nom)
+        W, H = self.J.width, self.J.height; w, h = self.dims(nom)
+        if nom == COMBAT:
+            a = self.ancre()
+            if a: return min(max(0.0, a['x']), W - w), min(max(0.0, a['y'] - h), H - h), w, h         # sous le coin inferieur gauche de la boite (le haut de la plaque touche son bord bas)
+        col, lig = self.case(nom)
         x = min(max(0.0, col * W / COLS), W - w); y = min(max(0.0, H - lig * H / LIGNES - h), H - h)
         return x, y, w, h
 
@@ -287,14 +304,22 @@ class Boutons:
         r = getattr(self.J, 'ui_rendu', None)
         return bool(r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), enfonce, coin=COIN_PLAQUE * self.echelle()))
 
-    def _texte_combat(self, x, y, w, h):
-        """Bouton de vitesse des combats : « Vitesse » en petit, au-dessus de la vitesse courante (Normal, Rapide, Très rapide : mots du menu Commandes, jamais « x2 ») ; la vitesse est plus chaude quand elle accelere.
-        Police du menu Pause (celle du jeu mobile), taille proportionnelle a la plaque."""
+    def _fleches_combat(self, x, y, w, h):
+        """Vitesse de combat en fleches, sans libelle : un triangle creux (gris) en Manuel, puis un, deux ou trois triangles pleins (Normal : blanc ; Rapide : jaune ; Tres rapide : orange, plus chaud quand ca accelere), comme le
+        curseur triangulaire des menus du jeu. Groupe centre dans la plaque."""
         import reglages as RG
-        v = RG.cran_combat(self.J.reg['vitesse_combat']); k = self.echelle(); pa = self.J.pause
-        coul = {1.0: (255, 255, 255, 255), 2.0: (255, 235, 130, 255), 3.0: (255, 176, 80, 255)}[v]
-        sous = pa._ajuster('Vitesse', 15.0 * k, (196, 200, 208, 255), w - 14 * k); sous.x = x + (w - sous.content_width) / 2; sous.y = y + h * 0.60; sous.draw()
-        et = pa._ajuster(RG.NOMS_VITESSE_COMBAT[v], 21.0 * k, coul, w - 14 * k); et.x = x + (w - et.content_width) / 2; et.y = y + h * 0.17; et.draw()
+        v = RG.cran_combat(self.J.reg['vitesse_combat'])
+        nb = {0.0: 1, 1.0: 1, 2.0: 2, 3.0: 3}[v]; coul = {0.0: (170, 174, 182), 1.0: (255, 255, 255), 2.0: (255, 235, 130), 3.0: (255, 176, 80)}[v]
+        th = h * 0.42; tw = th * 0.80; ec = tw * 0.22; total = nb * tw + (nb - 1) * ec           # hauteur et largeur d'un triangle, ecart entre deux
+        x0 = x + (w - total) / 2.0; yc = y + h / 2.0
+        for i in range(nb):
+            a = x0 + i * (tw + ec)
+            sommets = (a, yc - th / 2, a, yc + th / 2, a + tw, yc)
+            if v == 0.0:                                                                         # Manuel : triangle creux
+                e = max(2.0, h * 0.045)
+                pyglet.shapes.Polygon((sommets[0], sommets[1]), (sommets[2], sommets[3]), (sommets[4], sommets[5]), color=coul).draw()
+                d = e * 2.1; pyglet.shapes.Polygon((a + d * 0.55, yc - th / 2 + d), (a + d * 0.55, yc + th / 2 - d), (a + tw - d * 1.1, yc), color=PLAQUE_BAS).draw()
+            else: pyglet.shapes.Triangle(*sommets, color=coul).draw()
 
     def _art_croix(self):
         """Sprites de la croix (morceaux de la feuille « Button », ancres au centre pour tourner autour)."""
@@ -340,9 +365,14 @@ class Boutons:
         for nom in BOUTONS:
             if nom not in visibles and not edition: continue
             x, y, w, h = self.rect(nom); actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
-            vrai = self._plaque(x, y, w, h, actif)
-            if not vrai: cadre(x, y, w, h, h / 60.0, 0.45 if actif else 0.0)    # sans les menus d'origine : fond de bouton dessine (fenetre bleu nuit a cadre blanc, comme celles du jeu mobile)
-            if nom == COMBAT: self._texte_combat(x, y, w, h)
+            if nom == COMBAT:                                    # comme la plaque « Fuir » : un petit cadre de fenetre du jeu (fond noir translucide, cadre en cinq traits) qui porte la plaque du bouton
+                k = h / 56.0; cadre(x, y, w, h, k, 0.0, (0, 0, 0), OPACITE_JEU); m = 5.0 * k
+                vrai = self._plaque(x + m, y + m, w - 2 * m, h - 2 * m, actif)
+                if not vrai: cadre(x + m, y + m, w - 2 * m, h - 2 * m, k, 0.45 if actif else 0.0)
+            else:
+                vrai = self._plaque(x, y, w, h, actif)
+                if not vrai: cadre(x, y, w, h, h / 60.0, 0.45 if actif else 0.0)    # sans les menus d'origine : fond de bouton dessine (fenetre bleu nuit a cadre blanc, comme celles du jeu mobile)
+            if nom == COMBAT: self._fleches_combat(x, y, w, h)
             else:
                 ci = PLAQUE_DQ[nom][2] * self.echelle(); s, n = self._sprite(nom, ci)
                 s.update(x=x + (w - ci) / 2, y=y + (h - ci) / 2, scale=ci / (32.0 * n))

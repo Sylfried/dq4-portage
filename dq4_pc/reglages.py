@@ -9,13 +9,13 @@ TOUCHES_DEF = {
     'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
-    'vit_combat': ['V', None],        # fait defiler la vitesse des combats (Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
+    'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
-           ('accel', "Touche d'accélérateur"), ('vit_combat', 'Touche de vitesse des combats'), ('modif', 'Touche spéciale'),
-           ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique des messages'),
+           ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
+           ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule fenetre / plein ecran (comme Alt + Entree) : non reattribuables
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
@@ -38,8 +38,6 @@ DEFAUT = {
     'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
-    'defilement_force': False,    # combats : impose le defilement ci-dessous (non : celui de la sauvegarde, regle dans la fenetre Parametres du jeu)
-    'defilement_combat': 2,       # combats, « Messages en combat » : OptionStatus.battleSpeed impose si 'defilement_force' ; 0 Rapide (attente de 12 images), 2 Moyen (32 images, la valeur d'origine du jeu), 3 Lent (42 images), 4 Manuel (touche) ; voir CRANS_DEFILEMENT
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
@@ -47,7 +45,8 @@ DEFAUT = {
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu ; x1 a x4)
     'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
-    'vitesse_combat': 1.0,        # « Vitesse des combats » : 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations, deplacements, delais, messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
+    'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
+    'soin_niveau': False,         # « PV et PM restaurés au niveau supérieur » : quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (le jeu d'origine ne le fait pas) ; desactive = comme le jeu
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
@@ -77,7 +76,7 @@ FENETRE_DEFAUT = (1.0, 0.0, 0.0)                           # fenetre du jeu sans
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
 # 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees.
-CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage')
+CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat')
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -103,25 +102,30 @@ def mode_fenetre_valide(v):
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_fondu': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'defilement_force')
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau')
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
 VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
-VITESSES_COMBAT = (1.0, 2.0, 3.0)                            # crans de « Vitesse des combats » (x1 = comme le jeu)
-NOMS_VITESSE_COMBAT = {1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Commandes, bouton de l'ecran de combat) : jamais « x1 », « x2 », « x3 »
-# « Messages en combat » : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message suivant, 4 = pas
-# d'avance automatique (touche). Le jeu d'origine propose ces cinq crans (« Vitesse texte » 1 a 5) ; la page en garde quatre : Rapide (0), Moyen (2 : la valeur d'origine), Lent (3), Manuel (4). Le cran 1 (22 images) n'a pas de nom : il
-# s'affiche comme Moyen (le plus proche en rapport de durees : 22 / 12 = 1,8 contre 32 / 22 = 1,45), et reste tel quel dans la sauvegarde tant qu'on ne touche pas au reglage.
-CRANS_DEFILEMENT = (0, 2, 3, 4)
-COMBAT_MANUEL = 4
+VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
+NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
+# Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
+# suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 2 (Moyen, la valeur d'origine) sinon : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
+COMBAT_MANUEL = 0.0
+CODE_DEFILEMENT_MANUEL, CODE_DEFILEMENT_AUTO = 4, 2
 
 
-def cran_defilement(code):
-    """Valeur de OptionStatus.battleSpeed (0 a 4) -> le cran de CRANS_DEFILEMENT qui la represente (1 -> 2) ; toute autre valeur -> celle d'origine."""
+def code_defilement(vitesse):
+    """Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 2 (Moyen : la valeur d'origine du jeu) sinon."""
+    return CODE_DEFILEMENT_MANUEL if cran_combat(vitesse) == COMBAT_MANUEL else CODE_DEFILEMENT_AUTO
+
+
+def vitesse_apres_code_jeu(code, vitesse):
+    """Le jeu change lui-meme battleSpeed (chargement d'une sauvegarde, fenetre Parametres d'origine) : 4 -> Manuel ; toute autre valeur -> sortie du Manuel (Normal), les autres crans sont gardes."""
+    v = cran_combat(vitesse)
     try: code = int(code)
-    except (TypeError, ValueError): return DEFAUT['defilement_combat']
-    if code == 1: return 2
-    return code if code in CRANS_DEFILEMENT else DEFAUT['defilement_combat']
+    except (TypeError, ValueError): return v
+    if code == CODE_DEFILEMENT_MANUEL: return COMBAT_MANUEL
+    return DEFAUT['vitesse_combat'] if v == COMBAT_MANUEL else v
 
 
 def cran_x(v, defaut=1.0):
@@ -133,12 +137,12 @@ def cran_x(v, defaut=1.0):
 def cran_combat(v, defaut=1.0):
     """Valeur lue (reglages.json, saisie) -> le cran de VITESSES_COMBAT le plus proche (a egalite le plus rapide) ; tout ce qui n'est pas un nombre (texte, booleen, None, nan) -> `defaut`."""
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v: return defaut
-    v = min(VITESSES_COMBAT[-1], max(VITESSES_COMBAT[0], v))                                  # (bornes : jamais plus lent que Normal, ni plus rapide que Très rapide)
+    v = min(VITESSES_COMBAT[-1], max(VITESSES_COMBAT[0], v))                                  # (bornes : jamais plus lent que Manuel, ni plus rapide que Très rapide)
     return min(VITESSES_COMBAT, key=lambda c: (abs(c - v), -c))
 
 
 def combat_suivant(v):
-    """Touche « Vitesse des combats » : Normal -> Rapide -> Très rapide -> Normal (une valeur invalide est lue comme Normal, une valeur hors bornes comme le cran le plus proche)."""
+    """Touche « Changer la vitesse en combat » : Manuel -> Normal -> Rapide -> Très rapide -> Manuel (une valeur invalide est lue comme Normal, une valeur hors bornes comme le cran le plus proche)."""
     v = cran_combat(v)
     return VITESSES_COMBAT[(VITESSES_COMBAT.index(v) + 1) % len(VITESSES_COMBAT)]
 
@@ -174,9 +178,8 @@ class Reglages:
                         if isinstance(l, list) and any(l): d['touches']['accel'] = l; break
                     else:
                         if isinstance(d['touches'].get('courir'), list): d['touches']['accel'] = [None, None]        # le joueur avait vide ces touches : l'accelerateur n'a pas de touche
-                if 'defilement_combat' not in d and ('defilement_auto' in d or 'defilement_vitesse' in d):         # anciens reglages « Defilement automatique » (oui / non) + « Vitesse de defilement » (0 a 3) -> un seul reglage « Messages en combat »
-                    vit = d.get('defilement_vitesse'); vit = 2 if isinstance(vit, bool) or not isinstance(vit, (int, float)) else min(3, max(0, int(round(vit))))
-                    d['defilement_combat'] = COMBAT_MANUEL if d.get('defilement_auto') is False else cran_defilement(vit)
+                ancien = d.get('defilement_combat'); ancien = 4 if ancien is None and d.get('defilement_auto') is False else ancien                # (tout ancien « Defilement automatique : non » = messages a la main)
+                if d.get('defilement_force') is True and ancien == 4: d['vitesse_combat'] = COMBAT_MANUEL      # ancien « Messages en combat : Manuel » impose -> « Vitesse de combat : Manuel » (les autres crans n'ont plus d'equivalent : l'attente suit la vitesse de combat ; rien d'impose : la vitesse enregistree reste)
                 v_enreg = d.get('touches_v')
                 for k, x in d.items():
                     if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
@@ -205,7 +208,6 @@ class Reglages:
                 for k, (mi, ma) in BORNES.items(): self.v[k] = min(ma, max(mi, self.v[k])) if isinstance(self.v[k], (int, float)) and not isinstance(self.v[k], bool) else DEFAUT[k]       # valeurs d'anciennes versions ramenees aux curseurs
                 for k in BOOLEENS_SON_TEXTE:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
-                self.v['defilement_combat'] = cran_defilement(self.v['defilement_combat']) if isinstance(self.v['defilement_combat'], int) and not isinstance(self.v['defilement_combat'], bool) else DEFAUT['defilement_combat']
                 for k in VITESSES_X_CLES: self.v[k] = cran_x(self.v[k], DEFAUT[k])                       # ancien curseur (0,5 a 2) -> x1 a x4
                 self.v['vitesse_combat'] = cran_combat(self.v['vitesse_combat'], DEFAUT['vitesse_combat'])
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu

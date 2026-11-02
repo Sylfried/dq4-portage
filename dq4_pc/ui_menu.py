@@ -303,7 +303,7 @@ class Fenetre:
                 if pt['node'] in self.N: self.N[pt['node']]['act'] = (c != 0)
             elif e['kind'] == 'func':
                 fx = (e.get('fx') or {}).get(str(c))
-                if not fx: continue
+                if not fx: self._code_masque(e, c); continue
                 for nid, dd in fx['d'].items():
                     nd = self.N.get(int(nid))
                     if not nd: continue
@@ -317,6 +317,29 @@ class Fenetre:
                     if pt:
                         for j, ib in enumerate(pt['ib']):
                             if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    def _code_masque(self, e, c):
+        """Fonction de code dont l'argument est un MASQUE DE BITS sur des elements actifs / inactifs (Make_Casino_Poker b__1 : bit n = zone tactile de numero n, cartes 0 a 4 et « Donner » 5 ; le moteur envoie 63 pour toutes).
+        L'exporteur de mise en page n'a essaye que les valeurs 0 a 5 : le tableau `fx` ignore les autres. Si le tableau est bien de cette forme (pour CHAQUE valeur connue, les elements inactifs sont exactement ceux dont le bit
+        de leur numero de bouton est a 0, parmi ceux que la valeur 0 desactive), on applique la meme regle a la valeur recue : l'element de numero de bouton n est actif quand le bit n est a 1. Sinon rien (comme avant)."""
+        fxs = e.get('fx') or {}
+        ok = e.get('_masque')
+        if ok is None:
+            ok = e['_masque'] = False
+            try:
+                zero = {int(n) for n, dd in (fxs.get('0') or {}).get('d', {}).items() if dd.get('act') is False}
+                bid = {n: self.N[n]['buttonId'] for n in zero if n in self.N and self.N[n]['buttonId'] is not None and self.N[n]['buttonId'] >= 0}
+                if zero and len(bid) == len(zero) and len(set(bid.values())) == len(bid):
+                    ok = True
+                    for k, v in fxs.items():
+                        if k.lstrip('-').isdigit() and int(k) >= 0:
+                            off = {int(n) for n, dd in (v.get('d') or {}).items() if dd.get('act') is False}
+                            if off != {n for n in zero if not (int(k) >> bid[n]) & 1}: ok = False; break
+                    e['_masque'] = ok; e['_masque_ids'] = bid if ok else None
+            except Exception: ok = e['_masque'] = False
+        if not ok or not isinstance(c, int) or c < 0: return
+        for n, b in e['_masque_ids'].items():
+            if n in self.N: self.N[n]['act'] = bool((c >> b) & 1)
 
     # ---- eglise (type 66, Make_ChurchRoot)
     # Le jeu fait les boutons dans le code de la fenetre (Sub_ShopButton) : l'exporteur de mise en page n'en voit que le titre et le bouton de sortie (« Rien »). On les refait ici d'apres le code recu du moteur

@@ -19,6 +19,7 @@ DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
 # Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
 OR = (255, 235, 4, 255); BLANC = (255, 255, 255, 255); GRIS = (128, 128, 128, 255); AIDE = (170, 170, 170, 255); ROUGE = (255, 80, 80, 255)
 JAUNE = OR[:3]; CLAIR = (236, 236, 232)
+SANS = object()                                  # « pas de valeur par defaut » (None et False sont des valeurs possibles)
 NOIR = (0, 0, 0)                                  # fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.OPACITE_JEU, mesuree sur les fenetres du jeu)
 LARG_CELLULE, ECART_CELLULES = 150.0, 10.0       # menu Commandes : largeur d'une case de touche et ecart entre les deux (a 900 px de haut, multiplies par k)
 LARG_BARRE = 12.0                                 # barre de defilement
@@ -210,17 +211,19 @@ class Pause:
 
     def _e_racine(self):
         return [dict(t='act', l='Reprendre', ok=self.fermer),
-                dict(t='act', l='Historique des messages', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
+                dict(t='act', l='Historique', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
                 dict(t='act', l='Vitesse de défilement du texte', ok=self._aller('texte'), sous=True),
+                dict(t='act', l='Jeu', ok=self._aller('jeu'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
-    def _choix(self, label, valeurs, get, set_, off=False, note=None):
+    def _choix(self, label, valeurs, get, set_, off=False, note=None, defaut=SANS, retablir=None, est_defaut=None):
         """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
-        (valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante). `note` : fonction donnant un texte rouge affiche sous la valeur (ou '')."""
+        (valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante). `note` : fonction donnant un texte rouge affiche sous la valeur (ou '').
+        `defaut` : valeur d'origine du reglage (bouton rond « valeur par defaut » a droite de la ligne, Suppr / Debut) ; `retablir` / `est_defaut` : a la place, pour un reglage qui se rend au jeu (fonction qui le remet, fonction qui dit s'il l'est)."""
         sw = len(valeurs) == 2 and all(isinstance(v, bool) for v in valeurs)
         def pas(d):
             i = (valeurs.index(get()) + d) % len(valeurs) if get() in valeurs else 0
@@ -230,7 +233,10 @@ class Pause:
             if get() != x: set_(x)
         if sw: moins, plus, ok = (lambda: fixer(False)), (lambda: fixer(True)), (lambda: set_(not get()))
         else: moins, plus, ok = (lambda: pas(-1)), (lambda: pas(1)), (lambda: pas(1))
-        return dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw, note=note)
+        d = dict(t='choix', l=label, vals=valeurs, v=lambda: self._nom_valeur(label, get()), moins=moins, plus=plus, ok=ok, off=off, get=get, set=set_, sw=sw, liste=not sw, note=note)
+        if retablir is not None: d['defaut'] = retablir; d['est_defaut'] = est_defaut or (lambda: False)
+        elif defaut is not SANS: d['defaut'] = lambda: fixer(defaut); d['est_defaut'] = lambda: get() == defaut
+        return d
 
     def _valeurs(self, en): return en['vals']
 
@@ -270,8 +276,7 @@ class Pause:
         'Action': {'creer': 'Créer un état', 'charger': 'Charger un état', 'supprimer': 'Supprimer un état'},
     }
     noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
-    noms['Messages en combat'] = {0: 'Rapide', 2: 'Moyen', 3: 'Lent', 4: 'Manuel'}                       # OptionStatus.battleSpeed (voir RG.CRANS_DEFILEMENT)
-    noms['Vitesse des combats'] = RG.NOMS_VITESSE_COMBAT                                                  # Normal, Rapide, Très rapide (jamais x1, x2, x3)
+    noms['Vitesse de combat'] = RG.NOMS_VITESSE_COMBAT                                                    # Manuel, Normal, Rapide, Très rapide (jamais x1, x2, x3)
     for lib in ('Vitesse de marche', 'Vitesse de caméra', 'Vitesse de transition'): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
     del lib
 
@@ -282,20 +287,20 @@ class Pause:
                 R[k] = v
                 if f: f(v)                 # (les reglages sont enregistres a la fermeture du menu)
             return s
-        fen = self._choix('Plein écran', [False, True], lambda: J.est_plein, J.regler_plein_ecran)          # (interrupteur : l'ancien reglage d'avant la #42 ; F11 et Alt + Entree font la meme chose)
+        fen = self._choix('Plein écran', [False, True], lambda: J.est_plein, J.regler_plein_ecran, defaut=False)          # (interrupteur : l'ancien reglage d'avant la #42 ; F11 et Alt + Entree font la meme chose)
         fen['aide'] = "Plein écran : fenêtre sans bordure à la résolution du bureau (l'écran ne change pas)   F11 ou Alt + Entrée : passe du plein écran à la fenêtre et inversement"
-        res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, note=lambda: 'Sans effet en plein écran' if J.est_plein else '')
+        res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, note=lambda: 'Sans effet en plein écran' if J.est_plein else '', defaut=tuple(RG.DEFAUT['resolution']))
         res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution du bureau"
         if J.est_plein: res['moins'] = res['plus'] = lambda: None            # (ligne grisee : ni les fleches ni Entree ne la changent)
         return [fen, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
-                self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode)),
+                self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode), defaut=RG.DEFAUT['mode_sprites']),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
-                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Limité à x%d par cette carte graphique' % J.post.max_msaa if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa else ''),
-                self._choix('Suréchantillonnage', [1.0, 1.5, 2.0], lambda: R['echelle_rendu'], set_('echelle_rendu')),
+                self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), note=lambda: 'Limité à x%d par cette carte graphique' % J.post.max_msaa if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa else '', defaut=RG.DEFAUT['msaa']),
+                self._choix('Suréchantillonnage', [1.0, 1.5, 2.0], lambda: R['echelle_rendu'], set_('echelle_rendu'), defaut=RG.DEFAUT['echelle_rendu']),
                 self._curs('Luminosité', lambda: R['luminosite'], lambda v: R.__setitem__('luminosite', v), 0.5, 1.5, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['luminosite']),
                 dict(self._curs('Distance caméra', lambda: round(100.0 / J.zoom), J.regler_distance, 50.0, 200.0, 5.0, 10.0, lambda v: '%d %%' % round(v), 1.0, defaut=float(RG.DEFAUT['distance_camera'])), aide='Molette de la souris : zoom   Ctrl + clic molette : remet 100 %'),
-                self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v)),
+                self._choix('Centrer la caméra sur le joueur', [True, False], lambda: R['camera_centree'], lambda v: R.__setitem__('camera_centree', v), defaut=RG.DEFAUT['camera_centree']),
                 dict(t='act', l='Interface', ok=self._aller('interface'), sous=True)]          # (editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
 
     # ---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et fenetres du jeu (taille, position, affichage)
@@ -341,17 +346,17 @@ class Pause:
         """Page Interface : d'abord l'interface a modifier (liste par groupes), puis son affichage (propre a chaque interface), puis ses reglages."""
         R = self.J.reg; c = self.cible
         e = [self._choix('Interface à modifier', self.cibles(), lambda: self.cible, self._poser_cible),
-             self._choix("Afficher cette interface à l'écran", [True, False], lambda: self._visible(self.cible), lambda v: self._poser_visible(self.cible, v))]
+             self._choix("Afficher cette interface à l'écran", [True, False], lambda: self._visible(self.cible), lambda v: self._poser_visible(self.cible, v), defaut=True)]
         if c == RG.CIBLE_ECRAN:
             e.append(self._curs('Taille des boutons', lambda: R['boutons_taille'], lambda v: R.__setitem__('boutons_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['boutons_taille']))
-            e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v)))
+            e.append(self._choix('Afficher la croix', [True, False], lambda: R['croix'], lambda v: R.__setitem__('croix', v), defaut=RG.DEFAUT['croix']))
             e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
         else:
             e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[0]),
                   self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[1]),
                   self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[2])]
-        e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v)),            # (pour toutes les interfaces)
-              self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v))]
+        e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v), defaut=RG.DEFAUT['boutons_aimant']),            # (pour toutes les interfaces)
+              self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v), defaut=RG.DEFAUT['grille_edition'])]
         cette = dict(t='act', l='Rétablir cette interface', ok=self._remettre_cette)
         cette['aide'] = ("Remet les boutons et la croix comme dans le jeu : affichage, tailles et positions   Les fenêtres du jeu ne changent pas" if c == RG.CIBLE_ECRAN
                          else "Remet cette fenêtre comme dans le jeu : affichage, taille et position   Les autres interfaces ne changent pas")
@@ -400,15 +405,20 @@ class Pause:
                 self._ligne_son('Interface', 'volume_interface', 'interface', cle('interface_active'), "Bip des pages de message, validation des menus et des boutons   Un son de bouton est joué quand tu changes le volume")]
 
     def _e_texte(self):
-        """Vitesse d'ecriture des dialogues, puis defilement des messages de combat (Rapide, Moyen, Lent, Manuel). Le defilement ne concerne que les combats : dans les dialogues normaux, on passe toujours chaque page a la main."""
+        """Vitesse d'ecriture des dialogues, puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat)."""
         J, R = self.J, self.J.reg
-        vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()))
+        vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()), defaut=RG.DEFAUT['vitesse_texte'])
         vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal » : comme dans le jeu d\'origine'
-        cb = self._choix('Messages en combat', list(RG.CRANS_DEFILEMENT), J.defilement_actuel, J.regler_defilement)
-        cb['aide'] = 'Combats seulement : attente avant le message suivant (rapide : 0,4 s, moyen : 1,1 s, lent : 1,4 s)   Manuel : on passe chaque message avec Entrée, Espace ou un clic   Moyen est la valeur d\'origine du jeu   Les dialogues hors combat ne défilent jamais seuls'
-        retab = dict(t='act', l='Rétablir le réglage du jeu', ok=J.retablir_defilement)
-        retab['aide'] = 'Combats : reprend la vitesse des messages enregistrée dans la sauvegarde (fenêtre Paramètres du jeu)'
-        return [vt, cb, retab]
+        cb = self._choix('Vitesse de combat', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], J.regler_vitesse_combat, defaut=RG.DEFAUT['vitesse_combat'])
+        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche des Commandes, bouton à l'écran)"
+        return [vt, cb]
+
+    def _e_jeu(self):
+        """Options de jeu (regles) : PV et PM restaures a chaque niveau gagne (desactive = comme le jeu d'origine)."""
+        J, R = self.J, self.J.reg
+        sn = self._choix('PV et PM restaurés au niveau supérieur', [True, False], lambda: R['soin_niveau'], lambda v: (R.__setitem__('soin_niveau', v), J.appliquer_jeu()), defaut=RG.DEFAUT['soin_niveau'])
+        sn['aide'] = "Quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (au maximum qu'il vient d'atteindre)   Non : comme le jeu d'origine, la montée de niveau ne soigne pas"
+        return [sn]
 
     def _touche(self, act):
         """Ligne d'une action au clavier : deux cases (touche principale, secondaire) ; Suppr efface la case choisie, le bouton rond (ou Debut) remet les touches d'origine."""
@@ -419,19 +429,17 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la vitesse des combats : Normal, Rapide, Tres rapide, et sa touche), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat » ; le reglage de la vitesse de combat est dans la page Texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
-            d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None)); d['aide'] = aide; return d
+            d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à 100 %'
         accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
         vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
-        vit_cb = self._choix('Vitesse des combats', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], lambda v: R.__setitem__('vitesse_combat', v))
-        vit_cb['aide'] = "Combats : animations, déplacements et messages 2 ou 3 fois plus rapides   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche ci-dessous, bouton à l'écran)"
-        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Normal à Rapide, puis à Très rapide, puis à Normal   Marche aussi en plein combat   " + self.AIDE_TOUCHE
+        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la page Texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
@@ -440,7 +448,7 @@ class Pause:
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)'),
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
                 vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
-                accel, vit_acc, vit_cb, tch_cb,
+                accel, vit_acc, tch_cb,
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('historique'),
                 dict(t='sep', l='Autres'),
@@ -644,12 +652,12 @@ class Pause:
             c = self.sel.get('col', 0); self.sel['col'] = min(1, max(0, c + d))
 
     def _defaut(self):
-        """Remet le curseur ou les touches de la ligne choisie a leur valeur d'origine."""
+        """Remet le curseur, le choix ou les touches de la ligne choisie a leur valeur d'origine."""
         en = self._courante()
-        if en and en['t'] in ('curs', 'touche') and 'defaut' in en: en['defaut']()
+        if en and en['t'] in ('curs', 'touche', 'choix') and 'defaut' in en: en['defaut']()
 
     def _suppr(self):
-        """Suppr : curseur -> valeur d'origine ; touche -> la case choisie est videe."""
+        """Suppr : curseur ou choix -> valeur d'origine ; touche -> la case choisie est videe."""
         en = self._courante()
         if not en: return
         if en['t'] == 'touche': self.J.reg.delier(en['act'], self.sel.get('col', 0)); self.J.reg.enregistrer()
@@ -776,7 +784,7 @@ class Pause:
         bar = self.barres.get(i)
         zv = self.zones_val.get(i); zd = self.zones_def.get(i); zm = self.zones_mute.get(i)
         if en['t'] == 'curs' and zm and self._dans(zm, x, y): en['ok']()                           # bouton muet de la page Son : coupe ou remet le son
-        elif en['t'] in ('curs', 'touche') and zd and zd[0] <= x <= zd[2] and zd[1] <= y <= zd[3]:       # bouton rond « valeur par defaut » (curseurs, touches d'origine)
+        elif en['t'] in ('curs', 'touche', 'choix') and zd and zd[0] <= x <= zd[2] and zd[1] <= y <= zd[3]:       # bouton rond « valeur par defaut » (curseurs, choix, touches d'origine)
             if 'defaut' in en: en['defaut']()
         elif en['t'] == 'curs' and bar and bar[0] - 6 <= x <= bar[1] + 6:       # curseur : le clic maintenu le fait glisser (glisser)
             self.glisse = i; en['fixe'](min(1.0, max(0.0, (x - bar[0]) / (bar[1] - bar[0]))))
@@ -1056,7 +1064,7 @@ class Pause:
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
-        titres['texte'] = 'Vitesse de défilement du texte'
+        titres['texte'] = 'Vitesse de défilement du texte'; titres['jeu'] = 'Jeu'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -1083,7 +1091,7 @@ class Pause:
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr + (36 * k if ecr == 'son' else 0.0))          # (son : plus le bouton muet)
-        if ecr in ('texte',): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
+        if ecr in ('texte', 'jeu'): pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
@@ -1154,13 +1162,15 @@ class Pause:
             if note:
                 en_ = self._et(note, fsp * 0.95, ROUGE); en_.x = xr - en_.content_width; en_.y = ybas + 9 * k; en_.draw()
             if en['t'] == 'act' and en.get('sous'): self._chevron(xr - 6 * k, ybas + rh / 2 + dec, k)
+            xc = xr - (34 * k if en['t'] == 'choix' and 'defaut' in en else 0.0)                 # (place du bouton rond « valeur par defaut » des choix, a droite de la ligne)
+            if en['t'] == 'choix' and 'defaut' in en: self._bouton_defaut(idx, xr - 26 * k, ybas + rh / 2 - 13 * k, 26 * k, en['est_defaut'](), sel, k)
             if en['t'] == 'choix' and en.get('liste'):                                        # liste deroulante : valeur courante et petite fleche vers le bas
-                vl = self._et(en['v'](), fs, coul); vl.x = xr - 24 * k - vl.content_width; vl.y = base; vl.draw()
-                fx, fy = xr - 8 * k, ybas + rh / 2 + dec
+                vl = self._et(en['v'](), fs, coul); vl.x = xc - 24 * k - vl.content_width; vl.y = base; vl.draw()
+                fx, fy = xc - 8 * k, ybas + rh / 2 + dec
                 pyglet.shapes.Triangle(fx - 7 * k, fy + 4 * k, fx + 7 * k, fy + 4 * k, fx, fy - 5 * k, color=OR[:3] if sel else coul[:3]).draw()
-                self.zones_val[idx] = (vl.x - 10 * k, xr + 10 * k)
+                self.zones_val[idx] = (vl.x - 10 * k, xc + 10 * k)
             elif en['t'] == 'choix':                                                          # interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur
-                sw_x = xr - LARG_SW * k; actif = bool(en['get']())
+                sw_x = xc - LARG_SW * k; actif = bool(en['get']())
                 vl = self._et(en['v'](), fs, coul if not actif or en.get('off') else OR); vl.x = sw_x - 14 * k - vl.content_width; vl.y = base; vl.draw()
                 self._interrupteur(en['l'], sw_x, ybas + rh / 2, actif, sel and not mouse, en.get('off'), k)
                 self.zones_val[idx] = (vl.x - 10 * k, sw_x + LARG_SW * k + 10 * k)
@@ -1236,7 +1246,7 @@ class Pause:
         if t == 'curs' and 'actif' in en: return sup + 'Glisser ou ←/→ : volume   Entrée ou haut-parleur : couper / remettre   Clic sur la valeur : la taper   Suppr ou bouton rond : volume et son par défaut'
         if t == 'curs': return sup + 'Glisser ou ←/→ : changer la valeur   Clic sur la valeur : la taper   Suppr ou bouton rond : valeur par défaut'
         if t == 'choix':
-            return sup + ('Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante')
+            return sup + ('Entrée ou clic : activer / désactiver   ←  : Non   →  : Oui' if en.get('sw') else 'Entrée ou clic : ouvrir la liste   ←/→ : valeur précédente / suivante') + ('   Suppr ou bouton rond : valeur par défaut' if 'defaut' in en else '')
         if t == 'act' and en.get('aide'): return en['aide']
         if t == 'slot': return self.AIDE_ETATS[self.action_etat]
         if self.ecran == 'interface': return "Glisse l'élément choisi pour le placer   Échap ou clic droit : terminer   Tab : replier le panneau"
