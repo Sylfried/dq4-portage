@@ -189,7 +189,7 @@ class Jeu(pyglet.window.Window):
         self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
-        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
+        self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.cur_pas = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
@@ -930,7 +930,7 @@ class Jeu(pyglet.window.Window):
         viewer = ET.appliquer(mo, d)
         self.ui_g_reset()
         self.carte_nom = None; self.champ_cle = None; self.prec = None; self.canevas_cle = None; self.msg_cle = None
-        self.pad_prec = 0; self.rep = {}; self.menu_relacher = None; self.survol = None; self.appui = None; self.survol_nd = None; self.cur_local = {}; self.effet_ref = None; self.effet_tex_prete = False
+        self.pad_prec = 0; self.rep = {}; self.menu_relacher = None; self.survol = None; self.appui = None; self.survol_nd = None; self.cur_local = {}; self.cur_pas = {}; self.effet_ref = None; self.effet_tex_prete = False
         self.acc = 0.0; self.t_boucle = None; self.effet_ancre = {}
         self.n_combat = 0 if mo.etat.partie != MO.PARTIE_COMBAT else self.n_combat
         e = mo.etat
@@ -1603,6 +1603,7 @@ class Jeu(pyglet.window.Window):
         dirs = ((MO.HAUT, 2), (MO.BAS, 1), (MO.GAUCHE, 8), (MO.DROITE, 4))
         fe = self.ui_g.f.get(port) if self.ui_g else None
         z = {b: ((x0 + x1) / 2, (z0 + z1) / 2) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}
+        if not f.get('grille') and len(z) <= 1 and self._saisie_pas(port, f, fe, z, decl): return          # menu de saisie numerique (mise, jetons, montant) : fleches = colonnes et ▲ / ▼
         if f.get('grille') or len(z) < 1:
             for bit, pad in dirs:
                 if decl & bit:
@@ -1626,6 +1627,39 @@ class Jeu(pyglet.window.Window):
         if decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
         elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
         elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+
+    def _pas_colonnes(self, fe):
+        """Colonnes ▲ / ▼ d'un menu de saisie numerique (mise de la machine a sous et du poker, jetons, montant de la banque, pari de l'arene : Make_Casino_*, Make_Bank*) : numeros de bouton >= 0 qui ont
+        a la fois un element de manette 0x2 (▲, valeur + 1 rang) et un de manette 0x1 (▼), de gauche a droite. Vide pour les autres fenetres (les ▲ / ▼ de numero -1 sont des fleches de page)."""
+        if fe is None: return []
+        bs = fe.boutons(); haut = {b for b, pad, *_ in bs if b >= 0 and pad & 0x2}; bas = {b for b, pad, *_ in bs if b >= 0 and pad & 0x1}
+        cx = {b: (x0 + x1) / 2 for b, pad, x0, z0, x1, z1, _ in bs if b in haut & bas and pad & 0x3}
+        return sorted(cx, key=lambda b: cx[b])
+
+    def _pas_actif(self, port):
+        """Colonne ▲ / ▼ choisie au clavier dans un menu de saisie numerique (la plus a droite au depart : les unites), ou None si la fenetre n'en a pas (ou si elle a plusieurs boutons de validation : curseur ordinaire)."""
+        fe = self.ui_g.f.get(port) if self.ui_g else None; f = self.moteur.ui.f.get(port)
+        if fe is None or f is None or f.get('grille'): return None
+        cols = self._pas_colonnes(fe)
+        if not cols or sum(1 for b in fe.boutons() if b[0] >= 0 and b[1] & 0x10) > 1: return None
+        c = self.cur_pas.get((port, f['ordre'])); return c if c in cols else cols[-1]
+
+    def _saisie_pas(self, port, f, fe, z, decl):
+        """Menu de saisie numerique au clavier (les boutons ▲ / ▼ sont des touches de manette 0x2 / 0x1, hors du curseur local) : gauche / droite choisissent la colonne (dizaines, unites...), haut / bas = ▲ / ▼ de la colonne
+        (envoyes au moteur comme le toucher du bouton), A = le bouton de validation (Lancer, Donner, Valider), B = retour. Faux si la fenetre n'est pas de ce genre ou si aucune touche utile n'est pressee."""
+        if not decl & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE | MO.A | MO.B): return False
+        cols = self._pas_colonnes(fe)
+        if not cols: return False
+        mo = self.moteur; cle = (port, f['ordre']); act = self._pas_actif(port)
+        if act is None: return False
+        self.survol_nd = None                                                       # une touche : le curseur reprend la main
+        if decl & (MO.GAUCHE | MO.DROITE):
+            i = cols.index(act) + (1 if decl & MO.DROITE else -1); self.cur_pas[cle] = cols[min(max(i, 0), len(cols) - 1)]
+            if self.cur_pas[cle] != act: self.son.jouer_se(SE_BOUTON)
+        elif decl & (MO.HAUT | MO.BAS): mo.envoyer_menu(port, 1, act, 2 if decl & MO.HAUT else 1); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        elif decl & MO.A: mo.envoyer_menu(port, 1, next(iter(z), -1), 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        else: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+        return True
 
     def _port_depart(self, port):
         """Vrai si ce port est le menu de depart (type 53, Make_StartMenuSecond)."""
@@ -1677,6 +1711,8 @@ class Jeu(pyglet.window.Window):
         """Bouton en surbrillance du menu actif : curseur du moteur (messages 4) ou, sans curseur du moteur, curseur local des fleches."""
         f = self.moteur.ui.f[port]
         if f.get('grille'): return f['cur']
+        pas = self._pas_actif(port)
+        if pas is not None: return pas                                  # menu de saisie numerique : la colonne ▲ / ▼ choisie
         return self.cur_local.get((port, f['ordre']), f['cur'])
 
     def _ui_repere(self):
