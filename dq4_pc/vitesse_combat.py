@@ -1,15 +1,15 @@
 """Vitesse des combats : l'horloge du moteur pendant un combat (logique pure, sans fenetre ni moteur : testee par outils/test_vitesse_combat.py).
 
-Principe : le moteur d'origine avance par pas de 1 / 30 s (Time.fixedDeltaTime). La visionneuse lui fait faire, par seconde reelle, 1, 2 ou 3 fois plus de pas pendant un combat (reglage « Vitesse des combats » :
-Normal, Rapide, Tres rapide), au lieu de changer quoi que ce soit dans le moteur. Chaque pas est exactement celui du jeu : le resultat d'un combat (degats, ordre des actions, tirages au hasard, delais comptes en
+Principe : le moteur d'origine avance par pas de 1 / 30 s (Time.fixedDeltaTime). La visionneuse lui fait faire, par seconde reelle, 1, 2 ou 3 fois plus de pas pendant un combat (reglage « Vitesse de combat » :
+Manuel et Normal : 1 ; Rapide : 2 ; Tres rapide : 3), au lieu de changer quoi que ce soit dans le moteur. Chaque pas est exactement celui du jeu : le resultat d'un combat (degats, ordre des actions, tirages au hasard, delais comptes en
 images) ne depend donc pas de la vitesse ; seule la duree reelle change. Tout ce que la visionneuse anime pendant un combat est compte en pas du moteur (`moteur.images` + fraction `alpha`) : nombres de degats,
 secousses des plaques, fondus, effet de debut de combat, defilement des messages (ecrit par le moteur), animation des modeles 3D ; ils suivent donc l'horloge accelere.
 
 Ce qui n'est PAS accelere, a dessein :
   - la musique et les bruitages : ils sont lus par pyglet a leur vitesse normale (heures reelles, duree du fichier) ; seule la DATE de declenchement d'un bruitage suit le moteur. Si l'acceleration fait arriver le meme
     bruitage plusieurs fois dans la meme image affichee, il n'est lance qu'une fois (`sons_a_jouer`) ;
-  - les attentes de saisie du joueur (menu de commandes, choix de la cible, message « Manuel » qui attend une touche) : le moteur y tourne a vitesse normale (`facteur`), donc le curseur et les repetitions de touche
-    gardent leur cadence et les monstres leur animation de repos ;
+  - la LECTURE des touches pendant les attentes du joueur (menu de commandes, choix de la cible, message « Manuel » qui attend une touche) : le moteur y tourne a la vitesse du reglage (les monstres gardent leur animation
+    de repos a cette vitesse) mais seuls les pas a cadence normale (un toutes les 1 / 30 s reelles) lisent les touches ; les autres sont « muets » (fenetre.tick(muet=True)) : curseur et repetition des touches inchanges ;
   - la touche d'accelerateur : elle ne multiplie que la marche et la camera hors combat. `facteur` n'a volontairement aucun parametre pour elle."""
 import math
 
@@ -20,11 +20,11 @@ RATTRAPAGE = 3                           # au plus 3 pas de rattrapage par image
 VITESSE_MAX = 3.0
 
 
-def facteur(vitesse, en_combat, attend_saisie):
-    """Facteur d'horloge du moteur pendant un combat ; None hors combat (l'appelant applique alors la vitesse de marche). `vitesse` : reglage « Vitesse des combats » (1, 2 ou 3).
-    `attend_saisie` : le moteur attend le joueur (menu de commandes, cible, message qui attend une touche) : vitesse normale."""
+def facteur(vitesse, en_combat):
+    """Facteur d'horloge du moteur pendant un combat ; None hors combat (l'appelant applique alors la vitesse de marche). `vitesse` : reglage « Vitesse de combat » (0 Manuel, 1 Normal, 2 Rapide, 3 Tres rapide) :
+    Manuel et Normal gardent l'horloge du jeu (facteur 1 ; Manuel passe en plus les messages a la main, voir reglages.code_defilement). Meme quand le moteur attend le joueur (menu de commandes, cible, message qui attend
+    une touche) le facteur reste celui du reglage : les monstres gardent leur animation de repos a la vitesse choisie, et c'est la LECTURE des touches qui reste a cadence normale (pas muets, voir fenetre._faire_pas_combat)."""
     if not en_combat: return None
-    if attend_saisie: return 1.0
     try: v = float(vitesse)
     except (TypeError, ValueError): return 1.0
     if v != v: return 1.0

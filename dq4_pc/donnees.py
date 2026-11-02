@@ -133,7 +133,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte9_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte10_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -207,7 +207,10 @@ class Donnees:
                 for q in plp_obj.get(o['i'], ()):
                     if q['nom'] in tnom.get(key, '').rsplit('.', 1)[0]:
                         key = self._groupe_pam(q, pams[q['pam']], tex, pamdef) or key; break
-                mcol = np.array(mc, np.float32)                       # FldObject : fld_*.vert : couleur du sommet x _Color du materiau
+                # FldObject.save_org_color (init_fld, RVA 0xCD811C) : _OrgColor = (1, 1, 1, alpha de _Color) ; FldObject.update_material_color (a chaque image, 0xCD79F4) : Material.color = _OrgColor x FldObject.m_color
+                # (teinte du paquet 33, blanc par defaut). La couleur RGB de _Color enregistree dans l'asset n'est donc JAMAIS utilisee en jeu (elle rendait noirs les cedres, sous-bois et arbres du decor de
+                # nuit des combats : _Color = 0, 0, 0) ; seul son alpha compte. Shader fld_*.vert : couleur du sommet x _Color.
+                mcol = np.array((1.0, 1.0, 1.0, mc[3]), np.float32)
                 if genre == 'trans' and key is not None:               # materiau transparent : groupe a part, trace apres le decor opaque dans la file 3000 + priorite (FldObject.set_priority)
                     gk = ('tr', o['prio'], key)
                     if gk not in tex and key in tex: tex[gk] = tex[key]
@@ -390,7 +393,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte9_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte10_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))

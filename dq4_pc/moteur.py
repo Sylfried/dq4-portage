@@ -32,6 +32,8 @@ UI_MSGLOOP_ECRITURE = 0x128                # ui_MsgLoop + 0x128 : `sxth w20, w8`
 SXTH_W20_W8 = 0x13003d14
 COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
+HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
+TBZ_W20_0 = 0x36000094
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 
 
@@ -382,6 +384,7 @@ class Moteur:
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         self._crochets_texte()
         self._crochets_fondu()
+        self._crochets_niveau()
         self.capteur = Capteur(self)             # historique des messages : crochets sur TextBuffer::cat et sur l'objet fouille (installes avant la premiere image : Unicorn garde les blocs deja traduits)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
@@ -415,6 +418,21 @@ class Moteur:
                     if self.defilement is not None and self.rappel_defilement is not None and mu <= uc.reg_read(c.XREG[30]) < mu + 0x400: self.rappel_defilement(uc.reg_read(c.XREG[1]) & 0xff)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _sb, None, sb, sb)
         except Exception as ex: print('defilement des combats : crochet non installe :', ex, flush=True)
+
+    def _crochets_niveau(self):
+        """Option « PV et PM restaures au niveau superieur » (`soin_niveau`, faux = comme le jeu). Toute montee de niveau passe par `HaveStatus::levelup(bool)` : elle recalcule les caracteristiques, puis, si l'argument est vrai
+        (c'est le cas de `debugLevelup`), remet PV et PM a leur maximum (`tbz w20, #0` a +0x3f8 : PV <- PV max, PM <- PM max). Un crochet sur cette instruction force le bit quand l'option est active ; le reste du calcul est celui du jeu."""
+        c = self.core; self.soin_niveau = False
+        try:
+            a = c.export('_ZN6status10HaveStatus7levelupEb')
+            if not a or struct.unpack('<I', c.mem(a + HAVESTATUS_LEVELUP_FIN, 4))[0] != TBZ_W20_0:
+                print('PV/PM au niveau superieur : HaveStatus::levelup inattendu, option sans effet', flush=True); return
+            def _soin(uc, ad, sz, u):
+                if self.soin_niveau: uc.reg_write(c.XREG[20], uc.reg_read(c.XREG[20]) | 1)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _soin, None, a + HAVESTATUS_LEVELUP_FIN, a + HAVESTATUS_LEVELUP_FIN)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('PV/PM au niveau superieur : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree

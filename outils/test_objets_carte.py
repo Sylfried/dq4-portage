@@ -166,12 +166,12 @@ class TestMouvements(unittest.TestCase):
 
 
 def cartes_reelles():
-    """Cartes du cache de l'utilisateur (carte9_*.pkl) : `DQ_CACHE_CARTES`, sinon /tmp/uicache_coffres ; vide si le cache n'existe pas (les tests ci-dessous sont alors ignores)."""
+    """Cartes du cache de l'utilisateur (carte*_*.pkl) : `DQ_CACHE_CARTES`, sinon /tmp/uicache_coffres ; vide si le cache n'existe pas (les tests ci-dessous sont alors ignores)."""
     import glob
-    return sorted(glob.glob(os.path.join(os.environ.get('DQ_CACHE_CARTES', '/tmp/uicache_coffres'), 'carte9_*.pkl')))
+    return sorted(glob.glob(os.path.join(os.environ.get('DQ_CACHE_CARTES', '/tmp/uicache_coffres'), 'carte*_*.pkl')))
 
 
-@unittest.skipUnless(cartes_reelles(), 'pas de cache de cartes (carte9_*.pkl)')
+@unittest.skipUnless(cartes_reelles(), 'pas de cache de cartes (carte*_*.pkl)')
 class TestCartesReelles(unittest.TestCase):
     """Les vrais objets du jeu : tous les coffres (modele `tbox02` = le couvercle, `tbox01` = le corps), tiroirs (`hikidashi1b`) et portes de toutes les cartes, joues de bout en bout."""
 

@@ -208,7 +208,7 @@ class Jeu(pyglet.window.Window):
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
         self.son.precharger(SE_COURANTS)
-        self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
+        self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
@@ -615,7 +615,7 @@ class Jeu(pyglet.window.Window):
             else: self.pause.ouvrir()
             return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
-        if self.reg.action_de(symbol) == 'vit_combat': self.changer_vitesse_combat(); return pyglet.event.EVENT_HANDLED          # Normal -> Rapide -> Très rapide (en combat comme ailleurs)
+        if self.reg.action_de(symbol) == 'vit_combat': self.changer_vitesse_combat(); return pyglet.event.EVENT_HANDLED          # Manuel -> Normal -> Rapide -> Très rapide (en combat comme ailleurs)
         if self.reg.action_de(symbol) == 'historique' and self.titre is None and self.moteur.etat.partie in (MO.PARTIE_VILLE, MO.PARTIE_COMBAT, MO.PARTIE_CHAMP): self.pause.ouvrir('historique'); return pyglet.event.EVENT_HANDLED          # touche de l'historique des messages (meme pendant un message : le moteur s'arrete comme avec le menu Echap)
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
@@ -852,25 +852,21 @@ class Jeu(pyglet.window.Window):
     # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Vitesse de defilement du texte)
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
-    def defilement_actuel(self):
-        """Cran de « Messages en combat » en vigueur (RG.CRANS_DEFILEMENT : 0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) : celui du joueur s'il est impose, sinon celui du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
-        R = self.reg
-        return R['defilement_combat'] if R['defilement_force'] else RG.cran_defilement(self.moteur.options_jeu()[2])
-
-    def regler_defilement(self, code):
-        R = self.reg; R['defilement_combat'] = RG.cran_defilement(code); R['defilement_force'] = True
-        self.appliquer_defilement()
-
-    def retablir_defilement(self):
-        self.reg['defilement_force'] = False; self.appliquer_defilement()
+    def appliquer_jeu(self):
+        """Page « Jeu » du menu Echap : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
+        self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
-        R = self.reg
-        self.moteur.imposer_defilement(R['defilement_combat'] if R['defilement_force'] else None)
+        """« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon (RG.code_defilement) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente."""
+        self.moteur.imposer_defilement(RG.code_defilement(self.reg['vitesse_combat']))
+
+    def regler_vitesse_combat(self, v):
+        """Page Texte du menu Echap : nouvelle « Vitesse de combat » (prise en compte tout de suite, aussi en plein combat)."""
+        self.reg['vitesse_combat'] = RG.cran_combat(v); self.appliquer_defilement()
 
     def _adopter_defilement(self, code):
-        """Le joueur change la vitesse des messages dans la fenetre Parametres du jeu alors que le defilement est impose : ce nouveau choix remplace l'ancien."""
-        self.reg['defilement_combat'] = RG.cran_defilement(code)
+        """Le jeu change lui-meme la vitesse des messages (fenetre Parametres d'origine) : 4 -> Manuel, toute autre valeur -> sortie du Manuel (RG.vitesse_apres_code_jeu)."""
+        self.reg['vitesse_combat'] = RG.vitesse_apres_code_jeu(code, self.reg['vitesse_combat'])
         self.appliquer_defilement()
 
     def pause_jeu(self, oui):
@@ -1064,6 +1060,33 @@ class Jeu(pyglet.window.Window):
             pos = pos + fw * DIST_ADJ_VILLE
         droite = np.cross(haut, fw); droite /= np.linalg.norm(droite)
         return pos, droite, np.cross(fw, droite), fw
+
+    ancre_combat = None                                                # rattachement du bouton de vitesse de combat (voir _ancrer_vitesse_combat et hud_mobile.Boutons.ancre)
+
+    def _ancrer_vitesse_combat(self, liste, msg, dz, s, cx, repere, tf_msg):
+        """Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Parmi les fenetres visibles,
+        on prend celle dont le cadre descend le plus bas ; la plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
+        -> self.ancre_combat = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre) ; inchange tant qu'aucune boite n'est visible (la plaque reste la ou elle etait)."""
+        if self.moteur.etat.partie != MO.PARTIE_COMBAT: self.ancre_combat = None; return
+        cands = []; dims = None
+        if msg and self.ui_msg is not None:
+            c = self.ui_msg.N.get('cadre')
+            if c and c['vtx']:
+                tf = tf_msg or (cx, repere('msg')[0] + dz * s, s)
+                cands.append((tf[1] + min(c['pos'][2] + v[1] for v in c['vtx']) * tf[2], tf[0] + min(c['pos'][0] + v[0] for v in c['vtx']) * tf[2], None))
+        for _, p in liste:
+            fe = self.ui_g.f[p]
+            if p in self.ui_suit or self._cachee(fe.typ): continue
+            rs = fe.rects(); tf = self.ui_tf.get(p)
+            if not rs or tf is None: continue
+            cad = max(rs, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))                          # le cadre de la fenetre : le plus grand rectangle
+            fuir = [r for r in rs if r is not cad and r[3] <= cad[1] + 2.0 and r[2] >= cad[2] - 12.0]          # plaque accrochee sous le cadre, a son bord droit
+            d = (min((r[2] - r[0]) * tf[2] for r in fuir), min((r[3] - r[1]) * tf[2] for r in fuir)) if fuir else None
+            cands.append((tf[1] + cad[1] * tf[2], tf[0] + cad[0] * tf[2], d))
+        if not cands: return
+        bas, gauche, d = min(cands, key=lambda c: c[0])
+        d = d or (self.ancre_combat and self.ancre_combat.get('w') and (self.ancre_combat['w'], self.ancre_combat['h'])) or None
+        self.ancre_combat = dict(x=gauche, y=bas, w=d[0] if d else None, h=d[1] if d else None)
 
     def _ancrer_effets(self, e):
         """Effets-maillages de la ville (paquets 21 / 22) : le moteur pose l'effet sur le rayon de SA camera, entre elle et le personnage (sort Morph, eclaboussure de la grenouille : a mi-chemin exactement,
@@ -2188,6 +2211,7 @@ class Jeu(pyglet.window.Window):
                 if self._cachee(self.ui_g.f[p].typ): continue
                 if self.ui_g.f[p].typ in FENETRES_CENTREES: self._cadre_depart(self.ui_g.f[p], tf[0], tf[1], tf[2], True)
                 self.ui_rendu.dessiner([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
+            self._ancrer_vitesse_combat(liste, msg, dz, s, cx, repere, tf_msg)
         fens = [(p, f) for p, f in mo.ui.visibles() if not (self.ui_g and p in self.ui_g.f)]
         if not fens: return
         ech = self.height / 720.0; W, H = self.width, self.height
@@ -2397,7 +2421,7 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
-        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True, self._attend_joueur())          # combat : « Vitesse des combats » seule (Normal, Rapide, Très rapide) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
@@ -2408,27 +2432,33 @@ class Jeu(pyglet.window.Window):
 
     def _horloge_combat(self):
         """Le jeu est-il dans un combat, au sens de l'horloge du moteur ? Partie « combat » du moteur (0xd), mais aussi l'effet d'ecran qui le lance et l'ecran noir qui attend le chargement de sa scene (Etat.effet,
-        Etat.attente_charge : seul un combat les leve). Hors de cela la vitesse des combats n'a aucun effet (la marche garde ses reglages) ; en combat, au contraire, la marche et l'accelerateur n'en ont plus."""
+        Etat.attente_charge : seul un combat les leve). Hors de cela la vitesse de combat n'a aucun effet (la marche garde ses reglages) ; en combat, au contraire, la marche et l'accelerateur n'en ont plus."""
         e = self.moteur.etat
         return e.partie == MO.PARTIE_COMBAT or e.effet is not None or e.attente_charge is not None
 
     def _attend_joueur(self):
-        """Le moteur attend-il le joueur en combat ? Menu qui a la saisie (commandes, cible, sorts, objets, Oui / Non) ou message qui montre son curseur ▼ (« Messages en combat » Manuel : une touche est attendue). Le moteur
-        n'avance alors qu'a vitesse normale : curseur et repetition des touches inchangés, monstres a leur animation de repos habituelle. (Le dernier message d'un combat attend aussi une touche sans montrer le curseur :
-        non detectable, le moteur y tourne vite sans rien faire d'autre qu'attendre.)"""
+        """Le moteur attend-il le joueur en combat ? Menu qui a la saisie (commandes, cible, sorts, objets, Oui / Non) ou message qui montre son curseur ▼ (Manuel : une touche est attendue). Les touches ne sont alors lues qu'au rythme
+        normal (pas « muets » entre deux lectures, voir _faire_pas_combat) : curseur et repetition des touches inchanges, alors que les monstres suivent la vitesse de combat. (Le dernier message d'un combat attend aussi une touche
+        sans montrer le curseur : non detectable, ses pas supplementaires sont donc lus comme des pas ordinaires.)"""
         mo = self.moteur
         return mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed'))
 
+    _t_pas_reel = 0.0                                                  # heure du dernier pas qui a lu les touches (combat accelere : voir _faire_pas_combat)
+
     def _faire_pas_combat(self):
-        """Un pas du moteur pendant un combat accelere ; renvoie False quand le moteur vient d'ouvrir un menu ou d'attendre une touche (on n'enchaine pas d'autres pas dans la meme image affichee)."""
-        self._pas()
-        return not self._attend_joueur()
+        """Un pas du moteur pendant un combat accelere. Quand le moteur attend le joueur, seul un pas sur (f) lit les touches et les clics, a cadence normale (un par 1 / 30 s reelles) ; les autres sont muets : le moteur avance
+        (animation de repos des monstres, fenetres) a la vitesse choisie, sans qu'un curseur ni une repetition de touche aille plus vite. Toujours True : on continue jusqu'au bout du rattrapage."""
+        t = time.perf_counter()
+        muet = self._attend_joueur() and t - self._t_pas_reel < PAS_MOTEUR * VC.TOLERANCE
+        if not muet: self._t_pas_reel = t
+        self._pas(muet)
+        return True
 
     def changer_vitesse_combat(self, source='touche'):
-        """Touche « Touche de vitesse des combats » ou bouton de l'ecran de combat : Normal -> Rapide -> Très rapide -> Normal. Le reglage change tout de suite (la page Commandes le relit) et est enregistre ; pris en compte
-        au pas suivant. Sans le bouton a l'ecran (masque, ou hors combat), un message bref annonce la nouvelle vitesse."""
-        v = RG.combat_suivant(self.reg['vitesse_combat']); self.reg['vitesse_combat'] = v; self.reg.enregistrer()
-        if source == 'touche' and not self.hud.visibles(): self.toast('Vitesse des combats : %s' % RG.NOMS_VITESSE_COMBAT[v])
+        """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la page Texte le relit), est enregistre et gouverne aussi le
+        defilement des messages (Manuel : a la main). Sans le bouton a l'ecran (masque, ou hors combat), un message bref annonce la nouvelle vitesse."""
+        v = RG.combat_suivant(self.reg['vitesse_combat']); self.reg['vitesse_combat'] = v; self.appliquer_defilement(); self.reg.enregistrer()
+        if source == 'touche' and not self.hud.visibles(): self.toast('Vitesse de combat : %s' % RG.NOMS_VITESSE_COMBAT[v])
 
     def _touches_test(self):
         """(test) touches pressees a une image de boucle n, ou "cN+k" = k images de boucle apres que le combat a atteint N images : 'n:NOM' (NOM = nom de touche pyglet ;
@@ -2481,11 +2511,11 @@ class Jeu(pyglet.window.Window):
                 if isinstance(v, list): v = tuple(v)
                 (en['set'](v) if en['t'] == 'choix' else en['saisie'](float(v))); print('OPTION %s = %s (image %d)' % (lib, val, n), flush=True)
 
-    def _pas(self):
+    def _pas(self, muet=False):
         self.prec = self._instantane()
         self.pas_t.append(time.perf_counter())
         t0 = time.perf_counter()
-        self.tick(PAS_MOTEUR)
+        self.tick(PAS_MOTEUR, muet)
         self._ancrer_effets(self.moteur.etat)
         self._mesure('pas', t0)
 
@@ -2537,22 +2567,10 @@ class Jeu(pyglet.window.Window):
                 else: obj[nom] = ancien
             self._mesure('dessin', t0)
 
-    def tick(self, dt):
-        p = self.args.script.get(self.n, self.pad()) if self.args.script is not None else self.pad()
-        if self.args.slot and self.args.auto_message and self.n < 112:
-            # (test) ferme le message d'accueil automatiquement
-            p = MO.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
-        if self.args.script_combat is not None and self.n_combat > 0: p = self.args.script_combat.get(self.n_combat, 0)
-        if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
-        if os.environ.get('DQ_SPR') and self.n == 100: print('SPRITES', {k: (sp['id'], tuple(round(float(x), 2) for x in sp['pos']) if sp['pos'] is not None else None, sp.get('pose'), sp.get('dir'), sp.get('vis', True)) for k, sp in self.moteur.etat.sprites.items()}, 'icones', self.moteur.etat.icones, flush=True)
-        if os.environ.get('DQ_VILLE') and self.n == 30: self.moteur.demarrer_ville(os.environ['DQ_VILLE'])        # (test) charge cette ville ou ce donjon
-        if self.args.clics:                                                # (test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
-            for c in self.args.clics:
-                if c[3] == 2:                                              # d = 2 : survol sans clic
-                    if self.n == c[0]: self.on_mouse_motion(c[1], self.height - c[2], 0, 0)
-                    continue
-                if self.n == c[0]: (self.on_mouse_press(c[1], self.height - c[2], pyglet.window.mouse.RIGHT if c[3] else pyglet.window.mouse.LEFT, 0))
-                if self.n == c[0] + 3: self.on_mouse_release(c[1], self.height - c[2], pyglet.window.mouse.LEFT, 0)
+    def _entrees(self, p):
+        """Touches et clics de ce pas du moteur -> (p, decl) : boutons tenus et boutons qui viennent d'etre presses, tels que le moteur les veut (menu qui a la saisie : tout passe par `_saisie_menu`, p = decl = 0).
+        Seulement dans les pas « reels » : un pas supplementaire d'un combat accelere (`tick(muet=True)`) n'en lit aucune, pour que la cadence des touches (repetition des fleches, premier appui) ne change pas."""
+        mo = self.moteur
         if self.clic_a: p |= MO.A; self.clic_a = False                  # clics de souris : page suivante / annuler
         if self.clic_b: p |= MO.B; self.clic_b = False
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
@@ -2605,6 +2623,28 @@ class Jeu(pyglet.window.Window):
             elif fr['discussion']: decl = BTN_DISCUSSION
             elif fr['carte']: decl = BTN_CARTE
             p &= ~(MO.A | MO.B)
+        return p, decl
+
+    def tick(self, dt, muet=False):
+        """Un pas du moteur (30 par seconde d'horloge de jeu). `muet` : pas supplementaire d'un combat accelere pendant que le moteur attend le joueur (menu, message qui attend une touche) : le moteur avance (animations des monstres,
+        fenetres, minuteries) sans aucune touche ni clic, ceux-ci restant lus au rythme normal (voir _faire_pas_combat)."""
+        p = self.args.script.get(self.n, self.pad()) if self.args.script is not None else self.pad()
+        if self.args.slot and self.args.auto_message and self.n < 112:
+            # (test) ferme le message d'accueil automatiquement
+            p = MO.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
+        if self.args.script_combat is not None and self.n_combat > 0: p = self.args.script_combat.get(self.n_combat, 0)
+        if self.args.force_champ and self.n == self.args.force_champ: self.moteur.demarrer_champ()
+        if os.environ.get('DQ_SPR') and self.n == 100: print('SPRITES', {k: (sp['id'], tuple(round(float(x), 2) for x in sp['pos']) if sp['pos'] is not None else None, sp.get('pose'), sp.get('dir'), sp.get('vis', True)) for k, sp in self.moteur.etat.sprites.items()}, 'icones', self.moteur.etat.icones, flush=True)
+        if os.environ.get('DQ_VILLE') and self.n == 30: self.moteur.demarrer_ville(os.environ['DQ_VILLE'])        # (test) charge cette ville ou ce donjon
+        if self.args.clics:                                                # (test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
+            for c in self.args.clics:
+                if c[3] == 2:                                              # d = 2 : survol sans clic
+                    if self.n == c[0]: self.on_mouse_motion(c[1], self.height - c[2], 0, 0)
+                    continue
+                if self.n == c[0]: (self.on_mouse_press(c[1], self.height - c[2], pyglet.window.mouse.RIGHT if c[3] else pyglet.window.mouse.LEFT, 0))
+                if self.n == c[0] + 3: self.on_mouse_release(c[1], self.height - c[2], pyglet.window.mouse.LEFT, 0)
+        p, decl = (0, 0) if muet else self._entrees(p)
+        mo = self.moteur
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0

@@ -1,4 +1,4 @@
-"""Test de la vitesse des combats (Normal / Rapide / Tres rapide) : reglage, cycle, horloge du moteur, independance de l'accelerateur, musique et bruitages non accelerees, bouton de l'ecran de combat.
+"""Test de la vitesse de combat (Manuel / Normal / Rapide / Tres rapide) : reglage, cycle, horloge du moteur, independance de l'accelerateur, musique et bruitages non accelerees, bouton de l'ecran de combat.
 Sans fenetre ni moteur (faux objets) ; la partie « moteur reel » est facultative : DQ_APK=<dossier des APK> DQ_SAVES=<dossier des sauvegardes> la lance (rejeu d'un combat a 1, 2 et 3 pas par image).
 
     python3 outils/test_vitesse_combat.py       (Linux sans ecran : pyglet en mode « headless »)
@@ -31,14 +31,14 @@ def charger(contenu):
 class Reglage(unittest.TestCase):
     def test_defaut_normal(self):
         r = RG.Reglages(None); self.assertEqual(r['vitesse_combat'], 1.0); self.assertEqual(RG.DEFAUT['vitesse_combat'], 1.0)
-        self.assertEqual(RG.VITESSES_COMBAT, (1.0, 2.0, 3.0))
+        self.assertEqual(RG.VITESSES_COMBAT, (0.0, 1.0, 2.0, 3.0))
 
     def test_libelles_jamais_x(self):
-        self.assertEqual([RG.NOMS_VITESSE_COMBAT[v] for v in RG.VITESSES_COMBAT], ['Normal', 'Rapide', 'Très rapide'])
+        self.assertEqual([RG.NOMS_VITESSE_COMBAT[v] for v in RG.VITESSES_COMBAT], ['Manuel', 'Normal', 'Rapide', 'Très rapide'])
         self.assertFalse(any(re.search(r'\bx\d', n) for n in RG.NOMS_VITESSE_COMBAT.values()))
 
     def test_validation(self):
-        for brut, attendu in ((1, 1.0), (2, 2.0), (3, 3.0), (1.0, 1.0), (2.4, 2.0), (1.5, 2.0), (2.5, 3.0), (0, 1.0), (-4, 1.0), (4, 3.0), (99, 3.0), (float('inf'), 3.0), (float('-inf'), 1.0),
+        for brut, attendu in ((0, 0.0), (1, 1.0), (2, 2.0), (3, 3.0), (1.0, 1.0), (2.4, 2.0), (1.5, 2.0), (2.5, 3.0), (0.4, 0.0), (0.5, 1.0), (-4, 0.0), (4, 3.0), (99, 3.0), (float('inf'), 3.0), (float('-inf'), 0.0),
                               (float('nan'), 1.0), ('2', 1.0), ('x', 1.0), (None, 1.0), (True, 1.0), (False, 1.0), ([2], 1.0), ({'a': 2}, 1.0)):
             self.assertEqual(RG.cran_combat(brut), attendu, repr(brut))
             r, _ = charger({'vitesse_combat': brut}); self.assertEqual(r['vitesse_combat'], attendu, 'fichier : %r' % (brut,))
@@ -46,8 +46,8 @@ class Reglage(unittest.TestCase):
 
     def test_cycle(self):
         v = 1.0; vus = []
-        for _ in range(7): v = RG.combat_suivant(v); vus.append(v)
-        self.assertEqual(vus, [2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0])                                   # Normal -> Rapide -> Très rapide -> Normal
+        for _ in range(9): v = RG.combat_suivant(v); vus.append(v)
+        self.assertEqual(vus, [2.0, 3.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1.0, 2.0])                         # Normal -> Rapide -> Très rapide -> Manuel -> Normal
         self.assertEqual(RG.combat_suivant('x'), 2.0); self.assertEqual(RG.combat_suivant(None), 2.0)    # valeur invalide : lue comme Normal
 
     def test_enregistrement(self):
@@ -60,7 +60,7 @@ class Reglage(unittest.TestCase):
         for a, ts in RG.TOUCHES_DEF.items():
             if a != 'vit_combat': self.assertNotIn('V', ts, a)                                      # aucun conflit avec les touches existantes
         self.assertNotIn('V', RG.RESERVEES)
-        self.assertIn('vit_combat', dict(RG.ACTIONS)); self.assertEqual(dict(RG.ACTIONS)['vit_combat'], 'Touche de vitesse des combats')
+        self.assertIn('vit_combat', dict(RG.ACTIONS)); self.assertEqual(dict(RG.ACTIONS)['vit_combat'], 'Changer la vitesse en combat')
         r = RG.Reglages(None); self.assertEqual(r['touches']['vit_combat'], ['V', None]); self.assertEqual(r.action_de(RG.symbole('V')), 'vit_combat')
 
     def test_ancien_fichier_prend_la_touche_par_defaut(self):
@@ -74,17 +74,38 @@ class Reglage(unittest.TestCase):
 
 class Facteur(unittest.TestCase):
     def test_hors_combat_rien(self):
-        for v in (1.0, 2.0, 3.0): self.assertIsNone(VC.facteur(v, False, False))
+        for v in (0.0, 1.0, 2.0, 3.0): self.assertIsNone(VC.facteur(v, False))
 
     def test_combat(self):
-        self.assertEqual([VC.facteur(v, True, False) for v in (1.0, 2.0, 3.0)], [1.0, 2.0, 3.0])
-
-    def test_attente_du_joueur_vitesse_normale(self):
-        for v in (1.0, 2.0, 3.0): self.assertEqual(VC.facteur(v, True, True), 1.0)
+        self.assertEqual([VC.facteur(v, True) for v in (0.0, 1.0, 2.0, 3.0)], [1.0, 1.0, 2.0, 3.0])            # Manuel et Normal : l'horloge du jeu
 
     def test_valeurs_absurdes(self):
-        self.assertEqual(VC.facteur(9, True, False), 3.0); self.assertEqual(VC.facteur(0.2, True, False), 1.0)
-        for v in (None, 'x', float('nan')): self.assertEqual(VC.facteur(v, True, False), 1.0)
+        self.assertEqual(VC.facteur(9, True), 3.0); self.assertEqual(VC.facteur(0.2, True), 1.0)
+        for v in (None, 'x', float('nan')): self.assertEqual(VC.facteur(v, True), 1.0)
+
+
+class DefilementDesMessages(unittest.TestCase):
+    """La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon."""
+    def test_code_impose(self):
+        self.assertEqual([RG.code_defilement(v) for v in (0.0, 1.0, 2.0, 3.0)], [4, 2, 2, 2])
+        self.assertEqual(RG.code_defilement('x'), 2); self.assertEqual(RG.code_defilement(None), 2)             # valeur invalide : Normal
+
+    def test_le_jeu_change_la_vitesse_des_messages(self):
+        self.assertEqual(RG.vitesse_apres_code_jeu(4, 2.0), 0.0)                                              # Manuel choisi dans le jeu
+        self.assertEqual(RG.vitesse_apres_code_jeu(0, 0.0), 1.0); self.assertEqual(RG.vitesse_apres_code_jeu(3, 0.0), 1.0)      # autre valeur : on sort du Manuel (Normal)
+        self.assertEqual(RG.vitesse_apres_code_jeu(0, 3.0), 3.0); self.assertEqual(RG.vitesse_apres_code_jeu(2, 2.0), 2.0)      # hors Manuel : le cran est garde
+        self.assertEqual(RG.vitesse_apres_code_jeu('x', 2.0), 2.0)
+
+    def test_ancien_reglage_messages_en_combat(self):
+        r, _ = charger({'defilement_force': True, 'defilement_combat': 4, 'vitesse_combat': 3.0}); self.assertEqual(r['vitesse_combat'], 0.0)           # ancien « Manuel » : devient la vitesse Manuel
+        for ancien in (0, 2, 3):                                                                              # autres crans : plus d'equivalent, la vitesse de combat enregistree reste
+            r, _ = charger({'defilement_force': True, 'defilement_combat': ancien, 'vitesse_combat': 2.0}); self.assertEqual(r['vitesse_combat'], 2.0)
+        r, _ = charger({'defilement_force': False, 'defilement_combat': 4, 'vitesse_combat': 2.0}); self.assertEqual(r['vitesse_combat'], 2.0)       # non impose : la sauvegarde du jeu decidait, pas le joueur
+        r, _ = charger({'defilement_auto': False, 'defilement_force': True}); self.assertEqual(r['vitesse_combat'], 0.0)      # tout ancien « Defilement automatique : non » impose
+        r, _ = charger({'defilement_auto': False}); self.assertEqual(r['vitesse_combat'], 1.0)                 # (rien n'etait impose : la sauvegarde du jeu decidait)
+        r, _ = charger({'defilement_force': True, 'defilement_combat': 4}); r.enregistrer()
+        with open(r.chemin, encoding='utf-8') as fh: d = json.load(fh)
+        self.assertEqual(d['vitesse_combat'], 0.0); self.assertNotIn('defilement_force', d); self.assertNotIn('defilement_combat', d)           # les anciennes cles disparaissent du fichier
 
 
 class Horloge(unittest.TestCase):
@@ -208,9 +229,9 @@ class IndependanceAccelerateur(unittest.TestCase):
         return j
 
     def test_l_accelerateur_n_accelere_pas_le_combat(self):
-        for v in (1.0, 2.0, 3.0):
+        for v in (0.0, 1.0, 2.0, 3.0):
             for marche, accel, tenue in ((1.0, 1.0, False), (4.0, 2.0, True), (4.0, 2.0, False), (1.0, 2.0, True), (3.0, 1.5, True)):
-                j = self.faux(MO.PARTIE_COMBAT, v, marche, accel, tenue); self.assertEqual(j.facteur(), v, 'combat x%g, marche x%g, accelerateur x%g tenu=%s' % (v, marche, accel, tenue))      # ni cumule ni applique
+                j = self.faux(MO.PARTIE_COMBAT, v, marche, accel, tenue); self.assertEqual(j.facteur(), max(1.0, v), 'combat x%g, marche x%g, accelerateur x%g tenu=%s' % (v, marche, accel, tenue))      # ni cumule ni applique
 
     def test_hors_combat_la_marche_garde_ses_reglages(self):
         for partie in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP):
@@ -225,19 +246,33 @@ class IndependanceAccelerateur(unittest.TestCase):
         self.assertEqual(self.faux(MO.PARTIE_CHAMP, 2.0, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 2.0)      # ecran noir avant la scene du combat
         self.assertEqual(self.faux(MO.PARTIE_CHAMP, 1.0, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)       # Normal : comme avant (marche et accelerateur n'y comptaient deja pas)
 
-    def test_attentes_de_saisie_a_vitesse_normale(self):
-        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, menu=13).facteur(), 1.0)                              # menu de commandes, de cible...
-        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, msg=True, feed=True).facteur(), 1.0)                  # message « Manuel » qui attend une touche (curseur ▼)
-        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, msg=True, feed=False).facteur(), 3.0)                 # message qui defile seul : accelere
-        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 2.0).facteur(), 2.0)
+    def test_attentes_de_saisie_gardent_la_vitesse_choisie(self):
+        """Les monstres suivent la vitesse de combat meme pendant les menus : l'horloge reste celle du reglage ; seule la lecture des touches est a cadence normale (pas muets : test suivant)."""
+        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, menu=13).facteur(), 3.0)                              # menu de commandes, de cible...
+        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, msg=True, feed=True).facteur(), 3.0)                  # message qui attend une touche (curseur ▼)
+        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 3.0, msg=True, feed=False).facteur(), 3.0)                 # message qui defile seul
+        self.assertEqual(self.faux(MO.PARTIE_COMBAT, 2.0).facteur(), 2.0); self.assertEqual(self.faux(MO.PARTIE_COMBAT, 0.0, menu=13).facteur(), 1.0)      # Manuel : l'horloge du jeu
+
+    def test_pas_muets_pendant_les_attentes(self):
+        """Moteur en attente du joueur : un seul pas sur f lit les touches (un par 1 / 30 s reelles), les autres sont muets ; sinon tous les pas sont ordinaires."""
+        from unittest import mock
+        attend = [True]; appels = []; h = [100.0]
+        j = types.SimpleNamespace(_t_pas_reel=0.0, _attend_joueur=lambda: attend[0], _pas=lambda muet=False: appels.append(muet))
+        with mock.patch.object(F.time, 'perf_counter', lambda: h[0]):
+            for _ in range(3): self.assertTrue(F.Jeu._faire_pas_combat(j))                                      # 1er pas : lit les touches ; les 2 suivants (meme image affichee) : muets
+            self.assertEqual(appels, [False, True, True]); h[0] += PAS; F.Jeu._faire_pas_combat(j); self.assertEqual(appels[-1], False)       # 1 / 30 s plus tard : un pas qui lit les touches
+            attend[0] = False; appels.clear()
+            for _ in range(3): F.Jeu._faire_pas_combat(j)
+            self.assertEqual(appels, [False, False, False])                                                     # le moteur ne tient pas le joueur : tous les pas sont ordinaires
 
     def test_se_changer_sans_quitter_le_combat(self):
-        """Touche ou bouton : le reglage change, est enregistre et pris en compte au pas suivant ; un message bref l'annonce si le bouton n'est pas a l'ecran."""
-        r = RG.Reglages(None); sauve = []; r.enregistrer = lambda: sauve.append(r['vitesse_combat'])
+        """Touche ou bouton : le reglage change, est enregistre, le defilement des messages suit (Manuel : a la main) et un message bref l'annonce si le bouton n'est pas a l'ecran."""
+        r = RG.Reglages(None); sauve = []; r.enregistrer = lambda: sauve.append(r['vitesse_combat']); imposes = []
         toasts = []; vis = [()]
-        j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), toast=toasts.append)
-        for attendu in (2.0, 3.0, 1.0, 2.0): F.Jeu.changer_vitesse_combat(j); self.assertEqual(r['vitesse_combat'], attendu)
-        self.assertEqual(sauve, [2.0, 3.0, 1.0, 2.0]); self.assertEqual(toasts, ['Vitesse des combats : Rapide', 'Vitesse des combats : Très rapide', 'Vitesse des combats : Normal', 'Vitesse des combats : Rapide'])
+        j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), toast=toasts.append, appliquer_defilement=lambda: imposes.append(RG.code_defilement(r['vitesse_combat'])))
+        for attendu in (2.0, 3.0, 0.0, 1.0, 2.0): F.Jeu.changer_vitesse_combat(j); self.assertEqual(r['vitesse_combat'], attendu)
+        self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [2, 2, 4, 2, 2])
+        self.assertEqual(toasts, ['Vitesse de combat : Rapide', 'Vitesse de combat : Très rapide', 'Vitesse de combat : Manuel', 'Vitesse de combat : Normal', 'Vitesse de combat : Rapide'])
         vis[0] = (HM.COMBAT,); toasts.clear(); F.Jeu.changer_vitesse_combat(j); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])      # bouton a l'ecran : il montre deja la vitesse
         vis[0] = (); toasts.clear(); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])
 
@@ -314,7 +349,7 @@ class BoutonDeLEcran(unittest.TestCase):
         r = RG.Reglages(None); r['boutons_pos'] = dict(J.reg['boutons_pos']); r.remettre_interface(RG.CIBLE_ECRAN); self.assertEqual(r['boutons_pos'], {})        # « Rétablir cette interface » le remet en place
 
     def test_libelle_de_l_editeur(self):
-        self.assertEqual(HM.LIBELLE[HM.COMBAT], 'Vitesse des combats')
+        self.assertEqual(HM.LIBELLE[HM.COMBAT], 'Vitesse de combat')
 
 
 @unittest.skipUnless(os.environ.get('DQ_APK') and os.environ.get('DQ_SAVES') and MO is not None, 'moteur reel : DQ_APK et DQ_SAVES requis')
@@ -350,7 +385,7 @@ class RejeuMoteur(unittest.TestCase):
             return not (mo.menu_actif() is not None or (mo.msg_visible and mo.ui.msg.get('feed')))
         h = [0.0]; acc = 0.0; images = 0
         while mo.etat.partie == MO.PARTIE_COMBAT and etat['k'] < self.PAS_MAX:
-            fac = VC.facteur(f, True, mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed')))
+            fac = VC.facteur(f, True); fac = 1.0 if (mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed'))) else fac      # (le rejeu lit les touches a chaque pas : attente = vitesse normale, comme avant les pas muets)
             acc, _, _ = VC.avancer(acc, 1.0 / 60.0, fac, faire, lambda: h[0]); h[0] += 1.0 / 60.0; images += 1
         return trace[:self.PAS_MAX], images
 
