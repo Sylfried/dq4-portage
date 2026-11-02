@@ -1539,7 +1539,7 @@ class Jeu(pyglet.window.Window):
                         print('CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s' % (self.moteur.images, g, self.moteur.ui.msg, self.moteur.params_message()), flush=True)
             m = self.moteur.ui.msg; typ = m['type']
             if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
-            self.ui_msg.regler(typ, m['y'], m['feed'])
+            self.ui_msg.regler(typ, m['y'], m['feed'], m.get('qui', ''))
             return
         a = self.moteur.lire_message()
         if a is None: self.msg_img = None; return
