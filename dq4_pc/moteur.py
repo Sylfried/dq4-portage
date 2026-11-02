@@ -95,7 +95,7 @@ class Etat:
         self.fondu = self._plan_fondu(); self.fondu_fond = self._plan_fondu()      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir. DEUX plans (Fade.l_fade, bit 14 de l'entier du paquet 9 = Fade.l_targetLayer) : 0 = « FadeForMenu » (shader Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris) ; 1 = « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres)
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
-        self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'img': image du paquet 0, 'n': images ecoulees, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
+        self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
@@ -225,7 +225,7 @@ class Etat:
                                                                           # un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
                                                                           # du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
         if charge:         # chargement de carte : dessin retenu (voir maj_chargement) si l'ecran est couvert, soit par un fondu deja la, soit par le fondu d'entree lance avec ce chargement (il repart de l'opacite 1)
-            if couvert or any(fd['a'] >= CHARGEMENT_COUVERT and fd['fin'] == 0.0 and fd['n'] >= 1 for fd in (self.fondu, self.fondu_fond)): self.chargement = {'img': self.image, 'n': 0, 'cam': cam_vue}
+            if couvert or any(fd['a'] >= CHARGEMENT_COUVERT and fd['fin'] == 0.0 and fd['n'] >= 1 for fd in (self.fondu, self.fondu_fond)): self.chargement = {'n': -1, 'cam': cam_vue}
             else: self.chargement = None
 
     def _fondu(self, v, f):
@@ -251,7 +251,7 @@ class Etat:
         une image plus tard, sur une scene complete. Prete : au moins CHARGEMENT_MIN image, camera recue, et personnages visibles tous places (au plus CHARGEMENT_PLACEMENT images d'attente) ; garde-fou CHARGEMENT_MAX."""
         ch = self.chargement
         if ch is None: return
-        ch['n'] = self.image - ch['img']
+        ch['n'] += 1                                                       # images du moteur depuis le chargement (0 a l'image du chargement : compte propre, pas de difference d'images : un etat charge peut remettre le compteur d'images a zero)
         places = all(sp['pos'] is not None for sp in self.sprites.values() if sp.get('vis', True))
         monde = self.partie != PARTIE_CHAMP or self.champ is not None      # carte du monde : attendre aussi ses tuiles (paquet 28)
         if ch['n'] >= CHARGEMENT_MAX or (ch['n'] >= CHARGEMENT_MIN and monde and ch['cam'] and (places or ch['n'] >= CHARGEMENT_PLACEMENT)): self.chargement = None
