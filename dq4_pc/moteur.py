@@ -90,13 +90,14 @@ class Etat:
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
+        self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
         self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
     def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0)
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0))
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
@@ -104,9 +105,13 @@ class Etat:
         self.maillages_vus = set()
         for t, a, f in paquets:
             if t == 0:
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear()
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0)      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
+            elif t == 33 and len(f) >= 3:           # cmd_map_color_rate (D14E44) : r, g, b ; FldObject.m_color = (r, g, b, 1) (decor des villes et des combats : FldObject.update_material_color, a chaque image, Material.color = _OrgColor (1, 1, 1, alpha) x m_color, sauf les materiaux dont la texture a « tz_ » dans son nom) ; sur la carte du monde : Field.SetColor (tuiles et symboles)
+                self.teinte = (float(f[0]), float(f[1]), float(f[2]))
+            elif t == 27:                           # cmd_field_load : Field.Init, materiau neuf (couleur blanche) ; le moteur renvoie la teinte de la carte du monde ensuite
+                self.teinte = (1.0, 1.0, 1.0)
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
                 self.champ = {'x0': a[0], 'y0': a[1], 'cols': a[2], 'tuiles': a[4:4 + a[3]], 'cam': (f[0], f[1]) if len(f) >= 2 else None}
             elif t == 29 and a:                     # FieldData::draw_symbol : idx | genre << 8 + [x, y, alpha] ; 0x8000 | idx = cacher ; 0xc000 | idx = remontrer
@@ -117,7 +122,7 @@ class Etat:
                     if i in self.symboles: self.symboles[i]['vis'] = False
                 elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
-                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True}
+                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True, 'ech': 1.0}
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
@@ -197,7 +202,9 @@ class Etat:
             elif t == 13 and a:
                 fl = list(f); flags = a[0]; s = self.sprites.get(flags & 0x7ff)
                 if s is None: continue
-                if flags & 0x800: fl = fl[1:]
+                if flags & 0x800 and fl:                # cmd_chara (D12EA8) : bit 11 = Chara.SetScale(echelle) : Transform.localScale = 1,8 x echelle sur le panneau du personnage (pas sur son ombre)
+                    if s['pos'] is not None: s['ech'] = float(fl[0])      # (la 1re mise a jour d'un personnage, celle qui le place, porte une valeur de depart sans suite : 0,0253 a 0,08 puis 1,0 en une image ; observee sur 529 cartes, 1062 personnages : ignoree)
+                    fl = fl[1:]
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
                 if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
                 if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
