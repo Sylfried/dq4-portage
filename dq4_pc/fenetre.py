@@ -1021,7 +1021,7 @@ class Jeu(pyglet.window.Window):
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def appliquer_jeu(self):
-        """Page « Triches » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
+        """Page « Modifications » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):

@@ -231,7 +231,7 @@ class Pause:
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
-                dict(t='act', l='Triches', ok=self._aller('triches'), sous=True),
+                dict(t='act', l='Modifications', ok=self._aller('modifications'), sous=True),
                 dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
     def _choix(self, label, valeurs, get, set_, off=False, note=None, defaut=SANS, retablir=None, est_defaut=None):
@@ -437,8 +437,8 @@ class Pause:
         cb['aide'] = "Combats seulement : les animations s'enchaînent sans temps mort (le nombre de dégâts apparaît vite après le coup) ; Rapide, Très rapide : animations, déplacements et messages 2 ou 3 fois plus rapides   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche « Changer la vitesse en combat », bouton à l'écran)"
         return [dict(t='sep', l='Défilement du texte'), vt, cb]
 
-    def _e_triches(self):
-        """Page « Triches » (ex-« Jeu »), juste sous « Commandes » dans le menu racine : les modificateurs des regles du jeu, desactives par defaut (= comme le jeu d'origine) ; pour l'instant PV et PM restaures a chaque niveau gagne."""
+    def _e_modifications(self):
+        """Page « Modifications » (ex-« Jeu »), juste sous « Commandes » dans le menu racine : les modificateurs des regles du jeu, desactives par defaut (= comme le jeu d'origine) ; pour l'instant PV et PM restaures a chaque niveau gagne."""
         J, R = self.J, self.J.reg
         sn = self._choix('PV et PM restaurés au niveau supérieur', [True, False], lambda: R['soin_niveau'], lambda v: (R.__setitem__('soin_niveau', v), J.appliquer_jeu()), defaut=RG.DEFAUT['soin_niveau'])
         sn['aide'] = "Quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (au maximum qu'il vient d'atteindre)   Non : comme le jeu d'origine, la montée de niveau ne soigne pas"
@@ -1095,7 +1095,7 @@ class Pause:
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
         titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
-        titres['triches'] = 'Triches'
+        titres['modifications'] = 'Modifications'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
@@ -1122,7 +1122,7 @@ class Pause:
                 vw = max(vw, tw + 24 * k if x.get('liste') else tw + 14 * k + LARG_SW * k)               # liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
         pw = max(540 * k, 52 * k + lw + 40 * k + vw + rdr)
         if ecr in ('affichage', 'son', 'commandes', 'interface'): pw = max(pw, 52 * k + lw + 40 * k + 44 * k + 200 * k + 20 * k + 90 * k + rdr + (36 * k if ecr == 'son' else 0.0))          # (son : plus le bouton muet)
-        if ecr == 'triches': pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
+        if ecr == 'modifications': pw = max(pw, 52 * k + lw + 40 * k + vw + rdr + 20 * k)
         if ecr == 'commandes': pw = max(pw, 52 * k + lw + 30 * k + 40 * k + 2 * LARG_CELLULE * k + ECART_CELLULES * k + rdr)
         wmini = 360 * k if avec_mini else 0.0; gap = 24 * k if avec_mini else 0.0
         x0 = (W - pw - wmini - gap) / 2; y1 = (H + h + marge_ret) / 2; y0 = y1 - h
