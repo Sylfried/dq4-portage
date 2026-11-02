@@ -475,6 +475,14 @@ class Moteur:
         c = self.core; g = lambda off: struct.unpack('<H', c.mem(self.L + off, 2))[0]
         return c.mem(self.L + MSG_ACTIF, 1)[0], g(MSG_ETAT), g(MSG_COURANT), g(MSG_FIN), g(MSG_VITESSE)
 
+    def reappliquer_correctifs(self):
+        """Remet les correctifs que la visionneuse pose dans la memoire du moteur (fenetre des lieux elargie, pas de « Sauv. cloud », bouton « Paramètres », vitesses de marche d'origine). Appelee apres le chargement d'un etat
+        (etats.appliquer) : l'image d'origine de la bibliotheque est rechargee d'abord, et un etat enregistre par une version qui n'avait pas encore un correctif ne le contient pas. Chacun est idempotent."""
+        self._elargir_symboles()
+        self.core.mem_w(self.L + G_IS_AMAZON, b'\x01')
+        self.remettre_vitesses()
+        self.patcher_parametres()
+
     def _elargir_symboles(self):
         """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
         (x de -192 a +448, y de -192 a +788 pixels, plus une marge) : en 16/9 les lieux des cotes n'apparaissaient qu'une fois tout pres. Les trois constantes de
