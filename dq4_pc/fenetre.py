@@ -222,7 +222,7 @@ class Jeu(pyglet.window.Window):
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
-        self.son.precharger(SE_COURANTS)
+        self.son.precharger(SE_COURANTS); self.son.precharger_musiques()
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
@@ -2776,7 +2776,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_FLAG') and self.n % int(os.environ['DQ_FLAG']) == 0: print('FLAG n=%d %#x partie=%s msg=%s menu=%s cam=%s>%s' % (self.n, mo.drapeaux(), mo.etat.partie, mo.msg_visible, mo.menu_actif(), None if mo.etat.cam_pos is None else tuple(round(float(x), 2) for x in mo.etat.cam_pos), None if mo.etat.cam_cible is None else tuple(round(float(x), 2) for x in mo.etat.cam_cible)), flush=True)
         if mo.etat.partie == MO.PARTIE_CHAMP and mo.etat.champ is not None: self._avancer_motifs()
         self.son.image = self.n
-        if mo.etat.sons: self.son.evenements(VC.sons_a_jouer(mo.etat.sons, self._se_images)); mo.etat.sons = []
+        if mo.etat.sons: self.son.evenements(VC.sons_a_jouer(mo.etat.sons, self._se_images), image_moteur=mo.images); mo.etat.sons = []
         self.son.tick()
         jeu = mo.options_jeu()[:2]
         if jeu != self._opt_son: self._opt_son = jeu; self.son.regler_mixage(jeu={'musique': SON.volume_option_jeu(jeu[0]), 'effets': SON.volume_option_jeu(jeu[1])})        # options « volume » de la fenetre Parametres du jeu
