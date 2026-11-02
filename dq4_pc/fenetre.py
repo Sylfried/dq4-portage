@@ -646,8 +646,19 @@ class Jeu(pyglet.window.Window):
         """Echap sert de touche Annuler quand une fenetre du jeu (menu, carte) est ouverte sur le terrain : sinon il ouvre le menu Echap (combat, messages et terrain libre compris)."""
         mo = self.moteur
         if mo.etat.partie == MO.PARTIE_DEPART: return self.saisie_nom.actif or self.licence is not None or (not mo.msg_visible and mo.menu_actif() is not None)           # menu de depart : Echap = Annuler (le retour de la racine = quitter)
+        if mo.etat.partie in MO.PARTIES_MINIJEU:          # casino, bestiaire : Echap = bouton retour de la fenetre ouverte (manette 0x20) ; rouleaux en marche, message, cartes en cours de distribution : pas de retour, le menu Echap s'ouvre
+            p = mo.menu_actif()
+            return p is not None and not mo.msg_visible and self._retour_possible(p)
         if mo.etat.partie not in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) or mo.etat.effet is not None: return False
         return bool(self.carte_ouverte) or (not mo.msg_visible and mo.menu_actif() is not None)
+
+    def _retour_possible(self, port):
+        """Une fenetre visible du jeu a-t-elle un bouton Annuler / Retour (touche de manette 0x20) en ce moment ? (casino, bestiaire : Echap le presse ; sinon il ouvre le menu Echap)"""
+        if not self.ui_g: return False
+        for q in [port] + [q for q, fq in self.moteur.ui.f.items() if q > 1 and fq['vis']]:
+            fe = self.ui_g.f.get(q)
+            if fe and any(b[1] & 0x20 for b in fe.boutons()): return True
+        return False
 
     @staticmethod
     def _num_etat(symbol):
