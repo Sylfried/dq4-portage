@@ -1,6 +1,6 @@
 """Entrees souris / clavier de la visionneuse : la logique pure (sans fenetre ni OpenGL), pour la tester (outils/test_entrees.py).
 - souris_active / GardeSouris : quand le pointeur reprend la main apres un usage du clavier (survol et selection) ;
-- GesteMolette / pivoter : clic molette (clic simple, Ctrl + clic, glisser = rotation de la camera) ;
+- GesteMolette / pivoter : clic molette (clic simple = position de la camera remise, Ctrl + clic = position et distance remises, glisser = rotation de la camera, sens reglable) ;
 - zone_infos : ou se pose le bloc d'infos de F1 (en haut a droite)."""
 import math
 
@@ -47,8 +47,9 @@ CAM_SOURIS_ANGLE = 120.0      # glissement vertical : degres d'inclinaison de la
 
 
 class GesteMolette:
-    """Un geste du bouton du milieu : appui, deplacements, relachement. Un clic (relachement avant d'avoir bouge de SEUIL_GLISSE pixels) est « direction » (remise de la camera) ou « zoom » (avec Ctrl) ;
-    un glissement fait tourner la camera, depuis le point ou le seuil est franchi (pas de saut au debut) ; apres un glissement, le relachement ne remet rien."""
+    """Un geste du bouton du milieu : appui, deplacements, relachement. Un clic (relachement avant d'avoir bouge de SEUIL_GLISSE pixels) est « direction » (remet la POSITION de la camera : rotation et inclinaison) ou, avec Ctrl,
+    « tout » (remet la position ET la distance) ; un glissement fait tourner la camera, depuis le point ou le seuil est franchi (pas de saut au debut) ; apres un glissement, le relachement ne remet rien (un clic suivi
+    d'un deplacement n'est pas un clic). La distance seule se remet avec Ctrl + molette (Jeu.on_mouse_scroll)."""
 
     def __init__(self, seuil=SEUIL_GLISSE):
         self.seuil = seuil; self.annuler()
@@ -69,11 +70,11 @@ class GesteMolette:
         return float(d[0]), float(d[1])
 
     def relacher(self, ctrl=False):
-        """-> 'direction' (clic simple : remet la camera en place), 'zoom' (Ctrl + clic : remet le zoom en place) ou None (fin d'un glissement, ou pas d'appui)."""
+        """-> 'direction' (clic simple : remet la position de la camera, rotation et inclinaison), 'tout' (Ctrl + clic : remet la position et la distance) ou None (fin d'un glissement, ou pas d'appui)."""
         etait, glissait, ctrl_appui = self.en_cours, self.glisse, self.ctrl
         self.annuler()
         if not etait or glissait: return None
-        return 'zoom' if (ctrl or ctrl_appui) else 'direction'
+        return 'tout' if (ctrl or ctrl_appui) else 'direction'
 
 
 def pivoter(lacet, angle, dx, dy, hauteur, a_min, a_max, limite=None):

@@ -564,15 +564,22 @@ class Jeu(pyglet.window.Window):
         """Ctrl tenu : le modificateur de la souris ou la « Touche speciale » des reglages."""
         return bool(modifiers & pyglet.window.key.MOD_CTRL) or self._tenue('modif')
 
+    def distance_par_defaut(self):
+        """Remet la distance de la camera a sa valeur par defaut (reglages.DEFAUT['distance_camera'], 100 %) : Ctrl + molette, Ctrl + clic molette. Immediat comme le zoom de la molette."""
+        self.regler_zoom(100.0 / float(RG.DEFAUT['distance_camera']))
+
     def on_mouse_scroll(self, x, y, sx, sy):
-        """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap."""
+        """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap ; Ctrl + molette (vers le haut OU vers le bas) = distance par defaut (100 %).
+        pyglet ne donne pas les modificateurs de la molette : Ctrl = la « Touche speciale » des reglages (Ctrl par defaut, voir _ctrl_actif)."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.molette(sy); return
         if self.licence is not None: self.licence.defiler(-sy * 60.0); return
-        if sy and self._zoom_possible(): self.regler_zoom(self.zoom * 1.1 ** sy)
+        if not (sy and self._zoom_possible()): return
+        if self._ctrl_actif(0): self.distance_par_defaut()
+        else: self.regler_zoom(self.zoom * 1.1 ** sy)
 
     def _molette_appui(self, x, y, modifiers):
-        """Bouton du milieu enfonce : un clic (remise de la direction de la camera ; avec Ctrl, du zoom) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
+        """Bouton du milieu enfonce : un clic (remise de la position de la camera ; avec Ctrl, de la position et de la distance) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
         if self.hud.croix_on or self.appui or not (self._camera_pilotable() or self._zoom_possible()): self.molette.annuler(); return
         self.molette.appui(x, y, self._ctrl_actif(modifiers))
 
@@ -585,10 +592,11 @@ class Jeu(pyglet.window.Window):
         if a != self.angle_cam: self.angle_cam = a; self.reg['angle_camera'] = round(a, 2)
 
     def _molette_relache(self, modifiers):
-        """Bouton du milieu relache sans avoir glisse : clic = direction de la camera remise en place ; Ctrl + clic = zoom remis a la distance par defaut (sans toucher a la direction)."""
+        """Bouton du milieu relache sans avoir glisse : clic = position de la camera (rotation et inclinaison) remise par defaut, par l'animation de recentrage ; Ctrl + clic = la position ET la distance remises par defaut.
+        Chacune ne se remet que la ou elle se regle (position : terrain libre d'une ville ; distance : terrain, carte du monde comprise)."""
         agir = self.molette.relacher(self._ctrl_actif(modifiers))
-        if agir == 'direction' and self._camera_pilotable(): self.recentrer_camera()
-        elif agir == 'zoom' and self._zoom_possible(): self.regler_zoom(100.0 / float(RG.DEFAUT['distance_camera']))
+        if agir in ('direction', 'tout') and self._camera_pilotable(): self.recentrer_camera()
+        if agir == 'tout' and self._zoom_possible(): self.distance_par_defaut()
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
         """Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue par la souris ; bouton du milieu : rotation de la camera."""
