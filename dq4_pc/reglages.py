@@ -6,11 +6,12 @@ import pyglet
 TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
     'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
-    'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
+    'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
     'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
+ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
@@ -55,7 +56,7 @@ DEFAUT = {
     'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
     'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
     'interface_masquees': [],     # editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
-    'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
+    'touches_v': 5,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; v4 -> v5 : « Menu » = Entree et Tab (si « Menu » avait encore l'ancien defaut, Entree seule, et que Tab est libre) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
@@ -182,7 +183,7 @@ class Reglages:
                 if d.get('defilement_force') is True and ancien == 4: d['vitesse_combat'] = COMBAT_MANUEL      # ancien « Messages en combat : Manuel » impose -> « Vitesse de combat : Manuel » (les autres crans n'ont plus d'equivalent : l'attente suit la vitesse de combat ; rien d'impose : la vitesse enregistree reste)
                 v_enreg = d.get('touches_v')
                 for k, x in d.items():
-                    if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
+                    if k == 'touches' and v_enreg not in (3, 4, DEFAUT['touches_v']): continue
                     if k == 'touches' and isinstance(x, dict):
                         for a, ts in x.items():
                             if a in TOUCHES_DEF and isinstance(ts, list): self.v['touches'][a] = (list(ts) + [None, None])[:2]
@@ -195,6 +196,9 @@ class Reglages:
                         for i, n in enumerate(ts[a]):
                             if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None        # une touche deja prise par une autre action lui reste
                     if self.v['vitesse_accel'] == 2.0: self.v['vitesse_accel'] = DEFAUT['vitesse_accel']
+                if v_enreg in (3, 4):                                 # v4 -> v5 : nouveau defaut de « Menu » (Entree et Tab). Seul l'ancien defaut exact (Entree seule) change : un choix du joueur est garde, et Tab reste a l'action qui l'a prise
+                    ts = self.v['touches']
+                    if ts['menu'] == ANCIEN_MENU and not any('TAB' in l for a, l in ts.items() if a != 'menu'): ts['menu'] = list(TOUCHES_DEF['menu'])
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
                 for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise
                     if a in saved: continue
