@@ -2519,6 +2519,7 @@ class Jeu(pyglet.window.Window):
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse(); en_combat = self._horloge_combat() and f > 1.0
+        self.moteur.vitesse_marche = 1.0 if self._horloge_combat() else f          # marche acceleree : les rencontres aleatoires par seconde suivent (1 + a) / 2 et non a (crochet du compteur du moteur, voir rencontres.py) ; en combat, rien
         self._se_images = set() if en_combat else None            # combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sons_a_jouer) ; sa vitesse de lecture ne change pas
         self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))

@@ -4,6 +4,7 @@ import numpy as np
 import emu_core as T
 import priorite_jeu as PJ
 import pose_couchee as PC
+import rencontres as RE
 from pktlog import PacketLog
 from historique import Capteur
 from historique_combat import CapteurCombat
@@ -39,6 +40,8 @@ COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = 
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
 TBZ_W20_0 = 0x36000094
+COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
+STR_W8_X0 = 0xb9000008
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -415,6 +418,7 @@ class Moteur:
         self._crochets_texte()
         self._crochets_fondu()
         self._crochets_niveau()
+        self._crochets_rencontres()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
@@ -464,6 +468,27 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('PV/PM au niveau superieur : crochet non installe :', ex, flush=True)
+
+    def _crochets_rencontres(self):
+        """Rencontres aleatoires et marche acceleree (voir rencontres.py). `vitesse_marche` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
+        > 1 : le crochet sur `str w8, [x0]` de `CountDown::exec` (w9 = compteur avant, w8 = apres) remplace la perte du compteur par (1 + a) / (2 a) fois celle du jeu, de sorte que les rencontres par seconde
+        reelle soient (1 + a) / 2 fois celles de x1 et non a fois. A 1 (ou moins) : le crochet ne fait rien (le jeu d'origine, a l'identique)."""
+        c = self.core; self.vitesse_marche = 1.0; self.rencontres = RE.Reducteur()
+        try:
+            a = c.export('_ZN9CountDown4execEv')
+            if not a or struct.unpack('<I', c.mem(a + COUNTDOWN_EXEC_ECRITURE, 4))[0] != STR_W8_X0:
+                print('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres', flush=True); return
+            def _cd(uc, ad, sz, u):
+                v = self.vitesse_marche
+                if v <= 1.0: return                                                          # x1 : le jeu tel quel
+                r = self.rencontres; r.facteur = RE.facteur_par_pas(v)
+                avant = uc.reg_read(c.XREG[9]) & 0xffffffff; apres = uc.reg_read(c.XREG[8]) & 0xffffffff
+                avant -= (avant & 0x80000000) << 1; apres -= (apres & 0x80000000) << 1      # entiers signes de 32 bits (le compteur devient negatif au declenchement)
+                uc.reg_write(c.XREG[8], (avant - r.retenir(avant - apres)) & 0xffffffff)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _cd, None, a + COUNTDOWN_EXEC_ECRITURE, a + COUNTDOWN_EXEC_ECRITURE)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
