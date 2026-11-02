@@ -2688,7 +2688,16 @@ class Jeu(pyglet.window.Window):
                 if attr: setattr(obj, nom, ancien)
                 else: obj[nom] = ancien
             self._mesure('dessin', t0)
+            self._absorber_blocage(t0)
             if SV.ACTIF: self._suivre_dessin(t0)
+
+    def _absorber_blocage(self, t0):
+        """Une image longue (> 2 pas du moteur) dans les images qui suivent un chargement de carte (textures du decor et des personnages, shaders : premiere image d'une scene) ne doit pas etre rattrapee : sans cela le moteur
+        refait d'un coup jusqu'a 3 pas (VC.avancer), et le fondu d'entree saute d'autant (a l'ecran : l'image apparait deja a moitie fondue). L'horloge du moteur repart de zero ; le temps du blocage est perdu (ecran de chargement)."""
+        e = self.moteur.etat; cle = e.cartes_chargees
+        if cle != getattr(self, '_absorb_cle', None): self._absorb_cle = cle; self._absorb_n = 0
+        self._absorb_n += 1
+        if self._absorb_n <= 6 and time.perf_counter() - t0 > 2 * PAS_MOTEUR: self.t_boucle = None
 
     def _suivre_dessin(self, t0):
         """(diagnostic, DQ_SUIVI) une ligne par image dessinee pendant les 12 premieres images et pendant les 16 images qui suivent un chargement de carte ou un changement de partie : ce qui a ete dessine (`_dessin_genre` :
@@ -3010,7 +3019,8 @@ class Jeu(pyglet.window.Window):
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
         cam3d = None                                                        # ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
         retenu = getattr(e, 'chargement', None) is not None                 # chargement de carte sous un ecran couvert, scene pas encore en place : on ne dessine que le noir et les fondus (Etat.maj_chargement)
-        if not champ and e.carte and e.carte != self.carte_nom: self._charger_carte(e.carte)
+        if not champ and e.carte and e.carte != self.carte_nom:
+            self._charger_carte(e.carte); self.t_boucle = None              # chargement synchrone (plusieurs dixiemes de seconde) : le temps passe n'est pas rattrape par le moteur (le fondu d'entree garde sa duree, au lieu de sauter 3 pas en une image)
         fond = e.fond
         if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)

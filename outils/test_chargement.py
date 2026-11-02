@@ -1,22 +1,24 @@
-"""Test de la retenue du dessin pendant un changement de carte (micro-images de mise en place du decor).
+"""Test de la retenue du dessin pendant un changement de carte (micro-images de mise en place du decor) et de l'absorption des blocages de chargement.
 
 Le moteur envoie le decor de la nouvelle carte (paquet 0) une image AVANT sa camera (paquet 10) et les positions de ses personnages (paquet 13) ; le fondu d'entree demarre, lui, a l'image du chargement.
 Sans retenue, une image de la scene d'avant (camera) / sans personnages se voyait sous les quelques % d'opacite restants. `Etat.chargement` retient le dessin (noir + fondus seulement) et suspend le fondu d'entree
 jusqu'a ce que la scene soit en place, sans changer la duree du fondu.
 
   1. regles pures (`Etat.appliquer`, `maj_chargement`, `tick_fondu` sur des paquets fabriques) ;
-  2. moteur d'origine (si --apk et --saves sont donnes) : teleportations vers des cartes de villes : la retenue dure au plus CHARGEMENT_MAX images, la 1re image montree est complete (camera envoyee, personnages
+  2. absorption des blocages (`Jeu._absorber_blocage`, faux objet) ;
+  3. moteur d'origine (si --apk et --saves sont donnes) : teleportations vers des cartes de villes : la retenue dure au plus CHARGEMENT_MAX images, la 1re image montree est complete (camera envoyee, personnages
      places) et le fondu d'entree garde toute sa duree.
 
     python3 outils/test_chargement.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4]]
 Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
 """
-import argparse, os, sys, tempfile, unittest
+import argparse, os, sys, tempfile, time, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
 import pyglet
 if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.options['headless'] = True; pyglet.options['shadow_window'] = False
 import moteur as MO
+import fenetre as F
 
 ARGS = None
 SORTIE, ENTREE = 0x1000, 0                       # bit 12 du paquet 9 : fondu vers la couleur (sortie) ; sinon entree
@@ -126,6 +128,30 @@ class Regles(unittest.TestCase):
         e = MO.Etat(); d = dict(e.__dict__); d.pop('chargement')
         e2 = MO.Etat.__new__(MO.Etat); e2.__setstate__(d)
         self.assertIsNone(e2.chargement)
+
+
+class Absorption(unittest.TestCase):
+    def faux(self, cartes=1):
+        return types.SimpleNamespace(moteur=types.SimpleNamespace(etat=types.SimpleNamespace(cartes_chargees=cartes)), t_boucle=5.0)
+
+    def test_image_longue_apres_un_chargement(self):
+        j = self.faux()
+        F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
+        self.assertIsNone(j.t_boucle, 'un blocage de 300 ms n\'est pas rattrape par le moteur')
+
+    def test_image_normale(self):
+        j = self.faux()
+        for _ in range(5): F.Jeu._absorber_blocage(j, time.perf_counter() - 0.004)
+        self.assertEqual(j.t_boucle, 5.0)
+
+    def test_seulement_les_premieres_images_d_une_carte(self):
+        j = self.faux()
+        for _ in range(6): F.Jeu._absorber_blocage(j, time.perf_counter())
+        F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
+        self.assertEqual(j.t_boucle, 5.0, 'plus de 6 images apres le chargement : un ralentissement ordinaire reste soumis au rattrapage normal')
+        j.moteur.etat.cartes_chargees = 2
+        F.Jeu._absorber_blocage(j, time.perf_counter() - 0.3)
+        self.assertIsNone(j.t_boucle, 'nouvelle carte : le compte repart')
 
 
 @unittest.skipIf(ARGS is None and '--apk' not in sys.argv, 'moteur d\'origine : --apk et --saves requis')
