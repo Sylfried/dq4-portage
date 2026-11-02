@@ -26,6 +26,9 @@ EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur
 CHARGEMENT_COUVERT = 0.9                    # opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (Etat.chargement)
 CHARGEMENT_MIN, CHARGEMENT_PLACEMENT, CHARGEMENT_MAX = 1, 2, 6      # images du moteur apres le paquet 0 : au moins 1 (le moteur place la camera et les personnages a l'image suivante, sur 529 cartes), 2 au plus pour attendre les positions des personnages visibles, 6 : garde-fou (jamais d'attente plus longue)
 ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
+FENETRE_ENTREE_COMBAT = 12                  # images apres le chargement de la scene d'un combat (paquet 0, bit 8) pendant lesquelles un fondu lance par le moteur est le fondu d'arrivee du combat (Etat.transition_combat)
+FENETRE_RETOUR_COMBAT = 12                  # images apres la sortie de la partie combat pendant lesquelles un fondu lance par le moteur est le fondu de retour a la carte
+GARDE_TRANSITION = 8                        # images ou la transition de combat reste « en cours » apres la fin de l'un de ses fondus (le moteur change de scene 1 a 3 images plus tard, puis lance le fondu suivant)
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
@@ -96,18 +99,33 @@ class Etat:
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
+        self.fen_entree = 0; self.fen_retour = 0; self.garde_trans = 0      # transition de combat (voir transition_combat) : images restantes de la fenetre « arrivee en combat », de la fenetre « retour a la carte », de la garde entre deux fondus
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
         self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
-    def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
+    def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0, 'combat': False}      # 'combat' : fondu de la transition d'un combat (duree du jeu, voir transition_combat)
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
         self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None)
+        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
+
+    def transition_combat(self):
+        """Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
+        entre deux de ces fondus) ? Elle doit durer EXACTEMENT ce que dure le jeu d'origine : la visionneuse n'y applique ni « Vitesse de combat », ni la vitesse de marche, ni le multiplicateur de l'accelerateur
+        (l'horloge reste celle du jeu, 30 images par seconde : Jeu._facteur_vitesse) ni « Vitesse de transition » (les fondus gardent leur duree : Etat._fondu)."""
+        return (self.effet is not None or self.attente_charge is not None or self.garde_trans > 0
+                or (self.fondu['n'] >= 1 and bool(self.fondu.get('combat'))) or (self.fondu_fond['n'] >= 1 and bool(self.fondu_fond.get('combat'))))
+
+    def tick_transition(self):
+        """Une image du jeu (apres tick_fondu) : les fenetres et la garde de la transition de combat s'ecoulent."""
+        if self.fen_entree > 0: self.fen_entree -= 1
+        if self.fen_retour > 0: self.fen_retour -= 1
+        if self.garde_trans > 0: self.garde_trans -= 1
 
     def appliquer(self, paquets, lire_nom):
         self.maillages_vus = set()
@@ -115,6 +133,7 @@ class Etat:
         for t, a, f in paquets:
             if t == 0:
                 charge = True; cam_vue = False
+                if a and a[0] & 0x100: self.fen_entree = FENETRE_ENTREE_COMBAT          # scene de combat (cmd_fld_load, bit 8) : le fondu lance dans la foulee est le fondu d'arrivee du combat
                 self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0)      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
@@ -233,7 +252,8 @@ class Etat:
         entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
         script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
-        if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
+        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : il garde la duree du jeu d'origine, voir transition_combat
+        if not v & (0x800 | 0x2000) and not fd['combat']: d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script, ni pour ceux d'un combat)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -263,7 +283,9 @@ class Etat:
             if self.chargement is not None and fd['fin'] == 0.0 and fd['n'] >= 1: continue      # retenue du dessin apres un chargement : un fondu d'entree ne commence qu'avec la scene en place
             if fd['n'] >= 1:
                 fd['n'] -= 1
-                if fd['n'] < 1: fd['a'] = fd['fin']
+                if fd['n'] < 1:
+                    fd['a'] = fd['fin']
+                    if fd.get('combat') and fd['fin'] >= 1.0: self.garde_trans = GARDE_TRANSITION      # sortie au noir d'un combat finie : le moteur change de scene dans 1 a 3 images, puis lance le fondu d'entree ; l'horloge ne doit pas changer entre les deux
                 else: fd['a'] += fd['pas']
             if garde and fd['a'] >= 0.999 and fd['n'] < 1:
                 fd['noir'] += 1
@@ -718,8 +740,10 @@ class Moteur:
         if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
         self.etat.maj_chargement()
         self.etat.tick_fondu()
+        self.etat.tick_fondu(); self.etat.tick_transition()
         prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
+        if prec == PARTIE_COMBAT and self.etat.partie != PARTIE_COMBAT: self.etat.fen_retour = FENETRE_RETOUR_COMBAT      # fin du combat : le fondu d'entree qui suit sur la carte est celui du retour (duree du jeu)
         if self.etat.partie == PARTIE_COMBAT and prec != PARTIE_COMBAT and self.etat.attente_charge is None and self.etat.cartes_chargees <= avant:
             self.etat.attente_charge = {'base': avant, 'n': 0}      # combat sans effet d'ecran (scenario...) : la scene d'avant ne doit pas apparaitre avant le chargement de celle du combat
         if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None; self.etat.monde = None

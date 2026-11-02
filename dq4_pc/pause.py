@@ -434,7 +434,7 @@ class Pause:
         vt = self._choix('Vitesse du texte', list(RG.VITESSES_TEXTE), lambda: R['vitesse_texte'], lambda v: (R.__setitem__('vitesse_texte', v), J.appliquer_texte()), defaut=RG.DEFAUT['vitesse_texte'])
         vt['aide'] = 'Vitesse d\'écriture des dialogues (lettres par image du jeu)   « Normal » : comme dans le jeu d\'origine'
         cb = self._choix('Vitesse de combat', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], J.regler_vitesse_combat, defaut=RG.DEFAUT['vitesse_combat'])
-        cb['aide'] = "Combats seulement : animations des monstres et des coups, déplacements et messages 2 ou 3 fois plus rapides (Rapide, Très rapide)   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche « Changer la vitesse en combat », bouton à l'écran)"
+        cb['aide'] = "Combats seulement : les animations s'enchaînent sans temps mort (le nombre de dégâts apparaît vite après le coup) ; Rapide, Très rapide : animations, déplacements et messages 2 ou 3 fois plus rapides   Manuel : vitesse normale, on passe chaque message avec Entrée, Espace ou un clic   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche « Changer la vitesse en combat », bouton à l'écran)"
         return [dict(t='sep', l='Défilement du texte'), vt, cb]
 
     def _e_triches(self):

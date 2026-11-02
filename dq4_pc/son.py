@@ -279,6 +279,7 @@ class Son:
 
     def jouer_se(self, ident):
         if os.environ.get('DQ_SON'): self.log('Son : image %s bruitage %d' % (getattr(self, 'image', '?'), ident))
+        if ident <= 0: return                                                         # bruitage 0 : « aucun » (le moteur l'envoie avec chaque coup critique, SE0000 n'existe pas dans les donnees)
         nom = 'SE%04d' % ident
         self._obtenir(nom, lambda r, i=ident: self._lancer_se(i, r))
 

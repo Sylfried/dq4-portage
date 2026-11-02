@@ -175,7 +175,7 @@ class SectionDefilement(unittest.TestCase):
         p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 3.0)
         p.touche(K.RIGHT); self.assertEqual(J.reg['vitesse_combat'], 0.0)                                       # (la liste boucle) Très rapide -> Manuel
         self.assertEqual(J.appels[-1], ('combat', 4)); self.assertFalse(cb['est_defaut']())
-        cb['defaut'](); self.assertEqual(J.reg['vitesse_combat'], 1.0); self.assertEqual(J.appels[-1], ('combat', 2)); self.assertTrue(cb['est_defaut']())      # ↺ : Normal
+        cb['defaut'](); self.assertEqual(J.reg['vitesse_combat'], 1.0); self.assertEqual(J.appels[-1], ('combat', 0)); self.assertTrue(cb['est_defaut']())      # ↺ : Normal
         self.assertTrue(cb.get('aide')); self.assertNotIn('x2', cb['aide'])
 
     def test_pas_d_ancien_reglage(self):

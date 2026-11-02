@@ -26,6 +26,7 @@ import entrees as EN
 import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
+import contours_decor as CD
 import fbx as FX
 import ciel_titre as CT
 import vitesse_combat as VC
@@ -243,7 +244,7 @@ class Jeu(pyglet.window.Window):
         self.son.precharger(SE_COURANTS); self.son.precharger_musiques()
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
-        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
+        self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self._tex_contours = []; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
         self.fbx_cache = {}; self.fbx_lect = {}           # modeles 3D animes (fbx.py : le dragon du titre) : numero -> {'etat', 'm', ...} ; emplacement -> lecteur d'animation
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
@@ -1023,7 +1024,7 @@ class Jeu(pyglet.window.Window):
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
-        """« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon (RG.code_defilement) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente."""
+        """« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 0 (attente la plus courte du jeu, 12 images) sinon (RG.code_defilement) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente."""
         self.moteur.imposer_defilement(RG.code_defilement(self.reg['vitesse_combat']))
 
     def regler_vitesse_combat(self, v):
@@ -1388,6 +1389,15 @@ class Jeu(pyglet.window.Window):
         out.sort(key=lambda o: o[0])
         return [o[1:] for o in out]
 
+    def _purger_contours(self, src, garde=CD.TEXTURES_GARDEES):
+        """Les textures de decor de combat agrandies x4 (contours_decor.py, 5,6 Mo avec leurs mipmaps) ne sont gardees que pour les derniers decors vus : les plus anciennes rendent leur place sur la carte graphique."""
+        while len(self._tex_contours) > garde:
+            for i, cle in enumerate(self._tex_contours):
+                if cle[0] != src: break
+            else: return
+            cle = self._tex_contours.pop(i); t = self.tex_gl.pop(cle, None)
+            if t is not None: t.delete()
+
     def _charger_carte(self, nom):
         t_charge = time.perf_counter()
         for vl in self.carte_vl: vl[1].delete()
@@ -1395,20 +1405,28 @@ class Jeu(pyglet.window.Window):
         if self.ciel_ext and self.ciel_ext['vl'] is not None: self.ciel_ext['vl'].delete()
         self.ciel_ext = None; self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
-        try:
-            c = self.donnees.carte(src)
-        except Exception as ex:
-            print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        c = erreur = None
+        for cand in [src] + (DO.decors_de_secours(src) if nom.startswith('btl') else []):         # decor de combat sans la variante demandee (heure) : la plus proche, plutot qu'un decor vide
+            try: c = self.donnees.carte(cand)
+            except KeyError as ex: erreur = ex; continue
+            except Exception as ex: erreur = ex
+            if c is not None and cand != src: print('decor %s absent des donnees : %s a la place' % (src, cand), flush=True); src = cand
+            break
+        if c is None:
+            print('carte non chargee :', erreur, flush=True); self.carte_nom = nom; return
         if not os.environ.get('DQ_SANS_DECALAGE'):
             try: DP.decaler(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir decors_plats.py)
             except Exception as ex: print('decors_plats :', ex, flush=True)
         self.carte_src = src; self.decor_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objets = OC.ObjetsCarte(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
         self.palettes = OC.PalettesCarte(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
+        contours = nom.startswith('btl') and not os.environ.get('DQ_SANS_CONTOURS')        # decors de combat : silhouettes des arbres et montagnes adoucies (contours_decor.py) ; DQ_SANS_CONTOURS=1 : (test) texture d'origine
         for key, (pos, uv, col) in c['groupes'].items():
             if key not in c['textures']: continue
             if (src, key) not in self.tex_gl:
-                self.tex_gl[(src, key)] = t = self._tex(c['textures'][key], True, 99); self._filtrer(t, self.lissage)
+                arr = CD.pour_decor(c['textures'][key], key) if contours else c['textures'][key]
+                self.tex_gl[(src, key)] = t = self._tex(arr, True, 99); self._filtrer(t, self.lissage)
+                if arr is not c['textures'][key]: self._tex_contours.append((src, key)); self._purger_contours(src)
             vl = self.prog.vertex_list(len(pos), gl.GL_TRIANGLES, position=('f', self.objets.cur[key].ravel()), tex_coords=('f', self.objets.uv(key).ravel()), colors=('f', self.objets.col(key).ravel()))
             self.carte_vl.append((self.tex_gl[(src, key)], vl, key)); self.carte_pos[key] = pos.copy()
         for key, dd in self.palettes.defs.items():                         # images de chaque animation de palette
@@ -2659,7 +2677,7 @@ class Jeu(pyglet.window.Window):
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse(); en_combat = self._horloge_combat() and f > 1.0
         self._se_images = set() if en_combat else None            # combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sons_a_jouer) ; sa vitesse de lecture ne change pas
-        self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
+        self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas_terrain, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):
@@ -2667,6 +2685,7 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
+        if e.transition_combat(): return 1.0          # cascade d'entree en combat, ecran noir, fondus d'entree / de sortie du combat et de retour a la carte : EXACTEMENT la duree du jeu d'origine, aucun reglage (vitesse de combat, de marche, accelerateur, transitions) n'y change rien
         if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
@@ -2698,8 +2717,16 @@ class Jeu(pyglet.window.Window):
         t = time.perf_counter()
         muet = self._attend_joueur() and t - self._t_pas_reel < PAS_MOTEUR * VC.TOLERANCE
         if not muet: self._t_pas_reel = t
+        e = self.moteur.etat; avant = e.transition_combat()
         self._pas(muet)
-        return True
+        return avant or not e.transition_combat()          # une transition de combat (fondu de sortie du combat) commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
+
+    def _pas_terrain(self):
+        """Un pas du moteur hors combat accelere (marche, accelerateur). Renvoie False quand la transition d'un combat vient de commencer pendant ce pas (effet d'ecran de debut rendu par une rencontre) : VC.avancer s'arrete la
+        et le reste de l'image reprend a l'horloge du jeu ; sans cela, les pas restants du rattrapage d'une marche acceleree raccourciraient le debut de la cascade."""
+        e = self.moteur.etat; avant = e.transition_combat()
+        self._pas()
+        return avant or not e.transition_combat()
 
     def changer_vitesse_combat(self, source='touche'):
         """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
