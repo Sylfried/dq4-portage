@@ -221,7 +221,8 @@ class IndependanceAccelerateur(unittest.TestCase):
     @staticmethod
     def faux(partie, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, effet=None, attente=None, menu=None, msg=False, feed=False):
         j = types.SimpleNamespace(reg={'vitesse_combat': vitesse_combat, 'vitesse_marche': marche, 'vitesse_accel': accel})
-        j.moteur = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=effet, attente_charge=attente), msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
+        etat = MO.Etat(); etat.partie = partie; etat.effet = effet; etat.attente_charge = attente           # (l'Etat reel : transition_combat() decide de l'horloge de la cascade et des fondus)
+        j.moteur = types.SimpleNamespace(etat=etat, msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
         j.pad = lambda: MO.HAUT if direction else 0
         j._tenue = lambda a: accel_tenue and a == 'accel'
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))
@@ -241,10 +242,11 @@ class IndependanceAccelerateur(unittest.TestCase):
             self.assertEqual(self.faux(partie, 1.0, 4.0, 2.0, accel_tenue=True).facteur(), 8.0)
             self.assertEqual(self.faux(partie, 3.0, 2.0, 1.5, accel_tenue=True, direction=False).facteur(), 1.0)  # (arret : vitesse normale)
 
-    def test_effet_de_debut_et_ecran_noir_font_partie_du_combat(self):
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 3.0, 4.0, 2.0, True, effet={'n': 3}).facteur(), 3.0)       # effet qui brise l'ecran
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 2.0, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 2.0)      # ecran noir avant la scene du combat
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 1.0, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)       # Normal : comme avant (marche et accelerateur n'y comptaient deja pas)
+    def test_effet_de_debut_et_ecran_noir_gardent_l_horloge_du_jeu(self):
+        """#45 : la cascade d'entree en combat et l'ecran noir qui suit durent le temps du jeu d'origine : horloge x1 quelle que soit la vitesse de combat, de marche ou l'accelerateur (voir outils/test_transition_combat.py)."""
+        for v in (0.0, 1.0, 2.0, 3.0):
+            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)             # effet qui brise l'ecran
+            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 1.0)      # ecran noir avant la scene du combat
 
     def test_attentes_de_saisie_gardent_la_vitesse_choisie(self):
         """Les monstres suivent la vitesse de combat meme pendant les menus : l'horloge reste celle du reglage ; seule la lecture des touches est a cadence normale (pas muets : test suivant)."""
@@ -257,7 +259,7 @@ class IndependanceAccelerateur(unittest.TestCase):
         """Moteur en attente du joueur : un seul pas sur f lit les touches (un par 1 / 30 s reelles), les autres sont muets ; sinon tous les pas sont ordinaires."""
         from unittest import mock
         attend = [True]; appels = []; h = [100.0]
-        j = types.SimpleNamespace(_t_pas_reel=0.0, _attend_joueur=lambda: attend[0], _pas=lambda muet=False: appels.append(muet))
+        j = types.SimpleNamespace(_t_pas_reel=0.0, _attend_joueur=lambda: attend[0], _pas=lambda muet=False: appels.append(muet), moteur=types.SimpleNamespace(etat=MO.Etat()))
         with mock.patch.object(F.time, 'perf_counter', lambda: h[0]):
             for _ in range(3): self.assertTrue(F.Jeu._faire_pas_combat(j))                                      # 1er pas : lit les touches ; les 2 suivants (meme image affichee) : muets
             self.assertEqual(appels, [False, True, True]); h[0] += PAS; F.Jeu._faire_pas_combat(j); self.assertEqual(appels[-1], False)       # 1 / 30 s plus tard : un pas qui lit les touches

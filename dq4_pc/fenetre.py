@@ -2519,7 +2519,7 @@ class Jeu(pyglet.window.Window):
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse(); en_combat = self._horloge_combat() and f > 1.0
         self._se_images = set() if en_combat else None            # combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sons_a_jouer) ; sa vitesse de lecture ne change pas
-        self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
+        self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas_terrain, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):
@@ -2527,6 +2527,7 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
+        if e.transition_combat(): return 1.0          # cascade d'entree en combat, ecran noir, fondus d'entree / de sortie du combat et de retour a la carte : EXACTEMENT la duree du jeu d'origine, aucun reglage (vitesse de combat, de marche, accelerateur, transitions) n'y change rien
         if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
@@ -2558,8 +2559,16 @@ class Jeu(pyglet.window.Window):
         t = time.perf_counter()
         muet = self._attend_joueur() and t - self._t_pas_reel < PAS_MOTEUR * VC.TOLERANCE
         if not muet: self._t_pas_reel = t
+        e = self.moteur.etat; avant = e.transition_combat()
         self._pas(muet)
-        return True
+        return avant or not e.transition_combat()          # une transition de combat (fondu de sortie du combat) commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
+
+    def _pas_terrain(self):
+        """Un pas du moteur hors combat accelere (marche, accelerateur). Renvoie False quand la transition d'un combat vient de commencer pendant ce pas (effet d'ecran de debut rendu par une rencontre) : VC.avancer s'arrete la
+        et le reste de l'image reprend a l'horloge du jeu ; sans cela, les pas restants du rattrapage d'une marche acceleree raccourciraient le debut de la cascade."""
+        e = self.moteur.etat; avant = e.transition_combat()
+        self._pas()
+        return avant or not e.transition_combat()
 
     def changer_vitesse_combat(self, source='touche'):
         """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la page Texte le relit), est enregistre et gouverne aussi le
