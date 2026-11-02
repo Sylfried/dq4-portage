@@ -150,6 +150,11 @@ def rot_unity(ex, ey, ez):
     return Ry @ Rx @ Rz
 
 
+def camera_libre(e):
+    """Camera libre : position + rotation (comme en combat), pas de cible. Paquet 11 bit 7 (scenes, titre) ; casino : le moteur envoie la position et la rotation (paquet 10, masque 5) sans paquet 11."""
+    return bool(e.cam_libre or (getattr(e, 'partie', None) == MO.PARTIE_CASINO and e.cam_rot is not None))
+
+
 def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
     pos = np.array(cam, float); fw = np.array(cible, float) - pos; fw /= np.linalg.norm(fw)
     droite = np.cross(haut, fw); droite /= np.linalg.norm(droite); haut = np.cross(fw, droite)
@@ -998,16 +1003,12 @@ class Jeu(pyglet.window.Window):
         ax, ay, az = e.cam_rot
         return rot_unity(-ax, -(ay + 180.0), az)
 
-    def _libre(self, e):
-        """Camera libre : position + rotation (comme en combat), pas de cible. Paquet 11 bit 7 (scenes, titre) ; casino : le moteur envoie la position et la rotation (paquet 10, masque 5) sans paquet 11."""
-        return e.cam_libre or (e.partie == MO.PARTIE_CASINO and e.cam_rot is not None)
-
     def _camera_ville(self, e, aspect):
         """Camera d'une ville comme Unity (SceneCamera.Update, mode avec cible) : LookAt(position, cible), tangage - lookDownAdjust, puis avance de distanceAdjust le long de l'axe.
         Projection : champ HORIZONTAL fov x 4/3 fixe, hauteur deduite de l'ecran portrait d'origine (0,5625). En 16/9 on garde la meme hauteur de champ que sur mobile
         et on montre plus de decor sur les cotes : la bande centrale de la fenetre est exactement l'image du telephone."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
-        libre = self._libre(e); mini = e.partie in MO.PARTIES_MINIJEU       # mini = casino / bestiaire : le cadrage est celui du jeu (ni zoom, ni centrage, ni bornes 16/9, ni rotation du joueur)
+        libre = camera_libre(e); mini = getattr(e, 'partie', None) in MO.PARTIES_MINIJEU       # mini = casino / bestiaire : le cadrage est celui du jeu (ni zoom, ni centrage, ni bornes 16/9, ni rotation du joueur)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
         if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
@@ -1073,7 +1074,7 @@ class Jeu(pyglet.window.Window):
     def _cadre_jeu(self, e):
         """(position, droite, haut, avant) de la camera de la ville telle que le jeu d'origine la place (meme calcul que _camera_ville, SANS le zoom, le centrage, la rotation et l'inclinaison de la visionneuse)."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
-        if self._libre(e) and e.cam_rot is not None:
+        if camera_libre(e) and e.cam_rot is not None:
             R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
         else:
             fw = cib - pos; fw /= np.linalg.norm(fw)
@@ -2916,7 +2917,7 @@ class Jeu(pyglet.window.Window):
             if not (e.carte or '').startswith('btl_'):               # (fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
                 self._maj_message(); self._dessiner_message(); self._dessiner_menus()
             self._dessiner_fondu(); self._dessiner_aide(); return
-        if not champ and not bataille and (e.cam_pos is None or (e.cam_cible is None and not self._libre(e))): self._dessiner_aide(); return
+        if not champ and not bataille and (e.cam_pos is None or (e.cam_cible is None and not camera_libre(e))): self._dessiner_aide(); return
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
