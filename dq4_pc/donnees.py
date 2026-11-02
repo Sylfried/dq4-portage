@@ -5,6 +5,7 @@ import numpy as np
 import fld
 
 DATAPACK = 'assets/bin/Data/datapack.unity3d'
+TEX_BLANCHE = 'blanche'                 # cle de la texture blanche 4 x 4 des materiaux sans texture (voir Donnees._texture)
 
 
 def _quat_mat(x, y, z, w):
@@ -100,7 +101,11 @@ class Donnees:
                     return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y), col, genre
         except Exception as ex:
             self.log('  texture illisible: %s' % ex)
-        return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
+            return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
+        # materiau SANS texture (aucune texture dans ses TexEnvs : 21 cartes de lieux, 10 decors de combat) : Unity echantillonne la texture blanche par defaut, la surface est donc dessinee en couleur de sommet x _Color
+        # (sol sombre, eau...). Avant, la surface etait absente de la visionneuse (groupe sans texture ignore au dessin).
+        tex_out[TEX_BLANCHE] = np.full((4, 4, 4), 255, np.uint8)
+        return TEX_BLANCHE, (1.0, 1.0), (0.0, 0.0), col, 'trans' if col[3] != 1.0 else 'normal'
 
     def _components(self, g):
         out = {}
@@ -133,7 +138,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte9_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte10_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -342,7 +347,7 @@ class Donnees:
             mat = mref.deref_parse_as_object(); sh = mat.m_Shader.deref_parse_as_object().m_ParsedForm.m_Name
             if sh != 'Custom/ImdChara': raise ValueError('shader non gere : %s' % sh)
             cles.add(self._texture(mref, tex, tnom, tfmt)[0])
-        if len(cles) != 1 or None in cles: raise ValueError('textures : %s' % cles)
+        if len(cles) != 1 or None in cles or TEX_BLANCHE in cles: raise ValueError('textures : %s' % cles)          # (modele 3D sans texture : refuse comme avant, la texture blanche ne sert qu'au decor des cartes)
         mesh = smr.m_Mesh.deref_parse_as_object(); h = MeshHandler(mesh); h.process()
         v = np.array(h.m_Vertices, np.float32).reshape(-1, 3); n = len(v)
         uv = np.array(h.m_UV0, np.float32).reshape(n, -1)[:, :2]
@@ -390,7 +395,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte9_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte10_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
