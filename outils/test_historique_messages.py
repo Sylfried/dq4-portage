@@ -294,6 +294,91 @@ class TestFichier(unittest.TestCase):
         h = nouveau(None); h.ajouter('A', 'g', None, 'caf1', 300); self.assertFalse(h.enregistrer(True))
 
 
+class TestPagesMessage(unittest.TestCase):
+    """Le moteur prepare toutes les pages d'un message d'un coup : l'historique ne doit noter la page suivante qu'une fois la precedente lue (curseur de fin de page eteint) ou la fenetre fermee."""
+
+    def moteur(self):
+        cap = types.SimpleNamespace(actif=True, sortie=[], vider=lambda: None, temps_et_cle=lambda: (500, 0x66))
+        def vider():
+            r, cap.sortie[:] = list(cap.sortie), []
+            return r
+        cap.vider = vider
+        return types.SimpleNamespace(capteur=cap, etat=types.SimpleNamespace(partie=HI.PARTIE_VILLE, carte='mak1f1'), ui=types.SimpleNamespace(msg={'feed': False}), msg_visible=True)
+
+    def page(self, texte, t=500, cat=None):
+        return {'texte': texte, 'genre': 'f', 'val': 'Église', 'cat': cat or HI.CAT_TERRAIN, 'carte': 'mak1f1', 't': t}
+
+    def textes(self, h): return [e.texte for e in h.entrees()]
+
+    def test_page_suivante_notee_apres_lecture(self):
+        h = nouveau(); m = self.moteur()
+        m.capteur.sortie += [self.page('Page 1.'), self.page('Page 2.')]
+        h.maj(m)
+        self.assertEqual(self.textes(h), ['Page 1.'])                      # la page 2 n'a pas encore ete lue
+        m.ui.msg['feed'] = True; h.maj(m)                                  # fin de la page 1 : curseur allume
+        self.assertEqual(self.textes(h), ['Page 1.'])
+        m.ui.msg['feed'] = False; h.maj(m)                                 # le joueur tourne la page
+        self.assertEqual(self.textes(h), ['Page 1.', 'Page 2.'])
+
+    def test_trois_pages_une_par_une(self):
+        h = nouveau(); m = self.moteur()
+        m.capteur.sortie += [self.page('A.'), self.page('B.'), self.page('C.')]
+        h.maj(m); self.assertEqual(self.textes(h), ['A.'])
+        for attendu in (['A.', 'B.'], ['A.', 'B.', 'C.']):
+            m.ui.msg['feed'] = True; h.maj(m); m.ui.msg['feed'] = False; h.maj(m)
+            self.assertEqual(self.textes(h), attendu)
+
+    def test_fermeture_de_la_fenetre_libere_le_reste(self):
+        h = nouveau(); m = self.moteur()
+        m.capteur.sortie += [self.page('A.'), self.page('B.')]
+        h.maj(m); h.maj(m)                                                 # fenetre ouverte, rien ne bouge
+        self.assertEqual(self.textes(h), ['A.'])
+        m.msg_visible = False; h.maj(m)                                    # message termine (page sautee, defilement automatique...)
+        self.assertEqual(self.textes(h), ['A.', 'B.'])
+
+    def test_fenetre_pas_encore_ouverte_ne_libere_pas(self):
+        h = nouveau(); m = self.moteur(); m.msg_visible = False             # la fenetre s'ouvre une image apres le texte
+        m.capteur.sortie += [self.page('A.'), self.page('B.')]
+        h.maj(m); h.maj(m)
+        self.assertEqual(self.textes(h), ['A.'])
+        m.msg_visible = True; h.maj(m); h.maj(m)
+        self.assertEqual(self.textes(h), ['A.'])
+
+    def test_fenetre_jamais_ouverte_finit_par_liberer(self):
+        h = nouveau(); m = self.moteur(); m.msg_visible = False
+        m.capteur.sortie += [self.page('A.'), self.page('B.')]
+        h.maj(m)
+        for _ in range(HI.ATTENTE_FENETRE + 2): h.maj(m)
+        self.assertEqual(self.textes(h), ['A.', 'B.'])
+
+    def test_nouveau_message_libere_les_pages_restantes_dans_l_ordre(self):
+        h = nouveau(); m = self.moteur()
+        m.capteur.sortie += [self.page('A.'), self.page('B.')]
+        h.maj(m)
+        m.capteur.sortie += [self.page('Autre.', t=900)]
+        h.maj(m)
+        self.assertEqual(self.textes(h), ['A.', 'B.', 'Autre.'])
+
+    def test_combat_jamais_retenu(self):
+        h = nouveau(); m = self.moteur(); m.etat.partie = HI.PARTIE_COMBAT
+        m.capteur.sortie += [self.page('Le monstre attaque !', cat=HI.CAT_COMBAT), self.page('Ragnar subit 3 points.', cat=HI.CAT_COMBAT)]
+        h.maj(m)
+        self.assertEqual(len(h.entrees()), 2)
+
+    def test_messages_distincts_meme_image_pas_retenus(self):
+        h = nouveau(); m = self.moteur()
+        m.capteur.sortie += [self.page('A.'), {'texte': 'B.', 'genre': 'p', 'val': 17, 'cat': HI.CAT_TERRAIN, 'carte': 'mak1f1', 't': 500}]
+        h.maj(m)
+        self.assertEqual(self.textes(h), ['A.', 'B.'])                      # locuteurs differents : deux messages, pas deux pages
+
+    def test_retour_en_arriere_vide_l_attente(self):
+        h = nouveau(t=100); m = self.moteur()
+        m.capteur.sortie += [self.page('A.', t=500), self.page('B.', t=500)]
+        h.maj(m)
+        self.assertEqual(len(h._attente), 1)
+        h._tronquer(100); self.assertEqual(h._attente, [])
+
+
 class TestObjet(unittest.TestCase):
     def test_nom_objet(self):
         objets = [{'i': 0, 'uid': 0}, {'i': 9, 'uid': 1007}, {'i': 13, 'uid': 1007}, {'i': 63, 'uid': 1014}]

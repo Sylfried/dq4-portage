@@ -17,6 +17,7 @@ VERSION = 1
 MAX_ENTREES = 3000                 # par partie : les plus anciennes sortent
 MAX_PARTIES = 6                    # parties gardees dans le fichier : la moins recemment vue sort
 MAX_TEXTE = 1500                   # caracteres gardes d'un message
+ATTENTE_FENETRE = 180              # images : une page en attente est notee si la fenetre de message ne s'est jamais ouverte au bout de ce delai (3 s)
 MARGE_T = 120                      # 2 s de jeu (1/60 s) : un retour en arriere plus petit n'en est pas un ; deux messages identiques plus proches que cela sont un doublon
 CONFIRMATIONS = 3                  # images consecutives pendant lesquelles un changement de partie / un retour en arriere doit durer avant d'etre pris en compte (un instant incoherent pendant un chargement ne vide rien)
 DELAI_ENREGISTREMENT = 5.0         # secondes : les ecritures sont groupees
@@ -172,6 +173,8 @@ class Historique:
         self._cand = None                                   # (changement en attente, nombre d'images de suite)
         self._sale = False; self._t_ecr = 0.0
         self._carte_connue = None                           # derniere carte dont le lieu est connu (les cartes d'evenement et de combat n'en ont pas : on garde le dernier)
+        self._attente = []                                  # pages d'un message deja preparees par le moteur mais pas encore lues (voir maj)
+        self._feed = False; self._a_vu = False; self._n_att = 0       # curseur de fin de page de l'image precedente ; fenetre de message vue ouverte depuis la rafale ; images d'attente
         self.erreur = None
         self.charger()
 
@@ -255,6 +258,7 @@ class Historique:
         self._tronquer(t); self.dernier_t = t
 
     def _tronquer(self, t):
+        self._attente = []
         p = self._partie(self.cle); p['vu'] = self.horloge()
         avant = len(p['entrees'])
         p['entrees'] = [e for e in p['entrees'] if e.t <= t]
@@ -291,17 +295,49 @@ class Historique:
         try:
             jeu = moteur.etat.partie in (PARTIE_VILLE, PARTIE_COMBAT, PARTIE_CHAMP)
             recus = cap.vider()
-            if not jeu: return
+            if not jeu: self._attente = []; return
             t, uid = cap.temps_et_cle()
             if t is not None and not (t == 0 and uid == 0): self.synchroniser('%x' % uid, t)
-            for r in recus:
-                genre, val = r['genre'], r['val']
-                if genre == GENRE_OBJET and isinstance(val, int): val = nom_objet(objets, noms, val)             # numero d'objet de la carte -> nom du modele
-                self.ajouter(r['texte'], genre, val, r['carte'], r['t'], r['cat'], r.get('anonyme', False))
+            self._pages(moteur, recus, objets, noms)
             self.enregistrer()
         except Exception as ex:                                              # l'historique ne doit jamais arreter le jeu
             if self.erreur is None: print('Historique des messages : erreur (%r)' % (ex,), flush=True)
             self.erreur = repr(ex)
+
+    def _ranger(self, r, objets=None, noms=None):
+        genre, val = r['genre'], r['val']
+        if genre == GENRE_OBJET and isinstance(val, int): val = nom_objet(objets, noms, val)             # numero d'objet de la carte -> nom du modele
+        self.ajouter(r['texte'], genre, val, r['carte'], r['t'], r['cat'], r.get('anonyme', False))
+
+    def _liberer(self, n, objets=None, noms=None):
+        """Range les `n` premieres pages en attente (toutes si n est None)."""
+        k = len(self._attente) if n is None else min(n, len(self._attente))
+        pages, self._attente = self._attente[:k], self._attente[k:]
+        for r in pages: self._ranger(r, objets, noms)
+
+    def _pages(self, moteur, recus, objets, noms):
+        """Le moteur prepare TOUTES les pages d'un message d'un coup (plusieurs TextBuffer::cat dans la meme image, meme temps de jeu) : ne noter que celles que le joueur a lues, sinon l'historique
+        montrerait la page suivante avant sa lecture. La premiere page est notee tout de suite ; chaque fois que le curseur de fin de page s'eteint (le joueur tourne la page, Moteur.ui.msg['feed']) la suivante
+        est notee ; tout ce qui reste est note quand la fenetre de message se ferme ou quand un nouveau message arrive. Les messages de combat (defilement automatique) ne sont jamais retenus."""
+        msg = getattr(getattr(moteur, 'ui', None), 'msg', None)
+        feed = bool(msg.get('feed')) if isinstance(msg, dict) else False
+        chute = self._feed and not feed; self._feed = feed
+        visible = bool(getattr(moteur, 'msg_visible', True))
+        if recus:
+            self._liberer(None, objets, noms)                       # nouveau message : le precedent est fini (ses pages restantes ont ete lues ou sautees)
+            self._a_vu = visible; self._n_att = 0
+            prec = None
+            for r in recus:
+                cle = (r['genre'], r['val'], r['cat'], r['carte'], r['t'])
+                if prec is not None and cle == prec and r['cat'] != CAT_COMBAT: self._attente.append(r)                # page suivante du meme message
+                else: self._ranger(r, objets, noms)
+                prec = cle
+            return
+        if not self._attente: return
+        if visible: self._a_vu = True
+        else: self._n_att += 1
+        if (not visible and self._a_vu) or self._n_att > ATTENTE_FENETRE: self._liberer(None, objets, noms)      # la fenetre s'est fermee (ou ne s'est jamais ouverte) : le message est fini
+        elif chute: self._liberer(1, objets, noms)
 
 
 def nom_objet(objets, noms, uid):
