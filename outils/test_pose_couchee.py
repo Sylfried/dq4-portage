@@ -174,5 +174,30 @@ class TestVraiMoteur(unittest.TestCase):
         self.assertTrue(s['dort']); self.assertAlmostEqual(s['dort_rot'][0], -90.0, places=3)
         self.assertAlmostEqual(m.etat.dort_haut, 1863 * 1.6 / 8192, places=6)
 
+    def test_groupe_couche_comme_le_script_cmd_set_player_sleep(self):
+        """Le heros et ses compagnons (emplacements 0, 1...) se couchent par le meme paquet 16 que les PNJ : TownPartyDraw::setSleep(true) (appele par la commande de script cmd_set_player_sleep) envoie
+        0x500 | angle << 12 pour chacun, puis 0x200 pour se relever. Le crochet sur setPosition donne l'objet TownPartyDraw (Unicorn : vider les blocs deja traduits)."""
+        import unicorn
+        ecr = '/tmp/sv_test_pose_couchee_groupe'; shutil.rmtree(ecr, ignore_errors=True); os.makedirs(ecr)
+        m = MO.Moteur(os.environ['DQ_APK'], os.environ['DQ_SAVES'], ecr)
+        self.assertTrue(m.charger_sauvegarde(1))
+        for _ in range(10): m.step(0, 0)
+        m.demarrer_ville('mak1f1'); c = m.core; ici = []
+        ad = c.export('_ZN13TownPartyDraw11setPositionEiRKN3dss12Fix32Vector3E')
+        c.uc.hook_add(unicorn.UC_HOOK_CODE, lambda uc, a, sz, u: ici.append(uc.reg_read(c.XREG[0])), None, ad, ad); c.uc.ctl_flush_tb()
+        for _ in range(60): m.step(0, 0)
+        self.assertTrue(ici)
+        m.pk.begin(); c.call(c.export('_ZN13TownPartyDraw8setSleepEb'), ici[-1], 1); pq = m.pk.packets()
+        self.assertEqual(sorted(a[0] & 0xfff for t, a, f in pq if t == 16), [0x500, 0x501])          # couche (bits 8 et 10) : emplacements 0 (heros) et 1 (compagnon)
+        m.etat.appliquer(pq, nom_carte)
+        for k in (0, 1):
+            self.assertTrue(m.etat.sprites[k]['dort'])
+        for _ in range(30): m.step(0, 0)
+        m.pk.begin(); c.call(c.export('_ZN13TownPartyDraw8setSleepEb'), ici[-1], 0); pq = m.pk.packets()
+        self.assertEqual(sorted(a[0] & 0x3ff for t, a, f in pq if t == 16), [0x200, 0x201])          # se relever (bit 9, sans direction) : emplacements 0 et 1
+        m.etat.appliquer(pq, nom_carte)
+        for k in (0, 1):
+            self.assertFalse(m.etat.sprites[k]['dort'])
+
 
 if __name__ == '__main__': unittest.main(verbosity=1)
