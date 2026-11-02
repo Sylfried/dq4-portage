@@ -2670,7 +2670,7 @@ class Jeu(pyglet.window.Window):
         """Etat du pas qui vient de finir : positions des personnages et de la camera, pour l'interpolation."""
         e = self.moteur.etat
         tup = lambda v: None if v is None else tuple(float(x) for x in v)
-        return dict(cle=(e.partie, e.carte), sp={k: tup(s['pos']) for k, s in e.sprites.items() if s['pos'] is not None},
+        return dict(cle=(e.partie, e.carte), ret=getattr(e, 'chargement', None) is not None, sp={k: tup(s['pos']) for k, s in e.sprites.items() if s['pos'] is not None},
                     cam_pos=tup(e.cam_pos), cam_cible=tup(e.cam_cible), champ=tup(e.champ['cam']) if e.champ and e.champ['cam'] else None)
 
     def _interpoler(self):
@@ -2678,7 +2678,7 @@ class Jeu(pyglet.window.Window):
         un saut (changement de carte, deplacement force) n'est pas interpole. Renvoie de quoi tout remettre en place."""
         pr, a, e = self.prec, self.alpha, self.moteur.etat
         sauve = []
-        if pr is None or a >= 1.0 or e.partie == MO.PARTIE_COMBAT or pr['cle'] != (e.partie, e.carte): return sauve
+        if pr is None or a >= 1.0 or e.partie == MO.PARTIE_COMBAT or pr['cle'] != (e.partie, e.carte) or pr.get('ret', False) != (getattr(e, 'chargement', None) is not None): return sauve      # (l'image qui leve la retenue d'un chargement n'est pas interpolee depuis la camera de la retenue)
         seuil = 24.0 if e.partie == MO.PARTIE_CHAMP else CAM_SAUT_VILLE       # pixels de la carte / unites de la ville par pas ; au-dela, c'est un saut
         def entre(q, c):
             if q is None or c is None or len(q) != len(c): return None

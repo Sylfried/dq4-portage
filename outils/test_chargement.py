@@ -155,6 +155,24 @@ class Absorption(unittest.TestCase):
         self.assertIsNone(j.t_boucle, 'nouvelle carte : le compte repart')
 
 
+class Interpolation(unittest.TestCase):
+    """L'image qui leve la retenue d'un chargement n'est pas interpolee depuis l'etat de la retenue (camera d'avant) : Jeu._interpoler sur un faux objet."""
+    def faux(self, retenu_avant, retenu_apres):
+        e = types.SimpleNamespace(partie=0xc, carte='x', chargement={'n': 1} if retenu_apres else None, sprites={}, cam_pos=(0.0, 10.0, -20.0), cam_cible=(0.0, 0.0, 0.0), champ=None)
+        pr = dict(cle=(0xc, 'x'), ret=retenu_avant, sp={}, cam_pos=(0.5, 10.0, -20.0), cam_cible=(0.0, 0.0, 0.0), champ=None)
+        return types.SimpleNamespace(prec=pr, alpha=0.5, moteur=types.SimpleNamespace(etat=e))
+
+    def test_pas_d_interpolation_a_la_levee(self):
+        j = self.faux(True, False)
+        self.assertEqual(F.Jeu._interpoler(j), [])
+        self.assertEqual(j.moteur.etat.cam_pos, (0.0, 10.0, -20.0))
+
+    def test_interpolation_ordinaire(self):
+        j = self.faux(False, False)
+        sauve = F.Jeu._interpoler(j)
+        self.assertTrue(sauve and j.moteur.etat.cam_pos[0] == 0.25, 'camera a mi-chemin entre les deux pas')
+
+
 class DWM(unittest.TestCase):
     """Windows : animation d'ouverture de la fenetre coupee pendant le lancement (fenetre.transitions_dwm). Ici sans Windows : le systeme est simule."""
     def avec_dwm(self, dwm, fenetre):
