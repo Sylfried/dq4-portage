@@ -92,11 +92,12 @@ BGM_PRECHARGES = (6, 8, 10, 13) + tuple(range(35, 51)) + (30, 23)
 # 302 et 303 : meme bloc de la banque, jamais appeles directement par le moteur, donc supposes de l'interface).
 CATEGORIES = ('musique', 'jingles', 'effets', 'interface')
 SE_INTERFACE = frozenset(range(300, 305))
+SE_JINGLES = frozenset({409})   # fanfare de victoire (BattleEndTask : SoundManager::play(409), 2,9 s) : jouee comme un bruitage mais c'est une fanfare ; reglee avec « Jingles et fanfares » (volume de l'option « bruitages » du jeu conservee)
 JINGLE_DUREE_MAX = 30.0       # secondes : un morceau sans boucle plus court que cela est un jingle ; BGM 1 (111 s) et 34 (655 s), sans boucle, sont de vraies musiques (sauf demande avec reprise)
 
 
 def categorie_se(ident):
-    return 'interface' if ident in SE_INTERFACE else 'effets'
+    return 'interface' if ident in SE_INTERFACE else 'jingles' if ident in SE_JINGLES else 'effets'
 
 
 def categorie_bgm(relance, boucle, duree):
@@ -118,9 +119,10 @@ class Mixage:
         self.actif = {c: True for c in CATEGORIES}
         self.jeu = dict(musique=1.0, effets=1.0)              # options « volume » du jeu (fenetre Parametres) : facteurs 0,2 a 1
 
-    def gain(self, cat, propre=1.0):
+    def gain(self, cat, propre=1.0, option=None):
+        """option : « musique » ou « effets » = quelle option « volume » du jeu s'applique ; par defaut celle de la musique pour la musique et les jingles, celle des bruitages pour le reste (un bruitage range dans « jingles » passe option='effets')."""
         if not self.actif.get(cat, True): return 0.0
-        g = self.general * self.vol.get(cat, 1.0) * propre * self.jeu['musique' if cat in ('musique', 'jingles') else 'effets']
+        g = self.general * self.vol.get(cat, 1.0) * propre * self.jeu[option or ('musique' if cat in ('musique', 'jingles') else 'effets')]
         return max(0.0, min(1.0, g))
 
 
@@ -285,7 +287,7 @@ class Son:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             boucle = r['boucle']                                                            # bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'] if boucle else 0, r['fin'] if boucle else 0)
-            cat = categorie_se(ident); g = self.mix.gain(cat, r['volume'])
+            cat = categorie_se(ident); g = self.mix.gain(cat, r['volume'], 'effets')
             if g <= 0.0 and not boucle: return                                 # categorie coupee (ou volume a zero) : un bruitage court n'est pas joue ; un bruitage en boucle l'est a volume nul : il s'entend si on rouvre la categorie
             p = self.media.Player(); p.queue(src); p.volume = g; p.play()
             self.se.append(_SE(ident, p, time.time() + (SE_BOUCLE_MAX if boucle else len(r['pcm']) / r['frequence'] + 0.5), cat, r['volume']))
@@ -387,7 +389,7 @@ class Son:
             try: self.bgm.volume = self.mix.gain(self.bgm_cat, self.bgm_propre)
             except Exception: pass
         for x in self.se:
-            try: x.p.volume = self.mix.gain(x.cat, x.propre)
+            try: x.p.volume = self.mix.gain(x.cat, x.propre, 'effets')
             except Exception: pass
 
     def regler_volumes(self, musique=None, bruitages=None):

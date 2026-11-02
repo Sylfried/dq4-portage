@@ -47,7 +47,8 @@ def nouveau_son():
 class Categories(unittest.TestCase):
     def test_se(self):
         for i in range(300, 305): self.assertEqual(SON.categorie_se(i), 'interface')
-        for i in (299, 305, 316, 501, 1129): self.assertEqual(SON.categorie_se(i), 'effets')
+        for i in (299, 305, 316, 408, 501, 1129): self.assertEqual(SON.categorie_se(i), 'effets')
+        self.assertEqual(SON.categorie_se(409), 'jingles', 'fanfare de victoire')
 
     def test_bgm(self):
         self.assertEqual(SON.categorie_bgm(False, True, 60.0), 'musique')               # en boucle
@@ -139,6 +140,17 @@ class Lecture(unittest.TestCase):
         s.regler_mixage(actifs={'jingles': True})
         s.jouer_bgm(1)                                                                       # long morceau sans boucle : de la musique
         self.assertEqual(s.bgm_cat, 'musique'); self.assertAlmostEqual(s.bgm.volume, 0.5)
+
+    def test_fanfare_de_victoire_est_un_jingle(self):
+        """SE 409 (victoire) : volume et interrupteur de « Jingles et fanfares », mais l'option « bruitages » du jeu (pas celle de la musique)."""
+        s = nouveau_son(); s.dec['SE0409'] = donnees(2.9, False, volume=0.6)
+        s.regler_mixage(volumes={'jingles': 0.5, 'effets': 0.1}, jeu={'musique': 1.0, 'effets': 0.4})
+        s.jouer_se(409); x = s.se[-1]
+        self.assertEqual(x.cat, 'jingles'); self.assertAlmostEqual(x.p.volume, 0.5 * 0.6 * 0.4)
+        s.regler_mixage(jeu={'musique': 0.2, 'effets': 1.0}); self.assertAlmostEqual(x.p.volume, 0.5 * 0.6, msg='regle tout de suite, avec l\'option des bruitages')
+        s.regler_mixage(actifs={'jingles': False}); self.assertEqual(x.p.volume, 0.0)
+        n = len(s.se); s.jouer_se(409); self.assertEqual(len(s.se), n, 'jingles coupes : la fanfare n\'est pas jouee')
+        s.regler_mixage(actifs={'jingles': True, 'effets': False}); s.jouer_se(409); self.assertEqual(len(s.se), n + 1, 'bruitages coupes : la fanfare, elle, joue')
 
     def test_ecoute_pendant_la_pause(self):
         s = nouveau_son(); s.jouer_bgm(2); s.jouer_se(316)
