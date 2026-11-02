@@ -12,7 +12,7 @@ import historique as HI
 import hud_mobile as HM
 import reglages as RG
 
-OR = (255, 235, 4); BLANC = (255, 255, 255); GRIS = (150, 150, 150); AIDE = (120, 120, 120); ETOILE = (255, 210, 40); VIDE_ETOILE = (20, 20, 20)
+OR = (255, 235, 4); BLANC = (255, 255, 255); GRIS = (150, 150, 150); AIDE = (175, 175, 175); ETOILE = (255, 210, 40); VIDE_ETOILE = (20, 20, 20)
 TOLERANCE_GLISSE = 6.0               # pixels : en dessous, un appui dans la liste n'est pas un glissement
 ONGLETS = (('Dialogues', 'dialogues'), ('Combats', 'combats'), ('Favoris', 'favoris'))
 O_DIALOGUES, O_COMBATS, O_FAVORIS = 0, 1, 2
@@ -236,7 +236,7 @@ class VueHistorique:
         wt = self._larg(bm, titre, sc * 1.25, taille * 1.3)
         self._ligne(bm, titre, x0 + (pw - wt) / 2, y1 - 24 * k - asc * 1.25, sc * 1.25, BLANC, taille * 1.3)
         # onglets (plaques du jeu : l'onglet ouvert est la plaque « choisie »)
-        th = 34 * k; ty = y1 - 70 * k; self.zones_onglet = []
+        th = 34 * k; ty = y1 - 100 * k; self.zones_onglet = []                      # (sous le titre : ses plaques ne doivent pas le recouvrir)
         lgs = [self._larg(bm, nom, sc, taille) + 44 * k for nom, _ in ONGLETS]; tw = max(lgs + [120 * k]); gap = 10 * k
         tx = x0 + (pw - (tw * len(ONGLETS) + gap * (len(ONGLETS) - 1))) / 2
         for i, (nom, cle) in enumerate(ONGLETS):

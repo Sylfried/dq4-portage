@@ -82,10 +82,10 @@ class TestDialogues(unittest.TestCase):
 class TestCombats(unittest.TestCase):
     def test_lignes(self):
         e = HI.element_de_combat(1, combat(ennemis=[{'nom': 'Gluant', 'total': 3, 'vaincus': 3}, {'nom': 'Chauve-souris', 'total': 1, 'vaincus': 1}, {'nom': 'Golem', 'total': 2, 'vaincus': 1}]))
-        self.assertEqual(HI.lignes_combat(e), ['Gluant ×3', 'Chauve-souris', 'Golem : 1 vaincu sur 2', 'Or : 21     Expérience : 38'])
+        self.assertEqual(HI.lignes_combat(e), ['Gluant ×3', 'Chauve-souris', 'Golem : 1 vaincu sur 2', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38'])
         e2 = HI.element_de_combat(2, combat(issue='fuite', ennemis=[{'nom': 'Golem', 'total': 4, 'vaincus': 2}]))
         self.assertEqual(HI.lignes_combat(e2), ['Golem : 2 vaincus sur 4'])                                      # pas d'or ni d'experience sans victoire
-        self.assertEqual(HI.lignes_combat(HI.element_de_combat(3, combat(ennemis=[]))), ['Ennemis inconnus', 'Or : 21     Expérience : 38'])
+        self.assertEqual(HI.lignes_combat(HI.element_de_combat(3, combat(ennemis=[]))), ['Ennemis inconnus', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38'])
 
     def test_element_de_combat(self):
         e = HI.element_de_combat(7, combat(t=1234)); self.assertEqual((e.n, e.type, e.t, e.issue, e.or_, e.xp, e.fav), (7, HI.TYPE_COMBAT, 1234, 'victoire', 21, 38, None))

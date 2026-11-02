@@ -115,7 +115,7 @@ def lignes_combat(c):
         if e['vaincus'] >= e['total']: out.append('%s ×%d' % (e['nom'], e['total']) if e['total'] > 1 else e['nom'])
         else: out.append('%s : %d vaincu%s sur %d' % (e['nom'], e['vaincus'], 's' if e['vaincus'] > 1 else '', e['total']))
     if not out: out.append('Ennemis inconnus')
-    if c.issue == 'victoire': out.append('Or : %d     Expérience : %d' % (c.or_, c.xp))
+    if c.issue == 'victoire': out.append('Or : %d\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : %d' % (c.or_, c.xp))          # (espaces insecables : la coupure des lignes ne les fait pas disparaitre)
     return out
 
 
