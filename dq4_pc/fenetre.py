@@ -2101,7 +2101,7 @@ class Jeu(pyglet.window.Window):
             if self.sauv is not None: liste = []                                 # ecran Sauvegardes ouvert : le menu de depart est cache (sinon il se devine a travers le cadre translucide)
             fens_v = [self.ui_g.f[p] for _, p in liste]; self.ui_rendu.voisins = fens_v
             for fe in fens_v:
-                if fe.typ == 53: fe.centrer_menu(); fe.cacher_plaque_vide(4)          # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas) ; plaque « Sauvegarde automatique » sans etiquette (pas de data5.dat lisible) : cachee
+                if fe.typ == 53: fe.centrer_menu(); fe.plaque_auto()          # menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas) ; plaque « Sauvegarde automatique » toujours visible, grisee et inactive sans data5.dat lisible
             cacher = self._boite_fin_combat()
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex and not cacher)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
