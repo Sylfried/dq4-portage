@@ -404,10 +404,10 @@ class Donnees:
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte8_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte9_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre ; carte9_ : surfaces sans texture et decors portes par la racine absents), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-8]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-9]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 

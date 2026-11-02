@@ -48,5 +48,17 @@ class TestMaterielSansTexture(unittest.TestCase):
         self.assertIsNone(self.d._texture(_Ref(_Mat(exc=True)), {})[0])
 
 
+class TestPurgeAnciens(unittest.TestCase):
+    def test_carte9_purgee_carte10_gardee(self):
+        import shutil, tempfile
+        d = tempfile.mkdtemp(prefix='cache_test_purge_')
+        try:
+            for f in ('carte8_a.pkl', 'carte9_a.pkl', 'carte10_a.pkl', 'fbx1_c1018.pkl', 'sprite_h0.npy'): open(os.path.join(d, f), 'wb').close()
+            o = DO.Donnees.__new__(DO.Donnees); o.cache = d; o.log = lambda *a: None
+            o._purger_anciens()
+            self.assertEqual(sorted(os.listdir(d)), ['carte10_a.pkl', 'fbx1_c1018.pkl', 'sprite_h0.npy'])
+        finally: shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)
