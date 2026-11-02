@@ -2798,6 +2798,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_CARTE_TEST'):                                  # (test) DQ_CARTE_TEST="nom;x,y,z;cx,cy,cz" : montre une carte de ville/grotte avec une camera fixe (animations de decor)
             nom_t, pc, cc = os.environ['DQ_CARTE_TEST'].split(';')
             e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.cam_libre = False
+            if os.environ.get('DQ_CARTE_SANS_SPR'): e.sprites.clear()                          # (test) sans les personnages du moteur (le heros se superposerait aux objets etudies)
             e.cam_pos = tuple(float(v) for v in pc.split(',')); e.cam_cible = tuple(float(v) for v in cc.split(','))
             if os.environ.get('DQ_CARTE_DEPL'):                              # (test) DQ_CARTE_DEPL="dx,dy,dz" : la camera se deplace de ce vecteur a chaque image affichee (scintillement en mouvement)
                 dv = [float(v) * self.n_boucle for v in os.environ['DQ_CARTE_DEPL'].split(',')]

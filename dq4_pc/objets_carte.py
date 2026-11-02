@@ -225,7 +225,9 @@ class ObjetsCarte:
         mot = st['mot']; t = st['temps']
         if mot is not None and mot['keys']:
             a, b, f = _interp(mot['keys'], t); cp, cr, cs = self._cles_mot(mot)
-            pos = pos + (cp[a] if a == b or f == 0.0 else cp[a] * (1 - f) + cp[b] * f)
+            dp = cp[a] if a == b or f == 0.0 else cp[a] * (1 - f) + cp[b] * f
+            if mot['flag'] & 4: pos = pos + self._rot(rot) @ (scl * dp)                      # mouvement commun (FldObject.c_pmv_func) : le deplacement est lu dans le repere de l'objet, MultiplyPoint(TRS(position, rotateXZY(rotation), echelle)) de l'objet avant le mouvement (tiroir qui sort de SON meuble, quel que soit son cap)
+            else: pos = pos + dp                                                              # mouvement ordinaire (FldObject.pmv_func) : le deplacement s'ajoute tel quel
             rot = rot + (cr[a] if a == b or f == 0.0 else cr[a] * (1 - f) + cr[b] * f)
             scl = scl * (cs[a] if a == b or f == 0.0 else cs[a] * (1 - f) + cs[b] * f)
         panneau = self.bill.get(i) if self.bill_ok else None
