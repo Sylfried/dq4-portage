@@ -35,6 +35,42 @@ def _interp(cles, t):
     return 0, 0, 0.0
 
 
+def _horloge(delai, rdelai, rep, fin):
+    """Compteur d'une animation (un FldObject.FLD_MOTION : cur_frame, start_delay, repeat_delay, repeat_num, end_frame) : chaque mouvement (FPMV) et chaque sequence de maillages (FSQD) a SON horloge,
+    avec sa duree et son nombre de tours (fld_motion_update 0xCD69DC, appele une fois par motion). Deux animations d'un meme objet (ex. le rayon de soin : sequence de 84 images, rotation de 800) ne partagent rien."""
+    return {'delai': delai, 'rdelai': rdelai, 'rep': rep, 'fin': fin, 'temps': 0, 'fini': False}
+
+
+def _avancer(h):
+    """Une image du jeu pour une horloge (FldObject.fld_motion_update) : delai de depart, puis le temps avance de PAS ; au-dela de la fin : un tour de moins (rep = -1 : sans fin), retour au debut
+    (reste du depassement) apres le delai entre deux tours, ou arret sur la derniere cle quand les tours sont epuises."""
+    if h['fini']: return
+    if h['delai'] >= 1: h['delai'] -= PAS; h['temps'] = 0
+    else:
+        h['temps'] += PAS
+        if h['temps'] > h['fin']:
+            reste = h['temps'] - h['fin']
+            if h['rep'] >= 1: h['rep'] -= 1
+            if h['rep'] == 0: h['temps'] = h['fin']; h['fini'] = True
+            else: h['temps'] = reste
+            h['delai'] = h['rdelai']
+
+
+def _migrer_auto(a):
+    """Etat enregistre par une ancienne version : une seule horloge (celle de la sequence, sinon celle du mouvement) pour les deux animations de l'objet. Les deux horloges reprennent le temps
+    enregistre (celle du mouvement a son propre modulo)."""
+    if 'hs' in a or 'hm' in a: return a
+    h = {k: a.get(k, d) for k, d in (('delai', 0), ('rdelai', 0), ('rep', -1), ('fin', 0), ('temps', 0), ('fini', False))}
+    n = {'seq': a.get('seq'), 'mot': a.get('mot'), 'hs': None, 'hm': None}
+    if n['seq'] is not None: n['hs'] = dict(h)
+    if n['mot'] is not None:
+        if n['seq'] is None: n['hm'] = dict(h)
+        else:
+            mo = n['mot']; n['hm'] = _horloge(mo['delai'], mo['rdelai'], mo['repeat'], mo['fin'])
+            if mo['fin'] > 0: n['hm']['temps'] = h['temps'] % mo['fin']
+    return n
+
+
 class ObjetsCarte:
     def __init__(self, c):
         self.objs = c['objets']; self.plages = c.get('plages', {}); self.var = c.get('var', {}); self.tabs = c.get('tabs', [])
@@ -68,28 +104,26 @@ class ObjetsCarte:
         self._semer()
 
     def _semer(self):
-        """Animations de depart : sequences de maillages et mouvements des objets qui en ont une en continu (FMAP seq_obj_id / pmv_id)."""
+        """Animations de depart : sequences de maillages et mouvements des objets qui en ont une en continu (FMAP seq_obj_id / pmv_id). Chacune a sa propre horloge (voir `_horloge`)."""
         self.auto = {}
         for i, o in enumerate(self.objs):
             if not self.valide(i): continue
-            a = None; so = o.get('seqobj', -1)
+            sq = mo = hs = hm = None; so = o.get('seqobj', -1)
             if 0 <= so < len(self.seqent) and i in self.imgobj:
                 e = self.seqent[so]
                 if 0 <= e[1] < len(self.seqs) and e[7] != 0 and self.seqs[e[1]]['keys'] and self.seqs[e[1]]['fin'] > 0:     # nombre de tours d'origine 0 : jamais lancee d'elle-meme
-                    sq = self.seqs[e[1]]; a = dict(seq=sq, mot=None, delai=e[3], rdelai=e[4], rep=e[5], fin=sq['fin'])
+                    sq = self.seqs[e[1]]; hs = _horloge(e[3], e[4], e[5], sq['fin'])
             pm = o.get('pmv', -1)
             if 0 <= pm < len(self.mots) and self.mots[pm]['keys'] and self.mots[pm]['repeat'] != 0 and self.mots[pm]['fin'] > 0:
-                mo = self.mots[pm]
-                if a is None: a = dict(seq=None, mot=mo, delai=mo['delai'], rdelai=mo['rdelai'], rep=mo['repeat'], fin=mo['fin'])
-                else: a['mot'] = mo
-            if a is None: continue
-            a['temps'] = 0; a['fini'] = False; self.auto[i] = a
-            st = self._st(i); st['seq'] = a['seq']; st['mot'] = a['mot']; self._poser(i)
+                mo = self.mots[pm]; hm = _horloge(mo['delai'], mo['rdelai'], mo['repeat'], mo['fin'])
+            if sq is None and mo is None: continue
+            self.auto[i] = dict(seq=sq, mot=mo, hs=hs, hm=hm)
+            st = self._st(i); st['seq'] = sq; st['mot'] = mo; st['temps'] = st['tseq'] = st['tmot'] = 0; self._poser(i)
 
     def restaurer(self, etat, auto=None):
         """Remet les objets dans un etat enregistre (etats instantanes) ; `auto` absent (ancien format) : animations en continu reprises au depart."""
         self.etat = etat
-        if auto is not None: self.auto = auto
+        if auto is not None: self.auto = {i: _migrer_auto(a) for i, a in auto.items()}
         for i, a in self.auto.items():
             st = self._st(i); st['seq'] = a['seq']; st['mot'] = a['mot']
         for i in list(self.etat): self._poser(i)
@@ -121,7 +155,7 @@ class ObjetsCarte:
     # ---- commandes du moteur
     def _st(self, i):
         o = self.objs[i]
-        return self.etat.setdefault(i, {'mdl': o['mdl'], 'off': False, 'alpha': 31, 'pos': None, 'rot': None, 'mot': None, 'seq': None, 'temps': 0})
+        return self.etat.setdefault(i, {'mdl': o['mdl'], 'off': False, 'alpha': 31, 'pos': None, 'rot': None, 'mot': None, 'seq': None, 'temps': 0, 'tmot': 0, 'tseq': 0})
 
     def valide(self, i):
         return 0 <= i < len(self.objs) and (i in self.plages or i in self.var_de)
@@ -129,7 +163,7 @@ class ObjetsCarte:
     def anim_commune(self, i, no):
         if not self.valide(i): return
         o = self.objs[i]; st = self._st(i)
-        self.auto.pop(i, None); st['mot'] = st['seq'] = None; st['temps'] = 0; st['fini'] = False
+        self.auto.pop(i, None); st['mot'] = st['seq'] = None; st['temps'] = st['tmot'] = st['tseq'] = 0; st['fini'] = False
         if no <= 0: st['mdl'] = o['mdl']
         else:
             tab = self.tabs[o['canim']] if 0 <= o['canim'] < len(self.tabs) else []
@@ -164,26 +198,23 @@ class ObjetsCarte:
     # ---- images
     def tick(self):
         """Une image du jeu : avance les mouvements et les sequences en cours. -> ensemble des groupes modifies depuis le dernier appel."""
-        for i, a in self.auto.items():                      # animations en continu : delai de depart, tours, delai entre deux tours (FldObject.fld_motion_update)
-            if a['fini'] or i not in self.etat: continue
-            if a['delai'] >= 1: a['delai'] -= PAS; a['temps'] = 0
-            else:
-                a['temps'] += PAS
-                if a['temps'] > a['fin']:
-                    reste = a['temps'] - a['fin']
-                    if a['rep'] >= 1: a['rep'] -= 1
-                    if a['rep'] == 0: a['temps'] = a['fin']; a['fini'] = True
-                    else: a['temps'] = reste
-                    a['delai'] = a['rdelai']
-            self.etat[i]['temps'] = a['temps']; self._poser(i)
+        for i, a in self.auto.items():                      # animations en continu : delai de depart, tours, delai entre deux tours (FldObject.fld_motion_update), une horloge par animation
+            if i not in self.etat: continue
+            st = self.etat[i]; vivant = False
+            for h, cle in ((a.get('hs'), 'tseq'), (a.get('hm'), 'tmot')):
+                if h is None or h['fini']: continue
+                _avancer(h); st[cle] = h['temps']; vivant = True
+            if vivant: self._poser(i)
         for i, st in self.etat.items():
             if i in self.auto: continue
-            mv = [x for x in (st['mot'], st['seq']) if x]
-            if not mv or st.get('fini'): continue
-            st['temps'] += PAS
-            for x in mv:                                   # FldObject.fld_motion_update : au dela de la fin, repetition (repeat = -1 : sans fin) ou tenue sur la derniere cle
-                if st['temps'] > x['fin'] and x['repeat'] == -1 and x['fin'] > 0: st['temps'] -= x['fin']
-            if all(st['temps'] >= x['fin'] and x['repeat'] != -1 for x in mv): st['fini'] = True
+            if st.get('fini'): continue
+            if not (st['mot'] or st['seq']): continue
+            for x, cle in ((st['mot'], 'tmot'), (st['seq'], 'tseq')):         # animation commune : chaque mouvement et chaque sequence compte son propre temps (FldObject.fld_motion_update : repetition, repeat = -1 : sans fin, sinon tenue sur la derniere cle)
+                if not x: continue
+                t = st.get(cle, st['temps']) + PAS
+                if t > x['fin'] and x['repeat'] == -1 and x['fin'] > 0: t -= x['fin']
+                st[cle] = t
+            if all(st[cle] >= x['fin'] and x['repeat'] != -1 for x, cle in ((st['mot'], 'tmot'), (st['seq'], 'tseq')) if x): st['fini'] = True
             self._poser(i)
         s = self.sale; self.sale = set(); return s
 
@@ -222,7 +253,7 @@ class ObjetsCarte:
         pos0, rot0, scl0 = self._origine(i); pos, rot, scl = pos0, rot0, scl0
         if st['pos'] is not None: pos = np.array(st['pos'], np.float64)
         if st['rot'] is not None: rot = np.array([st['rot'][0], st['rot'][1], 0.0], np.float64)
-        mot = st['mot']; t = st['temps']
+        mot = st['mot']; t = st.get('tmot', st['temps'])                                  # (etat d'une ancienne version : une seule horloge)
         if mot is not None and mot['keys']:
             a, b, f = _interp(mot['keys'], t); cp, cr, cs = self._cles_mot(mot)
             dp = cp[a] if a == b or f == 0.0 else cp[a] * (1 - f) + cp[b] * f
@@ -254,7 +285,7 @@ class ObjetsCarte:
         des deux cles autour de l'image courante ; la valeur d'une cle est le numero de l'enfant du modele)."""
         seq = st['seq']
         if seq is None or img is None or not seq['keys']: return self.orig[key][d:d + n], None, None
-        a, b, f = _interp(seq['keys'], st['temps']); n_img = len(img['pos'])
+        a, b, f = _interp(seq['keys'], st.get('tseq', st['temps'])); n_img = len(img['pos'])
         va = min(max(seq['keys'][a][1], 0), n_img - 1); vb = min(max(seq['keys'][b][1], 0), n_img - 1)
         mix = lambda x: None if x is None else (x[va] if va == vb or f == 0.0 else x[va] * (1 - f) + x[vb] * f)
         return mix(img['pos']), mix(img['uv']), mix(img['col'])
