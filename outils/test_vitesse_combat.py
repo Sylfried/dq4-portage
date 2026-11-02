@@ -320,9 +320,7 @@ class BoutonDeLEcran(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('DQ_APK') and os.environ.get('DQ_SAVES') and MO is not None, 'moteur reel : DQ_APK et DQ_SAVES requis')
 class RejeuMoteur(unittest.TestCase):
     """Moteur reel : meme combat (memes entrees par pas du moteur) rejoue a 1, 2 et 3 pas par image affichee avec la boucle de la visionneuse (VC.avancer) : memes paquets, memes messages, meme fin ; seul le temps change."""
-    @classmethod
-    def setUpClass(cls):
-        cls.traces = {}
+    PAS_MAX = int(os.environ.get('DQ_PAS_MAX') or 1100)                       # pas du moteur compares (1100 = 37 s de combat, une trentaine de secondes de test)
 
     def rejouer(self, f):
         sys.path.insert(0, os.environ.get('DQ_OUTILS', ICI))
@@ -347,18 +345,19 @@ class RejeuMoteur(unittest.TestCase):
             return p, decl
         def faire():
             p, decl = entree(); pq = mo.step(p, decl); etat['k'] += 1
-            trace.append((etat['k'], [(t, tuple(a[:6]), tuple(round(x, 3) for x in fl[:6])) for t, a, fl in pq if t not in (22, 28, 29)], tuple(sorted(mo.ui.msg.items())), mo.etat.partie, mo.msg_visible, mo.menu_actif()))
+            trace.append((etat['k'], [(t, tuple(a[:6]), tuple(round(x, 3) for x in fl[:6])) for t, a, fl in pq if t not in (22, 28, 29)], tuple(sorted(mo.ui.msg.items())), mo.etat.partie, mo.msg_visible, mo.menu_actif(), tuple(mo.ui.degats)))      # (+ nombres de degats, que la visionneuse prend puis vide a chaque pas)
+            mo.ui.degats = []
             return not (mo.menu_actif() is not None or (mo.msg_visible and mo.ui.msg.get('feed')))
         h = [0.0]; acc = 0.0; images = 0
-        while mo.etat.partie == MO.PARTIE_COMBAT and etat['k'] < 1100:
+        while mo.etat.partie == MO.PARTIE_COMBAT and etat['k'] < self.PAS_MAX:
             fac = VC.facteur(f, True, mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed')))
             acc, _, _ = VC.avancer(acc, 1.0 / 60.0, fac, faire, lambda: h[0]); h[0] += 1.0 / 60.0; images += 1
-        return trace[:1100], images
+        return trace[:self.PAS_MAX], images
 
     def test_meme_combat_a_toutes_les_vitesses(self):
         ref, im1 = self.rejouer(1.0)
         for f in (2.0, 3.0):
-            tr, im = self.rejouer(f); n = min(len(ref), len(tr)); self.assertGreater(n, 800)
+            tr, im = self.rejouer(f); n = min(len(ref), len(tr)); self.assertGreater(n, self.PAS_MAX * 0.7)
             self.assertEqual(tr[:n], ref[:n], 'x%g : le combat n\'est pas identique' % f)                       # memes paquets (hors maillages), memes messages, meme etat, pas pour pas
             self.assertLess(im, im1, 'x%g : pas plus rapide' % f)
 
