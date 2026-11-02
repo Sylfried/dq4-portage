@@ -706,7 +706,7 @@ class Jeu(pyglet.window.Window):
         - la taille de la fenetre est memorisee avant de la quitter (`taille_fenetre`, la position l'est par pyglet) et rendue d'un coup en y revenant, jamais par un etat intermediaire (plus de set_fullscreen(False) suivi de set_fullscreen(True)) ;
         - la fenetre est cachee AVANT, donc remontree une seule fois, a sa taille et a sa place definitives, et non pas montree au mauvais endroit puis deplacee ;
         - une image du jeu est dessinee a la taille definitive pendant qu'elle est cachee (les tampons du rendu hors ecran, postfx.py, ne sont refaits que si la taille a change, une seule fois, ici : plus de reconstruction forcee a chaque
-          bascule), puis affichee, puis la fenetre est montree : aucune trame de taille instable ni de tampon vide.
+          bascule), puis affichee, puis la fenetre est montree et la meme image redessinee aussitot (au cas ou le systeme n'aurait pas gardé celle de la fenetre cachee) : aucune trame de taille instable ni de tampon vide.
         Leve une erreur si le mode n'a pas pu etre pris (l'etat de depart est alors retabli). DQ_BASCULE_SIMPLE=1 : (debogage) un set_fullscreen sans rien d'autre, comme avant."""
         avant = bool(self.fullscreen)
         if avant == plein: return
@@ -726,6 +726,7 @@ class Jeu(pyglet.window.Window):
         if cachee:
             try: self.set_visible(True)
             except Exception as ex: print('Fenêtre non remontrée (%r)' % (ex,), flush=True)
+            else: self._image_de_bascule()          # (supposé : le systeme peut ne pas garder ce qui est affiche pendant que la fenetre est cachee ; la meme image est redessinee des qu'elle est visible, sans attendre la boucle)
         if erreur is not None: raise erreur
 
     def _mettre_plein(self, plein, taille):

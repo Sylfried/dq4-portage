@@ -6,7 +6,10 @@ scenario sur chacun et on compare les lignes « BASCULE ».
 
 Le jeu est lance tel quel (fenetre.main) : les compteurs sont poses de l'exterieur sur la classe Jeu, sur PostFX et sur l'ecran, sans rien changer au code mesure. Une bascule est detectee a l'entree de
 Jeu.regler_plein_ecran (code d'aujourd'hui) ou de Jeu.regler_mode_fenetre (code de la #42) ; le compte s'arrete 12 trames apres la fin de l'appel. Une ligne par bascule :
-    BASCULE n=1 vers=1 : set_fullscreen=1 recreations=1 cache/montre=1/1 mode_moniteur=0 (restore_mode=0) redimensionnements=3 trames=14 (instables=0) tampons=1 ...
+    BASCULE n=1 vers=1 : set_fullscreen=1 recreations=1 cache/montre=1/1 mode_moniteur=0 (restore_mode=0) redimensionnements=3 trames=14 (instables=0) tampons=1 ... || fenetre visible sans image : 0.0 ms (tampons refaits pendant ce temps : 0, deplacements : 0)
+« fenetre visible sans image » = temps entre l'affichage de la fenetre (visible(True)) et le premier flip qui la remplit : 0 si une image complete a deja ete affichee avant de la montrer (code d'aujourd'hui) ; avec le code
+de la #42, la fenetre apparait d'abord, l'image n'arrive qu'a la trame suivante (apres la reconstruction des tampons du rendu hors ecran et, au retour en fenetre, le deplacement de la fenetre). Sous Mesa / xvfb : 250 a 280 ms
+vers le plein ecran, 65 a 70 ms au retour, contre 0 ; sur un vrai GPU les durees seront bien plus courtes, la structure (fenetre visible avant sa premiere image) est la meme.
 A lancer sous xvfb (un seul a la fois sur la machine : voir /tmp/run_wt.sh). Les bascules se declenchent par les touches du harnais :
     --touches-test "60:F11,120:F11"                       (F11 : code d'aujourd'hui = fenetre <-> plein ecran ; code de la #42 = plein ecran exclusif)
     --options-test "60:Fenêtre=1;120:Fenêtre=0"            (code de la #42 : plein ecran sans bordure) ; "60:Plein écran=true;120:Plein écran=false" (code d'aujourd'hui)
@@ -31,7 +34,7 @@ ETAT = {'rec': None, 'n': 0, 'fait': []}
 
 def evt(*e):
     r = ETAT['rec']
-    if r is not None: r['ev'].append(e)
+    if r is not None: r['ev'].append(e); r['t'].append(time.perf_counter())
 
 
 def finir(r):
@@ -41,13 +44,25 @@ def finir(r):
     montre = sum(1 for e in ev if e[0] == 'visible' and e[1]); cache = sum(1 for e in ev if e[0] == 'visible' and not e[1])
     d = dict(n=r['n'], vers=r['vers'], set_fullscreen=c('set_fullscreen'), recreations=c('recreate'), cache_montre='%d/%d' % (cache, montre), mode_moniteur=c('set_mode'), restore_mode=c('restore_mode'), set_size=c('set_size'), set_location=c('set_location'),
              redimensionnements=c('resize'), trames=len(trames), instables=sum(1 for t in trames if t[1:] != final), tampons=c('tampons'), flips=c('flip'), duree_ms=round(r['duree'] * 1000, 1))
+    # ce que le joueur voit : la fenetre est « montree » (visible(True)) ; une image complete est « affichee » par le premier flip ; ce qui est dessine ou deplace entre les deux se voit
+    noms = [e[0] for e in ev]; t = r['t']; i_montre = next((i for i, e in enumerate(ev) if e[0] == 'visible' and e[1]), None)
+    if i_montre is None: d['montree_sans_image_ms'] = None; d['image_avant_montrer'] = None; d['tampons_fenetre_visible'] = 0; d['deplacements_fenetre_visible'] = 0
+    else:
+        i_recree = max([i for i, n in enumerate(noms) if n == 'recreate' and i <= i_montre] or [-1])
+        avant = any(noms[i] == 'flip' for i in range(i_recree + 1, i_montre))                  # une image a deja ete affichee depuis la recreation : la fenetre apparait avec son contenu
+        i_flip = next((i for i in range(i_montre, len(ev)) if noms[i] == 'flip'), None)
+        d['image_avant_montrer'] = avant
+        d['montree_sans_image_ms'] = 0.0 if avant or i_flip is None else round((t[i_flip] - t[i_montre]) * 1000, 1)
+        fin = len(ev) if avant else (i_flip if i_flip is not None else len(ev))
+        d['tampons_fenetre_visible'] = sum(1 for i in range(i_montre, fin) if noms[i] == 'tampons') if not avant else 0       # reconstructions des tampons du rendu hors ecran pendant que la fenetre est visible sans image
+        d['deplacements_fenetre_visible'] = sum(1 for i in range(i_montre, fin) if noms[i] in ('set_location', 'set_size')) if not avant else 0
     seq = []                                    # sequence compacte (les repetitions consecutives sont regroupees)
     for e in ev:
         s = e[0] if len(e) == 1 else '%s(%s)' % (e[0], ','.join(str(x) for x in e[1:]))
         if seq and seq[-1][0] == s: seq[-1][1] += 1
         else: seq.append([s, 1])
     d['sequence'] = ' '.join(s if k == 1 else '%sx%d' % (s, k) for s, k in seq)
-    ligne = 'BASCULE n=%(n)d vers=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/montre=%(cache_montre)s mode_moniteur=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d redimensionnements=%(redimensionnements)d trames=%(trames)d (instables=%(instables)d) tampons=%(tampons)d flips=%(flips)d duree=%(duree_ms)sms' % d
+    ligne = 'BASCULE n=%(n)d vers=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/montre=%(cache_montre)s mode_moniteur=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d redimensionnements=%(redimensionnements)d trames=%(trames)d (instables=%(instables)d) tampons=%(tampons)d flips=%(flips)d duree=%(duree_ms)sms || fenetre visible sans image : %(montree_sans_image_ms)s ms (tampons refaits pendant ce temps : %(tampons_fenetre_visible)s, deplacements : %(deplacements_fenetre_visible)s)' % d
     print(ligne, flush=True); print('   sequence :', d['sequence'], flush=True); print('BASCULE_JSON', json.dumps(d, ensure_ascii=False), flush=True)
     ETAT['fait'].append(d)
 
@@ -67,7 +82,7 @@ def entree_bascule(vers):
     def f(self, *a, **k):
         if ETAT['rec'] is not None: return orig(self, *a, **k)
         ETAT['n'] += 1
-        ETAT['rec'] = rec = dict(n=ETAT['n'], vers=vers(self, *a), ev=[], duree=0.0, t0=time.perf_counter(), fin=False, apres=0)
+        ETAT['rec'] = rec = dict(n=ETAT['n'], vers=vers(self, *a), ev=[], t=[], duree=0.0, t0=time.perf_counter(), fin=False, apres=0)
         try: return orig(self, *a, **k)
         finally: rec['duree'] = time.perf_counter() - rec['t0']; rec['fin'] = True
     return f
@@ -87,7 +102,7 @@ orig_draw = Jeu.on_draw
 
 def on_draw(self):
     r = ETAT['rec']
-    if r is not None: r['ev'].append(('trame',) + tuple(self.get_framebuffer_size()))
+    if r is not None: r['ev'].append(('trame',) + tuple(self.get_framebuffer_size())); r['t'].append(time.perf_counter())
     ret = orig_draw(self)
     if r is not None and r['fin']:
         r['apres'] += 1

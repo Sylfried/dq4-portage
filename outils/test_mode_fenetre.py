@@ -225,13 +225,13 @@ class Bascule(unittest.TestCase):
 
     def test_vers_le_plein_ecran_en_une_etape(self):
         f = self.fen(); self.assertTrue(f.regler_plein_ecran(True))
-        self.assertEqual(f.journal, ['visible(False)', 'set_fullscreen(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'visible(True)', 'journal(plein écran)'])
+        self.assertEqual(f.journal, ['visible(False)', 'set_fullscreen(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'journal(plein écran)'])
         self.assertEqual((f.mode_fen, f.reg['mode_fenetre'], f.taille_fenetre), (1, 1, (1280, 720)))         # (la taille de la fenetre est gardee pour le retour)
         self.assertEqual(f.post.cle, ('cle', 1))                                                              # (les tampons du rendu hors ecran ne sont pas invalides de force : refaits seulement si la taille change)
 
     def test_retour_en_fenetre_en_une_etape_a_la_taille_memorisee(self):
         f = self.fen(); f.regler_plein_ecran(True); f.journal.clear(); self.assertFalse(f.regler_plein_ecran(False))
-        self.assertEqual(f.journal, ['visible(False)', 'set_fullscreen(False,1280x720)', 'switch_to', 'on_draw(1280x720)', 'flip', 'visible(True)', 'journal(fenêtre)'])
+        self.assertEqual(f.journal, ['visible(False)', 'set_fullscreen(False,1280x720)', 'switch_to', 'on_draw(1280x720)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(fenêtre)'])
         self.assertEqual((f.mode_fen, f.reg['mode_fenetre'], f.width, f.height), (0, 0, 1280, 720))
 
     def test_aucun_set_fullscreen_double(self):
@@ -260,7 +260,7 @@ class Bascule(unittest.TestCase):
         self.assertFalse(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (0, 0))
         self.assertEqual(f.toasts, ['Plein écran impossible'])
         self.assertEqual([e for e in f.journal if e.startswith('set_fullscreen')], ['set_fullscreen(True)', 'set_fullscreen(False,1280x720)'])      # (changement puis retour a l'etat de depart)
-        self.assertEqual(f.journal[-3:], ['flip', 'visible(True)', 'journal(fenêtre)'])                       # (une image complete est montree)
+        self.assertEqual(f.journal[-6:], ['flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(fenêtre)'])                       # (une image complete est dessinee avant et apres l'affichage de la fenetre)
 
     def test_echec_du_retour_en_fenetre_reste_en_plein_ecran(self):
         f = self.fen(); f.regler_plein_ecran(True); os.environ['DQ_SIM_ECHEC'] = '0'
