@@ -64,7 +64,7 @@ class ReglesPures(unittest.TestCase):
 
 def faux_jeu_marche(marche=2.0, accel=1.5, drapeaux=0x28, msg=False, partie=MO.PARTIE_VILLE, direction=MO.DROITE, accel_tenue=False):
     mo = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=None, attente_charge=None), msg_visible=msg, menu_actif=lambda: None, drapeaux=lambda: drapeaux)
-    return types.SimpleNamespace(reg={'vitesse_marche': marche, 'vitesse_accel': accel}, moteur=mo, pad=lambda: direction, _tenue=lambda a: accel_tenue and a == 'accel')
+    return types.SimpleNamespace(reg={'vitesse_marche': marche, 'vitesse_accel': accel}, moteur=mo, pad=lambda: direction, _tenue=lambda a: accel_tenue and a == 'accel', _horloge_combat=lambda: False)           # (hors combat : la branche « vitesse des combats » de Jeu._facteur_vitesse ne joue pas)
 
 
 class VitesseDeMarche(unittest.TestCase):

@@ -200,7 +200,7 @@ class IndependanceAccelerateur(unittest.TestCase):
     @staticmethod
     def faux(partie, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, effet=None, attente=None, menu=None, msg=False, feed=False):
         j = types.SimpleNamespace(reg={'vitesse_combat': vitesse_combat, 'vitesse_marche': marche, 'vitesse_accel': accel})
-        j.moteur = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=effet, attente_charge=attente), msg_visible=msg, menu_actif=lambda: menu, ui=types.SimpleNamespace(msg={'feed': feed}))
+        j.moteur = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=effet, attente_charge=attente), msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
         j.pad = lambda: MO.HAUT if direction else 0
         j._tenue = lambda a: accel_tenue and a == 'accel'
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))

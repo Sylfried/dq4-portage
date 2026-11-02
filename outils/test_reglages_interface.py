@@ -7,13 +7,13 @@ Verifie : (1) que toute cle de reglage est classee (interface ou non) : une cle 
 (3) « Retablir toutes les interfaces » remet toutes les interfaces et les options de l'editeur a DEFAUT, sans toucher aux autres reglages (son, affichage, touches...) ;
 (4) les memes actions, appelees par la page Interface (Pause), changent aussi l'etat de session de l'editeur (place du panneau).
 """
-import copy, os, sys, tempfile, types, unittest
+import copy, json, os, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
 import reglages as RG
 
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
-HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
+HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'suivi_camera_v', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte', 'defilement_force',
                   'defilement_combat', 'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches'}
@@ -154,6 +154,27 @@ class RemiseAZero(unittest.TestCase):
         ent['Rétablir toutes les interfaces']['ok']()
         for k in RG.CLES_INTERFACE: self.assertEqual(r[k], RG.DEFAUT[k], k)
         self.assertIsNone(P.pan_pos)
+
+
+class SuiviCameraParDefaut(unittest.TestCase):
+    """« Centrer la camera sur le joueur » : activee par defaut ; un fichier enregistre AVANT la cle de version (camera_centree = False) repasse une seule fois a True, ensuite le choix du joueur fait foi."""
+    def charger(self, d):
+        with tempfile.TemporaryDirectory() as t:
+            c = os.path.join(t, 'reglages.json')
+            with open(c, 'w', encoding='utf-8') as f: json.dump(d, f)
+            return RG.Reglages(c)
+
+    def test_defaut(self):
+        self.assertIs(RG.DEFAUT['camera_centree'], True)
+        self.assertIs(RG.Reglages(None)['camera_centree'], True)
+
+    def test_ancien_fichier_desactive_repasse_a_oui_une_fois(self):
+        r = self.charger({'camera_centree': False})
+        self.assertIs(r['camera_centree'], True); self.assertEqual(r['suivi_camera_v'], RG.DEFAUT['suivi_camera_v'])
+
+    def test_choix_ulterieur_conserve(self):
+        r = self.charger({'camera_centree': False, 'suivi_camera_v': RG.DEFAUT['suivi_camera_v']})
+        self.assertIs(r['camera_centree'], False)
 
 
 if __name__ == '__main__':
