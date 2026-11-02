@@ -35,6 +35,14 @@ TAILLE_POLICE = 19.0        # (repli GMaruGoPro-M) taille native de la police du
 MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
 
 
+def base_premiere_ligne(zp, row, n, pas, asc):
+    """Ordonnee (unites, vers le haut) de la ligne de base de la 1re ligne d'un TextMesh : TextMesh.anchor pose le point d'ancrage zp en haut (row 0), au milieu (1) ou en bas (2) d'un bloc de n lignes de hauteur `pas`
+    (= interligne de la police x characterSize x 0,1 x lineSpacing) ; la ligne de base est `asc` (ascent de la police x characterSize x 0,1) sous le haut de la ligne, quel que soit lineSpacing.
+    Verifie sur la capture du mobile (ecran4 : « Rat volant » 1 ligne, « Scarapince / x2 » 3 lignes, onglet « Ragnar »), a 0,3 unite pres."""
+    hb = n * pas
+    return zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0) - asc
+
+
 # Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
 ETAT_NORMAL, ETAT_ENFONCE, ETAT_INVISIBLE, ETAT_GRISE, ETAT_INVERSE = 0, 1, 2, 3, 4
 LIBELLE_AUTO = 'Sauvegarde automatique'      # chaine 623 du jeu (patch FR) : l'etiquette de la plaque auto quand le moteur n'en envoie pas (il ne l'envoie qu'avec un data5.dat valide)
@@ -985,9 +993,7 @@ class Rendu:
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = nd['tscale']
         row = t['anchor'] // 3; col = t['anchor'] % 3
-        hb = N * pas                                                    # hauteur du bloc de texte
-        haut = zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0)       # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
-        base0 = haut - asc
+        base0 = base_premiere_ligne(zp, row, N, pas, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
         px = max(6, int(round(emy * s)))
         def teinte(i):
             pal = self.ml.couleurs[i] if 0 <= i < len(self.ml.couleurs) else (1, 1, 1, 1)
