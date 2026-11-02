@@ -10,6 +10,7 @@ PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
 PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 MSGDBG = bool(os.environ.get('DQ_MSGDBG'))     # (test) journal des etats du message du moteur
+FBXLOG = bool(os.environ.get('DQ_FBXLOG'))     # (test) journal des paquets 32 (dragon du titre : position, rotation, couleur, sequence)
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
@@ -151,11 +152,12 @@ class Etat:
                     self.modeles[a[0]] = a[1]
                     self.mesh_etat[a[0]] = {'shader': 3 if a[1] > 999 else 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}      # MeshChara..ctor : shader 1 (DssaMonster0) sauf id > 999 (DssaCharaTransparent) ; couleur blanche
                 else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None); self.mesh_etat.pop(a[0], None)
-            elif t == 31 and len(a) >= 2:           # cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, tourne de (0, 180, 0), echelle 1
-                if a[1] >= 0: self.fbx[a[0]] = {'id': a[1], 'vis': False, 'pos': (0.0, 0.0, 0.0), 'rot': (0.0, 180.0, 0.0), 'scl': (1.0, 1.0, 1.0), 'col': (1.0, 1.0, 1.0, 1.0), 'anim': []}
+            elif t == 31 and len(a) >= 2:           # cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, sans rotation (le constructeur de FbxObject n'en pose pas ; le moteur envoie la rotation absolue au 1er paquet 32 : FbxObject.SetRotation = Quaternion.Euler puis Transform.set_rotation, 0xCD1748), echelle 1
+                if a[1] >= 0: self.fbx[a[0]] = {'id': a[1], 'vis': False, 'pos': (0.0, 0.0, 0.0), 'rot': (0.0, 0.0, 0.0), 'scl': (1.0, 1.0, 1.0), 'col': (1.0, 1.0, 1.0, 1.0), 'anim': []}
                 else: self.fbx.pop(a[0], None)
             elif t == 32 and a:                     # cmd_fbx : emplacement = v & 0xff ; bits 8-9 : visibilite (bit 8 = visible) ; 10 : forcer l'animation ; 11 : echelle (3 flottants) ; 12 : couleur (4) ; 13 : position (3) ; 14 : rotation, degres (3) ; 15 : animation (un entier : sequence)
                 v = a[0]; m = self.fbx.get(v & 0xff); fl = list(f)
+                if FBXLOG: print('FBX image %d paquet 32 : v=%#x ints=%s flottants=%s' % (self.image, v & 0xffff, list(a[1:]), [round(x, 4) for x in fl]), flush=True)         # (test) DQ_FBXLOG=1 : tous les paquets 32 (position, rotation, echelle, couleur, sequence)
                 if m is not None:
                     if v & 0x300: m['vis'] = bool(v & 0x100)
                     if v & 0x800 and len(fl) >= 3: m['scl'] = tuple(fl[:3]); fl = fl[3:]

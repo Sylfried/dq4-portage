@@ -35,6 +35,26 @@ TAILLE_POLICE = 19.0        # (repli GMaruGoPro-M) taille native de la police du
 MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
 
 
+# Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
+ETAT_NORMAL, ETAT_ENFONCE, ETAT_INVISIBLE, ETAT_GRISE, ETAT_INVERSE = 0, 1, 2, 3, 4
+LIBELLE_AUTO = 'Sauvegarde automatique'      # chaine 623 du jeu (patch FR) : l'etiquette de la plaque auto quand le moteur n'en envoie pas (il ne l'envoie qu'avec un data5.dat valide)
+TEXTE_GRIS = 3                               # MenuParts.TEXT_COLOR_GRAY : couleur de texte d'un bouton grise (palette du jeu)
+BOUTON_AUTO = 4                              # numero du bouton « Sauvegarde automatique » du menu de depart (type 53, cellule (4, 1) du moteur, banque 4 = data5.dat)
+
+
+def etat_actif(etat):
+    """Un bouton reagit-il au contact (souris, tactile) et a la validation ? MenuParts.IButton : le fichier de rappel des etats (RVA 0xD043CC) coupe le test de contact (`defaultIsHit`, 0xCFDB6C) pour les etats 2 (invisible),
+    3 (grise) et 4 (inverse) ; normal et enfonce le laissent actif. Un bouton grise n'est donc ni survole ni choisi, et le moteur ne recoit rien."""
+    return etat not in (ETAT_INVISIBLE, ETAT_GRISE, ETAT_INVERSE)
+
+
+def plaque_auto_disponible(code_auto, libelle_moteur):
+    """La sauvegarde automatique existe-t-elle ? Le moteur le dit par le code 0 du menu de depart (1 : data5.dat valide, 0 : absent ou illisible) et n'envoie l'etiquette de la cellule (4, 1) que dans le premier cas ;
+    `code_auto` None (code pas encore recu) : l'etiquette tranche."""
+    if code_auto is not None: return code_auto != 0
+    return bool((libelle_moteur or '').strip())
+
+
 def lire_cadres(chemin):
     """frameData (TextAsset du jeu) : nombre de maillages, puis pour chacun : nb sommets, nb indices, sommets (x, y, z, u, v), indices."""
     import struct
@@ -137,6 +157,7 @@ class Fenetre:
         if self.noms:
             for nd in self._marques(): nd['marque'] = True
         self.debut = nom.startswith('Make_StartMenuSelect')                       # menu de depart : cadre choisi par le code 3
+        self.vals_code = {}; self.auto_grise = False                              # derniere valeur de chaque code recu ; plaque « Sauvegarde automatique » grisee par la visionneuse (voir plaque_auto)
         for pt in self.parts:
             nd = self.N.get(pt['node'])
             for ib in pt['ib']:
@@ -271,6 +292,7 @@ class Fenetre:
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
+        self.vals_code[i] = c
         if self.eglise and i == 0: self._eglise(c)
         elif self.statut: self._statut(i, c)
         elif self.noms and i == 4: self._reset_marques()
@@ -500,7 +522,7 @@ class Fenetre:
         """Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface ; ident : l'identifiant de l'element s'ajoute en fin de tuple."""
         out = []
         for nd in self.N.values():
-            if not nd['pad'] or nd['buttonId'] is None or not nd['vtx'] or nd['etat'] == 2 or not self.visible(nd['id']): continue
+            if not nd['pad'] or nd['buttonId'] is None or not nd['vtx'] or not etat_actif(nd['etat']) or not self.visible(nd['id']): continue
             xs = [nd['pos'][0] + v[0] for v in nd['vtx']]; zs = [nd['pos'][2] + v[1] for v in nd['vtx']]
             out.append((nd['buttonId'], nd['pad'], min(xs), min(zs), max(xs), max(zs), nd['pos'][1]) + ((nd['id'],) if ident else ()))
         return out
@@ -544,6 +566,37 @@ class Fenetre:
             vide = bool(tx) and not any((n['text'].get('text') or '').strip() for n in tx)
             if vide: pl['act'] = False; pl['_vide'] = True
             elif pl.pop('_vide', False): pl['act'] = True
+
+    def textes_grises(self):
+        """Texte gris (TEXT_COLOR_GRAY) sur les plaques de bouton grisees (etat 3), blanc de nouveau quand elles ne le sont plus. Le shader gris du jeu ne fait que retirer la couleur : sur la plaque grise du menu de depart
+        la difference ne se voit presque pas ; le texte gris montre qu'elle est inactive (choix de la visionneuse : le jeu, lui, ne change la couleur du texte que pour les boutons qui l'ont demande)."""
+        for pl in self.N.values():
+            if pl['buttonId'] is None or not pl['mats'] or pl['mats'][0].get('part') != 7: continue
+            for t in self.N.values():
+                if t['par'] != pl['id'] or t['text'] is None: continue
+                if pl['etat'] == ETAT_GRISE: t['tcol'] = TEXTE_GRIS; t['_gris'] = True
+                elif t.pop('_gris', False): t['tcol'] = 0
+
+    def plaque_auto(self, bouton=BOUTON_AUTO, libelle=LIBELLE_AUTO):
+        """Menu de depart : plaque « Sauvegarde automatique » (voir _plaque_auto) puis texte gris des plaques grisees."""
+        self._plaque_auto(bouton, libelle); self.textes_grises()
+
+    def _plaque_auto(self, bouton=BOUTON_AUTO, libelle=LIBELLE_AUTO):
+        """Menu de depart (type 53) : la plaque « Sauvegarde automatique » reste TOUJOURS visible, avec son etiquette ; sans sauvegarde auto elle est grisee (etat 3 : shader gris) donc inactive (`etat_actif` : ni survol, ni clic,
+        ni validation au clavier ; le moteur, qui n'a pas de cellule 4 dans ce cas, ne recoit rien). Le jeu d'origine, lui, CACHE cette plaque (code 0 = 0 : cadre 215 / 216 puis SetActive(false)) ; la demande de l'utilisateur
+        (grisee, jamais disparue) l'emporte. Avec DQ_AUTO_CACHEE : comportement d'origine. Idempotent (appelee a chaque image)."""
+        pl = next((n for n in self.N.values() if n['buttonId'] == bouton and n['mats'] and n['mats'][0].get('part') == 7 and n['vtx']), None)
+        if pl is None: return
+        tx = [n for n in self.N.values() if n['par'] == pl['id'] and n['text'] is not None]
+        etiquette = ' '.join((n['text'].get('text') or '').strip() for n in tx).strip()
+        if self.auto_grise and etiquette == libelle: etiquette = ''                  # notre propre etiquette de remplacement n'est pas celle du moteur (compte seulement tant que le code 0 manque)
+        if plaque_auto_disponible(self.vals_code.get(0), etiquette):
+            if self.auto_grise: self.auto_grise = False; self.param_int(bouton, 0, ETAT_NORMAL)         # la sauvegarde auto est apparue : plaque normale (le moteur donne l'etiquette)
+            pl['act'] = True; pl.pop('_vide', None); return
+        if os.environ.get('DQ_AUTO_CACHEE'): pl['act'] = False; pl['_vide'] = True; return           # (comparaison) comme le jeu d'origine : plaque cachee
+        pl['act'] = True; pl.pop('_vide', None)
+        if not self.auto_grise or not etiquette: self.param_str(bouton, 1, libelle)
+        self.auto_grise = True; self.param_int(bouton, 0, ETAT_GRISE)
 
     def cadre_menu(self, marge=22.0, visibles=False):
         """Rectangle (x0, z0, x1, z1) de toute la mise en page (plaques, boutons), agrandi de `marge` : le cadre noir du menu de depart ; `visibles` : seulement les elements montres (listes de journaux : le cadre change de hauteur)."""
@@ -792,7 +845,8 @@ class Rendu:
                         if getattr(fen, 'appui_nd', None) == nd['id']: col = [c * 0.75 for c in col]        # fleche de page APPUYEE : comme le mobile (IButton(Material), DisplayClass6_0.b__0 : Material.color = 0,75 sur les quatre canaux)
                         else: col[:3] = [1.4, 1.4, 1.4]                                 # fleche de page survolee (PC, le mobile n'a pas de survol) : eclaircie
                     elif k == 0 and nd['buttonId'] is not None and (nd['buttonId'] >= 0 or fen.sel_nd == nd['id']) and 'part' in mat and mat['part'] == 7:
-                        if fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
+                        if not etat_actif(nd['etat']): etat = nd['etat']              # grise / inverse / invisible : ni survol ni curseur (le test de contact est coupe)
+                        elif fen.sel_nd is not None: etat = 1 if nd['id'] == fen.sel_nd else nd['etat']       # souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
                         else: etat = 1 if (fen.sel is not None and fen.sel == nd['buttonId'] and not ((nd['pad'] or 0) & 0xA0 and nd['buttonId'] in ok_num[id(fen)])) else nd['etat']       # un bouton d'annulation (manette 32 / 128, ex. « Rien ») qui partage son numero avec un bouton de validation (« Acheter ») ne s'allume pas avec lui
                         if etat == 1 or etat == 4: off = self.ml.pousse
                         if etat == 2: col[3] = 0.0
