@@ -33,6 +33,7 @@ SXTH_W20_W8 = 0x13003d14
 COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
+ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
 
 class Silencieux:
@@ -115,7 +116,7 @@ class Etat:
                     if i in self.symboles: self.symboles[i]['vis'] = False
                 elif len(f) >= 3: self.symboles[i] = {'genre': (v >> 8) & 0x7f, 'x': f[0], 'y': f[1], 'alpha': f[2], 'vis': True}
             elif t == 12 and len(a) >= 2:
-                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True}
+                if a[1] >= 0: self.sprites[a[0]] = {'id': a[1], 'pos': None, 'col': (1, 1, 1, 1), 'pose': 0, 'dir': 0, 'vis': True, 'cree': self.image}
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
@@ -198,7 +199,11 @@ class Etat:
                 if flags & 0x800: fl = fl[1:]
                 if flags & 0x1000: s['col'] = tuple(fl[:4]); fl = fl[4:]
                 if flags & 0x2000 or flags & 0x8000: s['pos'] = tuple(fl[:3]); fl = fl[3:]      # 0x8000 : meme position, version carte du monde (pixels)
-                if flags & 0x4000 and len(a) > 1: s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
+                if flags & 0x4000 and len(a) > 1:
+                    s['pose'] = a[1] & 0xff; s['dir'] = (a[1] >> 8) & 0xff
+                    if s['pos'] is None and self.image - s.get('cree', 0) >= ORIGINE_APRES: s['pos'] = (0.0, 0.0, 0.0)       # le moteur n'envoie une position que si elle change de celle qu'il croit deja posee (son enregistrement du personnage : (0, 0, 0)) :
+                                                                          # un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
+                                                                          # du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
 
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
