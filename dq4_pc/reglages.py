@@ -29,6 +29,7 @@ DEFAUT = {
     'lissage': True,              # agrandissement lineaire des textures (non : plus proche voisin)
     'mode_fenetre': 0,            # fenetre : 0 fenetre, 1 plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas : le plein ecran d'avant, ex-booleen « plein_ecran »), 2 plein ecran exclusif (le moniteur passe a la resolution du reglage « resolution ») ; F11 / Alt + Entree : bascule vers 2, puis retour
     'mode_fenetre_retour': 0,     # dernier mode non exclusif (0 ou 1) : F11 / Alt + Entree depuis le plein ecran exclusif y revient
+    'correction_bords': True,     # villes, donjons, tours : les personnages ne penchent plus vers l'exterieur pres des bords gauche / droit de l'ecran (1 / True = corrige, 0 / False = comme avant ; une valeur entre 0 et 1 = correction partielle ; voir Jeu._panneau_ville)
     'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
     'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
     'nettete': 0.0,               # 0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
@@ -187,6 +188,7 @@ class Reglages:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
                 self.v['defilement_combat'] = cran_defilement(self.v['defilement_combat']) if isinstance(self.v['defilement_combat'], int) and not isinstance(self.v['defilement_combat'], bool) else DEFAUT['defilement_combat']
                 for k in VITESSES_X_CLES: self.v[k] = cran_x(self.v[k], DEFAUT[k])                       # ancien curseur (0,5 a 2) -> x1 a x4
+                if not isinstance(self.v['correction_bords'], (bool, int, float)): self.v['correction_bords'] = DEFAUT['correction_bords']        # (0 a 1 accepte : correction partielle ; autre chose : valeur par defaut)
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
