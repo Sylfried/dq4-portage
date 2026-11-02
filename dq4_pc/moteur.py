@@ -3,6 +3,8 @@ import os, re, struct, zipfile, unicorn
 import numpy as np
 import emu_core as T
 import priorite_jeu as PJ
+import pose_couchee as PC
+import rencontres as RE
 from pktlog import PacketLog
 from historique import Capteur
 from historique_combat import CapteurCombat
@@ -43,6 +45,8 @@ COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = 
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
 TBZ_W20_0 = 0x36000094
+COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
+STR_W8_X0 = 0xb9000008
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -103,13 +107,14 @@ class Etat:
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
+        self.dort_haut = 0.0                          # paquet 17 (Chara.SetSleepNear) : hauteur du corps des personnages couches (composante Y de s_lieOffset, statique de Chara : elle survit aux changements de carte) ; 0 tant que le moteur n'a rien envoye
         self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
     def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0, 'combat': False}      # 'combat' : fondu de la transition d'un combat (duree du jeu, voir transition_combat)
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None)
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None); self.__dict__.setdefault('dort_haut', 0.0)
         self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
@@ -155,6 +160,18 @@ class Etat:
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
+            elif t == 16 and a:                     # cmd_chara_sleep_pose (D132FC) : personnage = v & 0xff ; bits 8-9 : Chara.SetSleepPose(bit 8) ; bit 10 : Chara.SetSleepDir(v >> 12) (voir pose_couchee.py)
+                v = a[0]; s = self.sprites.get(v & 0xff)
+                if s is not None:
+                    if v & 0x300:
+                        s['dort'] = bool(v & 0x100)
+                        if s['dort']: s['dort_rot'] = (0.0, 0)          # SetSleepPose(vrai) : quadrant 0, rotation identite (la direction suit dans le meme paquet)
+                    if v & 0x400: s['dort_rot'] = PC.direction_paquet(v)
+            elif t == 17 and len(a) >= 2:           # cmd_chara_sleep_near (D133E4) : (defNear, decalage) ; Chara.SetSleepNear : hauteur du corps couche
+                self.dort_haut = PC.hauteur_paquet(a[1])
+            elif t == 18 and a:                     # cmd_chara_pose (D13474) : v = personnage | numero << 8 : Chara.SetTexture(numero) = le personnage change de feuille de sprites (TownCharacterDraw::changePose)
+                s = self.sprites.get(a[0] & 0xff)
+                if s is not None and (a[0] >> 8) >= 0: s['id'] = (a[0] >> 8) | (s['id'] & 4096)
             elif t == 15 and a:                     # cmd_chara_shadow (D13150) : personnage = v & 0xff ; bits 8-9 : ombre visible (bit 8) ; bits 10-11 : ombre separee (bit 10) ; bit 12 : position de l'ombre (3 flottants,
                 v = a[0]; s = self.sprites.get(v & 0xff)        # SetShadowPosition) ; bit 13 : opacite (SetShadowAlpha) ; bit 14 : position de l'ombre sur la carte du monde (SetFieldShadowPosition)
                 if s is not None:
@@ -452,6 +469,7 @@ class Moteur:
         self._crochets_texte()
         self._crochets_fondu()
         self._crochets_niveau()
+        self._crochets_rencontres()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
@@ -501,6 +519,27 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('PV/PM au niveau superieur : crochet non installe :', ex, flush=True)
+
+    def _crochets_rencontres(self):
+        """Rencontres aleatoires et marche acceleree (voir rencontres.py). `vitesse_marche` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
+        > 1 : le crochet sur `str w8, [x0]` de `CountDown::exec` (w9 = compteur avant, w8 = apres) remplace la perte du compteur par (1 + a) / (2 a) fois celle du jeu, de sorte que les rencontres par seconde
+        reelle soient (1 + a) / 2 fois celles de x1 et non a fois. A 1 (ou moins) : le crochet ne fait rien (le jeu d'origine, a l'identique)."""
+        c = self.core; self.vitesse_marche = 1.0; self.rencontres = RE.Reducteur()
+        try:
+            a = c.export('_ZN9CountDown4execEv')
+            if not a or struct.unpack('<I', c.mem(a + COUNTDOWN_EXEC_ECRITURE, 4))[0] != STR_W8_X0:
+                print('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres', flush=True); return
+            def _cd(uc, ad, sz, u):
+                v = self.vitesse_marche
+                if v <= 1.0: return                                                          # x1 : le jeu tel quel
+                r = self.rencontres; r.facteur = RE.facteur_par_pas(v)
+                avant = uc.reg_read(c.XREG[9]) & 0xffffffff; apres = uc.reg_read(c.XREG[8]) & 0xffffffff
+                avant -= (avant & 0x80000000) << 1; apres -= (apres & 0x80000000) << 1      # entiers signes de 32 bits (le compteur devient negatif au declenchement)
+                uc.reg_write(c.XREG[8], (avant - r.retenir(avant - apres)) & 0xffffffff)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _cd, None, a + COUNTDOWN_EXEC_ECRITURE, a + COUNTDOWN_EXEC_ECRITURE)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree

@@ -33,6 +33,7 @@ import vitesse_combat as VC
 import teinte_carte as TC
 import ecrans as EK          # choix du moniteur du plein ecran (logique pure : ecrans.py)
 import suivi_charge as SV
+import pose_couchee as PC
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -2676,6 +2677,7 @@ class Jeu(pyglet.window.Window):
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse(); en_combat = self._horloge_combat() and f > 1.0
+        self.moteur.vitesse_marche = 1.0 if self._horloge_combat() else f          # marche acceleree : les rencontres aleatoires par seconde suivent (1 + a) / 2 et non a (crochet du compteur du moteur, voir rencontres.py) ; en combat, rien
         self._se_images = set() if en_combat else None            # combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sons_a_jouer) ; sa vitesse de lecture ne change pas
         self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas_terrain, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
@@ -3220,7 +3222,8 @@ class Jeu(pyglet.window.Window):
             if not f: continue
             tw, th, nl = f['tw'], f['th'], f['nl']
             col, row = s['pose'] % 3, s['dir'] % nl
-            if phi:                                                                  # camera tournee : la rangee montre le personnage tel qu'on le voit (cap du personnage - rotation de la camera, au plus proche)
+            dort = bool(s.get('dort')) and not champ and not bataille and cam3d is not None          # personnage couche (paquet 16) : dessine a plat par pose_couchee, voir plus bas
+            if phi and not dort:                                                     # camera tournee : la rangee montre le personnage tel qu'on le voit (cap du personnage - rotation de la camera, au plus proche) ; un personnage couche garde la rangee du moteur (c'est son corps entier qui tourne a l'ecran avec la camera)
                 pas_d = 360.0 / nl; row = int(round((row * pas_d - phi) / pas_d)) % nl
             pl, ph, g = f['cl'] + 2 * f['g'], f['ch'] + 2 * f['g'], f['g']          # case (col, row) de l'atlas (origine ou HD), gouttieres exclues
             u0, u1 = (col * pl + g) / tw, (col * pl + g + f['cl']) / tw
@@ -3234,7 +3237,15 @@ class Jeu(pyglet.window.Window):
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
                 # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
                 # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
-                a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue)
+                if dort and C_vue is not None:
+                    # Pose couchee (paquets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep ; voir pose_couchee.py) : le panneau n'est PAS debout, la correction des bords (qui redresse un panneau debout) ne lui
+                    # est jamais appliquee ; vu de dessus, a pleine taille, tourne selon la direction du sommeil, avec la profondeur du corps a plat (z-buffer, recouvrements par un lit, un mur...)
+                    ang, qd = s.get('dort_rot', (0.0, 0))
+                    qv = PC.sommets(p, ang, qd, float(getattr(e, 'dort_haut', 0.0)), wk / 0.48, cam3d, C_vue)
+                    if qv is None: continue
+                    a, b, c, d = qv
+                else:
+                    a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
                 a, b = p - dh * w / 2, p + dh * w / 2
@@ -3245,7 +3256,7 @@ class Jeu(pyglet.window.Window):
             if vl is None: vl = self.sprite_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             a_dessiner.append((slot, f, vl))
-            if s.get('ombre', True):                                                 # paquet 15 : le moteur peut masquer l'ombre d'un personnage (bateaux de la carte du monde...)
+            if s.get('ombre', True) and not (dort and not s.get('ombre_sep')):       # paquet 15 : le moteur peut masquer l'ombre d'un personnage (bateaux de la carte du monde...) ; couche, l'ombre part 64 sous le sol (Chara.lieBillboard) sauf si elle est separee
                 al = float(s['col'][3]) * float(s.get('ombre_a', 1.0))
                 if cam3d is not None: ombres.append((slot, np.array(s['ombre_pos'], float) if s.get('ombre_sep') and s.get('ombre_pos') else p, al))
                 elif champ: ombres.append((slot, p, al))
