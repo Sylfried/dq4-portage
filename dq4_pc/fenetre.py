@@ -1598,6 +1598,9 @@ class Jeu(pyglet.window.Window):
         dirs = ((MO.HAUT, 2), (MO.BAS, 1), (MO.GAUCHE, 8), (MO.DROITE, 4))
         fe = self.ui_g.f.get(port) if self.ui_g else None
         z = {b: ((x0 + x1) / 2, (z0 + z1) / 2) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}
+        if not f.get('grille') and len(z) < 1 and decl & (MO.GAUCHE | MO.DROITE):           # fenetre sans curseur du moteur ni bouton A (pages du Statut, types 13-17) : gauche / droite (Q, D, L, R) tournent les pages avec les fleches d'une autre fenetre (type 6), comme un toucher
+            pad = 4 if decl & MO.DROITE else 8; q = self._port_pour_manette(port, pad)
+            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
         if f.get('grille') or len(z) < 1:
             for bit, pad in dirs:
                 if decl & bit:
