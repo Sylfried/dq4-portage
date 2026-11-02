@@ -166,7 +166,7 @@ class Raccourcis(unittest.TestCase):
 
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Fenêtre » a trois valeurs, « Résolution » grisee en plein ecran sans bordure."""
-    ORDRE = ['Fenêtre', 'Résolution', 'Netteté', 'Shader', 'Lissage des textures', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Centrer la caméra sur le joueur', 'Interface']
+    ORDRE = ['Fenêtre', 'Résolution', 'Netteté', 'Shader', 'Lissage des textures', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Correction des bords des sprites', 'Centrer la caméra sur le joueur', 'Interface']
 
     @classmethod
     def setUpClass(cls):
