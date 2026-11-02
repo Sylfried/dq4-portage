@@ -306,7 +306,7 @@ class Fenetre:
         elif self.statut: self._statut(i, c)
         elif self.noms and i == 4: self._reset_marques()
         elif self.debut and i == 3: self._debut(c)
-        elif self.noms_liste and i == 6: self._liste_noms(c); return
+        elif getattr(self, 'noms_liste', False) and i == 6: self._liste_noms(c); return      # (getattr : les tests construisent des Fenetre factices sans cet attribut)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
