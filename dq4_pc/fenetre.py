@@ -1,5 +1,5 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
-import os, sys, math, time, argparse, glob, collections, threading, random
+import os, sys, math, time, argparse, glob, collections, threading, random, atexit
 from concurrent.futures import ThreadPoolExecutor, wait as attendre_futures
 import numpy as np
 import pyglet
@@ -23,6 +23,7 @@ import saisie_nom as SN
 import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
+import fbx as FX
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -83,6 +84,21 @@ def ajuster_taille(w, h):
     k = min(zu[0] / float(w), zu[1] / float(h)); nw, nh = max(320, int(w * k)), max(180, int(h * k))
     print('Fenêtre %d x %d trop grande pour l\'écran : %d x %d' % (w, h, nw, nh), flush=True)
     return nw, nh
+
+
+def choisir_mode_ecran(modes, w, h):
+    """Plein ecran exclusif : le mode d'affichage du moniteur (parmi `modes`, ceux de `screen.get_modes()` : width, height, depth, rate, scaling) qui convient a la resolution demandee w x h.
+    Taille : l'exacte, sinon la plus proche (en surface) parmi les 16/9, a defaut parmi toutes. A taille egale : couleurs sur 24 bits ou plus, sans mise a l'echelle par le pilote (scaling 0), meilleure frequence, puis plus de couleurs. None si la liste est vide."""
+    def dim(m): return int(getattr(m, 'width', 0) or 0), int(getattr(m, 'height', 0) or 0)
+    ok = [m for m in modes if dim(m)[0] > 0 and dim(m)[1] > 0]
+    if not ok: return None
+    def ecart(m):
+        mw, mh = dim(m)
+        return (0 if (mw, mh) == (w, h) else 1, 0 if abs(mw / float(mh) - 16.0 / 9.0) < 0.02 else 1, abs(mw * mh - w * h))
+    def prof(m): return int(getattr(m, 'depth', 0) or 0)
+    return min(ok, key=lambda m: (ecart(m), 0 if prof(m) >= 24 or prof(m) == 0 else 1, 1 if getattr(m, 'scaling', 0) not in (0, None) else 0, -float(getattr(m, 'rate', 0) or 0), -prof(m)))
+
+
 FOV_VILLE_DEF = 9.5           # fov nominal du mode 0 (terrain) tant que le moteur n'en envoie pas (paquet 11)
 VILLE_NEAR, VILLE_FAR = 5.0, 100.0
 DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
@@ -114,9 +130,11 @@ CAM_LACET_VIT, CAM_TANGAGE_VIT = 100.0, 45.0                                # fl
 CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # angle de camera (0 = comme le jeu)
 CAM_CENTRE_MAX = 60.0                                                        # camera centree sur le heros : garde-fou, ecart maximal (unites) entre la cible du jeu et le heros pour corriger (position du heros perimee) ; le vrai critere est le verrou TownCamera (cam_jeu)
 CAM_SAUT_VILLE = 1.5                                                         # unites de ville par pas du moteur : au-dela, la cible de la camera a saute (coupure, changement de carte) : pas d'interpolation, et la correction du centrage suit aussitot
+CAM_MENE_DIST = 1.0                                                      # camera verrouillee sans cible (mode 0) : le jeu la mene ailleurs que sur le joueur quand sa cible est a plus de 1 unite du heros
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
+BUDGET_PAS_RAPIDES = float(os.environ.get('DQ_BUDGET_PAS', '0.030'))                                                   # duree maximale (s) des pas du moteur dans une meme image affichee quand la marche est acceleree (vitesse de marche x2 a x4, accelerateur) : au-dela, le jeu prend du retard au lieu de figer l'image
 
 CB_FOV_NOM, CB_NEAR, CB_FAR, CB_YOFFSET, CB_ECHELLE_DECOR = 48.0, 0.25, 500.0, 0.04, 6.0      # combat : Global.CameraInitParams[1] du Unity d'origine (champ de vision nominal ; Unity le multiplie par 4/3 et l'applique a l'horizontale d'une vue 4/3)
 _cb = [float(x) for x in os.environ.get('DQ_CB', '0,0').split(',')]
@@ -157,31 +175,28 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
 class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
         self._journal_logo = False
+        self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self._modes = None; self.bureau = None; self._en_bascule = False; self._restaure_a_la_sortie = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; modes du moniteur, taille du bureau
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
         self.carte_ext = []; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
+        res_demandee = (args.largeur, args.hauteur)            # resolution du reglage avant d'etre ramenee a l'ecran : le plein ecran exclusif la veut telle quelle (le moniteur peut afficher plus que la zone utile d'une fenetre)
         if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
-        plein = bool(getattr(args, 'plein_ecran', 0))          # plein ecran memorise : la fenetre est creee directement en plein ecran (a la resolution du bureau), logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
         cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)       # (l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
-        try:
-            if plein: super().__init__(caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True, fullscreen=True)
-            else: super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
-        except Exception as ex:
-            if not plein: raise
-            print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True)
-            super().__init__(args.largeur, args.hauteur, caption='Dragon Quest IV - portage PC (essai)', resizable=True, config=cfg, vsync=True)
+        self.mode_fen = self._creer_fenetre(args, cfg, RG.mode_fenetre_valide(getattr(args, 'plein_ecran', 0)), res_demandee)        # mode memorise : la fenetre est creee directement dans ce mode, logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
+        if self.mode_fen in (0, 1): self.reg['mode_fenetre_retour'] = self.mode_fen
+        self.taille_fenetre = (args.largeur, args.hauteur)         # taille de la fenetre a retrouver en quittant un plein ecran
         self.post = PF.PostFX(self, log=lambda *a: print(*a, flush=True))
         self.args = args
         self._journal_fenetre('création')
         self._attente('Chargement du moteur...')
-        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie(); self.est_plein = bool(self.fullscreen); self.taille_fenetre = (args.largeur, args.hauteur)
+        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie()
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
@@ -207,6 +222,7 @@ class Jeu(pyglet.window.Window):
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
         self.carte_nom = None; self.fond_decor = None; self.carte_vl = []; self.tex_gl = {}; self.sprite_tex = {}; self.palettes = None; self.pam_gl = {}
         self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.bornes_x = None
+        self.fbx_cache = {}; self.fbx_lect = {}           # modeles 3D animes (fbx.py : le dragon du titre) : numero -> {'etat', 'm', ...} ; emplacement -> lecteur d'animation
         self.etiquette = pyglet.text.Label('', x=10, y=self.height - 10, anchor_y='top', font_size=11, color=(255, 255, 255, 255), multiline=True, width=600)
         self.etiq_stats = pyglet.text.Label('', x=10, y=self.height - 50, anchor_y='top', font_size=10, color=(255, 230, 150, 255), multiline=True, width=600)
         self.etiq_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255), multiline=True, width=600)
@@ -231,6 +247,66 @@ class Jeu(pyglet.window.Window):
         self.fixe_test = bool(args.shot) and not os.environ.get('DQ_TEMPS_REEL')         # (test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
         pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._pret = True
+
+    # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, resolution du bureau), 2 plein ecran exclusif (mode d'affichage du moniteur)
+    TITRE_FENETRE = 'Dragon Quest IV - portage PC (essai)'
+
+    @staticmethod
+    def _echec_simule(mode):
+        """(test) DQ_SIM_ECHEC=2 (ou 1, ou 2,1) : la creation / la bascule vers ce mode echoue, pour essayer les replis ; 2s : le moniteur refuse le mode sans erreur (pyglet ne leve rien quand ChangeDisplaySettings echoue)."""
+        if str(mode) in os.environ.get('DQ_SIM_ECHEC', '').split(','): raise RuntimeError('échec simulé (DQ_SIM_ECHEC)')
+
+    def _creer_fenetre(self, args, cfg, demande, res):
+        """Cree la fenetre directement dans le mode memorise (0 fenetre, 1 plein ecran, 2 plein ecran exclusif a la resolution `res`), avec repli a toute erreur, dit dans la console : exclusif -> plein ecran -> fenetre.
+        Elle reste cachee jusqu'a une premiere image noire (pas d'eclair blanc). -> mode obtenu."""
+        ecran = None
+        try:
+            ecran = pyglet.display.get_display().get_default_screen(); self.bureau = (int(ecran.width), int(ecran.height))      # (avant tout changement de mode : la taille du bureau)
+        except Exception as ex: print('Écran principal illisible (%r)' % (ex,), flush=True)
+        for mode in range(demande, -1, -1):
+            try:
+                self._echec_simule(mode)
+                if mode == 2:
+                    m = choisir_mode_ecran(self.modes_ecran(ecran), *res)
+                    if m is None: raise RuntimeError("aucun mode d'affichage disponible")
+                    super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, screen=ecran, mode=m, visible=False)
+                    if self._mode_applique(m): self._restaurer_a_la_sortie()
+                    else:        # (la fenetre existe et couvre le bureau : c'est deja le plein ecran sans bordure)
+                        print("Plein écran exclusif : le moniteur a refusé le mode %d x %d : plein écran" % (m.width, m.height), flush=True); self._restaurer_affichage(ecran); mode = 1
+                elif mode == 1: super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False)
+                else: super().__init__(args.largeur, args.hauteur, caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, visible=False)
+            except Exception as ex:
+                if mode == 0: raise
+                print('%s impossible au lancement (%r) : %s' % (RG.NOMS_MODES_FENETRE[mode], ex, 'plein écran' if mode == 2 else 'fenêtre'), flush=True)
+                self._restaurer_affichage(ecran)
+                continue
+            self.mode_fen = mode
+            try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
+            except Exception: pass
+            self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
+            return mode
+
+    def modes_ecran(self, ecran=None):
+        """Modes d'affichage du moniteur (lus une seule fois : l'enumeration est lente sous Windows) ; [] si illisibles."""
+        if self._modes is None:
+            try: self._modes = list(ecran.get_modes() if ecran is not None else self.screen.get_modes())
+            except Exception as ex: print("Modes d'affichage illisibles (%r)" % (ex,), flush=True); self._modes = []
+        return self._modes
+
+    def _mode_applique(self, m):
+        """Le moniteur a-t-il vraiment pris le mode m ? (pyglet n'annonce pas l'echec de ChangeDisplaySettings : la taille de l'ecran ne change pas, la fenetre couvre alors le bureau.)"""
+        if '2s' in os.environ.get('DQ_SIM_ECHEC', '').split(','): return False
+        return (int(self.screen.width), int(self.screen.height)) == (int(m.width), int(m.height))
+
+    def _restaurer_a_la_sortie(self):
+        """Plein ecran exclusif : le mode d'affichage d'origine est rendu a la fermeture, meme si le programme s'arrete sur une erreur (Windows le fait aussi a la fin du processus : mode temporaire)."""
+        if not self._restaure_a_la_sortie: self._restaure_a_la_sortie = True; atexit.register(self._restaurer_affichage)
+
+    def _restaurer_affichage(self, ecran=None):
+        try:
+            ecran = ecran or getattr(self, '_screen', None)
+            if ecran is not None: ecran.restore_mode()
+        except Exception as ex: print("Mode d'affichage non rétabli (%r)" % (ex,), flush=True)
 
     def _init_ui(self):
         """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
@@ -261,7 +337,7 @@ class Jeu(pyglet.window.Window):
         if len(self.ap_fich) < len(AP.RESSOURCES) and not args.sans_preparation: AP.preparer(args.apk, args.cache, log=lambda *a: print(*a, flush=True)); self.ap_fich = AP.chemins(args.cache)      # premiere fois : les images du titre sont extraites avant les logos (le moteur se charge pendant ce temps)
         logos = AP.Logos(self.ap_fich) if self.ap_fich and not args.sans_logos and (args.logos or (not args.shot and not args.slot)) else None
         if logos is not None and not logos.ok: logos = None
-        t0 = time.perf_counter(); texte = None
+        t0 = time.perf_counter()
         while (logos is not None and not logos.fini) or fil.is_alive():
             if self._ferme: sys.exit(0)
             self.switch_to(); self.dispatch_events()
@@ -270,9 +346,7 @@ class Jeu(pyglet.window.Window):
             if logos is not None and not logos.fini:
                 if self._logo_touche: logos.toucher()
                 logos.maj(dt); logos.dessiner(self.width, self.height)
-            else:
-                if texte is None: texte = pyglet.text.Label('Chargement du moteur...', x=self.width // 2, y=self.height // 2, anchor_x='center', anchor_y='center', font_size=16, color=(255, 255, 255, 255))
-                texte.draw(); time.sleep(0.02)
+            else: time.sleep(0.02)           # (le moteur se charge encore : ecran noir, sans texte)
             self._logo_touche = False
             self.flip()
             if not self._journal_logo: self._journal_logo = True; self._journal_fenetre('1re image affichée (logos)')
@@ -281,10 +355,10 @@ class Jeu(pyglet.window.Window):
         self.moteur = res['m']; self.moteur.duree_anim = self._duree_anim
 
     def _attente(self, texte):
-        """Ecran noir avec un message : la fenetre reste vivante pendant les chargements."""
+        """Ecran noir, sans aucun texte (le texte, lui, va dans la console) : la fenetre reste vivante pendant les chargements du demarrage."""
+        print(texte, flush=True)
         try:
             self.switch_to(); gl.glClearColor(0, 0, 0, 1); self.clear()
-            pyglet.text.Label(texte, x=self.width // 2, y=self.height // 2, anchor_x='center', anchor_y='center', font_size=16, color=(255, 255, 255, 255)).draw()
             self.flip(); self.dispatch_events()
         except Exception: pass
 
@@ -515,6 +589,7 @@ class Jeu(pyglet.window.Window):
             threading.Thread(target=self.donnees.preparer, args=(self.prepa_arret,), daemon=True, name='preparation-cache').start()
 
     def on_close(self):
+        if self.mode_fen == 2: self._restaurer_affichage()          # plein ecran exclusif : le moniteur retrouve son mode d'origine
         if not self._pret: self._ferme = True; return           # fermeture pendant les logos : le constructeur s'arrete
         self.reg.enregistrer(); self.son.fermer()
         p = getattr(self, 'prepa_proc', None)
@@ -526,6 +601,8 @@ class Jeu(pyglet.window.Window):
     def on_key_press(self, symbol, modifiers):
         """Seule touche fixe : Echap (menu). Les autres sont celles du menu Commandes (pad, infos a l'ecran) ; le menu ouvert recupere toutes les touches."""
         K = pyglet.window.key
+        if self._raccourci_fenetre(symbol, modifiers): return pyglet.event.EVENT_HANDLED          # F11 / Alt + Entree : de n'importe ou (logos, titre, jeu, menu Echap)
+        if symbol in (K.LALT, K.RALT): self.alt_cand = True                # Alt seul = discussion de groupe, au relachement (voir on_key_release et _fronts)
         if not self._pret: self._logo_touche = True; return pyglet.event.EVENT_HANDLED
         if self.pause.ouvert: self.pause.touche(symbol, modifiers); return pyglet.event.EVENT_HANDLED
         self.dernier_peripherique = 'clavier'
@@ -558,6 +635,10 @@ class Jeu(pyglet.window.Window):
 
     def on_key_release(self, symbol, modifiers):
         K = pyglet.window.key
+        self.avalees.discard(symbol)
+        if symbol in (K.LALT, K.RALT):         # Alt relache : si rien d'autre n'a ete fait pendant (pas Alt + Entree), c'est l'appui de la touche de discussion de groupe
+            cand, self.alt_cand = self.alt_cand, False
+            if cand and self._pret and not self.pause.ouvert and symbol in self.reg.codes('discussion') and not (self.touches[K.LALT] or self.touches[K.RALT]): self.alt_tap = True
         if (symbol in (K.LSHIFT, K.RSHIFT) or symbol in self.reg.codes('modif')) and self.combo[0]:
             declenche = not self.combo[1]; self.combo = [False, False]
             if declenche and self._pret and not self.pause.ouvert: self.annuler_chargement()
@@ -609,24 +690,44 @@ class Jeu(pyglet.window.Window):
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
+    @property
+    def est_plein(self):
+        """Plein ecran (sans bordure) ou plein ecran exclusif."""
+        return self.mode_fen in (1, 2)
+
     def resolutions(self):
-        """Tailles proposees (16/9, 720p a 4K) qui tiennent sur l'ecran ; la taille actuelle s'y ajoute si elle est libre ; triees par largeur puis hauteur."""
+        """Tailles proposees (16/9, 720p a 4K), triees par largeur puis hauteur : fenetre = celles qui tiennent sur l'ecran avec ses bordures ; plein ecran exclusif = celles que le moniteur sait afficher (ses modes d'affichage) ;
+        plein ecran (sans bordure) : celles du bureau (la ligne est grisee : la fenetre prend toujours la resolution du bureau). La taille actuelle s'y ajoute si elle est libre."""
         liste = list(RESOLUTIONS); cur = self.resolution_courante()
-        lim = (self.screen.width, self.screen.height) if self.est_plein else zone_utile()
-        if lim: liste = [r for r in liste if r[0] <= lim[0] and r[1] <= lim[1]]
+        if self.mode_fen == 2:
+            dispo = {(int(m.width), int(m.height)) for m in self.modes_ecran()}
+            if dispo: liste = [r for r in liste if r in dispo]
+            elif self.bureau: liste = [r for r in liste if r[0] <= self.bureau[0] and r[1] <= self.bureau[1]]
+        else:
+            lim = self.bureau if self.mode_fen == 1 else zone_utile()
+            if lim: liste = [r for r in liste if r[0] <= lim[0] and r[1] <= lim[1]]
         if cur not in liste: liste.append(cur)
         return sorted(liste)                # par largeur, puis par hauteur
 
     def resolution_courante(self): return (int(self.width), int(self.height))
 
     def regler_resolution(self, v):
-        """Fenetre : change la taille (ramenee a l'ecran si elle est trop grande) ; plein ecran : choisit le mode d'affichage correspondant s'il existe."""
+        """Fenetre : change la taille (ramenee a l'ecran si elle est trop grande). Plein ecran exclusif : change le mode d'affichage du moniteur (le plus proche s'il n'existe pas exactement ; repli sur le plein ecran sans bordure si le moniteur refuse).
+        Plein ecran (sans bordure) : sans effet, la fenetre garde la resolution du bureau ; le choix sert au prochain retour en fenetre."""
         w, h = int(v[0]), int(v[1])
-        if self.est_plein:
+        if self.mode_fen == 2:
             try:
-                modes = [m for m in self.screen.get_modes() if (m.width, m.height) == (w, h)]
-                if modes: self.set_fullscreen(True, screen=self.screen, mode=max(modes, key=lambda m: m.rate))
-            except Exception as ex: print('resolution plein ecran impossible :', ex, flush=True)
+                m = choisir_mode_ecran(self.modes_ecran(), w, h)
+                if m is None: raise RuntimeError("aucun mode d'affichage disponible")
+                if (m.width, m.height) != (self.width, self.height):
+                    self._echec_simule(2)
+                    self.set_fullscreen(True, screen=self.screen, mode=m, width=m.width, height=m.height)
+                    if not self._mode_applique(m): raise RuntimeError('le moniteur a refusé le mode %d x %d' % (m.width, m.height))
+                    self.post.cle = None; self._journal_fenetre('résolution %d x %d' % (m.width, m.height))
+            except Exception as ex:
+                print('Résolution du plein écran exclusif impossible (%r) : plein écran' % (ex,), flush=True)
+                self.regler_mode_fenetre(1)
+        elif self.mode_fen == 1: self.taille_fenetre = ajuster_taille(w, h)
         else:
             w, h = ajuster_taille(w, h)
             self.taille_fenetre = (w, h); self.set_size(w, h); self._verifier_taille_reelle()
@@ -649,19 +750,68 @@ class Jeu(pyglet.window.Window):
 
     def regler_infos(self, oui): self.aide = bool(oui)
 
-    def regler_plein_ecran(self, oui):
-        oui = bool(oui)
-        if oui == self.est_plein: return
-        if oui: self.taille_fenetre = (self.width, self.height); self.set_fullscreen(True)
-        else: self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
-        self.est_plein = oui
-        self._journal_fenetre('plein écran' if oui else 'fenêtre')
+    def regler_mode_fenetre(self, mode):
+        """Ligne « Fenêtre » du menu Echap, F11 / Alt + Entree : passe a 0 (fenetre), 1 (plein ecran sans bordure : fenetre a la resolution du bureau, le moniteur ne change pas) ou 2 (plein ecran exclusif : le moniteur prend la resolution
+        du reglage « Résolution »). Repli a toute erreur, dit dans la console et par un message a l'ecran : exclusif -> plein ecran -> fenetre. Le mode obtenu est memorise dans les reglages (avec le dernier mode non exclusif, ou F11 revient). -> mode obtenu."""
+        mode = RG.mode_fenetre_valide(mode); R = self.reg
+        if mode == self.mode_fen: R['mode_fenetre'] = mode; return mode
+        if self.mode_fen in (0, 1): R['mode_fenetre_retour'] = self.mode_fen
+        if not self.fullscreen: self.taille_fenetre = (self.width, self.height)           # (la taille de la fenetre, a retrouver au retour)
+        obtenu = None
+        for cible in range(mode, -1, -1):
+            try: self._poser_mode(cible); obtenu = cible; break
+            except Exception as ex:
+                print('%s impossible (%r)%s' % (RG.NOMS_MODES_FENETRE[cible], ex, ' : repli' if cible else ''), flush=True)
+                try: self.screen.restore_mode(); self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (retour a l'etat de depart avant d'essayer le mode suivant)
+                except Exception: pass
+        if obtenu is None: obtenu = 1 if self.fullscreen else 0           # (jamais atteint si le mode fenetre fonctionne : l'etat reel de la fenetre)
+        self.mode_fen = obtenu; R['mode_fenetre'] = obtenu
+        if obtenu in (0, 1): R['mode_fenetre_retour'] = obtenu
+        else: self._restaurer_a_la_sortie()
+        self.post.cle = None            # tampons du rendu hors ecran refaits a la taille du nouvel affichage (postfx.py)
+        self._journal_fenetre('mode « %s »' % RG.NOMS_MODES_FENETRE[obtenu])
+        if obtenu != mode and self._pret: self.toast('%s impossible : %s' % (RG.NOMS_MODES_FENETRE[mode], RG.NOMS_MODES_FENETRE[obtenu].lower()), 3.0)
+        if not self.fullscreen: self._verifier_taille_reelle()
+        return obtenu
+
+    def _poser_mode(self, cible):
+        """Une bascule : toujours par l'etat fenetre (qui rend le mode d'affichage du moniteur s'il avait change : pyglet restore_mode), puis le mode cible. Leve une erreur si le mode n'a pas pu etre pris."""
+        self._echec_simule(cible)
+        if self.fullscreen: self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
+        if cible == 1: self.set_fullscreen(True)
+        elif cible == 2:
+            try: res = (int(self.reg['resolution'][0]), int(self.reg['resolution'][1]))
+            except Exception: res = (1920, 1080)
+            m = choisir_mode_ecran(self.modes_ecran(), *res)
+            if m is None: raise RuntimeError("aucun mode d'affichage disponible")
+            self.set_fullscreen(True, screen=self.screen, mode=m)
+            if not self._mode_applique(m): raise RuntimeError('le moniteur a refusé le mode %d x %d' % (m.width, m.height))
+
+    def basculer_exclusif(self):
+        """F11 / Alt + Entree : plein ecran exclusif <-> le mode d'avant (fenetre ou plein ecran, memorise). Le reglage « Fenêtre » suit : le menu montre le mode reel et le prochain lancement le retrouve."""
+        self.regler_mode_fenetre((1 if self.reg['mode_fenetre_retour'] == 1 else 0) if self.mode_fen == 2 else 2)
+
+    def _raccourci_fenetre(self, symbol, modifiers):
+        """F11 ou Alt + Entree, de n'importe ou (logos, titre, jeu, menu Echap) : bascule du plein ecran exclusif. La touche est avalee (ni validation, ni action du jeu) et, avec Alt, Alt ne vaut plus « discussion de groupe » (voir _fronts). -> True si consommee."""
+        K = pyglet.window.key
+        alt = bool(modifiers & K.MOD_ALT)
+        if not (symbol == K.F11 or (alt and symbol in (K.RETURN, K.ENTER))): return False
+        if getattr(self.pause, 'capture', None) is not None: return False                    # menu Commandes en attente d'une touche : F11 y est « réservée » (reglages.RESERVEES)
+        self.avalees.add(symbol)
+        if alt: self.alt_cand = False
+        if self._en_bascule or not hasattr(self, 'post'): return True
+        self._en_bascule = True
+        try: self.basculer_exclusif()
+        except Exception as ex: print('Bascule du plein écran exclusif impossible : %r' % (ex,), flush=True)
+        finally: self._en_bascule = False
+        return True
 
     def _journal_fenetre(self, quand):
         """Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule."""
         try:
             ec = self.screen; fb = self.get_framebuffer_size()
-            print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d' % (quand, 'PLEIN ÉCRAN' if self.fullscreen else 'fenêtre', self.width, self.height, fb[0], fb[1], ec.width, ec.height), flush=True)
+            nom = ('fenêtre', 'PLEIN ÉCRAN', 'PLEIN ÉCRAN EXCLUSIF')[self.mode_fen] + ('' if bool(self.fullscreen) == (self.mode_fen > 0) else ' [INCOHÉRENT : fullscreen=%s]' % self.fullscreen)
+            print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d' % (quand, nom, self.width, self.height, fb[0], fb[1], ec.width, ec.height), flush=True)
         except Exception as ex: print('Fenêtre (%s) : état illisible (%r)' % (quand, ex), flush=True)
 
     def regler_son(self, oui):
@@ -687,19 +837,16 @@ class Jeu(pyglet.window.Window):
         if cat in ('general', 'effets') and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
         elif cat in ('general', 'interface'): self.son.jouer_se(SE_BOUTON)
 
-    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Texte et defilement)
+    # ---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Vitesse de defilement du texte)
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def defilement_actuel(self):
-        """(defilement automatique, vitesse 0 a 3) en vigueur : ceux du joueur s'ils sont imposes, sinon ceux du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
+        """Cran de « Messages en combat » en vigueur (RG.CRANS_DEFILEMENT : 0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) : celui du joueur s'il est impose, sinon celui du jeu (OptionStatus.battleSpeed : sauvegarde ou fenetre Parametres)."""
         R = self.reg
-        if R['defilement_force']: return R['defilement_auto'], R['defilement_vitesse']
-        code = self.moteur.options_jeu()[2]
-        return code < MO.COMBAT_MANUEL, (code if code < MO.COMBAT_MANUEL else R['defilement_vitesse'])
+        return R['defilement_combat'] if R['defilement_force'] else RG.cran_defilement(self.moteur.options_jeu()[2])
 
-    def regler_defilement(self, auto=None, vitesse=None):
-        a, v = self.defilement_actuel(); R = self.reg
-        R['defilement_auto'] = a if auto is None else bool(auto); R['defilement_vitesse'] = v if vitesse is None else int(vitesse); R['defilement_force'] = True
+    def regler_defilement(self, code):
+        R = self.reg; R['defilement_combat'] = RG.cran_defilement(code); R['defilement_force'] = True
         self.appliquer_defilement()
 
     def retablir_defilement(self):
@@ -707,12 +854,11 @@ class Jeu(pyglet.window.Window):
 
     def appliquer_defilement(self):
         R = self.reg
-        self.moteur.imposer_defilement((R['defilement_vitesse'] if R['defilement_auto'] else MO.COMBAT_MANUEL) if R['defilement_force'] else None)
+        self.moteur.imposer_defilement(R['defilement_combat'] if R['defilement_force'] else None)
 
     def _adopter_defilement(self, code):
         """Le joueur change la vitesse des messages dans la fenetre Parametres du jeu alors que le defilement est impose : ce nouveau choix remplace l'ancien."""
-        R = self.reg; R['defilement_auto'] = code < MO.COMBAT_MANUEL
-        if code < MO.COMBAT_MANUEL: R['defilement_vitesse'] = code
+        self.reg['defilement_combat'] = RG.cran_defilement(code)
         self.appliquer_defilement()
 
     def pause_jeu(self, oui):
@@ -847,10 +993,20 @@ class Jeu(pyglet.window.Window):
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
             if hp is not None and math.hypot(hp[0] - cib[0], hp[2] - cib[2]) <= CAM_CENTRE_MAX: dec = (hp[0] - cib[0], hp[2] - cib[2])
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
-        a = 1.0 - math.exp(-14.0 * dt)                                    # l'ecart se resorbe en douceur (passage d'une scene a la main du joueur et inversement)
-        if self.cam_saut: a = 1.0; self.cam_saut = False                  # coupure du jeu (changement de carte, plan de scene) : la correction suit aussitot, sans glissement apres la coupure
-        self.cam_dec = [c + (d - c) * a for c, d in zip(self.cam_dec, dec)]
-        poids_cible = 1.0 if option and (e.cam_libre or not self.cam_jeu) else 0.0          # part de l'option « camera centree » (sans les bornes de la visionneuse) : 1 = centree, 0 = comme option desactivee
+        # Correction du centrage = cible (heros - cible du jeu, suivie A L'IMAGE PRES : la camera est rigide sur le heros, meme quand le jeu borne la sienne aux bords de la carte et que le heros court)
+        # + reste qui se resorbe en douceur. Le reste ne naît que d'un changement de regime (scene <-> main du joueur) ou d'une coupure : avant, TOUT l'ecart etait lisse (exp(-14 t)), donc la camera trainait derriere
+        # un heros en course (v / 14 : ~0,6 u a x1,5, plus aux vitesses x2 a x4) et « continuait son chemin » apres l'arret (declenchement d'un evenement) avant de se recentrer
+        saut = self.cam_saut
+        if saut: self.cam_res = [0.0, 0.0]; self.cam_saut = False             # coupure du jeu (changement de carte, plan de scene) : la correction suit aussitot, sans glissement apres la coupure
+        elif centre != self.cam_centre: self.cam_res = [c - d for c, d in zip(self.cam_dec, dec)]                    # changement de regime : on part de l'ecart actuel (aucun saut a l'image), il s'estompe
+        self.cam_centre = centre
+        k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
+        self.cam_res = [r * k for r in self.cam_res]
+        self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
+        a = 1.0 if saut else 1.0 - k                                      # (poids des bornes 16/9 ci-dessous : meme constante de temps, aussitot apres une coupure)
+        # part SANS les bornes 16/9 de la visionneuse : 1 = aucune borne, 0 = bornes completes. Option « camera centree » ; ET camera menee par le jeu (cam_jeu : travelling, cible = un personnage, retour) :
+        # Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), le cadre du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi (progressivement, sans a-coup)
+        poids_cible = 1.0 if option or self.cam_jeu else 0.0
         self.cam_poids += (poids_cible - self.cam_poids) * a
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
@@ -998,6 +1154,8 @@ class Jeu(pyglet.window.Window):
             if slot not in e.maillages_vus: continue                # mode immediat : pas de paquet cette image = pas dessine
             mid = e.modeles.get(slot)
             if mid is None: continue
+            credits = ville and mid == 8905 and self.carte_nom == 'ev01'          # ecran-titre : les textes des credits (Yuji Horii...), avant le logo
+            if credits and os.environ.get('DQ_SANS_CREDITS'): continue            # (test) sans les credits : la difference avec la capture normale donne leur position exacte
             st = e.mesh_etat.get(slot) or {'shader': 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}
             if not st['vis']: continue
             ft = self._texture_monstre(mid); t, tw, th = ft['t'], ft['tw'], ft['th']
@@ -1006,6 +1164,7 @@ class Jeu(pyglet.window.Window):
             P = V[ix]
             xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
+            if credits: xyz = xyz + self._decalage_credits(mid, P, st['off'], Rb, xyz)           # centre le bloc de texte de la page au milieu de la zone de dessin
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]
             coul = np.c_[np.ones((len(ix), 3), np.float32) * np.array(st['col'], np.float32), alpha].astype(np.float32)           # Material.color (paquet 25) x couleur de sommet
@@ -1132,6 +1291,100 @@ class Jeu(pyglet.window.Window):
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
         if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
+
+    # ---- modeles 3D animes (FbxObject d'Unity : paquets 31 et 32 du moteur ; voir fbx.py)
+    TITRE_DRAGON_HAUT = 0.0           # ecran-titre : decalage vertical du dragon (meme unite que TITRE_HAUT) ; 0 = cadrage d'origine du jeu, 0,3 = releve comme le logo (le dragon ne montrerait alors que ses griffes) ; DQ_FBX_DY pour essayer
+
+    def _fbx_pret(self, no):
+        """Modele 3D numero `no` pret a etre dessine ({'m': fbx.ModeleFbx, 'vl', 'tex'...}), None tant qu'il se lit (tache de fond : le cache disque, ou le paquet de donnees la premiere fois) ou s'il n'est pas gere."""
+        r = self.fbx_cache.get(no)
+        if r is None:
+            r = self.fbx_cache[no] = {'etat': 'lecture', 'm': None}
+            def tache():
+                try: r['m'] = FX.ModeleFbx(self.donnees.modele_fbx(no)); r['etat'] = 'lu'
+                except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+            threading.Thread(target=tache, daemon=True).start()
+        if r['etat'] == 'lu':                                       # objets OpenGL : dans le fil du dessin
+            try:
+                m = r['m']; nt = len(m.tri)
+                self.tex_gl[('fbx', no)] = r['tex'] = t = self._tex(m.tex, True, 99); self._filtrer(t, self.lissage)
+                r['uv'] = m.uv[m.tri.ravel()].ravel().astype(np.float32); r['n'] = nt * 3
+                r['vl'] = self.prog.vertex_list(r['n'], gl.GL_TRIANGLES, position=('f', np.zeros(r['n'] * 3, np.float32)), tex_coords=('f', r['uv']), colors=('f', np.ones(r['n'] * 4, np.float32)))
+                r['etat'] = 'pret'
+            except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+        return r if r['etat'] == 'pret' else None
+
+    def _tracer_fbx(self, e):
+        """Modeles 3D de la scene (e.fbx) : pose = position / rotation / echelle du moteur (paquet 32), animation jouee depuis son lancement (images du moteur : 30 Hz, fraction de pas comprise), couleur = Material.color.
+        Shader Custom/ImdChara : couleur du sommet x _Color x texture, fusion alpha, ZWrite, ZTest LEqual, Cull Back, file Geometry (avec le decor opaque, avant les personnages et les effets-maillages)."""
+        tf = max(0.0, self.moteur.images - 2.0 + self.alpha)           # image du moteur affichee : celle du pas precedent + alpha (voir _interpoler)
+        M0 = None
+        if self.carte_nom == 'ev01':                                   # titre : le dragon n'est pas releve avec le groupe logo + ile (il sortirait de l'ecran) : decalage propre, en coordonnees d'ecran normalisees
+            dy = float(os.environ.get('DQ_FBX_DY', self.TITRE_DRAGON_HAUT)) - float(os.environ.get('DQ_TITRE_DY', TITRE_HAUT))
+            if dy:
+                M0 = self.prog['mvp']; Ty = np.eye(4); Ty[1, 3] = dy
+                Mn = np.array(M0, float).reshape(4, 4).T; self.prog['mvp'] = tuple(float(x) for x in (Ty @ Mn).T.ravel())
+        for k in [k for k in self.fbx_lect if k not in e.fbx]: del self.fbx_lect[k]
+        for slot, mod in sorted(e.fbx.items()):
+            if not mod['vis']: continue
+            r = self._fbx_pret(mod['id'])
+            if r is None: continue
+            m = r['m']; lc = self.fbx_lect.get(slot)
+            if lc is None or lc['id'] != mod['id'] or lc['n'] > len(mod['anim']):
+                lc = self.fbx_lect[slot] = {'id': mod['id'], 'n': 0, 'a': FX.LecteurAnim({k: {'dur': c['dur'], 'wrap': c['wrap']} for k, c in m.clips.items()})}
+            for img, seq, force in mod['anim'][lc['n']:]: lc['a'].jouer(seq, force, img)
+            lc['n'] = len(mod['anim'])
+            ech = 0.4 if mod['id'] == 10 else 1.0                      # FbxObject.m_defScale (.ctor : 0,4 pour le modele 10, 1 sinon)
+            sc = tuple(float(x) * ech for x in mod['scl'])
+            V = m.sommets(FX.matrice_objet(mod['pos'], mod['rot'], sc), lc['a'].poses(tf))
+            vl = r['vl']; vl.position[:] = V[m.tri.ravel()].ravel(); vl.colors[:] = np.tile(np.array(mod['col'], np.float32), r['n'])
+            self.prog['cutoff'] = 0.0; self.prog['net'] = 1.0 if self.lissage else 0.0; self.prog['tsize'] = (float(m.tex.shape[1]), float(m.tex.shape[0]))
+            self._dom_lie = None
+            if os.environ.get('DQ_FBX_CULL', '1') == '1': gl.glEnable(gl.GL_CULL_FACE); gl.glCullFace(gl.GL_BACK)          # Custom/ImdChara : Cull Back (lu dans le shader) ; sans, des faces internes (tete, ailes) recouvrent le visage ; DQ_FBX_CULL=0 pour essayer sans
+            self._tracer(r['tex'], vl)
+            gl.glDisable(gl.GL_CULL_FACE)
+        if M0 is not None: self.prog['mvp'] = M0
+        self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['cutoff'] = 0.05
+
+    # ---- ecran-titre : textes des credits (modele 8905 : « Yuji Horii », « Akira Toriyama »... une page apres l'autre)
+    _credits_cache = {}
+
+    def _decalage_credits(self, mid, P, off, Rb, xyz):
+        """Vecteur monde (le long du haut de la camera) qui amene le centre vertical du bloc de texte visible des credits au milieu de la zone de dessin (ordonnee d'ecran normalisee 0, quel que soit le format de la fenetre),
+        comme le groupe logo + ile. La scene du titre est relevee de TITRE_HAUT (pour centrer le logo) : sans cette correction les credits, poses par le moteur bas dans l'image d'origine, se retrouvent trop hauts.
+        Le centre est celui de l'ENCRE (pixels non transparents de chaque ligne de texte, lus dans la texture d'origine), pas celui des quadrilateres. Toute erreur : aucun decalage."""
+        try:
+            if os.environ.get('DQ_CREDITS_ORIGINE'): return np.zeros(3, np.float32)             # (test) credits tels que le moteur les pose
+            M = getattr(self, '_M_ville', None); orig = self.cb_tex.get((mid, 0))
+            if M is None or orig is None or len(P) % 6: return np.zeros(3, np.float32)
+            cle = (mid, P.tobytes(), float(off[0]), float(off[1]))
+            y_c = self._credits_cache.get(cle)
+            if y_c is None:
+                arr = orig['arr']; H, W = arr.shape[:2]; yy = []; zz = []
+                for q in P.reshape(-1, 6, 5):                                    # un quadrilatere = 6 sommets (u, v - 1, x, y, z) dans le repere de la camera
+                    v0, v1 = float(q[:, 1].min()), float(q[:, 1].max())
+                    if v1 - v0 < 1e-6: continue
+                    ya, yb = float(q[q[:, 1] == v0][:, 3].mean()), float(q[q[:, 1] == v1][:, 3].mean())        # ordonnee locale aux bords bas / haut de la texture du quadrilatere
+                    r0 = int(min(max(np.floor(-(v1 + off[1]) * H), 0), H)); r1 = int(min(max(np.ceil(-(v0 + off[1]) * H), 0), H))
+                    c0 = int(min(max(np.floor((q[:, 0].min() + off[0]) * W), 0), W)); c1 = int(min(max(np.ceil((q[:, 0].max() + off[0]) * W), 0), W))
+                    if r1 <= r0 or c1 <= c0: continue
+                    lig = np.flatnonzero((arr[r0:r1, c0:c1, 3] > 32).any(1))
+                    if not len(lig): continue
+                    for r in (r0 + lig[0], r0 + lig[-1] + 1):                    # rangees d'encre extremes -> ordonnee locale (v = -rangee / H - decalage, interpolation lineaire sur le quadrilatere)
+                        v = -r / H - off[1]; yy.append(ya + (v - v0) / (v1 - v0) * (yb - ya))
+                    zz.append(float(q[:, 4].mean()))
+                if not yy: return np.zeros(3, np.float32)
+                y_c = (min(yy) + max(yy)) / 2, float(np.mean(zz))
+                if len(self._credits_cache) > 64: self._credits_cache.clear()
+                self._credits_cache[cle] = y_c
+            haut = Rb[:, 1].astype(float); pos = xyz[0].astype(float) - Rb.astype(float) @ P[0, 2:5].astype(float)             # position du maillage (xyz = pos + Rb x sommet local)
+            c = M @ np.append(pos + Rb.astype(float) @ np.array([0.0, y_c[0], y_c[1]]), 1.0)                 # centre du bloc, en coordonnees de clip (la scene du titre est deja relevee de TITRE_HAUT dans M)
+            pente = float(M[1, :3] @ haut)                                      # variation de la coordonnee de clip y par unite de deplacement le long du haut de la camera (la profondeur ne change pas)
+            if abs(pente) < 1e-9: return np.zeros(3, np.float32)
+            return (haut * (-c[1] / pente)).astype(np.float32)
+        except Exception as ex:
+            if not getattr(self, '_credits_err', False): self._credits_err = True; print('Credits du titre non centres : %s' % ex, flush=True)
+            return np.zeros(3, np.float32)
 
     def _fond_combat(self, c):
         """Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
@@ -1496,7 +1749,7 @@ class Jeu(pyglet.window.Window):
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
         k, gr, modes = self._ui_echelle([(e[0] + dz, e[1] + dz)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'
-        v = self.reg['interface_fenetres'].get(cle) or [1.0, 0.0, 0.0]
+        v = self.reg['interface_fenetres'].get(cle) or RG.FENETRE_DEFAUT
         cx, cy, s2 = self._ui_perso(mode, s, v)
         fe.sel = None; fe.sel_nd = None; fe.appui_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
@@ -1511,10 +1764,10 @@ class Jeu(pyglet.window.Window):
         dzm = MSG_BAS - fm.bas(); D = dzm + (em[1] + OUINON_ECART - e[0])
         k, gr, modes = self._ui_echelle([(em[0] + dzm, em[1] + dzm), (e[0] + D, e[1] + D)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'; ov = self.reg['interface_fenetres']
-        cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or [1.0, 0.0, 0.0])
+        cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or RG.FENETRE_DEFAUT)
         fm.sel = None; fm.sel_nd = None; fe.sel = None; fe.sel_nd = None
         self.ui_rendu.dessiner([fm], cxm, cym + dzm * sm, sm, (self.width, self.height))
-        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or [1.0, 0.0, 0.0])
+        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or RG.FENETRE_DEFAUT)
         self.ui_rendu.dessiner([fe], cx, cy, s2, (self.width, self.height))
         x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + e[0] * s2, cy + e[1] * s2
         pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()
@@ -1575,21 +1828,45 @@ class Jeu(pyglet.window.Window):
         """Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)]."""
         if champ or bataille or not e.icones or e.cam_pos is None or e.cam_cible is None: return []
         fwd = np.array(e.cam_cible, float) - np.array(e.cam_pos, float); fwd /= np.linalg.norm(fwd) or 1
-        out = []
+        out = []; corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None
         for slot, ic in sorted(e.icones.items()):
             if ic['pos'] is None or ic['alpha'] < 0.02: continue
             tex = self._tex_icone(ic['id'])
             if not tex: continue
-            p = np.array(ic['pos'], float) - fwd * 0.48
-            if cam3d is not None: a, b, up = p - cam3d[0] * 0.48, p + cam3d[0] * 0.48, cam3d[1] * 0.96       # de face a l'ecran, comme les personnages (rotation de la camera)
-            else: a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
-            q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+            if cam3d is not None:
+                # de face a l'ecran, comme les personnages (rotation de la camera). Avance de 0,48 vers la camera de la VISIONNEUSE (et non de celle du jeu : tournee ou inclinee par le joueur, elle decalait la bulle a l'ecran),
+                # le long du rayon de vue (voir _decaler_profondeur) ; la bulle reste collee au personnage qui la porte, quelle que soit l'inclinaison de la camera (voir _ancrer_icone)
+                P = self._ancrer_icone(e, np.array(ic['pos'], float), cam3d); r_, u_, f_ = cam3d; D = self._decaler_profondeur
+                A0, B0 = P - r_ * 0.48, P + r_ * 0.48
+                a, b, c, d = D(A0, f_, 0.48, corr, C_vue), D(B0, f_, 0.48, corr, C_vue), D(B0 + u_ * 0.96, f_, 0.48, corr, C_vue), D(A0 + u_ * 0.96, f_, 0.48, corr, C_vue)
+                q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
+            else:
+                p = np.array(ic['pos'], float) - fwd * 0.48
+                a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
+                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
             uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, float(min(max(ic['alpha'], 0.0), 1.0))] * 6
             vl = self.icone_vl.get(slot)
             if vl is None: vl = self.icone_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             out.append((tex, vl))
         return out
+
+    def _ancrer_icone(self, e, P, cam3d):
+        """Position d'une bulle d'icone (paquet 20) pour la camera de la visionneuse. Le moteur la pose au-dessus de la cible (1,294 au-dessus de ses pieds, mesure sur trois villageois) en coordonnees du MONDE, alors que
+        les personnages sont des panneaux de face a la camera : si la camera du joueur est inclinee ou tournee, la hauteur de la bulle par rapport a la tete change (1,294 x cos de l'inclinaison a l'ecran, contre une hauteur
+        de panneau fixe) et elle semble trop haute ou trop basse. Quand un personnage est sous la bulle (meme x, z), on garde donc l'ecart tel que la camera DU JEU le voit (composantes droite / haut / avant) et on le
+        rapporte au repere de la camera de la visionneuse : la bulle reste a la meme place par rapport a la tete (identique a P quand les deux cameras sont les memes). Sans personnage dessous (tonneau, jarre...) : P, ancre dans le monde."""
+        S = None; meilleur = 0.35
+        for sp in e.sprites.values():
+            pos = sp.get('pos')
+            if pos is None or len(pos) < 3 or not sp.get('vis', True): continue
+            dx, dz, dy = P[0] - pos[0], P[2] - pos[2], P[1] - pos[1]
+            if 0.3 < dy < 3.0 and math.hypot(dx, dz) < meilleur: meilleur = math.hypot(dx, dz); S = np.array(pos, float)
+        if S is None: return P
+        try: _, Dr, H, F = self._cadre_jeu(e)
+        except Exception: return P
+        d = P - S
+        return S + cam3d[0] * float(d @ Dr) + cam3d[1] * float(d @ H) + cam3d[2] * float(d @ F)
 
     def _carte_ports(self):
         """Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 24: liste des boutiques de la ville, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte."""
@@ -1662,7 +1939,9 @@ class Jeu(pyglet.window.Window):
         nd = self.ui_g.f[port].N.get(nid) if self.ui_g and port in self.ui_g.f else None
         return bool(nd) and any(m.get('part') in (7, 10) for m in nd['mats'])
 
-    def on_mouse_leave(self, x, y): self.survol_nd = None
+    def on_mouse_leave(self, x, y):
+        self.survol_nd = None
+        if self.pause.ouvert: self.pause.sortie()                       # menu Echap : le pointeur a quitte la fenetre, plus rien n'est survole (les plaques se rallument)
 
     def _survol_pas(self):
         """Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis)."""
@@ -2003,9 +2282,9 @@ class Jeu(pyglet.window.Window):
 
     # ---- boucle
     def _tenue(self, action):
-        """Une des touches de l'action (menu Touches) est-elle enfoncee ?"""
-        k = self.touches
-        return any(k[c] for c in self.reg.codes(action))
+        """Une des touches de l'action (menu Touches) est-elle enfoncee ? (Une touche avalee par un raccourci, Entree de Alt + Entree, ne compte pas jusqu'a son relachement.)"""
+        k = self.touches; av = self.avalees
+        return any(k[c] and c not in av for c in self.reg.codes(action))
 
     def _terrain_libre(self):
         """Terrain sans fenetre : ni menu d'Echap, ni message, ni menu ou carte du jeu, ni combat, ni effet d'ecran. Les fleches pilotent alors la camera ; sinon elles naviguent dans les fenetres."""
@@ -2084,9 +2363,15 @@ class Jeu(pyglet.window.Window):
 
     def _fronts(self):
         """Appuis (front montant) de X, Start, L et R depuis la derniere image du moteur."""
-        r = {}
+        r = {}; K = pyglet.window.key; k = self.touches
         for a in ACT_FRONTS:
-            v = self._tenue(a); r[a] = v and not self.act_prec.get(a, False); self.act_prec[a] = v
+            if a == 'discussion': v = any(k[c] and c not in self.avalees for c in self.reg.codes(a) if c not in (K.LALT, K.RALT))        # (Alt : au relachement, voir alt_tap : Alt + Entree ne doit pas lancer la discussion de groupe)
+            else: v = self._tenue(a)
+            r[a] = v and not self.act_prec.get(a, False); self.act_prec[a] = v
+        if self.alt_tap: r['discussion'] = True; self.alt_tap = False
+        if r['discussion'] and os.environ.get('DQ_DEBUG'): print('FRONT discussion n=%d' % self.n, flush=True)
+        if self.avalees: self.avalees = {c for c in self.avalees if k[c]}          # (une touche avalee relachee hors de la fenetre : la liste se vide)
+        if self.alt_cand and not (k[K.LALT] or k[K.RALT]): self.alt_cand = False
         return r
 
     def _boucle(self, dt):
@@ -2104,10 +2389,11 @@ class Jeu(pyglet.window.Window):
             self._pas(); self.alpha = 1.0; return
         f = self._facteur_vitesse()
         self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
-        n = 0; nmax = 3 * max(1, math.ceil(f))
+        n = 0; nmax = 3 * max(1, math.ceil(f)); coupe = False; t_pas = time.perf_counter()
         while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
             self._pas(); self.acc -= PAS_MOTEUR; n += 1
-        if n == nmax: self.acc = 0.0
+            if f > 1.0 and time.perf_counter() - t_pas > BUDGET_PAS_RAPIDES: coupe = True; break      # marche x3, x4 (jusqu'a x8 avec l'accelerateur) : si les pas du moteur ne tiennent pas dans le budget de l'image, le jeu ralentit un peu plutot que de bloquer l'affichage
+        if n == nmax or coupe: self.acc = 0.0
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):
@@ -2142,8 +2428,8 @@ class Jeu(pyglet.window.Window):
             elif nom[0] == '~': x, y = [int(t) for t in nom[2:].split('@')]; self.on_mouse_release(x, self.height - y, pyglet.window.mouse.LEFT, 0)
             elif nom[0] == '^': x, y = [int(t) for t in nom[1:].split('^')]; self.on_mouse_drag(x, self.height - y, 0, 0, pyglet.window.mouse.LEFT, 0)      # ^x^y : souris deplacee bouton enfonce
             elif nom[0] == '$': self.dispatch_event('on_text', nom[1:])                                                                                   # $texte : caracteres tapes
-            elif nom[0] in '+-': self.dispatch_event('on_key_press' if nom[0] == '+' else 'on_key_release', getattr(pyglet.window.key, nom[1:]), 0)
-            else: self.dispatch_event('on_key_press', getattr(pyglet.window.key, nom), 0); a.touches_test.append((n + 3, '-' + nom))       # appui court : relache 3 images plus tard
+            elif nom[0] in '+-': self.dispatch_event('on_key_press' if nom[0] == '+' else 'on_key_release', getattr(pyglet.window.key, nom[1:]), self._mod_alt_test())
+            else: self.dispatch_event('on_key_press', getattr(pyglet.window.key, nom), self._mod_alt_test()); a.touches_test.append((n + 3, '-' + nom))       # appui court : relache 3 images plus tard
         for n in list(a.shots_boucle):
             if instant(n) == self.n_boucle:
                 a.shots_boucle.remove(n); self.dispatch_event('on_draw'); self.flip()
@@ -2151,6 +2437,11 @@ class Jeu(pyglet.window.Window):
                 pyglet.image.get_buffer_manager().get_color_buffer().save(a.shot.replace('.png', '_%s.png' % nom_n))
                 if os.environ.get('DQ_TEMPS_REEL'): print('PAS moteur=%d images boucle=%d t=%.1f' % (self.n, self.n_boucle, time.time() - self.t_demarrage), flush=True)
                 if not a.shots_boucle: self.on_close(); pyglet.app.exit()
+
+    def _mod_alt_test(self):
+        """(test) modificateur Alt d'un evenement de touche simule : le vrai clavier le donne (Alt tenue : MOD_ALT) ; +LALT puis RETURN = Alt + Entree."""
+        K = pyglet.window.key
+        return K.MOD_ALT if self.touches[K.LALT] or self.touches[K.RALT] else 0
 
     def _options_test(self):
         """(test) --options-test "image:Libelle=valeur;image:Libelle=valeur" : applique des options de la page Affichage a l'image de boucle donnee, par les memes fonctions que le menu Echap (valeur lue comme du JSON : 3, true, 0.5, [1280, 720])."""
@@ -2300,7 +2591,7 @@ class Jeu(pyglet.window.Window):
         if self.ui_g: self.ui_g.tick()                     # animations des fenetres d'origine, une fois par image du jeu
         if mo.etat.partie == MO.PARTIE_VILLE:              # TownCamera du jeu : limite negative = rotation interdite dans ce lieu ; verrou = camera tenue par un evenement
             lg, ld, vr = mo.camera_ville(); self.cam_bloquee = lg < 0 or ld < 0 or vr
-            self.cam_jeu = vr                                       # TownCamera verrouillee (+0x3e) : la camera est menee par le jeu (scene, evenement, chute, retour)
+            self.cam_jeu = bool(vr) and self._camera_menee(mo)         # TownCamera verrouillee (+0x3e) ET menee AILLEURS que sur le joueur (travelling, cible = un personnage, retour, plan fixe) : la camera est celle du jeu (le verrou seul ne change rien : l'evenement garde le joueur au centre)
             if self._coupure_camera(mo.etat): self.cam_saut = True
             self.cam_limite = min(lg, ld) * 360.0 / 4096.0 if lg > 0 and ld > 0 else None          # rotation bornee (ex. 120 degres de chaque cote) ; 0 = libre
             if self.cam_limite is not None and abs(self.lacet) > self.cam_limite: self.lacet = math.copysign(self.cam_limite, self.lacet)
@@ -2332,6 +2623,67 @@ class Jeu(pyglet.window.Window):
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
             print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.moteur.ui.visibles()], self.moteur.menu_actif(), self.moteur.msg_visible, flush=True); pyglet.app.exit()
 
+    def _camera_menee(self, mo):
+        """La TownCamera verrouillee va-t-elle AILLEURS que sur le joueur ? Mode de cible 1 a 4 (deplacements : travelling, retour) ou 5 (un personnage : la grenouille du prologue...), deplacement en cours, ou cible du jeu a plus de CAM_MENE_DIST du heros
+        (plan fixe, heros hors champ). Mode 6 (le joueur) et verrou sans cible a cote du heros : le jeu tient le joueur comme hors scene : AUCUN changement de regime (centrage, bornes), donc pas de glissement au declenchement."""
+        try: _, mode, _, deplace = mo.camera_jeu()
+        except Exception: return True
+        if 1 <= mode <= 5 or deplace: return True
+        e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
+        if mode == 6: return False
+        if hp is None or e.cam_cible is None: return True
+        return math.hypot(hp[0] - e.cam_cible[0], hp[2] - e.cam_cible[2]) > CAM_MENE_DIST
+
+    def _dbg_proj(self, M, e, cam3d, a_dessiner, icones):
+        """(debogage, DQ_PROJ=n) pixels (x, y depuis le haut) des pieds / haut des panneaux des sprites et des bulles, toutes les n images."""
+        def px(P):
+            v = M @ np.array([P[0], P[1], P[2], 1.0]); return None if v[3] <= 1e-6 else (round(float((v[0] / v[3] * 0.5 + 0.5) * self.width), 1), round(float((1 - (v[1] / v[3] * 0.5 + 0.5)) * self.height), 1))
+        out = {}
+        for slot, f, vl in a_dessiner:
+            q = np.array(vl.position[:], float).reshape(-1, 3); out['s%d' % slot] = (px(q[0]), px(q[1]), px(q[2]), px(q[5]))       # coins : bas-gauche, bas-droit, haut-droit, haut-gauche
+        for slot, ic in sorted(e.icones.items()):
+            if ic['pos'] is not None: out['i%d' % slot] = (px(ic['pos']),)
+        for tex, vl in icones:
+            q = np.array(vl.position[:], float).reshape(-1, 3); out['bulle'] = (px(q[0]), px(q[1]), px(q[2]), px(q[5]))
+        print('PROJ n=%d' % self.n_boucle, out, flush=True)
+
+    def _correction_bords(self):
+        """Intensite (0 a 1) de la correction des bords : option --correction-bords (0 a 100), sinon variable d'environnement DQ_CORRECTION_BORDS (0 a 100), sinon le reglage `correction_bords` (0 / False = aucune, 1 / True = complete)."""
+        v = getattr(self.args, 'correction_bords', None)
+        if v is None and os.environ.get('DQ_CORRECTION_BORDS'):
+            try: v = float(os.environ['DQ_CORRECTION_BORDS'])
+            except ValueError: v = None
+        if v is None:
+            try: return min(1.0, max(0.0, float(self.reg['correction_bords'])))
+            except Exception: return 1.0
+        return min(1.0, max(0.0, float(v) / 100.0))
+
+    @staticmethod
+    def _decaler_profondeur(X, F, delta, t, C):
+        """Point X (d'un panneau parallele a l'ecran) rapproche de la camera de `delta` unites de profondeur. t = 0 : le long de l'axe de la camera (F), comme les sommets du panneau de la bulle Riseup dans Unity (Riseup.s_vtxDepth) ;
+        t = 1 : le long du rayon de vue (camera -> X) : meme point a l'ecran, meme profondeur (sinon le bord decale s'ecarte du centre de l'image de delta x ecart / profondeur : la bulle glisse de cote quand la camera est tournee). Entre les deux : melange lineaire."""
+        if t <= 0.0 or C is None: return X - F * delta
+        d = X - C; z = float(d @ F)
+        if z <= delta * 1.5: return X - F * delta                          # (tout contre la camera : pas de division par une profondeur nulle)
+        return X - ((1.0 - t) * delta) * F - (t * delta / z) * d
+
+    def _panneau_ville(self, p, r_, u_, f_, w, h, zb, zt, t, C):
+        """Les 4 sommets (bas gauche, bas droit, haut droit, haut gauche) du panneau d'un personnage de ville dont les pieds sont en p : un rectangle w x h parallele a l'ecran, dont le bas est recule de `zb` et le haut de `zt`
+        vers la camera (profondeur du panneau d'origine, qui penche de 36 degres). t = 0 : le panneau d'origine (decalages le long de l'axe de la camera). Defaut de l'original, rendu visible par le champ horizontal du 16/9
+        (le portrait du mobile en voyait bien moins) : le haut, plus proche, s'ecarte du centre de l'image (de zt x ecart / profondeur) et le sprite « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a
+        20 degres) ; de plus la hauteur a l'ecran se comprime vers le bas de l'image, d'ou un sprite trop large (jusqu'a 0,9 au lieu de 0,75). t = 1 : le panneau est reconstruit A L'ECRAN : meme position, meme hauteur
+        et memes profondeurs qu'avant (taille, recouvrements et z-buffer inchanges), mais bords verticaux et largeur = 0,72 x la hauteur a l'ecran (la proportion du panneau au centre de l'image : la largeur y est la
+        moyenne de celles du bas et du haut), donc le sprite garde ses proportions partout. Au centre de l'image, rien ne change. Entre les deux : melange lineaire des sommets. Camera inconnue ou panneau contre la camera : l'original."""
+        a, b = p - r_ * (w / 2), p + r_ * (w / 2)
+        orig = (a - f_ * zb, b - f_ * zb, b + u_ * h - f_ * zt, a + u_ * h - f_ * zt)
+        if t <= 0.0 or C is None: return orig
+        d = p - C; z = float(d @ f_)
+        if z <= zt * 1.5: return orig
+        xs, yb, yt = float(d @ r_) / (z - zb), float(d @ u_) / (z - zb), (float(d @ u_) + h) / (z - zt)      # a l'ecran (focale 1) : abscisse du centre du bas, ordonnees du bas et du haut du panneau d'origine
+        hw = 0.5 * (w / h) * (z - zt) / (z - 0.5 * (zb + zt)) * (yt - yb)                                    # demi-largeur a l'ecran : proportion (largeur moyenne / hauteur) du panneau d'origine au centre de l'image
+        new = [C + r_ * ((xs + sx * hw) * (z - dz)) + u_ * (ys * (z - dz)) + f_ * (z - dz) for sx, ys, dz in ((-1, yb, zb), (1, yb, zb), (1, yt, zt), (-1, yt, zt))]
+        return tuple(o + t * (n - o) for o, n in zip(orig, new))
+
     def _coupure_camera(self, e):
         """Pendant ce pas du moteur, la cible de la camera du jeu a-t-elle saute (coupure de scene, changement de carte) ? self.prec = etat du pas precedent."""
         pr = self.prec
@@ -2345,6 +2697,8 @@ class Jeu(pyglet.window.Window):
         e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
         r = lambda v: None if v is None else tuple(round(float(x), 1) for x in v)
         print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s poids=%.2f' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec), self.cam_poids), flush=True)
+        if os.environ.get('DQ_CAMV_SPR'):                                  # (debogage) + tous les sprites et les bulles d'icone
+            print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icones', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icones.items()}, flush=True)
 
     def _maj_titre(self):
         """Port 12 = fenetre de type 73 (Make_TitleTouch) : le moteur ne lui donne aucune case, « Touchez l'ecran » et le copyright sont dessines par Unity (TapToStart) ; le code 0 est CountReset."""
@@ -2485,6 +2839,7 @@ class Jeu(pyglet.window.Window):
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
         a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
         phi = self._lacet_eff() if cam3d is not None else 0.0
+        corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None          # correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
         rang = {}
         if champ:       # carte du monde : sprites a plat, tous a la meme hauteur ; le jeu les superpose par la hauteur z que le moteur envoie (3e valeur de la position), puis le plus au sud passe devant (un equipier au sud du heros est devant lui), puis l'emplacement le plus recent
             vus = [(float(s['pos'][2]) if len(s['pos']) > 2 else 0.0, float(s['pos'][1]), sl) for sl, s in e.sprites.items() if s['pos'] is not None]
@@ -2505,8 +2860,9 @@ class Jeu(pyglet.window.Window):
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
-                a, b = p - r_ * w / 2 - f_ * zb, p + r_ * w / 2 - f_ * zb
-                c, d = b + u_ * h - f_ * zh, a + u_ * h - f_ * zh
+                # Correction des bords (reglage « correction_bords », voir _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
+                # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
+                a, b, c, d = self._panneau_ville(p, r_, u_, f_, w, h, zb, zb + zh, corr, C_vue)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
                 a, b = p - dh * w / 2, p + dh * w / 2
@@ -2522,6 +2878,7 @@ class Jeu(pyglet.window.Window):
                 if cam3d is not None: ombres.append((slot, np.array(s['ombre_pos'], float) if s.get('ombre_sep') and s.get('ombre_pos') else p, al))
                 elif champ: ombres.append((slot, p, al))
         icones = self._icones(e, champ, bataille, dh, cam3d)
+        if os.environ.get('DQ_PROJ') and self.n_boucle % int(os.environ['DQ_PROJ']) == 0: self._dbg_proj(M, e, cam3d, a_dessiner, icones)
         self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
@@ -2542,7 +2899,8 @@ class Jeu(pyglet.window.Window):
             gl.glDepthMask(gl.GL_TRUE)
             self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
         else:
-            self._tracer_decor(True)
+            self._tracer_decor(True); self._M_ville = M
+            if e.fbx: self._tracer_fbx(e)               # modeles 3D animes (le dragon du titre) : meme file que le decor opaque
         self.prog['cutoff'] = 0.05
         if ombres and not os.environ.get('DQ_SANS_OMBRE'):
             if cam3d is not None: self._dessiner_ombres_chara(ombres, cam3d)
@@ -2633,7 +2991,7 @@ class Jeu(pyglet.window.Window):
         lieu = 'Carte du monde' if champ else ('Combat %s' % e.carte if bataille else 'Carte %s' % (e.carte or '?'))
         nom_mode = HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect'
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
-        self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
+        self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, (' (plein écran)', ' (plein écran exclusif)')[self.mode_fen - 1] if self.est_plein else '', self.moteur.images, e.partie)
         self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
             nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
@@ -2690,7 +3048,8 @@ def main():
     ap.add_argument('--sans-son', action='store_true', help='coupe le son pour cette session (le menu Echap permet de le remettre)')
     ap.add_argument('--volume-musique', type=float, default=None, help='volume des musiques (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--volume-bruitages', type=float, default=None, help='volume des bruitages (0 a 1) ; par defaut celui du menu Echap')
-    ap.add_argument('--plein-ecran', type=int, choices=(0, 1), default=None, help='1 = lance le jeu en plein ecran (fenetre creee directement en plein ecran), 0 = en fenetre ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
+    ap.add_argument('--plein-ecran', type=int, choices=(0, 1, 2), default=None, help='0 = lance le jeu en fenetre, 1 = en plein ecran (fenetre sans bordure a la resolution du bureau), 2 = en plein ecran exclusif (le moniteur prend la resolution du reglage) ; la fenetre est creee directement dans ce mode ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
+    ap.add_argument('--correction-bords', type=int, default=None, choices=range(0, 101), metavar='0-100', help='sprites des villes : correction de l\'inclinaison vers l\'exterieur pres des bords gauche / droit de l\'ecran, en pourcentage (0 = aucune, comme avant ; 100 = complete) ; par defaut le reglage `correction_bords` (variable d\'environnement DQ_CORRECTION_BORDS pour comparer)')
     ap.add_argument('--msaa', type=int, default=None, help='anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap')
     ap.add_argument('--reglages', default=os.path.join(ici, 'reglages.json'), help='fichier des reglages du joueur (menu Echap : affichage, son, touches)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
@@ -2710,8 +3069,8 @@ def main():
     else: a.hd = reg['mode_sprites'] = RG.mode_sprites_valide(a.hd)
     if a.msaa is None: a.msaa = reg['msaa']
     else: reg['msaa'] = a.msaa
-    if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else int(bool(reg['plein_ecran']))
-    else: reg['plein_ecran'] = bool(a.plein_ecran)
+    if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else reg['mode_fenetre']
+    else: reg['mode_fenetre'] = a.plein_ecran
     rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1920, 1080)
     if a.largeur is None: a.largeur = int(rs[0]) if a.hauteur is None else int(round(a.hauteur * 16 / 9))
     if a.hauteur is None: a.hauteur = int(rs[1]) if a.largeur == int(rs[0]) else int(round(a.largeur * 9 / 16))

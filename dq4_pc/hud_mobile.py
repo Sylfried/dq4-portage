@@ -243,8 +243,6 @@ class Boutons:
         import moteur as MO
         return (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)[k]
 
-    def remettre(self): self.J.reg['boutons_pos'] = {}
-
     # ---- dessin
     def _icone(self, nom):
         """Icone d'origine 32 x 32 (RGBA), couleur des pixels transparents propagee d'un pixel (pas de liseré sombre quand le filtre melange les bords)."""
@@ -299,7 +297,7 @@ class Boutons:
         seulement pendant le clignotement du tutoriel, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA sont des constantes inutilisees)."""
         art = self._art_croix(); x, y, c, _ = self.rect(CROIX); cx, cy = x + c / 2, y + c / 2; k = c / 256.0
         sect = self.croix_secteur()
-        a = 0.35 if edition and not self.J.reg['croix'] else 1.0                           # masquee : montree (pale) dans l'editeur pour pouvoir la placer
+        a = 1.0                                                                            # (masquee, elle reste entiere dans l'editeur : le voile « Masquée » de pause.py l'assombrit comme les autres elements)
         def poser(nom, px, py, rot=0.0, op=1.0):
             sp = art[nom]; sp.update(x=px, y=py, scale=k, rotation=rot); sp.opacity = int(255 * a * op); sp.draw()
         poser('anneau', cx, cy)
