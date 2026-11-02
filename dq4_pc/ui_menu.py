@@ -33,6 +33,7 @@ void main() {
 HAUTEUR_LIGNE = 1.246     # (police de repli GMaruGoPro-M, utilisee seulement sans ui_garrir.*) hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/PM (28 px) et le centrage des boutons
 TAILLE_POLICE = 19.0        # (repli GMaruGoPro-M) taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
 MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
+RECENTRAGE_TEXTE = os.environ.get('DQ_TEXTE_ORIGINAL', '') not in ('1', 'true')      # DQ_TEXTE_ORIGINAL=1 (test) : placement vertical exact du jeu d'origine, sans le recentrage optique (voir recentrage_texte)
 
 
 def base_premiere_ligne(zp, row, n, pas, asc):
@@ -41,6 +42,13 @@ def base_premiere_ligne(zp, row, n, pas, asc):
     Verifie sur la capture du mobile (ecran4 : « Rat volant » 1 ligne, « Scarapince / x2 » 3 lignes, onglet « Ragnar »), a 0,3 unite pres."""
     hb = n * pas
     return zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0) - asc
+
+
+def recentrage_texte(interligne, u, ls):
+    """Remontee (unites) a appliquer au texte pour centrer l'encre dans sa ligne. Le jeu a regle lineSpacing (0,441 cibles, 0,481 plaques de monstres, 0,801 onglets / boutons / noms...) pour la police japonaise : la boite de ligne
+    est raccourcie de (1 - ls) mais la ligne de base reste a `ascent` du haut de la ligne, donc avec SE-GARRIR (encre centree dans sa boite naturelle de 23,5 px) le texte descend de (1 - ls) x interligne x u / 2 sous le centre de sa boite
+    (6,5 unites pour « Rat volant » et les plaques : texte colle au bas du cadre). Applique aux trois ancrages verticaux (l'ecart encre / boite ne depend pas de l'ancrage ; seul le cas milieu a une reference mobile, ecran4). lineSpacing >= 1 (PV / PM / Nv., regles sur les jauges) : 0. ECART VOLONTAIRE avec le jeu d'origine, qui a le meme defaut."""
+    return interligne * u * (1.0 - ls) / 2 if RECENTRAGE_TEXTE and ls < 1.0 else 0.0
 
 
 # Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
@@ -994,6 +1002,7 @@ class Rendu:
         ts = nd['tscale']
         row = t['anchor'] // 3; col = t['anchor'] % 3
         base0 = base_premiere_ligne(zp, row, N, pas, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
+        if bm: base0 += recentrage_texte(bm.interligne, u, t['lineSpacing'])      # (police d'origine seulement : les reglages du jeu sont calcules pour la police japonaise, GMaruGoPro-M, quand elle sert de repli)
         px = max(6, int(round(emy * s)))
         def teinte(i):
             pal = self.ml.couleurs[i] if 0 <= i < len(self.ml.couleurs) else (1, 1, 1, 1)
