@@ -109,13 +109,14 @@ VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
 NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
-# suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 2 (Moyen, la valeur d'origine) sinon : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
+# suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 0 (la plus courte, 12 images) sinon (#45 : avec 2, la valeur d'origine, 32 images, le nombre de degats n'apparaissait que 0,77 s apres le debut de l'animation du coup
+# et un tour d'attaque durait 5,7 s ; avec 0 : 0,43 s et 3,0 s ; l'animation du coup garde sa duree) : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
 COMBAT_MANUEL = 0.0
-CODE_DEFILEMENT_MANUEL, CODE_DEFILEMENT_AUTO = 4, 2
+CODE_DEFILEMENT_MANUEL, CODE_DEFILEMENT_AUTO = 4, 0
 
 
 def code_defilement(vitesse):
-    """Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 2 (Moyen : la valeur d'origine du jeu) sinon."""
+    """Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 0 (attente de 12 images entre deux messages : les animations s'enchainent sans temps mort) sinon."""
     return CODE_DEFILEMENT_MANUEL if cran_combat(vitesse) == COMBAT_MANUEL else CODE_DEFILEMENT_AUTO
 
 

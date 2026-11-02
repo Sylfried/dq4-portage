@@ -886,7 +886,7 @@ class Jeu(pyglet.window.Window):
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
-        """« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon (RG.code_defilement) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente."""
+        """« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 0 (attente la plus courte du jeu, 12 images) sinon (RG.code_defilement) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente."""
         self.moteur.imposer_defilement(RG.code_defilement(self.reg['vitesse_combat']))
 
     def regler_vitesse_combat(self, v):

@@ -85,10 +85,10 @@ class Facteur(unittest.TestCase):
 
 
 class DefilementDesMessages(unittest.TestCase):
-    """La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon."""
+    """La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 0 (12 images, la plus courte) sinon (#45)."""
     def test_code_impose(self):
-        self.assertEqual([RG.code_defilement(v) for v in (0.0, 1.0, 2.0, 3.0)], [4, 2, 2, 2])
-        self.assertEqual(RG.code_defilement('x'), 2); self.assertEqual(RG.code_defilement(None), 2)             # valeur invalide : Normal
+        self.assertEqual([RG.code_defilement(v) for v in (0.0, 1.0, 2.0, 3.0)], [4, 0, 0, 0])
+        self.assertEqual(RG.code_defilement('x'), 0); self.assertEqual(RG.code_defilement(None), 0)             # valeur invalide : Normal
 
     def test_le_jeu_change_la_vitesse_des_messages(self):
         self.assertEqual(RG.vitesse_apres_code_jeu(4, 2.0), 0.0)                                              # Manuel choisi dans le jeu
@@ -273,7 +273,7 @@ class IndependanceAccelerateur(unittest.TestCase):
         toasts = []; vis = [()]
         j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), toast=toasts.append, appliquer_defilement=lambda: imposes.append(RG.code_defilement(r['vitesse_combat'])))
         for attendu in (2.0, 3.0, 0.0, 1.0, 2.0): F.Jeu.changer_vitesse_combat(j); self.assertEqual(r['vitesse_combat'], attendu)
-        self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [2, 2, 4, 2, 2])
+        self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [0, 0, 4, 0, 0])
         self.assertEqual(toasts, ['Vitesse de combat : Rapide', 'Vitesse de combat : Très rapide', 'Vitesse de combat : Manuel', 'Vitesse de combat : Normal', 'Vitesse de combat : Rapide'])
         vis[0] = (HM.COMBAT,); toasts.clear(); F.Jeu.changer_vitesse_combat(j); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])      # bouton a l'ecran : il montre deja la vitesse
         vis[0] = (); toasts.clear(); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])
