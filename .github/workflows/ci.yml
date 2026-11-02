@@ -1,0 +1,35 @@
+# Contrôles minimaux (G-016). Rien ici ne lit ni ne produit de fichier du jeu.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  controles:
+    name: "Compilation et fichiers interdits"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Compilation du code (syntaxe de dq4_pc et outils)"
+        run: python -m compileall -q dq4_pc outils
+
+      - name: "Fichiers interdits (motifs du .gitignore : contenu du jeu, sauvegardes, caches)"
+        run: |
+          motifs='(^|/)(jeux|saves|sauvegardes|cache|captures|il2cpp)/|(^|/)(dump\.cs|script\.json)$|\.(apk|so|unity3d|obb|mpt|dat|pkl)$'
+          interdits=$(git ls-files | grep -E "$motifs" || true)
+          if [ -n "$interdits" ]; then
+            echo "::error::Fichiers interdits dans le dépôt (contenu du jeu, sauvegardes, caches) :"
+            echo "$interdits"
+            exit 1
+          fi
+          echo "Aucun fichier interdit."
