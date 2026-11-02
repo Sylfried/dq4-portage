@@ -29,6 +29,7 @@ import decors_plats as DP
 import fbx as FX
 import ciel_titre as CT
 import vitesse_combat as VC
+import teinte_carte as TC
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -37,7 +38,7 @@ centroid out vec2 v_uv; out vec4 v_col;
 void main() { gl_Position = mvp * vec4(position, 1.0); v_uv = tex_coords; v_col = colors; }'''
 FRAG = '''#version 330 core
 centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
-uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c;
+uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c; uniform vec3 teinte;      // teinte : paquet 33 (decor seulement), 1, 1, 1 = neutre
 void main() {
     vec2 uv = v_uv; float lod = 0.0;
     if (net > 0.5) { vec2 p0 = uv * tsize; vec2 dx = dFdx(p0), dy = dFdy(p0); lod = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8))); }      // mipmaps choisies sur l'uv d'origine (l'uv decalee saute d'un texel a l'autre)
@@ -47,6 +48,7 @@ void main() {
         uv = (b + clamp((p - b) / w, -0.5, 0.5)) / tsize;
     }
     vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0);
+    c.rgb = clamp(c.rgb * teinte, 0.0, 1.0);      // texture x couleur de sommet x _Color (fld_*.frag) : _Color = _OrgColor (blanc, alpha d'origine : FldObject.save_org_color) x teinte du paquet 33, qui peut depasser 1 (1,25 en rouge) : saturation a l'ecriture, comme le tampon d'image
     if (a2c > 0.5) { c.a = clamp((c.a - cutoff) / max(fwidth(c.a), 1e-4) + 0.5, 0.0, 1.0); if (c.a <= 0.0) discard; }      // decor decoupe (fleurs, feuillages, grilles) : la silhouette devient une couverture de 0 a 4 echantillons (MSAA), pas un bord dur qui scintille
     else if (c.a < cutoff) discard;
     c.a *= amul; fragColor = c; }'''
@@ -199,6 +201,7 @@ class Jeu(pyglet.window.Window):
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
         self.effet_tex = None; self.effet_sim = None; self.effet_vl = None; self.effet_ref = None; self.effet_tex_prete = False      # effet de debut de combat : capture de l'ecran, simulation, sommets
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
+        self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
         self._demarrer_moteur(args)
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
@@ -479,6 +482,8 @@ class Jeu(pyglet.window.Window):
                 gl.glBindTexture(t.target, t.id)
                 gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST if nearest else gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST if nearest else gl.GL_LINEAR)
         net = 0.0 if nearest else 1.0
+        tint = self._teinte_decor()                       # paquet 33 sur la carte du monde : Field.SetColor = couleur du materiau des tuiles (Custom/Field : texture x _Color) et de chaque symbole (alpha propre conserve)
+        if tint is not None: self._regler_teinte(tint)
         self.prog['cutoff'] = 0.05; self.prog['net'] = net; self.prog['tsize'] = (float(CH_ATLAS * CH_CASE),) * 2
         self._tracer(self.champ_tex, self.champ_vl)
         self.prog['tsize'] = (1024.0, 1024.0)
@@ -501,6 +506,7 @@ class Jeu(pyglet.window.Window):
                 v = self.champ_ico[1]; v.position[:] = pos; v.tex_coords[:] = tc; v.colors[:] = cc
             self._dom_lie = None                                  # sommets ecrits apres le 1er trace de l'image : sans rebind + commit() ils partent avec l'image precedente (icones en retard d'une image, absentes une image quand leur nombre change)
             self._tracer(self.champ_tex_ico, self.champ_ico[1])
+        if tint is not None: self._regler_teinte((1.0, 1.0, 1.0))
         self.prog['net'] = 0.0
 
     def _tracer(self, tex, vl):
@@ -1306,6 +1312,17 @@ class Jeu(pyglet.window.Window):
             for t in self.decor_hd.pop(next(iter(self.decor_hd))).values(): t.delete()
         return r
 
+    def _teinte_decor(self):
+        """Teinte du paquet 33 a appliquer au decor (r, g, b), ou None si elle est neutre (rien ne change : le dessin reste identique). DQ_SANS_TEINTE=1 : (debogage) jamais de teinte, pour comparer."""
+        if os.environ.get('DQ_SANS_TEINTE'): return None
+        t = self.moteur.etat.teinte
+        return None if TC.teinte_neutre(t) else t
+
+    def _regler_teinte(self, t):
+        """Ecrit le uniforme `teinte` s'il a change (le programme est en cours d'utilisation)."""
+        t = (float(t[0]), float(t[1]), float(t[2]))
+        if t != self._teinte_gl: self._teinte_gl = t; self.prog['teinte'] = t
+
     def _tracer_decor(self, net=False):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
         lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; le mode agrandi (EPX) lui applique l'algorithme HD choisi."""
@@ -1315,6 +1332,7 @@ class Jeu(pyglet.window.Window):
         opaques = [x for x in self.carte_vl if not est_tr(x[2])]
         transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
         cutoff0 = self.prog['cutoff']; a2c = self.post.a2c
+        tint = self._teinte_decor(); ids_tz = self.tz.ids() if tint is not None else None; neutre = (1.0, 1.0, 1.0)      # paquet 33 : teinte de tout le decor, sauf les groupes dont la texture a « tz_ » dans son nom (lampes, bougies, vagues)
         if a2c: self.prog['a2c'] = 1.0; gl.glEnable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glDisable(gl.GL_BLEND)      # decor opaque decoupe : alpha -> couverture MSAA, sans melange (le melange doublerait l'alpha)
         for pas, liste in ((0, opaques), (1, transp)):
             if pas == 1 and liste:
@@ -1327,14 +1345,17 @@ class Jeu(pyglet.window.Window):
                 t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
                 self.prog['net'] = net_o if (r is None or key not in r) else 0.0
                 self.prog['tsize'] = (float(t.width), float(t.height))
+                if tint is not None: self._regler_teinte(neutre if TC.groupe_tz(key, ids_tz) else tint)
                 self._tracer(t, vl)
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
             if pas == 0:
+                if tint is not None: self._regler_teinte(tint)
                 for tex, vl, key, deb, n, dx in self.carte_ext:
                     self.prog['net'] = net_o; self.prog['tsize'] = (float(tex.width), float(tex.height)); self._tracer(tex, vl)
                 if self.ciel_ext is not None: self._tracer_ciel(r, net_o)
         if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
+        if tint is not None: self._regler_teinte(neutre)
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     # ---- modeles 3D animes (FbxObject d'Unity : paquets 31 et 32 du moteur ; voir fbx.py)
@@ -2907,6 +2928,7 @@ class Jeu(pyglet.window.Window):
         self._dom_lie = None
         self.prog.use()
         self.prog['mvp'] = tuple(float(x) for x in M.T.ravel()); self.prog['cutoff'] = 0.5; self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0); self.prog['amul'] = 1.0
+        self._teinte_gl = None; self._regler_teinte((1.0, 1.0, 1.0))        # (le uniforme vaut 0 tant qu'on ne l'a pas ecrit : tout noir)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         if champ: self._tracer_champ(e)
         elif bataille:
