@@ -136,6 +136,9 @@ def _ldr_w(mot, base=0):
     return ((mot >> 10) & 0xfff) * 4
 
 
+_PAR_MOTEUR = {}                                                                         # (secours si le moteur refuse un attribut en plus : id -> (moteur, capteur))
+
+
 class CapteurCombat:
     def __init__(self, moteur):
         self.actif = False; self.erreur = None
@@ -157,6 +160,17 @@ class CapteurCombat:
             self.actif = True
         except Exception as ex:
             self.erreur = repr(ex); print('Historique des combats : crochets non installes (%r)' % (ex,), flush=True)
+
+    @classmethod
+    def pour(cls, moteur):
+        """Le capteur de ce moteur : cree a la premiere demande, toujours le meme ensuite (les crochets ne sont installes qu'une fois). Permet de n'ajouter qu'UNE ligne a la boucle d'images, sans rien
+        creer ailleurs : `for combat in CapteurCombat.pour(mo).maj(mo): ...` juste apres `mo.step`."""
+        c = getattr(moteur, '_capteur_combat', None) or _PAR_MOTEUR.get(id(moteur), (None, None))[1]
+        if c is None:
+            c = cls(moteur)
+            try: moteur._capteur_combat = c
+            except Exception: _PAR_MOTEUR[id(moteur)] = (moteur, c)
+        return c
 
     # ---- verification : le moteur est celui qu'on a etudie
     def _verifier(self):

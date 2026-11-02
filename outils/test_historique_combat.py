@@ -190,6 +190,22 @@ class Colle(unittest.TestCase):
         self.assertTrue(self.c.actif)
         self.assertEqual(sorted(self.m.core.uc.crochets), sorted(NOMS_FONCTIONS[n] for _e, n in HC.CROCHETS))
 
+    def test_pour_un_seul_capteur_par_moteur(self):
+        """CapteurCombat.pour(mo) : l'unique ligne d'integration ; les crochets ne sont installes qu'une fois."""
+        m = FauxMoteur(); a = HC.CapteurCombat.pour(m); b = HC.CapteurCombat.pour(m)
+        self.assertIs(a, b); self.assertTrue(a.actif)
+        self.assertTrue(all(len(v) == 1 for v in m.core.uc.crochets.values()))
+        for _ in range(3): self.assertEqual(HC.CapteurCombat.pour(m).maj(m), [])
+        self.assertIsNot(HC.CapteurCombat.pour(FauxMoteur()), a)
+
+    def test_pour_moteur_qui_refuse_un_attribut(self):
+        class Ferme(FauxMoteur):
+            def __setattr__(self, nom, valeur):
+                if nom == '_capteur_combat': raise AttributeError(nom)
+                object.__setattr__(self, nom, valeur)
+        m = Ferme(); a = HC.CapteurCombat.pour(m); self.assertIs(HC.CapteurCombat.pour(m), a)
+        self.assertTrue(all(len(v) == 1 for v in m.core.uc.crochets.values()))
+
     def test_moteur_inattendu_capture_desactivee(self):
         m = FauxMoteur(mauvaise_version=True); c = HC.CapteurCombat(m)
         self.assertFalse(c.actif); self.assertEqual(m.core.uc.crochets, {}); self.assertEqual(m.pas(c, 3), [])
