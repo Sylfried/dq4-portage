@@ -9,11 +9,12 @@ TOUCHES_DEF = {
     'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
+    'vit_combat': ['V', None],        # fait defiler la vitesse des combats (Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
-           ('accel', "Touche d'accélérateur"), ('modif', 'Touche spéciale'),
+           ('accel', "Touche d'accélérateur"), ('vit_combat', 'Touche de vitesse des combats'), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
 RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule le plein ecran exclusif (avec Alt + Entree) : non reattribuables
@@ -47,7 +48,8 @@ DEFAUT = {
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu ; x1 a x4)
-    'vitesse_accel': 1.5,         # vitesse de l'accelerateur (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course »)
+    'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
+    'vitesse_combat': 1.0,        # « Vitesse des combats » : 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations, deplacements, delais, messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
@@ -104,6 +106,8 @@ BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'i
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
 VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
+VITESSES_COMBAT = (1.0, 2.0, 3.0)                            # crans de « Vitesse des combats » (x1 = comme le jeu)
+NOMS_VITESSE_COMBAT = {1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Commandes, bouton de l'ecran de combat) : jamais « x1 », « x2 », « x3 »
 # « Messages en combat » : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message suivant, 4 = pas
 # d'avance automatique (touche). Le jeu d'origine propose ces cinq crans (« Vitesse texte » 1 a 5) ; la page en garde quatre : Rapide (0), Moyen (2 : la valeur d'origine), Lent (3), Manuel (4). Le cran 1 (22 images) n'a pas de nom : il
 # s'affiche comme Moyen (le plus proche en rapport de durees : 22 / 12 = 1,8 contre 32 / 22 = 1,45), et reste tel quel dans la sauvegarde tant qu'on ne touche pas au reglage.
@@ -123,6 +127,19 @@ def cran_x(v, defaut=1.0):
     """Vitesse lue (ancien curseur de 0,5 a 2 ou valeur absurde) -> le cran x1 a x4 le plus proche (a egalite le plus rapide), jamais moins que x1."""
     if isinstance(v, bool) or not isinstance(v, (int, float)): return defaut
     return float(min(VITESSES_X[-1], max(VITESSES_X[0], int(v + 0.5))))
+
+
+def cran_combat(v, defaut=1.0):
+    """Valeur lue (reglages.json, saisie) -> le cran de VITESSES_COMBAT le plus proche (a egalite le plus rapide) ; tout ce qui n'est pas un nombre (texte, booleen, None, nan) -> `defaut`."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v: return defaut
+    v = min(VITESSES_COMBAT[-1], max(VITESSES_COMBAT[0], v))                                  # (bornes : jamais plus lent que Normal, ni plus rapide que Très rapide)
+    return min(VITESSES_COMBAT, key=lambda c: (abs(c - v), -c))
+
+
+def combat_suivant(v):
+    """Touche « Vitesse des combats » : Normal -> Rapide -> Très rapide -> Normal (une valeur invalide est lue comme Normal, une valeur hors bornes comme le cran le plus proche)."""
+    v = cran_combat(v)
+    return VITESSES_COMBAT[(VITESSES_COMBAT.index(v) + 1) % len(VITESSES_COMBAT)]
 
 
 def nom_touche(nom):
@@ -188,6 +205,7 @@ class Reglages:
                     if not isinstance(self.v[k], bool): self.v[k] = DEFAUT[k]
                 self.v['defilement_combat'] = cran_defilement(self.v['defilement_combat']) if isinstance(self.v['defilement_combat'], int) and not isinstance(self.v['defilement_combat'], bool) else DEFAUT['defilement_combat']
                 for k in VITESSES_X_CLES: self.v[k] = cran_x(self.v[k], DEFAUT[k])                       # ancien curseur (0,5 a 2) -> x1 a x4
+                self.v['vitesse_combat'] = cran_combat(self.v['vitesse_combat'], DEFAUT['vitesse_combat'])
                 if not isinstance(self.v['correction_bords'], (bool, int, float)): self.v['correction_bords'] = DEFAUT['correction_bords']        # (0 a 1 accepte : correction partielle ; autre chose : valeur par defaut)
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur

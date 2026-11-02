@@ -24,6 +24,7 @@ import ecran_sauvegardes as ES
 import postfx as PF
 import decors_plats as DP
 import fbx as FX
+import vitesse_combat as VC
 
 VERT = '''#version 330 core
 in vec3 position; in vec2 tex_coords; in vec4 colors;
@@ -618,6 +619,7 @@ class Jeu(pyglet.window.Window):
             else: self.pause.ouvrir()
             return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
+        if self.reg.action_de(symbol) == 'vit_combat': self.changer_vitesse_combat(); return pyglet.event.EVENT_HANDLED          # Normal -> Rapide -> Très rapide (en combat comme ailleurs)
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if self._tenue('modif'):
@@ -1962,7 +1964,8 @@ class Jeu(pyglet.window.Window):
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
-            if n: self.hud_decl = HM.DECL[n]
+            if n == HM.COMBAT: self.changer_vitesse_combat('bouton')                      # bouton de vitesse de l'ecran de combat : ne passe rien au moteur
+            elif n: self.hud_decl = HM.DECL[n]
             return
         if bouton != pyglet.window.mouse.LEFT or not self.appui: return
         port, b, pad = self.appui; self.appui = None
@@ -2332,7 +2335,7 @@ class Jeu(pyglet.window.Window):
 
     def _maj_camera(self):
         """Fleches sur le terrain (a chaque image affichee) : gauche / droite tournent la camera autour du heros (villes, donjons, tours seulement), haut / bas relevent ou abaissent son angle ;
-        deux fleches opposees ensemble la remettent par defaut par une animation, par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglages « Vitesse de caméra » et « Vitesse de l'accélérateur » (touche tenue)."""
+        deux fleches opposees ensemble la remettent par defaut par une animation, par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglages « Vitesse de caméra » et « Multiplicateur de l'accélérateur » (touche tenue)."""
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_cam is None else min(0.1, t - self.t_cam)); self.t_cam = t
         if not self._terrain_libre(): return
         g, d, h, b = (self._tenue(a) for a in ('cam_gauche', 'cam_droite', 'cam_haut', 'cam_bas'))
@@ -2374,6 +2377,8 @@ class Jeu(pyglet.window.Window):
         if self.alt_cand and not (k[K.LALT] or k[K.RALT]): self.alt_cand = False
         return r
 
+    _se_images = None                                                  # bruitages deja lances pendant l'image affichee en cours quand le combat est accelere (None : pas de filtre ; voir _boucle et vitesse_combat.sons_a_jouer)
+
     def _boucle(self, dt):
         """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
         self.n_boucle += 1
@@ -2387,13 +2392,9 @@ class Jeu(pyglet.window.Window):
         self.t_boucle = t
         if self.fixe_test:
             self._pas(); self.alpha = 1.0; return
-        f = self._facteur_vitesse()
-        self.acc += min(dt * f, 3 * PAS_MOTEUR * max(1.0, f))
-        n = 0; nmax = 3 * max(1, math.ceil(f)); coupe = False; t_pas = time.perf_counter()
-        while self.acc >= PAS_MOTEUR * 0.85 and n < nmax:      # tolerance de 15 % : sur un ecran de 60 Hz, un pas tous les 2 images exactement (sans elle, la gigue de l'horloge alterne 2 et 3 images)
-            self._pas(); self.acc -= PAS_MOTEUR; n += 1
-            if f > 1.0 and time.perf_counter() - t_pas > BUDGET_PAS_RAPIDES: coupe = True; break      # marche x3, x4 (jusqu'a x8 avec l'accelerateur) : si les pas du moteur ne tiennent pas dans le budget de l'image, le jeu ralentit un peu plutot que de bloquer l'affichage
-        if n == nmax or coupe: self.acc = 0.0
+        f = self._facteur_vitesse(); en_combat = self._horloge_combat() and f > 1.0
+        self._se_images = set() if en_combat else None            # combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sons_a_jouer) ; sa vitesse de lecture ne change pas
+        self.acc, n, coupe = VC.avancer(self.acc, dt, f, self._faire_pas_combat if en_combat else self._pas, time.perf_counter, PAS_MOTEUR, BUDGET_PAS_RAPIDES)      # (tolerance de 15 %, rattrapage et budget de calcul : voir vitesse_combat.avancer)
         self.alpha = max(0.0, min(1.0, self.acc / PAS_MOTEUR))
 
     def _facteur_vitesse(self):
@@ -2401,12 +2402,37 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
+        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True, self._attend_joueur())          # combat : « Vitesse des combats » seule (Normal, Rapide, Très rapide) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
         f = float(R['vitesse_marche'])
         if self._tenue('accel'): f *= float(R['vitesse_accel'])
         return max(0.25, min(8.0, f))
+
+    def _horloge_combat(self):
+        """Le jeu est-il dans un combat, au sens de l'horloge du moteur ? Partie « combat » du moteur (0xd), mais aussi l'effet d'ecran qui le lance et l'ecran noir qui attend le chargement de sa scene (Etat.effet,
+        Etat.attente_charge : seul un combat les leve). Hors de cela la vitesse des combats n'a aucun effet (la marche garde ses reglages) ; en combat, au contraire, la marche et l'accelerateur n'en ont plus."""
+        e = self.moteur.etat
+        return e.partie == MO.PARTIE_COMBAT or e.effet is not None or e.attente_charge is not None
+
+    def _attend_joueur(self):
+        """Le moteur attend-il le joueur en combat ? Menu qui a la saisie (commandes, cible, sorts, objets, Oui / Non) ou message qui montre son curseur ▼ (« Messages en combat » Manuel : une touche est attendue). Le moteur
+        n'avance alors qu'a vitesse normale : curseur et repetition des touches inchangés, monstres a leur animation de repos habituelle. (Le dernier message d'un combat attend aussi une touche sans montrer le curseur :
+        non detectable, le moteur y tourne vite sans rien faire d'autre qu'attendre.)"""
+        mo = self.moteur
+        return mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed'))
+
+    def _faire_pas_combat(self):
+        """Un pas du moteur pendant un combat accelere ; renvoie False quand le moteur vient d'ouvrir un menu ou d'attendre une touche (on n'enchaine pas d'autres pas dans la meme image affichee)."""
+        self._pas()
+        return not self._attend_joueur()
+
+    def changer_vitesse_combat(self, source='touche'):
+        """Touche « Touche de vitesse des combats » ou bouton de l'ecran de combat : Normal -> Rapide -> Très rapide -> Normal. Le reglage change tout de suite (la page Commandes le relit) et est enregistre ; pris en compte
+        au pas suivant. Sans le bouton a l'ecran (masque, ou hors combat), un message bref annonce la nouvelle vitesse."""
+        v = RG.combat_suivant(self.reg['vitesse_combat']); self.reg['vitesse_combat'] = v; self.reg.enregistrer()
+        if source == 'touche' and not self.hud.visibles(): self.toast('Vitesse des combats : %s' % RG.NOMS_VITESSE_COMBAT[v])
 
     def _touches_test(self):
         """(test) touches pressees a une image de boucle n, ou "cN+k" = k images de boucle apres que le combat a atteint N images : 'n:NOM' (NOM = nom de touche pyglet ;
@@ -2602,7 +2628,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_FLAG') and self.n % int(os.environ['DQ_FLAG']) == 0: print('FLAG n=%d %#x partie=%s msg=%s menu=%s cam=%s>%s' % (self.n, mo.drapeaux(), mo.etat.partie, mo.msg_visible, mo.menu_actif(), None if mo.etat.cam_pos is None else tuple(round(float(x), 2) for x in mo.etat.cam_pos), None if mo.etat.cam_cible is None else tuple(round(float(x), 2) for x in mo.etat.cam_cible)), flush=True)
         if mo.etat.partie == MO.PARTIE_CHAMP and mo.etat.champ is not None: self._avancer_motifs()
         self.son.image = self.n
-        if mo.etat.sons: self.son.evenements(mo.etat.sons); mo.etat.sons = []
+        if mo.etat.sons: self.son.evenements(VC.sons_a_jouer(mo.etat.sons, self._se_images)); mo.etat.sons = []
         self.son.tick()
         jeu = mo.options_jeu()[:2]
         if jeu != self._opt_son: self._opt_son = jeu; self.son.regler_mixage(jeu={'musique': SON.volume_option_jeu(jeu[0]), 'effets': SON.volume_option_jeu(jeu[1])})        # options « volume » de la fenetre Parametres du jeu

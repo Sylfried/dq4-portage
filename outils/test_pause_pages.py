@@ -149,7 +149,23 @@ class PageCommandes(unittest.TestCase):
         for lib in self.LIBS:
             x = par_libelle(p, lib); self.assertEqual(x['t'], 'choix'); self.assertEqual(x['vals'], [1.0, 2.0, 3.0, 4.0])
             self.assertEqual([p._nom_valeur(lib, v) for v in x['vals']], ['x1', 'x2', 'x3', 'x4'])
-        x = par_libelle(p, "Vitesse de l'accélérateur"); self.assertEqual(x['t'], 'curs'); self.assertAlmostEqual(x['v'] and J.reg['vitesse_accel'], 1.5)    # l'accelerateur garde son curseur
+        x = par_libelle(p, "Multiplicateur de l'accélérateur"); self.assertEqual(x['t'], 'curs'); self.assertAlmostEqual(x['v'] and J.reg['vitesse_accel'], 1.5)    # l'accelerateur garde son curseur
+        self.assertNotIn("Vitesse de l'accélérateur", [e.get('l') for e in p._entrees()])                                                                                       # (ancien libelle : renomme)
+
+    def test_vitesse_des_combats(self):
+        """Ligne « Vitesse des combats » : juste sous les lignes de l'accelerateur (touche, multiplicateur), meme forme que les choix x1 a x4, libelles Normal / Rapide / Tres rapide, defaut Normal ; sa touche suit."""
+        J, p = menu('commandes'); e = p._entrees(); ls = [x['l'] for x in e]
+        i = ls.index("Multiplicateur de l'accélérateur"); self.assertEqual(ls[i - 1], "Touche d'accélérateur")
+        self.assertEqual(ls[i + 1], 'Vitesse des combats'); self.assertEqual(ls[i + 2], 'Touche de vitesse des combats'); self.assertEqual(e[i + 3]['t'], 'sep')       # (puis la section suivante)
+        x = par_libelle(p, 'Vitesse des combats'); self.assertEqual(x['t'], 'choix'); self.assertTrue(x['liste']); self.assertEqual(x['vals'], [1.0, 2.0, 3.0])
+        self.assertEqual([p._nom_valeur('Vitesse des combats', v) for v in x['vals']], ['Normal', 'Rapide', 'Très rapide'])
+        self.assertEqual(x['v'](), 'Normal'); self.assertEqual(J.reg['vitesse_combat'], 1.0)
+        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (2.0, 'Rapide'))
+        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (3.0, 'Très rapide'))
+        x['plus'](); self.assertEqual((J.reg['vitesse_combat'], x['v']()), (1.0, 'Normal'))                  # la liste boucle
+        x['moins'](); self.assertEqual(J.reg['vitesse_combat'], 3.0)
+        self.assertTrue(x.get('aide')); self.assertNotIn('x2', x['aide'])
+        t = par_libelle(p, 'Touche de vitesse des combats'); self.assertEqual((t['t'], t['act']), ('touche', 'vit_combat')); self.assertEqual(t['v'], ['V', '—'])
 
     def test_changement_de_valeur(self):
         J, p = menu('commandes')
