@@ -168,6 +168,13 @@ class ArenePageMessage(unittest.TestCase):
         j = self.jeu([b(0, 0x400, 0, 62)]); j.ui_g = None; self.assertFalse(j._quitter_seul(12))
         j = self.jeu([b(0, 0x400, 0, 62)]); self.assertFalse(j._quitter_seul(99))
 
+    def test_attente_du_joueur(self):
+        self.assertFalse(self.jeu([b(0, 0x400, 0, 62)])._attend_joueur(), 'arene : « Quitter » seul ouvert : le combat n\'attend personne')
+        self.assertTrue(self.jeu([b(0, 0x10, 0, 0)])._attend_joueur(), 'menu a boutons de validation (commandes, cibles...) : attente du joueur')
+        self.assertTrue(self.jeu([], grille=(1, 2, 2))._attend_joueur(), 'Oui / Non du moteur : attente du joueur')
+        j = self.jeu([b(0, 0x400, 0, 62)]); j.moteur.menu_actif = lambda: None; self.assertFalse(j._attend_joueur())
+        j.moteur.msg_visible = True; j.moteur.ui.msg = {'feed': True}; self.assertTrue(j._attend_joueur(), 'message avec son curseur : attente du joueur')
+
 
 class CodeMasque(unittest.TestCase):
     """Poker (type 48) : le code 2 de la fenetre recoit un MASQUE (63 = tout actif) ; le tableau `fx` exporte ne connait que 0 a 5."""

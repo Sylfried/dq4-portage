@@ -2498,8 +2498,9 @@ class Jeu(pyglet.window.Window):
         """Le moteur attend-il le joueur en combat ? Menu qui a la saisie (commandes, cible, sorts, objets, Oui / Non) ou message qui montre son curseur ▼ (« Messages en combat » Manuel : une touche est attendue). Le moteur
         n'avance alors qu'a vitesse normale : curseur et repetition des touches inchangés, monstres a leur animation de repos habituelle. (Le dernier message d'un combat attend aussi une touche sans montrer le curseur :
         non detectable, le moteur y tourne vite sans rien faire d'autre qu'attendre.)"""
-        mo = self.moteur
-        return mo.menu_actif() is not None or bool(mo.msg_visible and mo.ui.msg.get('feed'))
+        mo = self.moteur; p = mo.menu_actif()
+        if p is not None and not (mo.etat.partie == MO.PARTIE_COMBAT and sans_validation(mo, getattr(self, 'ui_g', None), p)): return True          # (arene des monstres : la fenetre « Quitter » reste ouverte pendant tout le combat, ce n'est pas une attente du joueur)
+        return bool(mo.msg_visible and mo.ui.msg.get('feed'))
 
     def _faire_pas_combat(self):
         """Un pas du moteur pendant un combat accelere ; renvoie False quand le moteur vient d'ouvrir un menu ou d'attendre une touche (on n'enchaine pas d'autres pas dans la meme image affichee)."""
