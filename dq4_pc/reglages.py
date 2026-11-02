@@ -1,16 +1,18 @@
 """Reglages du joueur (menu Echap) : affichage, son, touches. Enregistres dans reglages.json (a cote de fenetre.py, ignore par git)."""
 import json, os
 import pyglet
+import ecrans as EC
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
     'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
-    'menu': ['RETURN', None], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
+    'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
     'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
+ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
@@ -38,8 +40,11 @@ DEFAUT = {
     'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
+    'ecran_plein': None,          # moniteur du plein ecran : None = automatique (l'ecran ou se trouve la fenetre) ; sinon l'ecran choisi, enregistre avec son indice, sa position, ses dimensions et son nom (voir ecrans.py) pour le retrouver au lancement suivant ; un ecran qui n'est plus branche : l'ecran de la fenetre sert
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
+    'camera_inverser_gd': False,  # camera deplacee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
+    'camera_inverser_hb': False,  # idem haut / bas (non = glisser vers le haut = fleche haut, qui releve l'angle de la camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
@@ -53,9 +58,10 @@ DEFAUT = {
     'croix': True, 'croix_taille': 1.0,      # croix (manette tactile) a l'ecran, utilisable a la souris : affichee ou non ; taille relative (en plus de l'option « Taille de la croix » du jeu)
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
     'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
-    'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py)
+    'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py) ; le bouton de vitesse de combat a la sienne (bouton_vitesse_pos)
+    'bouton_vitesse': True, 'bouton_vitesse_taille': 1.0, 'bouton_vitesse_pos': [],      # interface « Combat : bouton de vitesse » (sortie de « Boutons et croix de l'ecran ») : affiche en combat ou non ; taille relative ; [colonne, ligne] de son coin superieur gauche (vide : colle sous la boite du bas, voir hud_mobile.Boutons.ancre)
     'interface_masquees': [],     # editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
-    'touches_v': 4,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; une action ajoutee depuis prend sa touche par defaut
+    'touches_v': 5,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; v4 -> v5 : « Menu » = Entree et Tab (si « Menu » avait encore l'ancien defaut, Entree seule, et que Tab est libre) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
 }
 
@@ -69,9 +75,11 @@ FENETRES_RETIREES = ('StartMenuFirst', 'StartMenuSecond', 'StartMenuSelect', 'St
 # (outils/test_reglages_interface.py le verifie : une cle ajoutee sans classement fait echouer le test).
 CIBLE_ECRAN = 'boutons'                                    # « Boutons et croix de l'ecran » : l'une des interfaces de l'editeur (les autres : 'msg' et les fenetres du jeu, par leur nom Make_*)
 CLES_ECRAN = ('boutons', 'croix', 'croix_taille', 'boutons_taille', 'boutons_pos')      # reglages de CIBLE_ECRAN : affichage des boutons et de la croix, tailles, positions
+CIBLE_VITESSE = 'bouton_vitesse'                           # « Combat : bouton de vitesse » : sa propre interface de l'editeur (groupe « Combat »), separee de CIBLE_ECRAN
+CLES_VITESSE = ('bouton_vitesse', 'bouton_vitesse_taille', 'bouton_vitesse_pos')      # reglages de CIBLE_VITESSE : affichage, taille, position
 CLES_FENETRES = ('interface_fenetres', 'interface_masquees')                       # reglages par fenetre du jeu (ou 'msg') : taille et position, affichage
 CLES_EDITEUR = ('grille_edition', 'boutons_aimant')                                # options de l'editeur lui-meme, communes a toutes les interfaces : grille affichee, aimantation
-CLES_INTERFACE = CLES_ECRAN + CLES_FENETRES + CLES_EDITEUR
+CLES_INTERFACE = CLES_ECRAN + CLES_VITESSE + CLES_FENETRES + CLES_EDITEUR
 FENETRE_DEFAUT = (1.0, 0.0, 0.0)                           # fenetre du jeu sans reglage enregistre : taille relative, decalage x, decalage y (fractions de l'ecran)
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
@@ -102,20 +110,21 @@ def mode_fenetre_valide(v):
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_fondu': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau')
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'camera_inverser_hb')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
 VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
 NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
-# suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 2 (Moyen, la valeur d'origine) sinon : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
+# suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 0 (la plus courte, 12 images) sinon (#45 : avec 2, la valeur d'origine, 32 images, le nombre de degats n'apparaissait que 0,77 s apres le debut de l'animation du coup
+# et un tour d'attaque durait 5,7 s ; avec 0 : 0,43 s et 3,0 s ; l'animation du coup garde sa duree) : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
 COMBAT_MANUEL = 0.0
-CODE_DEFILEMENT_MANUEL, CODE_DEFILEMENT_AUTO = 4, 2
+CODE_DEFILEMENT_MANUEL, CODE_DEFILEMENT_AUTO = 4, 0
 
 
 def code_defilement(vitesse):
-    """Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 2 (Moyen : la valeur d'origine du jeu) sinon."""
+    """Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 0 (attente de 12 images entre deux messages : les animations s'enchainent sans temps mort) sinon."""
     return CODE_DEFILEMENT_MANUEL if cran_combat(vitesse) == COMBAT_MANUEL else CODE_DEFILEMENT_AUTO
 
 
@@ -178,11 +187,12 @@ class Reglages:
                         if isinstance(l, list) and any(l): d['touches']['accel'] = l; break
                     else:
                         if isinstance(d['touches'].get('courir'), list): d['touches']['accel'] = [None, None]        # le joueur avait vide ces touches : l'accelerateur n'a pas de touche
+                if 'bouton_vitesse' not in d and 'bouton_vitesse_taille' not in d and 'bouton_vitesse_pos' not in d: self.migrer_bouton_vitesse(d)      # (une seule fois : ensuite les trois cles sont enregistrees)
                 ancien = d.get('defilement_combat'); ancien = 4 if ancien is None and d.get('defilement_auto') is False else ancien                # (tout ancien « Defilement automatique : non » = messages a la main)
                 if d.get('defilement_force') is True and ancien == 4: d['vitesse_combat'] = COMBAT_MANUEL      # ancien « Messages en combat : Manuel » impose -> « Vitesse de combat : Manuel » (les autres crans n'ont plus d'equivalent : l'attente suit la vitesse de combat ; rien d'impose : la vitesse enregistree reste)
                 v_enreg = d.get('touches_v')
                 for k, x in d.items():
-                    if k == 'touches' and v_enreg not in (3, DEFAUT['touches_v']): continue
+                    if k == 'touches' and v_enreg not in (3, 4, DEFAUT['touches_v']): continue
                     if k == 'touches' and isinstance(x, dict):
                         for a, ts in x.items():
                             if a in TOUCHES_DEF and isinstance(ts, list): self.v['touches'][a] = (list(ts) + [None, None])[:2]
@@ -195,6 +205,9 @@ class Reglages:
                         for i, n in enumerate(ts[a]):
                             if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None        # une touche deja prise par une autre action lui reste
                     if self.v['vitesse_accel'] == 2.0: self.v['vitesse_accel'] = DEFAUT['vitesse_accel']
+                if v_enreg in (3, 4):                                 # v4 -> v5 : nouveau defaut de « Menu » (Entree et Tab). Seul l'ancien defaut exact (Entree seule) change : un choix du joueur est garde, et Tab reste a l'action qui l'a prise
+                    ts = self.v['touches']
+                    if ts['menu'] == ANCIEN_MENU and not any('TAB' in l for a, l in ts.items() if a != 'menu'): ts['menu'] = list(TOUCHES_DEF['menu'])
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
                 for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise
                     if a in saved: continue
@@ -213,12 +226,29 @@ class Reglages:
                 self.v['vitesse_texte'] = min(VITESSES_TEXTE, key=lambda x: max(x, self.v['vitesse_texte']) / min(x, self.v['vitesse_texte']))        # un des crans du menu
                 fw = self.v['interface_fenetres']; self.v['interface_fenetres'] = {n: x for n, x in fw.items() if n not in FENETRES_RETIREES and isinstance(x, list) and len(x) == 3} if isinstance(fw, dict) else {}      # editeur d'interface : fenetres retirees de l'editeur
                 ms = self.v['interface_masquees']; self.v['interface_masquees'] = [n for n in ms if isinstance(n, str) and n not in FENETRES_RETIREES] if isinstance(ms, list) else []
+                bs = self.v['bouton_vitesse_taille']; self.v['bouton_vitesse_taille'] = min(2.0, max(0.5, float(bs))) if isinstance(bs, (int, float)) and not isinstance(bs, bool) and bs == bs else DEFAUT['bouton_vitesse_taille']
+                if not isinstance(self.v['bouton_vitesse'], bool): self.v['bouton_vitesse'] = DEFAUT['bouton_vitesse']
+                bp = self.v['bouton_vitesse_pos']; self.v['bouton_vitesse_pos'] = [float(x) for x in bp] if isinstance(bp, list) and len(bp) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in bp) else []
+                if isinstance(self.v['boutons_pos'], dict): self.v['boutons_pos'] = {n: x for n, x in self.v['boutons_pos'].items() if n != 'combat'}      # (la position du bouton de vitesse n'est plus ici)
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
+                self.v['ecran_plein'] = EC.valide(self.v['ecran_plein'])          # (moniteur du plein ecran : une description propre ou None = automatique)
                 self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre'])          # (2 = ancien plein ecran exclusif -> 1)
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
                 print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
         self.codes_cache = {}
+
+    @staticmethod
+    def migrer_bouton_vitesse(d):
+        """Ancien fichier : le bouton de vitesse de combat faisait partie de « Boutons et croix de l'ecran » (affichage = 'boutons', taille = 'boutons_taille', position = boutons_pos['combat']) ; il a maintenant ses propres reglages,
+        repris tels qu'ils agissaient : affiche si les boutons l'etaient ; sa position gardee si le joueur l'avait placee (sinon elle reste collee a la boite du bas) et alors la taille des boutons (sans position, la plaque
+        suivait celle de « Fuir » et ignorait la taille). `boutons_pos` perd la cle 'combat'. Modifie `d` sur place."""
+        bp = d.get('boutons_pos'); pos = bp.pop('combat', None) if isinstance(bp, dict) else None
+        if isinstance(d.get('boutons'), bool): d['bouton_vitesse'] = d['boutons']
+        if isinstance(pos, list) and len(pos) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in pos):
+            d['bouton_vitesse_pos'] = [pos[0], pos[1]]
+            t = d.get('boutons_taille')
+            if isinstance(t, (int, float)) and not isinstance(t, bool): d['bouton_vitesse_taille'] = t
 
     def __getitem__(self, k): return self.v[k]
 
@@ -233,10 +263,13 @@ class Reglages:
 
     def remettre_interface(self, cible):
         """« Retablir cette interface » : l'interface `cible` de l'editeur (CIBLE_ECRAN, 'msg' ou nom Make_* d'une fenetre du jeu) revient entierement a son etat d'origine, et elle seule :
-        position, taille, affichage (« Afficher cette interface a l'ecran ») et ses autres options. Boutons et croix de l'ecran : tout CLES_ECRAN (affichage, taille de la croix et des boutons, positions).
+        position, taille, affichage (« Afficher cette interface a l'ecran ») et ses autres options. Boutons et croix de l'ecran : tout CLES_ECRAN (affichage, taille de la croix et des boutons, positions) ; bouton de vitesse de combat : tout CLES_VITESSE.
         Fenetre du jeu : son entree de CLES_FENETRES (absente de DEFAUT = taille, position et affichage du jeu). Les options de l'editeur (CLES_EDITEUR) ne bougent pas."""
         if cible == CIBLE_ECRAN:
             for k in CLES_ECRAN: self[k] = self.defaut(k)
+            return
+        if cible == CIBLE_VITESSE:                                    # bouton de vitesse de combat : affichage, taille et position (retour sous la boite du bas)
+            for k in CLES_VITESSE: self[k] = self.defaut(k)
             return
         fen = dict(self['interface_fenetres']); fen.pop(cible, None)
         if cible in DEFAUT['interface_fenetres']: fen[cible] = self.defaut('interface_fenetres')[cible]

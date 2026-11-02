@@ -7,7 +7,10 @@
   3. tiroir (mouvement commun avec une cle de position) : le deplacement est dans le repere de l'objet (FldObject.c_pmv_func : MultiplyPoint(TRS(position, rotateXZY(rotation), echelle)) ; un
      mouvement ordinaire (pmv_func) ajoute le deplacement tel quel ;
   4. porte (rotation autour de Y seulement) : inchangee (cap de la porte + cap du mouvement) ;
-  5. (si le cache de cartes existe : DQ_CACHE_CARTES, sinon /tmp/uicache_coffres) les VRAIS objets : les 194 coffres, les tiroirs et des portes de toutes les cartes.
+  5. animations en continu (mouvements FPMV et sequences de maillages FSQD) : CHACUNE a son horloge (FldObject.fld_motion_update, une FLD_MOTION par animation) ; interpolation lineaire des angles d'Euler
+     COMPOSANTE PAR COMPOSANTE (pmv_func : rotateXZY de la rotation interpolee, jamais de quaternion ni de plus court chemin) : 0 -> 360 degres tourne vraiment, boucle sans saut ; le rayon de soin
+     `kifk01a` (rotation 0 -> 180 -> 360 en 800 / 60 s, sequence de 84 / 60 s) tourne d'un tour complet et non de 38 degres avant de revenir ;
+  6. (si le cache de cartes existe : DQ_CACHE_CARTES, sinon /tmp/uicache_coffres) les VRAIS objets : les 194 coffres, les tiroirs et des portes de toutes les cartes.
 
     python3 outils/test_objets_carte.py
 """
@@ -165,6 +168,168 @@ class TestMouvements(unittest.TestCase):
             np.testing.assert_allclose(fini, np.array([ry_mat(cap - 90) @ np.array(p, float) for p in pts]), atol=1e-5)
 
 
+# ---- animations en continu : une horloge par animation
+def carte_auto(pts_locaux, cles, fin, repeat=-1, delai=0, rdelai=0, seq_fin=None, commune=False, pos=(0.0, 0.0, 0.0)):
+    """Une carte d'un objet qui tourne : mouvement FPMV a cles (image, rotation) joue en continu (ou lance par SetCommonAnimation 1 si `commune`), avec en plus, si `seq_fin`, une sequence de maillages
+    de duree propre (deux images de sommets : l'objet et le meme decale de 0,5 en hauteur)."""
+    pts = np.array(pts_locaux, np.float64); n = len(pts); monde = (np.array(pos, np.float64) + pts).astype(np.float32)
+    mot = dict(flag=0, nkey=len(cles), repeat=repeat, delai=delai, rdelai=rdelai, fin=fin, keys=[(f, (0.0, 0.0, 0.0), tuple(float(v) for v in r), (1.0, 1.0, 1.0)) for f, r in cles])
+    obj = dict(i=0, pos=tuple(pos), rot=(0.0, 0.0, 0.0), scl=(1.0, 1.0, 1.0), mdl=1, canim=0 if commune else -1, flag=0, seqobj=-1, pmv=-1 if commune else 0, id=0, com=0, uid=0, prio=0, rest='')
+    c = {'objets': [obj], 'groupes': {'k': (monde, np.zeros((n, 2), np.float32), np.ones((n, 4), np.float32))}, 'plages': {0: [('k', 0, n)]}, 'var': {}, 'tabs': [], 'mots': [mot],
+         'seqs': [], 'seqent': [], 'imgobj': {}}
+    if seq_fin:
+        c['seqs'] = [dict(flag=0, nkey=3, repeat=-1, delai=0, rdelai=0, fin=seq_fin, keys=[(0, 0), (seq_fin // 2, 1), (seq_fin, 0)])]
+        c['seqent'] = [(0, 0, 0, 0, 0, -1, 0, -1)]                              # (objet, sequence, groupe, delai de depart, delai entre deux tours, nombre de tours, _, nombre de tours d'origine)
+        c['imgobj'] = {0: [{'pos': np.stack([monde, monde + np.array([0.0, 0.5, 0.0], np.float32)]), 'uv': None, 'col': None}]}
+        if commune: c['tabs'] = [[(1, 0, 0)]]
+        else: obj['seqobj'] = 0
+    elif commune: c['tabs'] = [[(1, -1, 0)]]
+    return c
+
+
+def tourner(c, ticks, commune=False):
+    oc = OC.ObjetsCarte(c)
+    if commune: oc.anim_commune(0, 1)
+    for _ in range(ticks): oc.tick()
+    return oc
+
+
+def sommets_carte(oc): return oc.cur['k'].astype(np.float64)
+
+
+PTS = [(1.0, 0.0, 0.0), (0.0, 0.0, 2.0), (-0.5, 1.0, 0.0)]
+
+
+class TestHorloges(unittest.TestCase):
+    """Compteur d'une animation (FldObject.fld_motion_update) : delai de depart, tours, delai entre deux tours, tenue sur la derniere cle."""
+
+    def avancer(self, delai, rdelai, rep, fin, n):
+        h = OC._horloge(delai, rdelai, rep, fin); suite = []
+        for _ in range(n): OC._avancer(h); suite.append(h['temps'])
+        return h, suite
+
+    def test_boucle_sans_fin(self):
+        h, t = self.avancer(0, 0, -1, 10, 12)
+        self.assertEqual(t, [2, 4, 6, 8, 10, 2, 4, 6, 8, 10, 2, 4])               # a la fin exacte on reste sur la derniere cle ; au-dela, retour au debut par le reste du depassement
+        self.assertFalse(h['fini'])
+
+    def test_depassement_conserve(self):
+        h, t = self.avancer(0, 0, -1, 9, 7)
+        self.assertEqual(t, [2, 4, 6, 8, 1, 3, 5])                                 # 10 > 9 : 10 - 9 = 1
+
+    def test_delai_de_depart(self):
+        h, t = self.avancer(5, 0, -1, 10, 6)
+        self.assertEqual(t, [0, 0, 0, 2, 4, 6])                                    # delai 5 : 3 images a l'image 0 (5, 3, 1 >= 1), puis le temps avance
+
+    def test_nombre_de_tours_fini_puis_arret_sur_la_derniere_cle(self):
+        h, t = self.avancer(0, 0, 2, 6, 12)
+        self.assertEqual(t[:9], [2, 4, 6, 2, 4, 6, 6, 6, 6]); self.assertTrue(h['fini'])      # 2 tours puis tenue a la fin
+
+    def test_delai_entre_deux_tours(self):
+        h, t = self.avancer(0, 4, -1, 4, 8)
+        self.assertEqual(t, [2, 4, 2, 0, 0, 2, 4, 2])                              # 2, 4, (6 > 4 : reste 2), delai de 4 : 2 images a 0
+
+    def test_deux_horloges_independantes(self):
+        a = OC._horloge(0, 0, -1, 84); b = OC._horloge(0, 0, -1, 800)
+        for _ in range(100): OC._avancer(a); OC._avancer(b)
+        self.assertEqual(b['temps'], 200); self.assertEqual(a['temps'], 32)
+
+
+class TestRotationsEuler(unittest.TestCase):
+    """Interpolation des rotations d'un mouvement : angles d'Euler, lineaires, composante par composante (pmv_func : rotateXZY(rotation interpolee)) ; une image du jeu = 2 / 60 s."""
+
+    def verifier(self, c, ticks, attendu_euler, msg=''):
+        oc = tourner(c, ticks)
+        np.testing.assert_allclose(sommets_carte(oc), (euler_mat(*attendu_euler) @ np.array(PTS).T).T, atol=1e-5, err_msg=msg)
+
+    def test_0_a_360_tourne_en_continu(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (400, (0, 360, 0))], 400)
+        for k in range(0, 201, 5): self.verifier(c, k, (0, 1.8 * k, 0), 'tick %d' % k)       # 400 / 60 s = 200 images : 1,8 degre par image, sans aucun retour en arriere
+        oc = tourner(c, 100); np.testing.assert_allclose(sommets_carte(oc), np.array(PTS) * [-1, 1, -1], atol=1e-5)     # a mi-course : demi-tour exact (pas une rotation nulle)
+
+    def test_boucle_apres_un_tour(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (400, (0, 360, 0))], 400)
+        for k in (0, 1, 7, 50, 133):
+            np.testing.assert_allclose(sommets_carte(tourner(c, 200 + k)), sommets_carte(tourner(c, k)), atol=1e-5)      # le deuxieme tour reprend exactement le premier
+        np.testing.assert_allclose(sommets_carte(tourner(c, 400 + 33)), sommets_carte(tourner(c, 33)), atol=1e-5)
+
+    def test_quatre_quarts_de_tour(self):
+        cles = [(0, (0, 0, 0)), (100, (0, 90, 0)), (200, (0, 180, 0)), (300, (0, 270, 0)), (400, (0, 360, 0))]
+        c = carte_auto(PTS, cles, 400)
+        for tick, ang in ((25, 45), (50, 90), (75, 135), (100, 180), (125, 225), (150, 270), (175, 315), (200, 360)): self.verifier(c, tick, (0, ang, 0), 'tick %d' % tick)
+
+    def test_angles_negatifs(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (100, (0, -90, 0)), (400, (0, -360, 0))], 400)
+        for tick, ang in ((25, -45), (50, -90), (125, -225), (200, -360)): self.verifier(c, tick, (0, ang, 0), 'tick %d' % tick)
+
+    def test_pas_de_plus_court_chemin(self):
+        """0 -> 270 degres : le jeu passe par 135 a mi-course ; un slerp de quaternions irait en arriere vers -45."""
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (400, (0, 270, 0))], 400)
+        self.verifier(c, 100, (0, 135, 0))
+        oc = tourner(c, 100); self.assertFalse(np.allclose(sommets_carte(oc), (euler_mat(0, -45, 0) @ np.array(PTS).T).T, atol=1e-3))
+
+    def test_composante_par_composante(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (400, (60, 120, 90))], 400)
+        self.verifier(c, 50, (15, 30, 22.5)); self.verifier(c, 100, (30, 60, 45))      # Quaternion.Euler(lerp(x), lerp(y), lerp(z)), pas la rotation du quaternion intermediaire
+
+    def test_tenue_sur_la_derniere_cle_quand_les_tours_sont_finis(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (100, (0, 90, 0))], 100, repeat=2)
+        self.verifier(c, 25, (0, 45, 0)); self.verifier(c, 50, (0, 90, 0)); self.verifier(c, 60, (0, 18, 0)); self.verifier(c, 300, (0, 90, 0))   # 120 > 100 : 2e tour a 20 / 100 (18 degres), puis 90 pour toujours
+
+    def test_une_animation_sans_boucle_ne_repart_pas(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (100, (0, 90, 0))], 100, repeat=1)
+        self.verifier(c, 50, (0, 90, 0)); self.verifier(c, 500, (0, 90, 0))
+
+
+class TestUneHorlogeParAnimation(unittest.TestCase):
+    """Cause du faisceau de soin qui « tournait de 5 degres puis revenait » : le mouvement (800 / 60 s) et la sequence de maillages (84 / 60 s) de l'objet partageaient UNE horloge qui bouclait a 84."""
+
+    CLES = [(0, (0, 0, 0)), (400, (0, 180, 0)), (800, (0, 360, 0))]
+
+    def test_la_sequence_ne_raccourcit_pas_le_mouvement(self):
+        c = carte_auto(PTS, self.CLES, 800, seq_fin=84)
+        oc = tourner(c, 100); st = oc.etat[0]
+        self.assertEqual(st['tmot'], 200); self.assertEqual(st['tseq'], 32)           # chacune son temps (avant : 32 pour les deux)
+        self.assertEqual(oc.auto[0]['hm']['fin'], 800); self.assertEqual(oc.auto[0]['hs']['fin'], 84)
+        sans = carte_auto(PTS, self.CLES, 800); ref = tourner(sans, 100)
+        haut = sommets_carte(oc)[:, 1] - sommets_carte(ref)[:, 1]
+        np.testing.assert_allclose(sommets_carte(oc)[:, [0, 2]], sommets_carte(ref)[:, [0, 2]], atol=1e-5)       # la meme rotation (90 degres), avec ou sans sequence
+        self.assertTrue(np.all(np.abs(haut) <= 0.5 + 1e-6))                           # la sequence ne fait que deplacer les sommets d'une image a l'autre
+
+    def test_un_tour_complet_malgre_la_sequence_courte(self):
+        c = carte_auto(PTS, self.CLES, 800, seq_fin=84); sans = carte_auto(PTS, self.CLES, 800)
+        for k in (0, 10, 50, 100, 150, 200, 250, 399):
+            a = sommets_carte(tourner(c, k)); b = sommets_carte(tourner(sans, k))
+            np.testing.assert_allclose(a[:, [0, 2]], b[:, [0, 2]], atol=1e-5, err_msg='tick %d' % k)
+            np.testing.assert_allclose(b, (euler_mat(0, 0.9 * k, 0) @ np.array(PTS).T).T, atol=1e-5)          # 800 / 60 s = 400 images : 0,9 degre par image
+
+    def test_animation_commune_une_horloge_par_animation(self):
+        c = carte_auto(PTS, [(0, (0, 0, 0)), (800, (0, 360, 0))], 800, seq_fin=84, commune=True)
+        c['mots'][0]['repeat'] = -1; oc = tourner(c, 100, commune=True)
+        self.assertEqual(oc.etat[0]['tmot'], 200); self.assertEqual(oc.etat[0]['tseq'], 32)
+        sans = tourner(carte_auto(PTS, [(0, (0, 0, 0)), (800, (0, 360, 0))], 800, commune=True), 100, commune=True)
+        np.testing.assert_allclose(sommets_carte(oc)[:, [0, 2]], sommets_carte(sans)[:, [0, 2]], atol=1e-5)
+
+    def test_etat_enregistre_par_une_ancienne_version(self):
+        """Un etat instantane d'avant la correction (une seule horloge : `temps`, entrees `auto` a plat) se recharge et continue sans erreur."""
+        c = carte_auto(PTS, self.CLES, 800, seq_fin=84); oc = OC.ObjetsCarte(c); sq, mo = oc.auto[0]['seq'], oc.auto[0]['mot']
+        auto_ancien = {0: dict(seq=sq, mot=mo, delai=0, rdelai=0, rep=-1, fin=84, temps=40, fini=False)}
+        etat_ancien = {0: {'mdl': 1, 'off': False, 'alpha': 31, 'pos': None, 'rot': None, 'mot': mo, 'seq': sq, 'temps': 40}}
+        oc.restaurer(etat_ancien, auto_ancien)
+        self.assertEqual(oc.auto[0]['hs']['temps'], 40); self.assertEqual(oc.auto[0]['hm']['temps'], 40)
+        oc.tick(); self.assertEqual(oc.etat[0]['tmot'], 42); self.assertEqual(oc.etat[0]['tseq'], 42)
+        for _ in range(50): oc.tick()
+        self.assertEqual(oc.etat[0]['tmot'], 142); self.assertEqual(oc.etat[0]['tseq'], 142 - 84)         # a partir de la, chacune boucle a sa duree
+
+
+def attendu_horloge(fin, ticks):
+    t = 0
+    for _ in range(ticks):
+        t += OC.PAS
+        if t > fin: t -= fin
+    return t
+
+
 def cartes_reelles():
     """Cartes du cache de l'utilisateur (carte10_*.pkl) : `DQ_CACHE_CARTES`, sinon /tmp/uicache_coffres ; vide si le cache n'existe pas (les tests ci-dessous sont alors ignores)."""
     import glob
@@ -243,6 +408,60 @@ class TestCartesReelles(unittest.TestCase):
                 ouvert = self.sommets(c, oc, i); msg = '%s objet %d' % (nom, i)
                 np.testing.assert_allclose(ouvert[:, 1], ferme[:, 1], atol=1e-4, err_msg=msg)            # la porte tourne autour de la verticale : aucune hauteur ne change
                 np.testing.assert_allclose(np.hypot(ouvert[:, 0] - pos[0], ouvert[:, 2] - pos[2]), np.hypot(ferme[:, 0] - pos[0], ferme[:, 2] - pos[2]), atol=1e-4, err_msg=msg)
+
+
+@unittest.skipUnless(cartes_reelles(), 'pas de cache de cartes (carte10_*.pkl)')
+class TestAnimationsContinuesReelles(unittest.TestCase):
+    """Les vraies cartes : rayon de soin (`kifk01a`, cartes cmf1c, dmb2, tab1a) et toutes les animations en continu."""
+
+    @staticmethod
+    def charger(nom):
+        import pickle
+        for f in cartes_reelles():
+            if os.path.basename(f) == 'carte10_%s.pkl' % nom:
+                with open(f, 'rb') as fh: return pickle.load(fh)
+        return None
+
+    def test_rayon_de_soin_tourne_d_un_tour_complet(self):
+        vu = 0
+        for nom in ('cmf1c', 'dmb2', 'tab1a'):
+            c = self.charger(nom)
+            if c is None: continue
+            io = [i for i, n in c['noms'].items() if n.endswith('kifk01a')]; self.assertEqual(len(io), 1, nom); io = io[0]
+            o = c['objets'][io]; mo = c['mots'][o['pmv']]
+            self.assertEqual((mo['repeat'], mo['fin'], [k[2][1] for k in mo['keys']]), (-1, 800, [0.0, 180.0, 360.0]), nom)       # donnees : 0 -> 180 -> 360 en 800 / 60 s, sans fin
+            sans = dict(c, imgobj={k: v for k, v in c['imgobj'].items() if k != io})                   # mouvement seul (sans la sequence de maillages) pour mesurer la rotation
+            ref = OC.ObjetsCarte(sans); pos0 = np.array(o['pos'], np.float64)
+            def pts(oc): return np.concatenate([oc.cur[key][d:d + n] for key, d, n in c['plages'][io]]).astype(np.float64)
+            depart = pts(ref)
+            for k in (50, 100, 150, 200, 300, 399):
+                for _ in range(k - getattr(ref, '_k', 0)): ref.tick()
+                ref._k = k
+                att = pos0 + (euler_mat(0, 0.9 * k, 0) @ (depart - pos0).T).T                           # 0,9 degre par image : 45 degres a 50 images, 90 a 100, 180 a 200
+                np.testing.assert_allclose(pts(ref), att, atol=2e-4, err_msg='%s tick %d' % (nom, k))
+            vrai = OC.ObjetsCarte(c)
+            for _ in range(100): vrai.tick()
+            st = vrai.etat[io]; self.assertEqual((st['tmot'], st['tseq']), (200, attendu_horloge(84, 100)), nom)         # sequence de 84 : sa propre horloge
+            vu += 1
+        self.assertGreater(vu, 0)
+
+    def test_horloges_de_toutes_les_animations_en_continu(self):
+        """Pour toutes les cartes : chaque mouvement et chaque sequence en continu (sans delai) a son temps = (2 x images) replie a SA duree."""
+        n_doubles = 0
+        for f in cartes_reelles():
+            c = self.charger(os.path.basename(f)[8:-4])
+            if os.path.basename(f).startswith('carte10_btl_'): continue
+            oc = OC.ObjetsCarte(c)
+            for _ in range(137): oc.tick()
+            for i, a in oc.auto.items():
+                for h, cle in ((a['hs'], 'tseq'), (a['hm'], 'tmot')):
+                    if h is None or h['rep'] != -1 or h['rdelai']: continue
+                    if h['fin'] == 0: continue
+                    d0 = (c['seqent'][c['objets'][i]['seqobj']][3] if cle == 'tseq' else a['mot']['delai'])
+                    if d0: continue
+                    self.assertEqual(oc.etat[i][cle], attendu_horloge(h['fin'], 137), '%s objet %d %s' % (os.path.basename(f), i, cle))
+                if a['hs'] and a['hm']: n_doubles += 1
+        self.assertGreater(n_doubles, 20)                                                   # des dizaines d'objets ont les deux animations (torches, oiseaux, cascades, rayons de soin...)
 
 
 if __name__ == '__main__':

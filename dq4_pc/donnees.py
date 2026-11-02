@@ -27,6 +27,17 @@ def euler_mat(rx, ry, rz):
     return Ry @ Rz @ Rx
 
 
+def decors_de_secours(nom):
+    """Decors voisins d'un decor de combat absent des donnees. Le moteur choisit la lettre finale selon l'heure du monde (`StageStatus::getBtlMapName` : _d jour, _e soir, _n nuit et debut / fin de
+    nuit) ; `param_map_battle.dat` liste les decors de chaque lieu, mais `btlcc1` n'a que _d et _e : sans `_n` rien ne s'afficherait. Dans l'ordre : la variante la plus proche en luminosite, l'autre,
+    puis le nom sans lettre. Un nom qui ne finit pas par _d, _e ou _n : aucune."""
+    m = re.match(r'^(.*)_([den])$', nom or '')
+    if not m: return []
+    base, c = m.groups()
+    ordre = {'n': 'ed', 'e': 'dn', 'd': 'en'}[c]
+    return ['%s_%s' % (base, x) for x in ordre] + [base]
+
+
 class Donnees:
     def __init__(self, apk_donnees, cache_dir, log=print):
         self.apk, self.cache, self.log = apk_donnees, cache_dir, log

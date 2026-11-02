@@ -69,7 +69,7 @@ class Reglage(unittest.TestCase):
         self.assertEqual(r['touches']['vit_combat'], [None, None]); self.assertEqual(r['touches']['carte'], ['V', None])
 
     def test_classement_interface(self):
-        self.assertNotIn('vitesse_combat', RG.CLES_INTERFACE)                                         # un reglage de jeu, pas d'interface ; la position du bouton est dans 'boutons_pos'
+        self.assertNotIn('vitesse_combat', RG.CLES_INTERFACE)                                         # un reglage de jeu, pas d'interface ; le bouton a sa propre interface (RG.CIBLE_VITESSE : bouton_vitesse, _taille, _pos)
 
 
 class Facteur(unittest.TestCase):
@@ -85,10 +85,10 @@ class Facteur(unittest.TestCase):
 
 
 class DefilementDesMessages(unittest.TestCase):
-    """La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 2 (Moyen, la valeur d'origine) sinon."""
+    """La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 0 (12 images, la plus courte) sinon (#45)."""
     def test_code_impose(self):
-        self.assertEqual([RG.code_defilement(v) for v in (0.0, 1.0, 2.0, 3.0)], [4, 2, 2, 2])
-        self.assertEqual(RG.code_defilement('x'), 2); self.assertEqual(RG.code_defilement(None), 2)             # valeur invalide : Normal
+        self.assertEqual([RG.code_defilement(v) for v in (0.0, 1.0, 2.0, 3.0)], [4, 0, 0, 0])
+        self.assertEqual(RG.code_defilement('x'), 0); self.assertEqual(RG.code_defilement(None), 0)             # valeur invalide : Normal
 
     def test_le_jeu_change_la_vitesse_des_messages(self):
         self.assertEqual(RG.vitesse_apres_code_jeu(4, 2.0), 0.0)                                              # Manuel choisi dans le jeu
@@ -221,7 +221,8 @@ class IndependanceAccelerateur(unittest.TestCase):
     @staticmethod
     def faux(partie, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, effet=None, attente=None, menu=None, msg=False, feed=False):
         j = types.SimpleNamespace(reg={'vitesse_combat': vitesse_combat, 'vitesse_marche': marche, 'vitesse_accel': accel})
-        j.moteur = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=effet, attente_charge=attente), msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
+        etat = MO.Etat(); etat.partie = partie; etat.effet = effet; etat.attente_charge = attente           # (l'Etat reel : transition_combat() decide de l'horloge de la cascade et des fondus)
+        j.moteur = types.SimpleNamespace(etat=etat, msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
         j.pad = lambda: MO.HAUT if direction else 0
         j._tenue = lambda a: accel_tenue and a == 'accel'
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))
@@ -241,10 +242,11 @@ class IndependanceAccelerateur(unittest.TestCase):
             self.assertEqual(self.faux(partie, 1.0, 4.0, 2.0, accel_tenue=True).facteur(), 8.0)
             self.assertEqual(self.faux(partie, 3.0, 2.0, 1.5, accel_tenue=True, direction=False).facteur(), 1.0)  # (arret : vitesse normale)
 
-    def test_effet_de_debut_et_ecran_noir_font_partie_du_combat(self):
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 3.0, 4.0, 2.0, True, effet={'n': 3}).facteur(), 3.0)       # effet qui brise l'ecran
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 2.0, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 2.0)      # ecran noir avant la scene du combat
-        self.assertEqual(self.faux(MO.PARTIE_CHAMP, 1.0, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)       # Normal : comme avant (marche et accelerateur n'y comptaient deja pas)
+    def test_effet_de_debut_et_ecran_noir_gardent_l_horloge_du_jeu(self):
+        """#45 : la cascade d'entree en combat et l'ecran noir qui suit durent le temps du jeu d'origine : horloge x1 quelle que soit la vitesse de combat, de marche ou l'accelerateur (voir outils/test_transition_combat.py)."""
+        for v in (0.0, 1.0, 2.0, 3.0):
+            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)             # effet qui brise l'ecran
+            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 1.0)      # ecran noir avant la scene du combat
 
     def test_attentes_de_saisie_gardent_la_vitesse_choisie(self):
         """Les monstres suivent la vitesse de combat meme pendant les menus : l'horloge reste celle du reglage ; seule la lecture des touches est a cadence normale (pas muets : test suivant)."""
@@ -257,7 +259,7 @@ class IndependanceAccelerateur(unittest.TestCase):
         """Moteur en attente du joueur : un seul pas sur f lit les touches (un par 1 / 30 s reelles), les autres sont muets ; sinon tous les pas sont ordinaires."""
         from unittest import mock
         attend = [True]; appels = []; h = [100.0]
-        j = types.SimpleNamespace(_t_pas_reel=0.0, _attend_joueur=lambda: attend[0], _pas=lambda muet=False: appels.append(muet))
+        j = types.SimpleNamespace(_t_pas_reel=0.0, _attend_joueur=lambda: attend[0], _pas=lambda muet=False: appels.append(muet), moteur=types.SimpleNamespace(etat=MO.Etat()))
         with mock.patch.object(F.time, 'perf_counter', lambda: h[0]):
             for _ in range(3): self.assertTrue(F.Jeu._faire_pas_combat(j))                                      # 1er pas : lit les touches ; les 2 suivants (meme image affichee) : muets
             self.assertEqual(appels, [False, True, True]); h[0] += PAS; F.Jeu._faire_pas_combat(j); self.assertEqual(appels[-1], False)       # 1 / 30 s plus tard : un pas qui lit les touches
@@ -271,7 +273,7 @@ class IndependanceAccelerateur(unittest.TestCase):
         toasts = []; vis = [()]
         j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), toast=toasts.append, appliquer_defilement=lambda: imposes.append(RG.code_defilement(r['vitesse_combat'])))
         for attendu in (2.0, 3.0, 0.0, 1.0, 2.0): F.Jeu.changer_vitesse_combat(j); self.assertEqual(r['vitesse_combat'], attendu)
-        self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [2, 2, 4, 2, 2])
+        self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [0, 0, 4, 0, 0])
         self.assertEqual(toasts, ['Vitesse de combat : Rapide', 'Vitesse de combat : Très rapide', 'Vitesse de combat : Manuel', 'Vitesse de combat : Normal', 'Vitesse de combat : Rapide'])
         vis[0] = (HM.COMBAT,); toasts.clear(); F.Jeu.changer_vitesse_combat(j); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])      # bouton a l'ecran : il montre deja la vitesse
         vis[0] = (); toasts.clear(); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])
@@ -303,7 +305,7 @@ class BoutonDeLEcran(unittest.TestCase):
         plan = lambda **k: dict(dict(a=0.0, fin=0.0, pas=0.0, n=0, col=(0, 0, 0), noir=0), **k)
         f = fondu or {}
         etat = types.SimpleNamespace(partie=MOd.PARTIE_COMBAT if partie is None else partie, effet=effet, attente_charge=attente, fondu=plan(**f.get('devant', {})), fondu_fond=plan(**f.get('fond', {})))
-        J = types.SimpleNamespace(width=W, height=H, reg={'boutons': boutons, 'croix': True, 'boutons_taille': 1.0, 'croix_taille': 1.0, 'boutons_pos': pos or {}, 'boutons_aimant': True},
+        J = types.SimpleNamespace(width=W, height=H, reg={'boutons': True, 'bouton_vitesse': boutons, 'bouton_vitesse_taille': 1.0, 'bouton_vitesse_pos': pos or [], 'croix': True, 'boutons_taille': 1.0, 'croix_taille': 1.0, 'boutons_pos': {}, 'boutons_aimant': True},
                                   pause=types.SimpleNamespace(ouvert=pause), carte_ouverte=carte, args=types.SimpleNamespace(cache='/inexistant'))
         J.moteur = types.SimpleNamespace(etat=etat, drapeaux=lambda: flag, taille_croix=lambda: 1)
         return J, HM.Boutons(J)
@@ -316,7 +318,7 @@ class BoutonDeLEcran(unittest.TestCase):
         J, b = self.faux(partie=14); self.assertNotIn(HM.COMBAT, b.visibles())
 
     def test_masque_comme_les_autres(self):
-        self.assertEqual(self.faux(boutons=False)[1].visibles(), ())                                               # « Afficher cette interface » = Non
+        self.assertEqual(self.faux(boutons=False)[1].visibles(), ())                                               # « Afficher cette interface » = Non (celle du bouton de vitesse : « Combat : bouton de vitesse »)
         self.assertEqual(self.faux(pause=True)[1].visibles(), ())                                                  # menu Pause ouvert
 
     def test_pas_pendant_l_ecran_noir_ni_les_fondus_au_noir(self):
@@ -344,9 +346,9 @@ class BoutonDeLEcran(unittest.TestCase):
 
     def test_deplacable_dans_l_editeur_et_retablissable(self):
         J, b = self.faux(); x, y, w, h = b.rect(HM.COMBAT); self.assertIn(HM.COMBAT, HM.NOMS_ED)
-        self.assertEqual(b.prendre(x + 5, y + 5), HM.COMBAT); b.deplacer(x + 5 + 400, y + 5 - 100); b.poser()
-        self.assertIn(HM.COMBAT, J.reg['boutons_pos']); x2, y2, _, _ = b.rect(HM.COMBAT); self.assertGreater(x2, x + 300); self.assertLess(y2, y)
-        r = RG.Reglages(None); r['boutons_pos'] = dict(J.reg['boutons_pos']); r.remettre_interface(RG.CIBLE_ECRAN); self.assertEqual(r['boutons_pos'], {})        # « Rétablir cette interface » le remet en place
+        self.assertEqual(b.prendre(x + 5, y + 5, HM.noms_ed(RG.CIBLE_VITESSE)), HM.COMBAT); b.deplacer(x + 5 + 400, y + 5 - 100); b.poser()
+        self.assertEqual(len(J.reg['bouton_vitesse_pos']), 2); self.assertEqual(J.reg['boutons_pos'], {}); x2, y2, _, _ = b.rect(HM.COMBAT); self.assertGreater(x2, x + 300); self.assertLess(y2, y)        # (position propre : plus dans 'boutons_pos')
+        r = RG.Reglages(None); r['bouton_vitesse_pos'] = list(J.reg['bouton_vitesse_pos']); r.remettre_interface(RG.CIBLE_VITESSE); self.assertEqual(r['bouton_vitesse_pos'], [])        # « Rétablir cette interface » le remet en place
 
     def test_libelle_de_l_editeur(self):
         self.assertEqual(HM.LIBELLE[HM.COMBAT], 'Vitesse de combat')

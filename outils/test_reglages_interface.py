@@ -17,9 +17,11 @@ HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'suivi_ca
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
                   'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
+HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera)
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
 AUTRES = {'boutons': False, 'croix': False, 'croix_taille': 1.7, 'boutons_taille': 1.4, 'boutons_pos': {'carte': [10, 5], 'menu': [3, 2.5], 'discussion': [0, 9], 'croix': [20, 9]},
+          'bouton_vitesse': False, 'bouton_vitesse_taille': 1.3, 'bouton_vitesse_pos': [4.0, 6.0],
           'grille_edition': False, 'boutons_aimant': False,
           'interface_fenetres': {'RootMenu': [1.3, 0.1, -0.2], 'Status': [0.7, -0.05, 0.3], 'msg': [1.5, 0.0, 0.1], 'YesNo': [0.8, 0.2, 0.0]},
           'interface_masquees': ['RootMenu', 'Status', 'msg', 'MapButton']}
@@ -48,7 +50,7 @@ class RemiseAZero(unittest.TestCase):
         self.assertEqual(classees - set(RG.DEFAUT), set(), 'cle classee mais absente de DEFAUT')
         self.assertEqual(set(RG.CLES_INTERFACE) & HORS_INTERFACE, set())
         self.assertEqual(len(RG.CLES_INTERFACE), len(set(RG.CLES_INTERFACE)))
-        self.assertEqual(set(RG.CLES_ECRAN + RG.CLES_FENETRES + RG.CLES_EDITEUR), set(RG.CLES_INTERFACE))
+        self.assertEqual(set(RG.CLES_ECRAN + RG.CLES_VITESSE + RG.CLES_FENETRES + RG.CLES_EDITEUR), set(RG.CLES_INTERFACE))
 
     def test_valeurs_de_test_non_par_defaut(self):
         self.assertEqual(set(AUTRES), set(RG.CLES_INTERFACE))
@@ -58,7 +60,14 @@ class RemiseAZero(unittest.TestCase):
         r = reglages_modifies(); av = interface(r); ap = autres(r)
         r.remettre_interface(RG.CIBLE_ECRAN)
         for k in RG.CLES_ECRAN: self.assertEqual(r[k], RG.DEFAUT[k], k)               # boutons et croix : tout revient (affichage, tailles, positions)
-        for k in RG.CLES_FENETRES + RG.CLES_EDITEUR: self.assertEqual(r[k], av[k], k)           # fenetres et options de l'editeur : intactes
+        for k in RG.CLES_VITESSE + RG.CLES_FENETRES + RG.CLES_EDITEUR: self.assertEqual(r[k], av[k], k)           # bouton de vitesse de combat, fenetres et options de l'editeur : intacts
+        self.assertEqual(autres(r), ap)
+
+    def test_bouton_de_vitesse_seul(self):
+        r = reglages_modifies(); av = interface(r); ap = autres(r)
+        r.remettre_interface(RG.CIBLE_VITESSE)
+        for k in RG.CLES_VITESSE: self.assertEqual(r[k], RG.DEFAUT[k], k)                  # affichage, taille et position : tout revient (la position : collee sous la boite du bas)
+        for k in RG.CLES_ECRAN + RG.CLES_FENETRES + RG.CLES_EDITEUR: self.assertEqual(r[k], av[k], k)       # boutons et croix, fenetres et options de l'editeur : intacts
         self.assertEqual(autres(r), ap)
 
     def test_fenetre_seule(self):
@@ -67,7 +76,7 @@ class RemiseAZero(unittest.TestCase):
         self.assertNotIn('RootMenu', r['interface_fenetres']); self.assertNotIn('RootMenu', r['interface_masquees'])          # taille, position et affichage d'origine
         self.assertEqual(r['interface_fenetres'], {k: x for k, x in av['interface_fenetres'].items() if k != 'RootMenu'})      # les autres fenetres gardent leur reglage
         self.assertEqual(r['interface_masquees'], [n for n in av['interface_masquees'] if n != 'RootMenu'])                   # ... et leur masquage
-        for k in RG.CLES_ECRAN + RG.CLES_EDITEUR: self.assertEqual(r[k], av[k], k)
+        for k in RG.CLES_ECRAN + RG.CLES_VITESSE + RG.CLES_EDITEUR: self.assertEqual(r[k], av[k], k)
         self.assertEqual(autres(r), ap)
 
     def test_dialogues_et_oui_non_independants(self):
@@ -120,13 +129,17 @@ class RemiseAZero(unittest.TestCase):
         r = RG.Reglages(None)
         hud = types.SimpleNamespace(rect=lambda n: (10.0 * len(n), 20.0, 60.0, 50.0))
         P = PA.Pause(types.SimpleNamespace(reg=r, hud=hud)); P.cible = RG.CIBLE_ECRAN
-        masque = lambda: {n: (e[4], e[5]) for n, e in zip(HM.NOMS_ED, P._elements_apercu())}
-        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'combat': (False, True), 'croix': (False, False)})      # tout affiche : rien de marque (le bouton de vitesse des combats est un bouton comme les autres)
+        masque = lambda: {n: (e[4], e[5]) for n, e in zip(HM.noms_ed(P.cible), P._elements_apercu())}
+        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'croix': (False, False)})      # tout affiche : rien de marque (le bouton de vitesse des combats n'est plus ici : il a sa propre interface)
         r['croix'] = False                                                                       # « Afficher la croix » = Non : la croix seule est marquee (feminin), les boutons non
-        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'combat': (False, True), 'croix': (True, False)})
+        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'croix': (True, False)})
         r['boutons'] = False; r['croix'] = True                                                  # interface entiere masquee : boutons (masculin) et croix (feminin)
-        self.assertEqual(masque(), {'carte': (True, True), 'menu': (True, True), 'discussion': (True, True), 'combat': (True, True), 'croix': (True, False)})
-        self.assertEqual(len(P._rects_montres()), 5)                                              # (le panneau de l'editeur et la selection ne dependent pas de l'affichage)
+        self.assertEqual(masque(), {'carte': (True, True), 'menu': (True, True), 'discussion': (True, True), 'croix': (True, False)})
+        self.assertEqual(len(P._rects_montres()), 4)                                              # (le panneau de l'editeur et la selection ne dependent pas de l'affichage)
+        r['boutons'] = True; P.cible = RG.CIBLE_VITESSE                                          # bouton de vitesse de combat : son propre affichage, independant des boutons
+        self.assertEqual(masque(), {'combat': (False, True)})
+        r['bouton_vitesse'] = False; self.assertEqual(masque(), {'combat': (True, True)}); r['boutons'] = False; r['bouton_vitesse'] = True; self.assertEqual(masque(), {'combat': (False, True)})
+        r['boutons'] = True; P.cible = RG.CIBLE_ECRAN
         r['boutons'] = True; P.cible = 'RootMenu'; P.rect_apercu = (5.0, 6.0, 7.0, 8.0)
         self.assertEqual(P._elements_apercu(), [(5.0, 6.0, 7.0, 8.0, False, False)])
         r['interface_masquees'] = ['RootMenu']
@@ -175,6 +188,41 @@ class SuiviCameraParDefaut(unittest.TestCase):
     def test_choix_ulterieur_conserve(self):
         r = self.charger({'camera_centree': False, 'suivi_camera_v': RG.DEFAUT['suivi_camera_v']})
         self.assertIs(r['camera_centree'], False)
+
+
+class MigrationBoutonVitesse(unittest.TestCase):
+    """Un ancien reglages.json (le bouton de vitesse de combat faisait partie de « Boutons et croix de l'ecran ») garde l'etat du bouton : affichage, position, taille ; une seule fois."""
+    def charger(self, d):
+        f = os.path.join(tempfile.mkdtemp(prefix='rg_mig_'), 'reglages.json')
+        with open(f, 'w', encoding='utf-8') as h: json.dump(d, h)
+        return RG.Reglages(f), f
+
+    def test_boutons_masques_masquent_encore_le_bouton(self):
+        r, _ = self.charger({'boutons': False, 'boutons_taille': 1.5}); self.assertEqual((r['boutons'], r['bouton_vitesse']), (False, False))
+        self.assertEqual((r['bouton_vitesse_taille'], r['bouton_vitesse_pos']), (1.0, []))              # (jamais place : sa plaque suivait « Fuir » et ignorait la taille des boutons)
+
+    def test_boutons_affiches(self):
+        r, _ = self.charger({'boutons': True}); self.assertEqual((r['bouton_vitesse'], r['bouton_vitesse_taille'], r['bouton_vitesse_pos']), (True, 1.0, []))
+
+    def test_position_et_taille_gardees(self):
+        r, _ = self.charger({'boutons': True, 'boutons_taille': 1.4, 'boutons_pos': {'combat': [7, 3.5], 'carte': [2, 2], 'croix': [20, 9]}})
+        self.assertEqual((r['bouton_vitesse_pos'], r['bouton_vitesse_taille']), ([7.0, 3.5], 1.4))
+        self.assertEqual(r['boutons_pos'], {'carte': [2, 2], 'croix': [20, 9]}); self.assertEqual(r['boutons_taille'], 1.4)           # les autres boutons gardent les leurs
+
+    def test_une_seule_fois(self):
+        """Le fichier enregistre par la nouvelle version contient les trois cles : le choix du joueur fait foi, meme si « Boutons » change ensuite."""
+        r, f = self.charger({'boutons': False}); r['bouton_vitesse'] = True; r['boutons'] = False; r.enregistrer()
+        r2 = RG.Reglages(f); self.assertEqual((r2['boutons'], r2['bouton_vitesse']), (False, True))
+
+    def test_fichier_neuf_ou_sans_boutons(self):
+        r = RG.Reglages(None); self.assertEqual((r['bouton_vitesse'], r['bouton_vitesse_taille'], r['bouton_vitesse_pos']), (True, 1.0, []))
+        r, _ = self.charger({'vignette': 0.2}); self.assertEqual((r['bouton_vitesse'], r['bouton_vitesse_pos']), (True, []))
+
+    def test_valeurs_invalides(self):
+        r, _ = self.charger({'boutons': True, 'boutons_pos': {'combat': 'x'}}); self.assertEqual(r['bouton_vitesse_pos'], []); self.assertNotIn('combat', r['boutons_pos'])
+        r, _ = self.charger({'bouton_vitesse': 'oui', 'bouton_vitesse_taille': 'grand', 'bouton_vitesse_pos': [1]}); self.assertEqual((r['bouton_vitesse'], r['bouton_vitesse_taille'], r['bouton_vitesse_pos']), (True, 1.0, []))
+        r, _ = self.charger({'bouton_vitesse': True, 'bouton_vitesse_taille': 9, 'bouton_vitesse_pos': [1, 2]}); self.assertEqual((r['bouton_vitesse_taille'], r['bouton_vitesse_pos']), (2.0, [1.0, 2.0]))
+        r, _ = self.charger({'boutons': True, 'boutons_pos': {'combat': [True, 1]}}); self.assertEqual(r['bouton_vitesse_pos'], [])
 
 
 if __name__ == '__main__':

@@ -80,6 +80,11 @@ BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur 
 BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
 SE_GRACE = 0.4               # secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
 SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
+IMAGES_MOTEUR_PAR_S = 30.0   # images du moteur par seconde a vitesse normale (un pas du moteur = 1/30 s)
+# Musiques decodees d'avance (tache de fond, un fil a part, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache ; 59 Mo en tout) : le decodage d'une musique longue prend du temps
+# (BGM 23, 113 s : 0,6 a 1,2 s ici, plus sur un PC lent ; les jingles : 0,01 a 0,14 s), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 a 3,9 s apres l'avoir lancee (x3) : sans cela, la musique
+# de la defaite (BGM 23, demandee quand tout le groupe est battu) n'etait decodee qu'a ce moment-la (elle partait en retard, et un arret du moteur arrive avant la fin du decodage la supprimait : le groupe mourait en silence).
+BGM_PRECHARGES = (6, 8, 10, 13) + tuple(range(35, 51)) + (30, 23)
 
 # ---- categories de sons (menu Echap > Son). Unity ne connait que PlayBGM / PlaySE (classe Sound) : ni voix, ni canal « ME » a part. Les categories sont celles que le MOTEUR distingue par la facon de jouer un son :
 # musique (PlayBGM, avec boucle) ; jingles et fanfares (PlayBGM sans boucle : BGM 6, 8, 10, 13, 35 a 50 de 2,9 a 23,2 s, ou demande avec la reprise de la musique d'avant, 0x1000 | n = SoundManager::playRestart) ;
@@ -87,11 +92,12 @@ SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n
 # 302 et 303 : meme bloc de la banque, jamais appeles directement par le moteur, donc supposes de l'interface).
 CATEGORIES = ('musique', 'jingles', 'effets', 'interface')
 SE_INTERFACE = frozenset(range(300, 305))
+SE_JINGLES = frozenset({409})   # fanfare de victoire (BattleEndTask : SoundManager::play(409), 2,9 s) : jouee comme un bruitage mais c'est une fanfare ; reglee avec « Jingles et fanfares » (volume de l'option « bruitages » du jeu conservee)
 JINGLE_DUREE_MAX = 30.0       # secondes : un morceau sans boucle plus court que cela est un jingle ; BGM 1 (111 s) et 34 (655 s), sans boucle, sont de vraies musiques (sauf demande avec reprise)
 
 
 def categorie_se(ident):
-    return 'interface' if ident in SE_INTERFACE else 'effets'
+    return 'interface' if ident in SE_INTERFACE else 'jingles' if ident in SE_JINGLES else 'effets'
 
 
 def categorie_bgm(relance, boucle, duree):
@@ -113,9 +119,10 @@ class Mixage:
         self.actif = {c: True for c in CATEGORIES}
         self.jeu = dict(musique=1.0, effets=1.0)              # options « volume » du jeu (fenetre Parametres) : facteurs 0,2 a 1
 
-    def gain(self, cat, propre=1.0):
+    def gain(self, cat, propre=1.0, option=None):
+        """option : « musique » ou « effets » = quelle option « volume » du jeu s'applique ; par defaut celle de la musique pour la musique et les jingles, celle des bruitages pour le reste (un bruitage range dans « jingles » passe option='effets')."""
         if not self.actif.get(cat, True): return 0.0
-        g = self.general * self.vol.get(cat, 1.0) * propre * self.jeu['musique' if cat in ('musique', 'jingles') else 'effets']
+        g = self.general * self.vol.get(cat, 1.0) * propre * self.jeu[option or ('musique' if cat in ('musique', 'jingles') else 'effets')]
         return max(0.0, min(1.0, g))
 
 
@@ -132,7 +139,10 @@ class Son:
         self.mix = Mixage(musique=volume_musique, effets=volume_bruitages)
         self.actif = actif; self.ok = False
         self.pool = ThreadPoolExecutor(max_workers=1)
+        self.pool_fond = ThreadPoolExecutor(max_workers=1)                 # prechargement des musiques : un fil a part, pour qu'il ne retarde jamais un son demande par le moteur
         self.dec = collections.OrderedDict(); self.jobs = {}
+        self.fond = []; self.epingles = set()                              # musiques a decoder d'avance (noms), noms gardes en memoire
+        self.attente_bgm = collections.deque(); self.e_req = None          # ordres de musique retenus pendant un jingle (valeur, image du moteur) ; image du moteur de l'ordre qui a lance la musique en cours
         self.bgm = None; self.bgm_id = None; self.bgm_demande = None
         self.reprise = None; self.bgm_fin = None                           # jingle : musique a reprendre, heure de fin du jingle
         self.bgm_t0 = None; self.bgm_pos0 = 0.0; self.bgm_decalage = 0.0     # heure et position (secondes) du depart de la lecture ; position demandee pour la prochaine musique (chargement d'un etat)
@@ -169,16 +179,16 @@ class Son:
         d = self._octets(nom)
         if d is None: return None
         r = decoder_akb(d)
-        if r is not None and nom.startswith('SE'):                        # les bruitages sont petits : cache disque (les musiques se decodent en une fraction de seconde)
+        if r is not None and nom.startswith('SE'):                        # les bruitages sont petits : cache disque (une musique longue, elle, prend plus d'une seconde : voir BGM_PRECHARGES)
             try: np.savez(f, pcm=r['pcm'], p=np.array([r['frequence'], r['debut'], r['fin'], int(r['boucle'])], np.int64), v=np.array([r['volume']], np.float32))
             except Exception: pass
         return r
 
-    def _obtenir(self, nom, rappel):
+    def _obtenir(self, nom, rappel, fond=False):
         """Appelle rappel(donnees) : tout de suite si `nom` est deja decode, sinon depuis tick() quand la tache de fond a fini."""
         if nom in self.dec: self.dec.move_to_end(nom); rappel(self.dec[nom]); return
         if nom in self.jobs: self.jobs[nom][1].append(rappel); return
-        self.jobs[nom] = (self.pool.submit(self._decode_sur, nom), [rappel])
+        self.jobs[nom] = ((self.pool_fond if fond else self.pool).submit(self._decode_sur, nom), [rappel])
 
     def _decode_sur(self, nom):
         try: return self._decode(nom)
@@ -190,6 +200,22 @@ class Son:
         if not (self.ok and self.actif): return
         for i in ids: self._obtenir('SE%04d' % i, lambda r: None)
 
+    def precharger_musiques(self, ids=BGM_PRECHARGES):
+        """Musiques a decoder d'avance : une par image du jeu, seulement quand aucun autre decodage n'attend (la premiere musique du jeu passe donc la premiere) et une fois qu'une musique joue. Elles restent en memoire."""
+        if not (self.ok and self.ogg): return                                # (meme son coupe au depart : le prechargement attend qu'une musique joue)
+        for i in ids:
+            nom = 'BGM%02d' % i
+            self.epingles.add(nom)
+            if nom not in self.fond: self.fond.append(nom)
+
+    def _purger(self):
+        """Cache de decodage : 80 sons (hors musiques epinglees) et 400 Mo au plus ; les plus anciennement utilises partent les premiers."""
+        while True:
+            libres = [k for k in self.dec if k not in self.epingles]
+            if len(libres) <= 80 and sum(x['pcm'].nbytes for x in self.dec.values()) <= 400 * 2 ** 20: return
+            if not libres: return
+            del self.dec[libres[0]]
+
     # ---- appele a chaque image
     def tick(self):
         if not self.ok: return
@@ -197,10 +223,13 @@ class Son:
             if not fut.done(): continue
             r = fut.result(); del self.jobs[nom]
             if r is None: continue
-            self.dec[nom] = r
-            while len(self.dec) > 80 or sum(x['pcm'].nbytes for x in self.dec.values()) > 400 * 2 ** 20: self.dec.popitem(last=False)
+            self.dec[nom] = r; self._purger()
             for cb in rappels: cb(r)
+        if self.fond and not self.jobs and self.bgm is not None:             # rien d'autre a decoder et une musique joue : on avance le prechargement d'une musique
+            nom = self.fond.pop(0)
+            if nom not in self.dec: self._obtenir(nom, lambda r: None, fond=True)
         maintenant = time.time()
+        self._liberer_ordres(maintenant)
         if self.reprise is not None and self.bgm_fin is not None and maintenant >= self.bgm_fin:       # Sound.SystemUpdate : le jingle est fini, la musique d'avant reprend
             n = self.reprise; self.reprise = None; self.bgm_fin = None
             self.arreter_bgm(); self.jouer_bgm(n)
@@ -213,17 +242,44 @@ class Son:
         self.se = vivants
 
     # ---- ordres du moteur
-    def evenements(self, evts):
-        """evts : [(type de paquet, valeur)] de l'image : 35 bruitage, 36 arret de bruitage, 37 musique."""
+    def evenements(self, evts, image_moteur=None):
+        """evts : [(type de paquet, valeur)] de l'image : 35 bruitage, 36 arret de bruitage, 37 musique. image_moteur : numero de la derniere image du moteur (30 par seconde a vitesse normale) :
+        sert a ne pas couper un jingle quand le jeu tourne plus vite que la normale (voir _jingle_protege)."""
         if not (self.ok and self.actif): return
         if os.environ.get('DQ_SON'): self.log('Son : image %s ordres %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
         for t, v in evts:
             if t == 35: self.jouer_se(v)
             elif t == 36: self.arreter_se(v)
-            elif t == 37: self.jouer_bgm(v)
+            elif t == 37: self._ordre_bgm(v, image_moteur)
+
+    def _ordre_bgm(self, v, e):
+        """Ordre de musique du moteur (image e) : appliques tout de suite, ou retenu tant qu'un jingle le meriterait (et derriere ceux qui attendent deja : l'ordre des ordres est garde)."""
+        if self.attente_bgm or self._jingle_protege(e): self.attente_bgm.append((v, e))
+        else: self._appliquer_ordre(v, e)
+
+    def _appliquer_ordre(self, v, e):
+        self.jouer_bgm(v); self.e_req = e
+
+    def _jingle_protege(self, e):
+        """Vrai si un jingle joue encore ET que l'ordre du moteur d'image e serait arrive apres lui a vitesse normale. Un combat accelere enchaine ses ordres (arret, reprise de la musique, ...) 2 a 3 fois plus tot : la fanfare etait coupee
+        (montee de niveau, BGM 47 de 3,1 s : jouee 1,75 s a x3). L'ordre attend donc l'heure a laquelle il serait arrive a vitesse normale (image e - image de l'ordre qui a lance le jingle, a 30 par seconde) ou la fin du jingle, la premiere des deux."""
+        if e is None or self.e_req is None or self.bgm is None or self.bgm_fin is None or self.bgm_cat != 'jingles' or self.bgm_t0 is None: return False
+        if not self.mix.actif.get('jingles', True): return False          # jingles coupes : rien a proteger
+        return time.time() < min(self.bgm_fin, self.bgm_t0 + (e - self.e_req) / IMAGES_MOTEUR_PAR_S)
+
+    def _liberer_ordres(self, maintenant):
+        """Ordres de musique retenus : appliques dans l'ordre des que le jingle n'a plus de raison de les retenir. Jingle fini et ordre suivant = un autre jingle (avec reprise) : la musique d'avant reprend d'abord, comme sans retard (Sound.SystemUpdate)."""
+        if self.t_pause is not None: return
+        while self.attente_bgm:
+            v, e = self.attente_bgm[0]
+            if self._jingle_protege(e): return
+            if BGM_RELANCE <= v < BGM_ARRET and self.reprise is not None and self.bgm_fin is not None and maintenant >= self.bgm_fin:
+                n = self.reprise; self.reprise = None; self.bgm_fin = None; self.arreter_bgm(); self.jouer_bgm(n)
+            self.attente_bgm.popleft(); self._appliquer_ordre(v, e)
 
     def jouer_se(self, ident):
         if os.environ.get('DQ_SON'): self.log('Son : image %s bruitage %d' % (getattr(self, 'image', '?'), ident))
+        if ident <= 0: return                                                         # bruitage 0 : « aucun » (le moteur l'envoie avec chaque coup critique, SE0000 n'existe pas dans les donnees)
         nom = 'SE%04d' % ident
         self._obtenir(nom, lambda r, i=ident: self._lancer_se(i, r))
 
@@ -232,7 +288,7 @@ class Son:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             boucle = r['boucle']                                                            # bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'] if boucle else 0, r['fin'] if boucle else 0)
-            cat = categorie_se(ident); g = self.mix.gain(cat, r['volume'])
+            cat = categorie_se(ident); g = self.mix.gain(cat, r['volume'], 'effets')
             if g <= 0.0 and not boucle: return                                 # categorie coupee (ou volume a zero) : un bruitage court n'est pas joue ; un bruitage en boucle l'est a volume nul : il s'entend si on rouvre la categorie
             p = self.media.Player(); p.queue(src); p.volume = g; p.play()
             self.se.append(_SE(ident, p, time.time() + (SE_BOUCLE_MAX if boucle else len(r['pcm']) / r['frequence'] + 0.5), cat, r['volume']))
@@ -252,13 +308,13 @@ class Son:
 
     def jouer_bgm(self, v, decalage=0.0):
         if v >= BGM_ARRET:                                         # cmd_bgm : >= 0x4000 = Sound.StopBGM
-            self.reprise = None; self.arreter_bgm(); return
+            self.reprise = None; self.e_req = None; self.arreter_bgm(); return
         if not self.ogg: return
         reprise = None; relance = v >= BGM_RELANCE
         if relance: v -= BGM_RELANCE; reprise = self.bgm_id                 # Sound.PlayBGM avec reprise : jingle, puis retour a la musique en cours
         elif v == self.bgm_id and self.bgm is not None: self.reprise = None; return       # deja en cours
         else: self.reprise = None
-        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None; self.bgm_decalage = decalage
+        self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None; self.bgm_decalage = decalage; self.e_req = None
         self._obtenir('BGM%02d' % v, lambda r, i=v, rl=relance: self._lancer_bgm(i, r, rl))
 
     def _lancer_bgm(self, ident, r, relance=False):
@@ -296,7 +352,7 @@ class Son:
 
     def restaurer_bgm(self, info, defaut=None):
         """Chargement d'un etat : la musique repart du moment enregistre (sans `info`, ancien etat : depuis le debut de `defaut`, la derniere commande du moteur)."""
-        self.arreter_bgm()
+        self.arreter_bgm(); self.attente_bgm.clear()
         if info is None:
             if defaut is not None: self.jouer_bgm(defaut)
             return
@@ -334,7 +390,7 @@ class Son:
             try: self.bgm.volume = self.mix.gain(self.bgm_cat, self.bgm_propre)
             except Exception: pass
         for x in self.se:
-            try: x.p.volume = self.mix.gain(x.cat, x.propre)
+            try: x.p.volume = self.mix.gain(x.cat, x.propre, 'effets')
             except Exception: pass
 
     def regler_volumes(self, musique=None, bruitages=None):
@@ -375,7 +431,7 @@ class Son:
         """Touche : son active / coupe."""
         self.actif = not self.actif
         if not self.actif:
-            self.arreter_bgm()
+            self.arreter_bgm(); self.attente_bgm.clear()
             for x in self.se:
                 try: x.p.pause(); x.p.delete()
                 except Exception: pass
@@ -383,8 +439,9 @@ class Son:
         return self.actif
 
     def fermer(self):
-        try: self.pool.shutdown(wait=False, cancel_futures=True)
-        except Exception: pass
+        for pool in (self.pool, self.pool_fond):
+            try: pool.shutdown(wait=False, cancel_futures=True)
+            except Exception: pass
         self.arreter_bgm()
 
 

@@ -3,6 +3,8 @@ import os, re, struct, zipfile, unicorn
 import numpy as np
 import emu_core as T
 import priorite_jeu as PJ
+import pose_couchee as PC
+import rencontres as RE
 from pktlog import PacketLog
 from historique import Capteur
 from historique_combat import CapteurCombat
@@ -23,7 +25,12 @@ ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque Game
 G_IS_AMAZON = 0x24f684                      # octet g_isAmazon du moteur : a 1, la case « Sauv. cloud » du menu de depart n'existe pas
 EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
 EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
+CHARGEMENT_COUVERT = 0.9                    # opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (Etat.chargement)
+CHARGEMENT_MIN, CHARGEMENT_PLACEMENT, CHARGEMENT_MAX = 1, 2, 6      # images du moteur apres le paquet 0 : au moins 1 (le moteur place la camera et les personnages a l'image suivante, sur 529 cartes), 2 au plus pour attendre les positions des personnages visibles, 6 : garde-fou (jamais d'attente plus longue)
 ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
+FENETRE_ENTREE_COMBAT = 12                  # images apres le chargement de la scene d'un combat (paquet 0, bit 8) pendant lesquelles un fondu lance par le moteur est le fondu d'arrivee du combat (Etat.transition_combat)
+FENETRE_RETOUR_COMBAT = 12                  # images apres la sortie de la partie combat pendant lesquelles un fondu lance par le moteur est le fondu de retour a la carte
+GARDE_TRANSITION = 8                        # images ou la transition de combat reste « en cours » apres la fin de l'un de ses fondus (le moteur change de scene 1 a 3 images plus tard, puis lance le fondu suivant)
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
@@ -38,6 +45,8 @@ COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = 
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
 TBZ_W20_0 = 0x36000094
+COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
+STR_W8_X0 = 0xb9000008
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -93,23 +102,43 @@ class Etat:
         self.fondu = self._plan_fondu(); self.fondu_fond = self._plan_fondu()      # Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir. DEUX plans (Fade.l_fade, bit 14 de l'entier du paquet 9 = Fade.l_targetLayer) : 0 = « FadeForMenu » (shader Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris) ; 1 = « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres)
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
+        self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
+        self.fen_entree = 0; self.fen_retour = 0; self.garde_trans = 0      # transition de combat (voir transition_combat) : images restantes de la fenetre « arrivee en combat », de la fenetre « retour a la carte », de la garde entre deux fondus
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
         self.teinte = (1.0, 1.0, 1.0)             # paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
+        self.dort_haut = 0.0                          # paquet 17 (Chara.SetSleepNear) : hauteur du corps des personnages couches (composante Y de s_lieOffset, statique de Chara : elle survit aux changements de carte) ; 0 tant que le moteur n'a rien envoye
         self.fbx = {}; self.image = 0             # modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Moteur.step)
 
     @staticmethod
-    def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0}
+    def _plan_fondu(): return {'a': 0.0, 'fin': 0.0, 'pas': 0.0, 'n': 0, 'col': (0.0, 0.0, 0.0), 'noir': 0, 'combat': False}      # 'combat' : fondu de la transition d'un combat (duree du jeu, voir transition_combat)
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
-        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0))
+        self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None); self.__dict__.setdefault('dort_haut', 0.0)
+        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0)
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
+    def transition_combat(self):
+        """Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
+        entre deux de ces fondus) ? Elle doit durer EXACTEMENT ce que dure le jeu d'origine : la visionneuse n'y applique ni « Vitesse de combat », ni la vitesse de marche, ni le multiplicateur de l'accelerateur
+        (l'horloge reste celle du jeu, 30 images par seconde : Jeu._facteur_vitesse) ni « Vitesse de transition » (les fondus gardent leur duree : Etat._fondu)."""
+        return (self.effet is not None or self.attente_charge is not None or self.garde_trans > 0
+                or (self.fondu['n'] >= 1 and bool(self.fondu.get('combat'))) or (self.fondu_fond['n'] >= 1 and bool(self.fondu_fond.get('combat'))))
+
+    def tick_transition(self):
+        """Une image du jeu (apres tick_fondu) : les fenetres et la garde de la transition de combat s'ecoulent."""
+        if self.fen_entree > 0: self.fen_entree -= 1
+        if self.fen_retour > 0: self.fen_retour -= 1
+        if self.garde_trans > 0: self.garde_trans -= 1
+
     def appliquer(self, paquets, lire_nom):
         self.maillages_vus = set()
+        couvert = max(self.fondu['a'], self.fondu_fond['a']) >= CHARGEMENT_COUVERT; charge = False; cam_vue = False      # ecran deja couvert par un fondu au moment du chargement de carte ?
         for t, a, f in paquets:
             if t == 0:
+                charge = True; cam_vue = False
+                if a and a[0] & 0x100: self.fen_entree = FENETRE_ENTREE_COMBAT          # scene de combat (cmd_fld_load, bit 8) : le fondu lance dans la foulee est le fondu d'arrivee du combat
                 self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0)      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur de fond (ciel) : deux teintes, on prend la moyenne
@@ -131,6 +160,18 @@ class Etat:
                 else: self.sprites.pop(a[0], None)
             elif t == 14 and len(a) >= 2:           # cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
                 if a[0] in self.sprites: self.sprites[a[0]]['vis'] = a[1] != 0
+            elif t == 16 and a:                     # cmd_chara_sleep_pose (D132FC) : personnage = v & 0xff ; bits 8-9 : Chara.SetSleepPose(bit 8) ; bit 10 : Chara.SetSleepDir(v >> 12) (voir pose_couchee.py)
+                v = a[0]; s = self.sprites.get(v & 0xff)
+                if s is not None:
+                    if v & 0x300:
+                        s['dort'] = bool(v & 0x100)
+                        if s['dort']: s['dort_rot'] = (0.0, 0)          # SetSleepPose(vrai) : quadrant 0, rotation identite (la direction suit dans le meme paquet)
+                    if v & 0x400: s['dort_rot'] = PC.direction_paquet(v)
+            elif t == 17 and len(a) >= 2:           # cmd_chara_sleep_near (D133E4) : (defNear, decalage) ; Chara.SetSleepNear : hauteur du corps couche
+                self.dort_haut = PC.hauteur_paquet(a[1])
+            elif t == 18 and a:                     # cmd_chara_pose (D13474) : v = personnage | numero << 8 : Chara.SetTexture(numero) = le personnage change de feuille de sprites (TownCharacterDraw::changePose)
+                s = self.sprites.get(a[0] & 0xff)
+                if s is not None and (a[0] >> 8) >= 0: s['id'] = (a[0] >> 8) | (s['id'] & 4096)
             elif t == 15 and a:                     # cmd_chara_shadow (D13150) : personnage = v & 0xff ; bits 8-9 : ombre visible (bit 8) ; bits 10-11 : ombre separee (bit 10) ; bit 12 : position de l'ombre (3 flottants,
                 v = a[0]; s = self.sprites.get(v & 0xff)        # SetShadowPosition) ; bit 13 : opacite (SetShadowAlpha) ; bit 14 : position de l'ombre sur la carte du monde (SetFieldShadowPosition)
                 if s is not None:
@@ -158,6 +199,8 @@ class Etat:
             elif t == 4 and a and len(f) >= 2:      # cmd_fld_rot : objet ; rotation x, y (z = 0)
                 self.objets_cmd.append(('rot', a[0] & 0xffff, tuple(f[:2])))
             elif t == 10 and a:
+                if charge: cam_vue = True
+                elif self.chargement is not None: self.chargement['cam'] = True
                 fl = list(f)
                 if a[0] & 1 and len(fl) >= 3: self.cam_pos = tuple(fl[:3]); fl = fl[3:]
                 if a[0] & 2 and len(fl) >= 3: self.cam_cible = tuple(fl[:3]); fl = fl[3:]
@@ -217,13 +260,17 @@ class Etat:
                     if s['pos'] is None and self.image - s.get('cree', 0) >= ORIGINE_APRES: s['pos'] = (0.0, 0.0, 0.0)       # le moteur n'envoie une position que si elle change de celle qu'il croit deja posee (son enregistrement du personnage : (0, 0, 0)) :
                                                                           # un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
                                                                           # du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
+        if charge:         # chargement de carte : dessin retenu (voir maj_chargement) si l'ecran est couvert, soit par un fondu deja la, soit par le fondu d'entree lance avec ce chargement (il repart de l'opacite 1)
+            if couvert or any(fd['a'] >= CHARGEMENT_COUVERT and fd['fin'] == 0.0 and fd['n'] >= 1 for fd in (self.fondu, self.fondu_fond)): self.chargement = {'n': -1, 'cam': cam_vue}
+            else: self.chargement = None
 
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
         entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
         script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
-        if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
+        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : il garde la duree du jeu d'origine, voir transition_combat
+        if not v & (0x800 | 0x2000) and not fd['combat']: d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script, ni pour ceux d'un combat)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -234,13 +281,28 @@ class Etat:
             if d <= 1: fd['a'] = 0.0; fd['n'] = 0; fd['pas'] = 0.0
             else: fd['a'] = 1.0; fd['pas'] = -1.0 / d; fd['n'] = d
 
+    def maj_chargement(self):
+        """Fin de la retenue du dessin apres un chargement de carte (une fois par image du moteur, apres `appliquer`). La visionneuse n'a vu que le paquet 0 (nouveau decor) a l'image du chargement : camera de la scene
+        d'avant, personnages sans position, ni teinte ni ordres d'objets ; le moteur envoie la camera (paquet 10) et les positions (paquet 13) a l'image suivante (59 cartes essayees, 529 cartes comptees : toujours le decalage 1).
+        Tant que `chargement` existe, la fenetre ne dessine que les plans de fondu (noir de l'ecran couvert) et les fondus d'entree sont suspendus (`tick_fondu`) : le fondu du jeu garde toute sa duree, il commence juste
+        une image plus tard, sur une scene complete. Prete : au moins CHARGEMENT_MIN image, camera recue, et personnages visibles tous places (au plus CHARGEMENT_PLACEMENT images d'attente) ; garde-fou CHARGEMENT_MAX."""
+        ch = self.chargement
+        if ch is None: return
+        ch['n'] += 1                                                       # images du moteur depuis le chargement (0 a l'image du chargement : compte propre, pas de difference d'images : un etat charge peut remettre le compteur d'images a zero)
+        places = all(sp['pos'] is not None for sp in self.sprites.values() if sp.get('vis', True))
+        monde = self.partie != PARTIE_CHAMP or self.champ is not None      # carte du monde : attendre aussi ses tuiles (paquet 28)
+        if ch['n'] >= CHARGEMENT_MAX or (ch['n'] >= CHARGEMENT_MIN and monde and ch['cam'] and (places or ch['n'] >= CHARGEMENT_PLACEMENT)): self.chargement = None
+
     def tick_fondu(self):
         """FadePlane.Update : une fois par image du jeu, pour chacun des deux plans. Garde-fou (plan de devant seulement) : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert ;
         le plan de fond n'en a pas : le moteur le tient noir de lui-meme (titre de chapitre, 160 images) et le rouvre par une commande."""
         for fd, garde in ((self.fondu, True), (self.fondu_fond, False)):
+            if self.chargement is not None and fd['fin'] == 0.0 and fd['n'] >= 1: continue      # retenue du dessin apres un chargement : un fondu d'entree ne commence qu'avec la scene en place
             if fd['n'] >= 1:
                 fd['n'] -= 1
-                if fd['n'] < 1: fd['a'] = fd['fin']
+                if fd['n'] < 1:
+                    fd['a'] = fd['fin']
+                    if fd.get('combat') and fd['fin'] >= 1.0: self.garde_trans = GARDE_TRANSITION      # sortie au noir d'un combat finie : le moteur change de scene dans 1 a 3 images, puis lance le fondu d'entree ; l'horloge ne doit pas changer entre les deux
                 else: fd['a'] += fd['pas']
             if garde and fd['a'] >= 0.999 and fd['n'] < 1:
                 fd['noir'] += 1
@@ -257,7 +319,7 @@ class Interface:
     que le message suivant du port est le texte de cette case ; [4,i] curseur sur la ligne i ; [12,ligne,x] et [10,..] reglages."""
     def __init__(self):
         self.f = {}; self.attente = {}; self.ordre = 0
-        self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page
+        self.msg = {'type': 0, 'y': 0, 'feed': False, 'shake': 0, 'qui': '', 'qui_att': False}      # fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page, nom de l'interlocuteur (« qui ») ; qui_att : le paquet suivant du port porte ce nom
         self.degats = []           # nombres de degats a faire sauter sur les monstres : (monstre, hauteur, degats), vides par la visionneuse
         self.systeme = []          # messages du port 0 adresses a l'hote : (code, arguments...) ; 999 = quitter (MenuPortSendQuit), 6 = portail, 4 / 5 = volumes, 7 = taille du nom, 8 = manette
         self.obs = None            # observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
@@ -271,12 +333,18 @@ class Interface:
             for port, a in liste:
                 if port in (0, 1) or port >= 12: print('MSG image %s port %d %s' % (getattr(self, 'image', '?'), port, a[:10]), flush=True)
         for port, a in liste:
-            if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement
+            if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement, 4 nom de l'interlocuteur
+                if self.msg['qui_att']:                         # [4, 1] a annonce un nom : le paquet suivant du port en est le texte (un entier par caractere, comme les textes des cases des menus)
+                    self.msg['qui_att'] = False; self.msg['qui'] = ''.join(chr(v & 0xffff) for v in a if v).strip()
+                    continue
                 if len(a) >= 2:
                     c, v = a[0], a[1]
                     if c == 0: self.msg['type'] = v
                     elif c == 1: self.msg['feed'] = (v & 0xffff) == 1
                     elif c == 3: self.msg['y'] = v
+                    elif c == 4:                                # [4, 0] : pas de nom (cadre sans onglet) ; [4, 1] : le nom suit (cadre avec onglet, seulement pour la fenetre du terrain : MenuMessage.NoticeReceive, commande 4)
+                        if (v & 0xffff) != 0: self.msg['qui_att'] = True
+                        else: self.msg['qui'] = ''
                 continue
             if port == 0:
                 if len(a) >= 2 and a[0] == 0: self.systeme.append(tuple(a[1:]))
@@ -386,7 +454,7 @@ class Moteur:
             port = uc.reg_read(c.XREG[0]) & 0xffffffffffff
             if port and port == struct.unpack('<Q', c.mem(self.L + OBJ_MESSAGE + 0x30, 8))[0]:
                 self.msg_visible = bool(uc.reg_read(c.XREG[1]) & 0xff)
-                if not self.msg_visible: self._acc_texte = 0.0
+                if not self.msg_visible: self._acc_texte = 0.0; self.ui.msg['qui'] = ''; self.ui.msg['qui_att'] = False        # MenuMessage.SetVisible(false) efface le texte du nom (m_who)
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
@@ -401,6 +469,7 @@ class Moteur:
         self._crochets_texte()
         self._crochets_fondu()
         self._crochets_niveau()
+        self._crochets_rencontres()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
@@ -450,6 +519,27 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('PV/PM au niveau superieur : crochet non installe :', ex, flush=True)
+
+    def _crochets_rencontres(self):
+        """Rencontres aleatoires et marche acceleree (voir rencontres.py). `vitesse_marche` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
+        > 1 : le crochet sur `str w8, [x0]` de `CountDown::exec` (w9 = compteur avant, w8 = apres) remplace la perte du compteur par (1 + a) / (2 a) fois celle du jeu, de sorte que les rencontres par seconde
+        reelle soient (1 + a) / 2 fois celles de x1 et non a fois. A 1 (ou moins) : le crochet ne fait rien (le jeu d'origine, a l'identique)."""
+        c = self.core; self.vitesse_marche = 1.0; self.rencontres = RE.Reducteur()
+        try:
+            a = c.export('_ZN9CountDown4execEv')
+            if not a or struct.unpack('<I', c.mem(a + COUNTDOWN_EXEC_ECRITURE, 4))[0] != STR_W8_X0:
+                print('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres', flush=True); return
+            def _cd(uc, ad, sz, u):
+                v = self.vitesse_marche
+                if v <= 1.0: return                                                          # x1 : le jeu tel quel
+                r = self.rencontres; r.facteur = RE.facteur_par_pas(v)
+                avant = uc.reg_read(c.XREG[9]) & 0xffffffff; apres = uc.reg_read(c.XREG[8]) & 0xffffffff
+                avant -= (avant & 0x80000000) << 1; apres -= (apres & 0x80000000) << 1      # entiers signes de 32 bits (le compteur devient negatif au declenchement)
+                uc.reg_write(c.XREG[8], (avant - r.retenir(avant - apres)) & 0xffffffff)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _cd, None, a + COUNTDOWN_EXEC_ECRITURE, a + COUNTDOWN_EXEC_ECRITURE)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
@@ -687,9 +777,11 @@ class Moteur:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
         ac = self.etat.attente_charge
         if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
-        self.etat.tick_fondu()
+        self.etat.maj_chargement()
+        self.etat.tick_fondu(); self.etat.tick_transition()
         prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
+        if prec == PARTIE_COMBAT and self.etat.partie != PARTIE_COMBAT: self.etat.fen_retour = FENETRE_RETOUR_COMBAT      # fin du combat : le fondu d'entree qui suit sur la carte est celui du retour (duree du jeu)
         if self.etat.partie == PARTIE_COMBAT and prec != PARTIE_COMBAT and self.etat.attente_charge is None and self.etat.cartes_chargees <= avant:
             self.etat.attente_charge = {'base': avant, 'n': 0}      # combat sans effet d'ecran (scenario...) : la scene d'avant ne doit pas apparaitre avant le chargement de celle du combat
         if self.etat.partie != PARTIE_CHAMP: self.etat.champ = None; self.etat.monde = None

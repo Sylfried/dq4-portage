@@ -33,6 +33,22 @@ void main() {
 HAUTEUR_LIGNE = 1.246     # (police de repli GMaruGoPro-M, utilisee seulement sans ui_garrir.*) hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/PM (28 px) et le centrage des boutons
 TAILLE_POLICE = 19.0        # (repli GMaruGoPro-M) taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
 MARQUES_TEXTE = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
+RECENTRAGE_TEXTE = os.environ.get('DQ_TEXTE_ORIGINAL', '') not in ('1', 'true')      # DQ_TEXTE_ORIGINAL=1 (test) : placement vertical exact du jeu d'origine, sans le recentrage optique (voir recentrage_texte)
+
+
+def base_premiere_ligne(zp, row, n, pas, asc):
+    """Ordonnee (unites, vers le haut) de la ligne de base de la 1re ligne d'un TextMesh : TextMesh.anchor pose le point d'ancrage zp en haut (row 0), au milieu (1) ou en bas (2) d'un bloc de n lignes de hauteur `pas`
+    (= interligne de la police x characterSize x 0,1 x lineSpacing) ; la ligne de base est `asc` (ascent de la police x characterSize x 0,1) sous le haut de la ligne, quel que soit lineSpacing.
+    Verifie sur la capture du mobile (ecran4 : « Rat volant » 1 ligne, « Scarapince / x2 » 3 lignes, onglet « Ragnar »), a 0,3 unite pres."""
+    hb = n * pas
+    return zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0) - asc
+
+
+def recentrage_texte(interligne, u, ls):
+    """Remontee (unites) a appliquer au texte pour centrer l'encre dans sa ligne. Le jeu a regle lineSpacing (0,441 cibles, 0,481 plaques de monstres, 0,801 onglets / boutons / noms...) pour la police japonaise : la boite de ligne
+    est raccourcie de (1 - ls) mais la ligne de base reste a `ascent` du haut de la ligne, donc avec SE-GARRIR (encre centree dans sa boite naturelle de 23,5 px) le texte descend de (1 - ls) x interligne x u / 2 sous le centre de sa boite
+    (6,5 unites pour « Rat volant » et les plaques : texte colle au bas du cadre). Applique aux trois ancrages verticaux (l'ecart encre / boite ne depend pas de l'ancrage ; seul le cas milieu a une reference mobile, ecran4). lineSpacing >= 1 (PV / PM / Nv., regles sur les jauges) : 0. ECART VOLONTAIRE avec le jeu d'origine, qui a le meme defaut."""
+    return interligne * u * (1.0 - ls) / 2 if RECENTRAGE_TEXTE and ls < 1.0 else 0.0
 
 
 # Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
@@ -131,6 +147,14 @@ class MiseEnPage:
         self.cadres = lire_cadres(cadres) if cadres and os.path.exists(cadres) else []
 
 
+# MenuPortItemTable.name_button_param (RVA 0xCF8E00-0xCF8F98, .cctor) : (nombre de rangees, ordonnee de depart, pas) de la liste Make_NameButton ; le moteur choisit la mise en page par le code 6 de la fenetre
+# (`<Make_NameButton>b__0`, 0xD08BE8 : les rangees 0 a nombre - 1 sont activees et posees en `depart - pas x rang`, les autres sont desactivees jusqu'a la 6e). L'exporteur ne peut pas jouer cette fonction (« List index »).
+NOMS_PRESETS = ((4, 382.0, 67.0), (5, 382.0, 67.0), (5, 434.0, 67.0), (6, 434.0, 67.0), (5, 412.0, 67.0))
+NOMS_DEPART, NOMS_PAS = 382.0, 67.0         # mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
+COUT_FICHE_X_MAX = 214.0              # fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
+DESC_FICHE_X_MAX = 148.0              # fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
+
+
 def uv_icone(info, no, decal):
     """PartsInfo.SetUV : 4 sommets (HG, HD, BD, BG) de l'icone numero `no` dans la feuille."""
     n = no + info['startNo']; w = info['widthNum']
@@ -173,6 +197,7 @@ class Fenetre:
                 if e['kind'] == 'func':
                     for nid, dd in ((e.get('fx') or {}).get('-1') or {}).get('d', {}).items():
                         if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
+        self.noms_liste = nom.startswith('Make_NameButton'); self.noms_dec = {}       # liste de boutons nommes (type 8) : decalage deja applique a chaque rangee (voir _liste_noms)
         if self.t.get('name', '').startswith('Make_NameButton'):       # liste de 6 boutons mais le moteur n'en pilote que 5 (codes 0 a 4) : le 6e (en bas, sous « Sauvegarde rapide ») reste cache tant qu'aucun code ne le montre
             for e in self.codes.get(5, []):
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
@@ -289,6 +314,10 @@ class Fenetre:
                     elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
+        if self.typ == 7 and no == 1: nd['wrap_x'] = DESC_FICHE_X_MAX; nd['wrap_n'] = 2        # description d'un sort : le cadre du bas montre 2 lignes ; au-dela, le texte est recoupe a la largeur du cadre (Rendu._recoupe)
+        if self.typ == 7 and no == 2: nd['fit_x'] = COUT_FICHE_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Rendu._texte
+        ts = nd['text'].get('tabSize')
+        if ts and self.noms_liste and '\t' in s: s = s.replace('\t', ' ' * max(0, int(round(ts))))        # TextMesh.tabSize : une tabulation vaut tabSize fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » de la liste des magies) ; la police du jeu n'a pas de glyphe pour « \t » : elle comptait pour rien et le nombre collait a l'etiquette (limite a la liste des magies : les autres fenetres a tabSize, types 20, 31, 33, 34, 35, 39, ne sont pas verifiees)
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
@@ -297,6 +326,7 @@ class Fenetre:
         elif self.statut: self._statut(i, c)
         elif self.noms and i == 4: self._reset_marques()
         elif self.debut and i == 3: self._debut(c)
+        elif getattr(self, 'noms_liste', False) and i == 6: self._liste_noms(c); return      # (getattr : les tests construisent des Fenetre factices sans cet attribut)
         for e in self.codes.get(i, []):
             if e['kind'] == 'active':
                 pt = self.parts[e['parts']]
@@ -317,6 +347,26 @@ class Fenetre:
                     if pt:
                         for j, ib in enumerate(pt['ib']):
                             if (t['mask'] >> j) & 1 and ib['k'] == 'text' and ib.get('go') in self.N: self.N[ib['go']]['tcol'] = t['color']
+
+    def _liste_noms(self, c):
+        """Make_NameButton, code 6 (`<Make_NameButton>b__0`) : mise en page de la liste. Le preset `c` (NOMS_PRESETS) donne le nombre de rangees visibles et l'ordonnee de la premiere : les rangees suivantes (jusqu'a la 6e) sont desactivees, donc ni
+        dessinees ni cliquables (la 5e rangee, vide, restait visible et menait, au toucher, a une magie inexistante : <ERR ...> a l'ecran). Les codes de rangee (0 cache, 1 / 2 visible) arrivent apres et priment."""
+        if not isinstance(c, int) or not 0 <= c < len(NOMS_PRESETS) or len(self.parts) < 7: return
+        nb, depart, pas = NOMS_PRESETS[c]
+        for k in range(6):
+            nid = self.parts[1 + k]['node']; racine = self.N.get(nid)
+            if racine is None: continue
+            racine['act'] = k < nb and self.vals_code.get(k) != 0        # (rejeu d'une fenetre : le code de la rangee peut etre deja connu)
+            dz = (depart - pas * k) - (NOMS_DEPART - NOMS_PAS * k)                   # decalage voulu de la rangee k (le jeu pose la plaque, ses textes la suivent)
+            d = dz - self.noms_dec.get(k, 0.0)
+            if abs(d) > 1e-6:
+                for nd in self.N.values():
+                    x = nd; filiation = False
+                    while x is not None:
+                        if x['id'] == nid: filiation = True; break
+                        x = self.N.get(x['par'])
+                    if filiation: nd['pos'][2] += d
+                self.noms_dec[k] = dz
 
     def _code_masque(self, e, c):
         """Fonction de code dont l'argument est un MASQUE DE BITS sur des elements actifs / inactifs (Make_Casino_Poker b__1 : bit n = zone tactile de numero n, cartes 0 a 4 et « Donner » 5 ; le moteur envoie 63 pour toutes).
@@ -651,30 +701,46 @@ class Fenetre:
         return True
 
 
+CADRE_AVEC_NOM = 191                          # frameData du cadre de dialogue AVEC onglet de nom (192 = sans onglet : celui du type 0 de ui_layout.json)
+QUI_POS = (-104.5, 4.0, -104.0)               # MenuMessage.m_who : position locale du TextMesh du nom ; la hauteur s'y ajoute BIAS_FONT_Y (= lang['dy'], ajoute par Rendu._texte)
+QUI_TAILLE = 10.0                             # characterSize du TextMesh du nom (celui des dialogues vaut 10,4975)
+
+
 class FenetreMessage:
     """Fenetre de message du jeu (MenuMessage) : cadre (frameData) + canevas de texte dessine par le moteur + curseur de fin de page.
     Le canevas est une texture 512 x 512 qui boucle ; le defilement `[3, y]` decale l'origine verticale de ses UV de (y & 0x1ff) / 512."""
     def __init__(self, ml):
         self.ml = ml; self.d = ml.message; self.vu = True; self.sel = None; self.sel_nd = None; self.ordre = 0
-        self.type = -1; self.y = 0; self.feed = False; self.N = {}
+        self.type = -1; self.y = 0; self.feed = False; self.N = {}; self.qui = ''; self.avec_nom = False; self._base = None
+        self.typ = -1; self.t = 0                                    # (pour Rendu._texte, qui lit ces deux champs des fenetres de menu : numero de type, image de la mise en page)
         self.regler(0, 0, False)
 
     @staticmethod
     def _nd(nid, pos, vtx, uv, tris, mat):
         return dict(id=nid, par=None, pos=pos, act=True, mats=[mat], vtx=vtx, uv=uv, sub={'0': tris}, text=None, buttonId=None, etat=0, tcol=0, tscale=1.0)
 
-    def regler(self, typ, y, feed):
-        """typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page."""
+    def regler(self, typ, y, feed, qui=''):
+        """typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page, qui = nom de l'interlocuteur ('' : aucun).
+        MenuMessage.NoticeReceive, commande 4 : le nom n'est montre que sur la fenetre du terrain (m_nowType == 0) ; le cadre devient alors frameData 191 (le meme que 192 + un onglet colle au bord haut-gauche, souligne)
+        et le TextMesh « m_who » recoit le nom. Les cotes servant a poser la fenetre (etendue(), bas()) restent ceux du cadre sans onglet : l'onglet depasse vers le haut, il ne decale rien."""
         ts = self.d['types']; t = ts[typ] if 0 <= typ < len(ts) else ts[0]
         fm = self.d.get('frame_mats') or [{'sheet': 0, 'part': 4}]
-        if typ != self.type:
-            self.type = typ; w = t['win']; cv = t['canvas']; fl = t['feed_local']; fd = self.d['feed']
+        qui = (qui or '').strip(); avec = bool(qui) and typ == 0 and len(self.ml.cadres) > CADRE_AVEC_NOM
+        if typ != self.type or avec != self.avec_nom:
+            self.type = typ; self.avec_nom = avec; w = t['win']; cv = t['canvas']; fl = t['feed_local']; fd = self.d['feed']
+            fmesh = self._base = t['frame_mesh']
+            if avec: c = self.ml.cadres[CADRE_AVEC_NOM]; fmesh = dict(vtx=c['vtx'], uv=c['uv'], tris=c['tri'])
             self.N = {
-                'cadre': self._nd('cadre', list(w), t['frame_mesh']['vtx'], t['frame_mesh']['uv'], t['frame_mesh']['tris'], dict(sheet=fm[0]['sheet'], part=fm[0]['part'], color=None)),
+                'cadre': self._nd('cadre', list(w), fmesh['vtx'], fmesh['uv'], fmesh['tris'], dict(sheet=fm[0]['sheet'], part=fm[0]['part'], color=None)),
                 'canevas': self._nd('canevas', [w[0], w[1] + 4.0, w[2]], [[v[0], v[2]] for v in cv['vtx']], [list(u) for u in cv['uv']], cv['tris'], dict(sheet='msg', color=[1, 1, 1, 1])),
                 'curseur': self._nd('curseur', [w[0] + fl[0], w[1] + fl[1] + 6.0, w[2] + fl[2]], fd['vtx'], fd['uv'], fd['tris'], dict(sheet=fd['mats'][0]['sheet'], part=fd['mats'][0]['part'], color=None)),
             }
-            self.uv0 = [list(u) for u in cv['uv']]
+            if avec:                                                  # TextMesh « m_who » : position locale (-104,5 ; 4 ; BIAS_FONT_Y - 104), taille 10, ancre « haut centre », texte centre, blanc
+                nd = self._nd('qui', [w[0] + QUI_POS[0], w[1] + QUI_POS[1], w[2] + QUI_POS[2] + self.ml.hdr['lang']['dy']], [], [], {}, None)
+                nd['mats'] = []; nd['text'] = dict(text=qui, characterSize=QUI_TAILLE, lineSpacing=1.0, anchor=1, alignment=1, font=0); self.N['qui'] = nd
+            self.uv0 = [list(u) for u in cv['uv']]; self._ty = None
+        if avec: self.N['qui']['text']['text'] = qui
+        self.qui = qui if avec else ''; self.t += 1
         self.N['curseur']['act'] = bool(feed); self.feed = bool(feed)
         if y != self.y or typ != getattr(self, '_ty', None):
             self.y = y; self._ty = typ
@@ -687,12 +753,24 @@ class FenetreMessage:
 
     def etendue(self):
         c = self.N.get('cadre')
-        return (c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx'])) if c and c['vtx'] else None
+        if not c or not c['vtx']: return None
+        vt = self._base['vtx'] if self.avec_nom else c['vtx']          # (l'onglet du nom ne compte pas : le Oui/Non et l'echelle gardent la place du cadre sans onglet)
+        return (c['pos'][2] + min(v[1] for v in vt), c['pos'][2] + max(v[1] for v in vt))
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas du cadre."""
         c = self.N.get('cadre')
         return c['pos'][2] + min(v[1] for v in c['vtx']) if c and c['vtx'] else 0.0
+
+    def etendue_x(self):
+        """(gauche, droite) du cadre, unites d'interface (Rendu._texte : limites dans lesquelles un texte doit tenir)."""
+        c = self.N.get('cadre')
+        return (c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx'])) if c and c['vtx'] else None
+
+    def rects(self):
+        c = self.N.get('cadre')
+        if not c or not c['vtx']: return []
+        return [(c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx']))]
 
 
 class PoliceBitmap:
@@ -975,19 +1053,35 @@ class Rendu:
         if col == 1: return r[1] - r[0] - 2 * self.MARGE_PLAQUE                                      # texte centre : la plaque entiere
         return (r[1] - self.MARGE_PLAQUE - xa) if col == 0 else (xa - r[0] - self.MARGE_PLAQUE)      # texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
 
+    def _recoupe(self, lignes, dispo, bm, u, ts, s, emy):
+        """Description plus haute que son cadre (le texte francais d'un sort a 3 ou 4 lignes de ~20 caracteres, coupees pour un cadre plus etroit, le cadre n'en montre que 2 et la 3e sortait de l'ecran) : les retours a la
+        ligne sont remplaces par des espaces et le texte est recoupe a la largeur `dispo` (unites). Si le resultat n'a pas moins de lignes qu'avant, le texte est laisse tel quel."""
+        px = max(6, int(round(emy * s)))
+        def larg(x):
+            x = re.sub(r'@c\d', '', x)
+            return bm.largeur(x) * u * ts if bm else (self.textes.ligne(x, px)[1] - 4) / s * ts
+        out = []; cur = ''
+        for w in ' '.join(l.strip() for l in lignes).split():
+            essai = cur + ' ' + w if cur else w
+            if cur and larg(essai) > dispo: out.append(cur); cur = w
+            else: cur = essai
+        if cur: out.append(cur)
+        return out if len(out) < len(lignes) else lignes
+
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
-        lignes = t['text'].split('\n'); N = len(lignes)
+        lignes = t['text'].split('\n')
         bm = self.textes.bitmap                                         # police d'origine (SE-GARRIR) : 1 px de police = characterSize * 0.1 unite ; sinon GMaruGoPro-M rendue par Pillow
         u = t['characterSize'] * 0.1
         if bm: emy = u; pas = bm.interligne * u * t['lineSpacing']; asc = bm.ascent * u
         else: emy = TAILLE_POLICE * u; pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = nd['tscale']
+        if nd.get('wrap_x') is not None and len(lignes) > nd.get('wrap_n', 2): lignes = self._recoupe(lignes, nd['wrap_x'] - nd['pos'][0], bm, u, ts, s, emy)       # description plus haute que son cadre
+        N = len(lignes)
         row = t['anchor'] // 3; col = t['anchor'] % 3
-        hb = N * pas                                                    # hauteur du bloc de texte
-        haut = zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0)       # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
-        base0 = haut - asc
+        base0 = base_premiere_ligne(zp, row, N, pas, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
+        if bm: base0 += recentrage_texte(bm.interligne, u, t['lineSpacing'])      # (police d'origine seulement : les reglages du jeu sont calcules pour la police japonaise, GMaruGoPro-M, quand elle sert de repli)
         px = max(6, int(round(emy * s)))
         def teinte(i):
             pal = self.ml.couleurs[i] if 0 <= i < len(self.ml.couleurs) else (1, 1, 1, 1)
@@ -1016,7 +1110,8 @@ class Rendu:
             if ex and ex[0] <= xa <= ex[1]:
                 dispo = {0: ex[1] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - ex[0] - self.MARGE_PLAQUE}[col]
                 if dispo < 0.4 * bl: dispo = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
-        if dispo and bl > dispo and not bm:                              # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans
+        if nd.get('fit_x') is not None and col == 0: dispo = nd['fit_x'] - nd['pos'][0]      # limite posee par la fenetre (ligne de cout de la fiche d'un sort) : le cadre n'est pas un element de la fenetre
+        if dispo and bl > dispo and (not bm or nd.get('fit_x') is not None):      # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
             f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue
