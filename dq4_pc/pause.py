@@ -11,6 +11,7 @@ from pyglet import gl
 import reglages as RG
 import hd as HD
 import hud_mobile as HM
+import ui_historique as UH
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -63,7 +64,7 @@ MOTS_MASQUE = ('Masquée', 'Masqué')                             # etiquette d'
 
 class Pause:
     def __init__(self, jeu):
-        self.J = jeu; self.ouvert = False; self.pile = []; self.sel = {}; self.capture = None; self.message = None
+        self.J = jeu; self.hist = UH.VueHistorique(self); self.ouvert = False; self.pile = []; self.sel = {}; self.capture = None; self.message = None
         self.zones = []; self.barres = {}; self.zones_val = {}; self.zones_col = 0.0; self.minis = {}; self.rep = None; self.veut_miniature = False; self.mini_tex = None; self.confirme = None
         self.cadre_panneau = None                          # (x0, y0, x1, y1) du cadre dessine a la derniere image (placement des boutons : un clic hors du cadre saisit un bouton)
         self.zones_def = {}; self.zones_mute = {}          # ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs ; du bouton « muet » des lignes de la page Son
@@ -175,6 +176,7 @@ class Pause:
         self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None
         if page: self.pile = [page]; self.sel[page] = 2           # ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
         self.J.pause_jeu(True)
+        if page == 'historique': self.hist.entrer()
 
     def fermer(self):
         if not self.ouvert: return
@@ -196,6 +198,8 @@ class Pause:
     def _entrees(self):
         return getattr(self, '_e_' + self.ecran)()
 
+    def _e_historique(self): return []                                     # (page dessinee par ui_historique.VueHistorique : aucune ligne de menu)
+
     def _aller(self, nom):
         def va():
             self.pile.append(nom)
@@ -204,6 +208,7 @@ class Pause:
 
     def _e_racine(self):
         return [dict(t='act', l='Reprendre', ok=self.fermer),
+                dict(t='act', l='Historique des messages', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
@@ -433,7 +438,7 @@ class Pause:
                 vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
                 accel, vit_acc,
                 dict(t='sep', l='Actions du jeu'),
-                T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
+                T('A'), T('menu'), T('B'), T('carte'), T('discussion'), T('historique'),
                 dict(t='sep', l='Autres'),
                 modif, T('infos'),
                 dict(t='act', l='Rétablir les touches par défaut', ok=lambda: (R.touches_par_defaut(), R.enregistrer()))]
@@ -521,6 +526,7 @@ class Pause:
         """True si la touche est consommee (le menu est ouvert)."""
         K = pyglet.window.key; R = self.J.reg
         self.mode_souris = False                                  # une touche : retour a la selection au clavier (curseur dore)
+        if self.ecran == 'historique': return self.hist.touche(symbol, modifiers)
         if self.capture is not None: self._capturer(symbol); return True
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
@@ -609,6 +615,7 @@ class Pause:
         return None
 
     def _bouger(self, d):
+        if self.ecran == 'historique': return self.hist.bouger(d)
         if self.deroule is not None: self._bouger_liste(d); return
         e = self._entrees(); n = len(e)
         if not n: return
@@ -667,6 +674,7 @@ class Pause:
         return None, 0.0
 
     def survol(self, x, y):
+        if self.ecran == 'historique': return self.hist.survol(x, y)
         p = self.pos_souris; self.pos_souris = (x, y)
         if p is None or abs(x - p[0]) + abs(y - p[1]) < 3: return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
         self.mode_souris = True
@@ -714,6 +722,7 @@ class Pause:
 
     def clic(self, x, y, bouton):
         M = pyglet.window.mouse
+        if self.ecran == 'historique': return self.hist.clic(x, y, bouton)
         self.mode_souris = True; self.pos_souris = (x, y)
         if self.capture is not None: self.capture = None; return
         if self.popup is not None:                                    # fenetre de confirmation : un bouton la valide, un clic droit ou ailleurs la ferme
@@ -790,6 +799,7 @@ class Pause:
         self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, double=t - self.pan_clic_t < DELAI_DOUBLE_CLIC)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
 
     def relache(self, x, y, bouton):
+        if self.ecran == 'historique': return self.hist.relache(x, y, bouton)
         self.glisse = None; self.glisse_barre = None; self.glisse_liste = None
         a, self.pan_appui = self.pan_appui, None
         if a is not None and not a['long']:                                       # appui court (sans mouvement) : replier / deplier ; deuxieme appui d'un double clic : position d'origine, le pliage du premier est annule
@@ -800,6 +810,7 @@ class Pause:
 
     def glisser(self, x, y):
         """Souris deplacee bouton enfonce : le curseur maintenu (ou celui de la barre de defilement) suit."""
+        if self.ecran == 'historique': return self.hist.glisser(x, y)
         a = self.pan_appui
         if a is not None:                                                                    # panneau de l'editeur : il suit le pointeur des que celui-ci a quitte le point d'appui (le panneau se souleve, ni pliage ni double clic), ou apres un appui maintenu
             if not a['long'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['long'] = True; a['double'] = False
@@ -842,6 +853,7 @@ class Pause:
             except ValueError: pass
 
     def molette(self, sy):
+        if self.ecran == 'historique': return self.hist.molette(sy)
         if self.popup is not None or (self.ecran == 'interface' and self.plie): return
         b = self.barre
         if b and self.deroule is None and b['n'] > b['vis']: self._fixer_vue(self.debut.get(self.ecran, 0) - 2 * (1 if sy > 0 else -1)); return      # liste qui defile : la molette fait defiler la vue (comme la barre)
@@ -1017,6 +1029,7 @@ class Pause:
             pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=CADRE_SELECTION).draw()                  # le cadre jaune de selection reste aussi net que sur un element affiche (le voile le couvrait)
 
     def dessiner(self):
+        if self.ecran == 'historique': return self.hist.dessiner()
         J = self.J; W, H = J.width, J.height; k = max(0.75, H / 900.0)
         editeur = self.ecran == 'interface'
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)

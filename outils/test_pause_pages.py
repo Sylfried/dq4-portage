@@ -52,7 +52,7 @@ class Racine(unittest.TestCase):
     def test_entree_renommee(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         self.assertIn('Vitesse de défilement du texte', libs); self.assertNotIn('Texte et défilement', libs)
-        self.assertEqual(libs, ['Reprendre', 'États', 'Affichage', 'Son', 'Vitesse de défilement du texte', 'Commandes', "Revenir à l'écran titre"])
+        self.assertEqual(libs, ['Reprendre', 'Historique des messages', 'États', 'Affichage', 'Son', 'Vitesse de défilement du texte', 'Commandes', "Revenir à l'écran titre"])
 
 
 class PageSon(unittest.TestCase):
