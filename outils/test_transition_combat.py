@@ -42,6 +42,7 @@ class Fondus(unittest.TestCase):
         for vf in (1.0, 2.0, 3.0, 4.0):
             e = etat(MO.PARTIE_CHAMP, vf); e.appliquer([(0, [0x100], []), (9, [ENTREE_30], [])], lambda: 'btl_pl_d')           # chargement de la scene de combat (bit 8) puis fondu d'entree, meme image du moteur
             self.assertEqual(e.fondu['n'], 30, 'x%g' % vf); self.assertTrue(e.fondu['combat']); self.assertTrue(e.transition_combat())
+            e.chargement = None                                                                                                      # (la retenue du dessin apres un chargement retarde le DEBUT du fondu, pas sa duree : test_chargement)
             for i in range(29): e.tick_fondu(); e.tick_transition(); self.assertTrue(e.transition_combat(), 'image %d' % i)
             e.tick_fondu(); self.assertEqual(e.fondu['n'], 0)
 

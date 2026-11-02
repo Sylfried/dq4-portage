@@ -739,7 +739,6 @@ class Moteur:
         ac = self.etat.attente_charge
         if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
         self.etat.maj_chargement()
-        self.etat.tick_fondu()
         self.etat.tick_fondu(); self.etat.tick_transition()
         prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
