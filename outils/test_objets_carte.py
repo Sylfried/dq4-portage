@@ -6,7 +6,8 @@
      meme famille s'ouvrent « vers l'arriere du coffre », jamais de cote), et a la meme vitesse ;
   3. tiroir (mouvement commun avec une cle de position) : le deplacement est dans le repere de l'objet (FldObject.c_pmv_func : MultiplyPoint(TRS(position, rotateXZY(rotation), echelle)) ; un
      mouvement ordinaire (pmv_func) ajoute le deplacement tel quel ;
-  4. porte (rotation autour de Y seulement) : inchangee (cap de la porte + cap du mouvement).
+  4. porte (rotation autour de Y seulement) : inchangee (cap de la porte + cap du mouvement) ;
+  5. (si le cache de cartes existe : DQ_CACHE_CARTES, sinon /tmp/uicache_coffres) les VRAIS objets : les 194 coffres, les tiroirs et des portes de toutes les cartes.
 
     python3 outils/test_objets_carte.py
 """
@@ -162,6 +163,86 @@ class TestMouvements(unittest.TestCase):
         for cap in (0, 90, -90, 180):
             c = carte_objet((0, 0, 0), (0, cap, 0), pts, ((0, 0, 0), (0, -90, 0), (1, 1, 1))); fini = jouer(c)
             np.testing.assert_allclose(fini, np.array([ry_mat(cap - 90) @ np.array(p, float) for p in pts]), atol=1e-5)
+
+
+def cartes_reelles():
+    """Cartes du cache de l'utilisateur (carte9_*.pkl) : `DQ_CACHE_CARTES`, sinon /tmp/uicache_coffres ; vide si le cache n'existe pas (les tests ci-dessous sont alors ignores)."""
+    import glob
+    return sorted(glob.glob(os.path.join(os.environ.get('DQ_CACHE_CARTES', '/tmp/uicache_coffres'), 'carte9_*.pkl')))
+
+
+@unittest.skipUnless(cartes_reelles(), 'pas de cache de cartes (carte9_*.pkl)')
+class TestCartesReelles(unittest.TestCase):
+    """Les vrais objets du jeu : tous les coffres (modele `tbox02` = le couvercle, `tbox01` = le corps), tiroirs (`hikidashi1b`) et portes de toutes les cartes, joues de bout en bout."""
+
+    @staticmethod
+    def charger(f):
+        import pickle
+        with open(f, 'rb') as fh: return pickle.load(fh)
+
+    @staticmethod
+    def sommets(c, oc, i):
+        return np.concatenate([oc.cur[key][d:d + n] for key, d, n in c['plages'][i]]).astype(np.float64)
+
+    def objets(self, motif):
+        """[(carte, c, i)] des objets dont le nom de modele finit par `motif` et qui ont des animations communes."""
+        res = []
+        for f in cartes_reelles():
+            c = self.charger(f)
+            for i, o in enumerate(c['objets']):
+                if c['noms'].get(i, '').endswith(motif) and 0 <= o['canim'] < len(c['tabs']) and i in c['plages']: res.append((os.path.basename(f), c, i))
+        return res
+
+    def test_tous_les_coffres_s_ouvrent_autour_de_leur_charniere(self):
+        coffres = self.objets('tbox02'); self.assertGreater(len(coffres), 150)
+        caps = set()
+        for nom, c, i in coffres:
+            o = c['objets'][i]; pos = np.array(o['pos'], np.float64); R = euler_mat(*o['rot']); caps.add(round(o['rot'][1]))
+            oc = OC.ObjetsCarte(c); ferme = self.sommets(c, oc, i)
+            oc.anim_commune(i, 2)                                                    # SetCommonAnimation 2 = ouverture (TownFurnitureObject::openObject), 4 = fermeture
+            for _ in range(20): oc.tick()
+            ouvert = self.sommets(c, oc, i); msg = '%s objet %d cap %s' % (nom, i, o['rot'])
+            np.testing.assert_allclose(np.linalg.norm(ouvert - pos, axis=1), np.linalg.norm(ferme - pos, axis=1), atol=1e-4, err_msg=msg)       # rotation rigide autour de l'origine du modele (la charniere)
+            axe = R @ np.array([1.0, 0.0, 0.0])                                      # la charniere est l'axe X du coffre
+            np.testing.assert_allclose((ouvert - ferme) @ axe, 0.0, atol=1e-4, err_msg=msg)       # aucun mouvement le long de la charniere : le couvercle ne roule jamais de cote
+            haut = np.argmax(ouvert[:, 1]); self.assertGreater(ouvert[haut, 1] - ferme[:, 1].max(), 0.1, msg)    # le bord libre monte...
+            dec = (ouvert[haut] - ferme[haut]) @ (R @ np.array([0.0, 0.0, 1.0]))     # ... et recule vers l'arriere du coffre (+Z du modele, le devant est -Z)
+            self.assertGreater(dec, 0.1, msg)
+        self.assertTrue({90, -90, 180, -180, -27} <= caps or len(caps) > 1, caps)    # les caps non nuls existent dans les donnees (ss5b1b, hcy1b1, tcf1, mdi1f1...)
+
+    def test_les_coffres_se_referment_comme_au_depart(self):
+        for nom, c, i in self.objets('tbox02')[:40]:
+            oc = OC.ObjetsCarte(c); ferme = self.sommets(c, oc, i)
+            oc.anim_commune(i, 2)
+            for _ in range(20): oc.tick()
+            oc.anim_commune(i, 4)                                                    # fermeture
+            for _ in range(20): oc.tick()
+            np.testing.assert_allclose(self.sommets(c, oc, i), ferme, atol=1e-4, err_msg='%s objet %d' % (nom, i))
+
+    def test_tiroirs_sortent_vers_l_avant_de_leur_meuble(self):
+        tiroirs = self.objets('hikidashi1b'); self.assertGreater(len(tiroirs), 10)
+        vu = set()
+        for nom, c, i in tiroirs:
+            o = c['objets'][i]; oc = OC.ObjetsCarte(c); ferme = self.sommets(c, oc, i)
+            oc.anim_commune(i, 2)
+            for _ in range(20): oc.tick()
+            dep = self.sommets(c, oc, i) - ferme
+            cle = np.array(c['mots'][c['tabs'][o['canim']][1][2]]['keys'][-1][1], np.float64)       # cle d'arrivee de l'animation 2 : un tiroir sort vers l'avant (-Z) de son meuble, de 0,25 (ou 1) selon le modele
+            self.assertEqual((cle[0], cle[1]), (0.0, 0.0)); self.assertLess(cle[2], 0.0)
+            attendu = euler_mat(*o['rot']) @ (np.array(o['scl'], np.float64) * cle)  # tournee du cap du meuble (repere de l'objet)
+            np.testing.assert_allclose(dep, np.tile(attendu, (len(dep), 1)), atol=1e-4, err_msg='%s objet %d cap %s' % (nom, i, o['rot']))
+            vu.add(round(o['rot'][1]))
+        self.assertGreater(len(vu), 1)                                               # des tiroirs de caps differents (0, 90, -90, -6, -2)
+
+    def test_portes_ouvertes_autour_de_leur_charniere_verticale(self):
+        for motif in ('door01', 'wdoor04'):
+            for nom, c, i in self.objets(motif)[:60]:
+                o = c['objets'][i]; pos = np.array(o['pos'], np.float64); oc = OC.ObjetsCarte(c); ferme = self.sommets(c, oc, i)
+                oc.anim_commune(i, 2)
+                for _ in range(20): oc.tick()
+                ouvert = self.sommets(c, oc, i); msg = '%s objet %d' % (nom, i)
+                np.testing.assert_allclose(ouvert[:, 1], ferme[:, 1], atol=1e-4, err_msg=msg)            # la porte tourne autour de la verticale : aucune hauteur ne change
+                np.testing.assert_allclose(np.hypot(ouvert[:, 0] - pos[0], ouvert[:, 2] - pos[2]), np.hypot(ferme[:, 0] - pos[0], ferme[:, 2] - pos[2]), atol=1e-4, err_msg=msg)
 
 
 if __name__ == '__main__':
