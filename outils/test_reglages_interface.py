@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import reglages as RG
 
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
-HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'lissage', 'correction_bords', 'mode_fenetre', 'mode_fenetre_retour', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
+HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte', 'defilement_force',
                   'defilement_combat', 'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'taille_degats',
                   'touches_v', 'touches'}

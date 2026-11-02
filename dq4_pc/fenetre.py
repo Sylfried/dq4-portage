@@ -1,5 +1,5 @@
 """Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera)."""
-import os, sys, math, time, argparse, glob, collections, threading, random, atexit
+import os, sys, math, time, argparse, glob, collections, threading, random
 from concurrent.futures import ThreadPoolExecutor, wait as attendre_futures
 import numpy as np
 import pyglet
@@ -88,19 +88,6 @@ def ajuster_taille(w, h):
     return nw, nh
 
 
-def choisir_mode_ecran(modes, w, h):
-    """Plein ecran exclusif : le mode d'affichage du moniteur (parmi `modes`, ceux de `screen.get_modes()` : width, height, depth, rate, scaling) qui convient a la resolution demandee w x h.
-    Taille : l'exacte, sinon la plus proche (en surface) parmi les 16/9, a defaut parmi toutes. A taille egale : couleurs sur 24 bits ou plus, sans mise a l'echelle par le pilote (scaling 0), meilleure frequence, puis plus de couleurs. None si la liste est vide."""
-    def dim(m): return int(getattr(m, 'width', 0) or 0), int(getattr(m, 'height', 0) or 0)
-    ok = [m for m in modes if dim(m)[0] > 0 and dim(m)[1] > 0]
-    if not ok: return None
-    def ecart(m):
-        mw, mh = dim(m)
-        return (0 if (mw, mh) == (w, h) else 1, 0 if abs(mw / float(mh) - 16.0 / 9.0) < 0.02 else 1, abs(mw * mh - w * h))
-    def prof(m): return int(getattr(m, 'depth', 0) or 0)
-    return min(ok, key=lambda m: (ecart(m), 0 if prof(m) >= 24 or prof(m) == 0 else 1, 1 if getattr(m, 'scaling', 0) not in (0, None) else 0, -float(getattr(m, 'rate', 0) or 0), -prof(m)))
-
-
 FOV_VILLE_DEF = 9.5           # fov nominal du mode 0 (terrain) tant que le moteur n'en envoie pas (paquet 11)
 VILLE_NEAR, VILLE_FAR = 5.0, 100.0
 DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
@@ -176,23 +163,21 @@ def matrice(cam, cible, fov, aspect, n=1.0, f=200.0, haut=(0, 1, 0)):
 class Jeu(pyglet.window.Window):
     def __init__(self, args, reg=None):
         self._journal_logo = False
-        self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self._modes = None; self.bureau = None; self._en_bascule = False; self._restaure_a_la_sortie = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; modes du moniteur, taille du bureau
+        self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self.bureau = None; self._en_bascule = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; taille du bureau ; bascule fenetre / plein ecran en cours
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
         self.carte_ext = []; self.ciel_ext = None; self._M_ville = None; self._aspect_ville = 16 / 9; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self)
-        res_demandee = (args.largeur, args.hauteur)            # resolution du reglage avant d'etre ramenee a l'ecran : le plein ecran exclusif la veut telle quelle (le moniteur peut afficher plus que la zone utile d'une fenetre)
         if not args.shot: args.largeur, args.hauteur = ajuster_taille(args.largeur, args.hauteur)       # (les captures de test gardent la taille demandee)
         cfg = gl.Config(depth_size=24, double_buffer=True, major_version=3, minor_version=3)       # (l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
-        self.mode_fen = self._creer_fenetre(args, cfg, RG.mode_fenetre_valide(getattr(args, 'plein_ecran', 0)), res_demandee)        # mode memorise : la fenetre est creee directement dans ce mode, logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
-        if self.mode_fen in (0, 1): self.reg['mode_fenetre_retour'] = self.mode_fen
+        self.mode_fen = self._creer_fenetre(args, cfg, RG.mode_fenetre_valide(getattr(args, 'plein_ecran', 0)))        # mode memorise : la fenetre est creee directement dans ce mode, logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
         self.taille_fenetre = (args.largeur, args.hauteur)         # taille de la fenetre a retrouver en quittant un plein ecran
         self.post = PF.PostFX(self, log=lambda *a: print(*a, flush=True))
         self.args = args
         self._journal_fenetre('création')
         self._attente('Chargement du moteur...')
-        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = bool(self.reg['lissage']); self.aniso = self._anisotropie()
+        self.mode = RG.mode_sprites_valide(args.hd); self.lissage = not os.environ.get('DQ_SANS_LISSAGE'); self.aniso = self._anisotropie()          # lissage des textures : toujours actif (ex-reglage « Lissage des textures », retire) ; DQ_SANS_LISSAGE=1 : (debogage) plus proche voisin
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
@@ -250,65 +235,34 @@ class Jeu(pyglet.window.Window):
         pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._pret = True
 
-    # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, resolution du bureau), 2 plein ecran exclusif (mode d'affichage du moniteur)
+    # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, a la resolution du bureau : l'affichage du moniteur ne change jamais)
     TITRE_FENETRE = 'Dragon Quest IV - portage PC (essai)'
 
     @staticmethod
     def _echec_simule(mode):
-        """(test) DQ_SIM_ECHEC=2 (ou 1, ou 2,1) : la creation / la bascule vers ce mode echoue, pour essayer les replis ; 2s : le moniteur refuse le mode sans erreur (pyglet ne leve rien quand ChangeDisplaySettings echoue)."""
+        """(test) DQ_SIM_ECHEC=1 (ou 0, ou 1,0) : la creation / la bascule vers ce mode (1 plein ecran, 0 fenetre) echoue, pour essayer les replis."""
         if str(mode) in os.environ.get('DQ_SIM_ECHEC', '').split(','): raise RuntimeError('échec simulé (DQ_SIM_ECHEC)')
 
-    def _creer_fenetre(self, args, cfg, demande, res):
-        """Cree la fenetre directement dans le mode memorise (0 fenetre, 1 plein ecran, 2 plein ecran exclusif a la resolution `res`), avec repli a toute erreur, dit dans la console : exclusif -> plein ecran -> fenetre.
+    def _creer_fenetre(self, args, cfg, demande):
+        """Cree la fenetre directement dans le mode memorise (0 fenetre, 1 plein ecran), avec repli a toute erreur, dit dans la console : plein ecran -> fenetre.
         Elle reste cachee jusqu'a une premiere image noire (pas d'eclair blanc). -> mode obtenu."""
-        ecran = None
         try:
-            ecran = pyglet.display.get_display().get_default_screen(); self.bureau = (int(ecran.width), int(ecran.height))      # (avant tout changement de mode : la taille du bureau)
+            ecran = pyglet.display.get_display().get_default_screen(); self.bureau = (int(ecran.width), int(ecran.height))      # (la taille du bureau)
         except Exception as ex: print('Écran principal illisible (%r)' % (ex,), flush=True)
         for mode in range(demande, -1, -1):
             try:
                 self._echec_simule(mode)
-                if mode == 2:
-                    m = choisir_mode_ecran(self.modes_ecran(ecran), *res)
-                    if m is None: raise RuntimeError("aucun mode d'affichage disponible")
-                    super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, screen=ecran, mode=m, visible=False)
-                    if self._mode_applique(m): self._restaurer_a_la_sortie()
-                    else:        # (la fenetre existe et couvre le bureau : c'est deja le plein ecran sans bordure)
-                        print("Plein écran exclusif : le moniteur a refusé le mode %d x %d : plein écran" % (m.width, m.height), flush=True); self._restaurer_affichage(ecran); mode = 1
-                elif mode == 1: super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False)
+                if mode == 1: super().__init__(caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, fullscreen=True, visible=False)
                 else: super().__init__(args.largeur, args.hauteur, caption=self.TITRE_FENETRE, resizable=True, config=cfg, vsync=True, visible=False)
             except Exception as ex:
                 if mode == 0: raise
-                print('%s impossible au lancement (%r) : %s' % (RG.NOMS_MODES_FENETRE[mode], ex, 'plein écran' if mode == 2 else 'fenêtre'), flush=True)
-                self._restaurer_affichage(ecran)
+                print('Plein écran impossible au lancement (%r) : fenêtre' % (ex,), flush=True)
                 continue
             self.mode_fen = mode
             try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
             self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
             return mode
-
-    def modes_ecran(self, ecran=None):
-        """Modes d'affichage du moniteur (lus une seule fois : l'enumeration est lente sous Windows) ; [] si illisibles."""
-        if self._modes is None:
-            try: self._modes = list(ecran.get_modes() if ecran is not None else self.screen.get_modes())
-            except Exception as ex: print("Modes d'affichage illisibles (%r)" % (ex,), flush=True); self._modes = []
-        return self._modes
-
-    def _mode_applique(self, m):
-        """Le moniteur a-t-il vraiment pris le mode m ? (pyglet n'annonce pas l'echec de ChangeDisplaySettings : la taille de l'ecran ne change pas, la fenetre couvre alors le bureau.)"""
-        if '2s' in os.environ.get('DQ_SIM_ECHEC', '').split(','): return False
-        return (int(self.screen.width), int(self.screen.height)) == (int(m.width), int(m.height))
-
-    def _restaurer_a_la_sortie(self):
-        """Plein ecran exclusif : le mode d'affichage d'origine est rendu a la fermeture, meme si le programme s'arrete sur une erreur (Windows le fait aussi a la fin du processus : mode temporaire)."""
-        if not self._restaure_a_la_sortie: self._restaure_a_la_sortie = True; atexit.register(self._restaurer_affichage)
-
-    def _restaurer_affichage(self, ecran=None):
-        try:
-            ecran = ecran or getattr(self, '_screen', None)
-            if ecran is not None: ecran.restore_mode()
-        except Exception as ex: print("Mode d'affichage non rétabli (%r)" % (ex,), flush=True)
 
     def _init_ui(self):
         """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
@@ -629,7 +583,6 @@ class Jeu(pyglet.window.Window):
             threading.Thread(target=self.donnees.preparer, args=(self.prepa_arret,), daemon=True, name='preparation-cache').start()
 
     def on_close(self):
-        if self.mode_fen == 2: self._restaurer_affichage()          # plein ecran exclusif : le moniteur retrouve son mode d'origine
         if not self._pret: self._ferme = True; return           # fermeture pendant les logos : le constructeur s'arrete
         self.reg.enregistrer(); self.son.fermer()
         p = getattr(self, 'prepa_proc', None)
@@ -721,54 +674,28 @@ class Jeu(pyglet.window.Window):
         noms = [n for n in self.reg['touches']['infos'] if n]
         return 'Échap : menu' + ('    %s : infos' % RG.nom_touche(noms[0]) if noms else '')
 
-    def regler_lissage(self, oui):
-        self.lissage = bool(oui)
-        for t in self.tex_gl.values(): self._filtrer(t, self.lissage)
-        for r in self.decor_hd.values():
-            for t in r.values(): self._filtrer(t, self.lissage)
-        for d in list(self.sprite_tex.values()) + list(self.cb_tex.values()):          # sprites et monstres agrandis (EPX) : meme choix ; les originaux le suivent dans le shader (net)
-            if d and d.get('hd'): self._filtrer(d['t'], self.lissage)
-
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
     @property
     def est_plein(self):
-        """Plein ecran (sans bordure) ou plein ecran exclusif."""
-        return self.mode_fen in (1, 2)
+        """Plein ecran (fenetre sans bordure a la resolution du bureau) ?"""
+        return self.mode_fen == 1
 
     def resolutions(self):
-        """Tailles proposees (16/9, 720p a 4K), triees par largeur puis hauteur : fenetre = celles qui tiennent sur l'ecran avec ses bordures ; plein ecran exclusif = celles que le moniteur sait afficher (ses modes d'affichage) ;
-        plein ecran (sans bordure) : celles du bureau (la ligne est grisee : la fenetre prend toujours la resolution du bureau). La taille actuelle s'y ajoute si elle est libre."""
+        """Tailles proposees (16/9, 720p a 4K), triees par largeur puis hauteur : fenetre = celles qui tiennent sur l'ecran avec ses bordures ; plein ecran = celles du bureau (la ligne est grisee : la fenetre prend toujours
+        la resolution du bureau, le choix sert au prochain retour en fenetre). La taille actuelle s'y ajoute si elle est libre."""
         liste = list(RESOLUTIONS); cur = self.resolution_courante()
-        if self.mode_fen == 2:
-            dispo = {(int(m.width), int(m.height)) for m in self.modes_ecran()}
-            if dispo: liste = [r for r in liste if r in dispo]
-            elif self.bureau: liste = [r for r in liste if r[0] <= self.bureau[0] and r[1] <= self.bureau[1]]
-        else:
-            lim = self.bureau if self.mode_fen == 1 else zone_utile()
-            if lim: liste = [r for r in liste if r[0] <= lim[0] and r[1] <= lim[1]]
+        lim = self.bureau if self.est_plein else zone_utile()
+        if lim: liste = [r for r in liste if r[0] <= lim[0] and r[1] <= lim[1]]
         if cur not in liste: liste.append(cur)
         return sorted(liste)                # par largeur, puis par hauteur
 
     def resolution_courante(self): return (int(self.width), int(self.height))
 
     def regler_resolution(self, v):
-        """Fenetre : change la taille (ramenee a l'ecran si elle est trop grande). Plein ecran exclusif : change le mode d'affichage du moniteur (le plus proche s'il n'existe pas exactement ; repli sur le plein ecran sans bordure si le moniteur refuse).
-        Plein ecran (sans bordure) : sans effet, la fenetre garde la resolution du bureau ; le choix sert au prochain retour en fenetre."""
+        """Fenetre : change la taille (ramenee a l'ecran si elle est trop grande). Plein ecran : sans effet, la fenetre garde la resolution du bureau ; le choix sert au prochain retour en fenetre."""
         w, h = int(v[0]), int(v[1])
-        if self.mode_fen == 2:
-            try:
-                m = choisir_mode_ecran(self.modes_ecran(), w, h)
-                if m is None: raise RuntimeError("aucun mode d'affichage disponible")
-                if (m.width, m.height) != (self.width, self.height):
-                    self._echec_simule(2)
-                    self.set_fullscreen(True, screen=self.screen, mode=m, width=m.width, height=m.height)
-                    if not self._mode_applique(m): raise RuntimeError('le moniteur a refusé le mode %d x %d' % (m.width, m.height))
-                    self.post.cle = None; self._journal_fenetre('résolution %d x %d' % (m.width, m.height))
-            except Exception as ex:
-                print('Résolution du plein écran exclusif impossible (%r) : plein écran' % (ex,), flush=True)
-                self.regler_mode_fenetre(1)
-        elif self.mode_fen == 1: self.taille_fenetre = ajuster_taille(w, h)
+        if self.est_plein: self.taille_fenetre = ajuster_taille(w, h)
         else:
             w, h = ajuster_taille(w, h)
             self.taille_fenetre = (w, h); self.set_size(w, h); self._verifier_taille_reelle()
@@ -791,67 +718,106 @@ class Jeu(pyglet.window.Window):
 
     def regler_infos(self, oui): self.aide = bool(oui)
 
-    def regler_mode_fenetre(self, mode):
-        """Ligne « Fenêtre » du menu Echap, F11 / Alt + Entree : passe a 0 (fenetre), 1 (plein ecran sans bordure : fenetre a la resolution du bureau, le moniteur ne change pas) ou 2 (plein ecran exclusif : le moniteur prend la resolution
-        du reglage « Résolution »). Repli a toute erreur, dit dans la console et par un message a l'ecran : exclusif -> plein ecran -> fenetre. Le mode obtenu est memorise dans les reglages (avec le dernier mode non exclusif, ou F11 revient). -> mode obtenu."""
-        mode = RG.mode_fenetre_valide(mode); R = self.reg
-        if mode == self.mode_fen: R['mode_fenetre'] = mode; return mode
-        if self.mode_fen in (0, 1): R['mode_fenetre_retour'] = self.mode_fen
-        if not self.fullscreen: self.taille_fenetre = (self.width, self.height)           # (la taille de la fenetre, a retrouver au retour)
-        obtenu = None
-        for cible in range(mode, -1, -1):
-            try: self._poser_mode(cible); obtenu = cible; break
-            except Exception as ex:
-                print('%s impossible (%r)%s' % (RG.NOMS_MODES_FENETRE[cible], ex, ' : repli' if cible else ''), flush=True)
-                try: self.screen.restore_mode(); self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (retour a l'etat de depart avant d'essayer le mode suivant)
-                except Exception: pass
-        if obtenu is None: obtenu = 1 if self.fullscreen else 0           # (jamais atteint si le mode fenetre fonctionne : l'etat reel de la fenetre)
-        self.mode_fen = obtenu; R['mode_fenetre'] = obtenu
-        if obtenu in (0, 1): R['mode_fenetre_retour'] = obtenu
-        else: self._restaurer_a_la_sortie()
-        self.post.cle = None            # tampons du rendu hors ecran refaits a la taille du nouvel affichage (postfx.py)
-        self._journal_fenetre('mode « %s »' % RG.NOMS_MODES_FENETRE[obtenu])
-        if obtenu != mode and self._pret: self.toast('%s impossible : %s' % (RG.NOMS_MODES_FENETRE[mode], RG.NOMS_MODES_FENETRE[obtenu].lower()), 3.0)
-        if not self.fullscreen: self._verifier_taille_reelle()
-        return obtenu
+    def regler_plein_ecran(self, oui):
+        """Interrupteur « Plein écran » du menu Echap, F11 et Alt + Entree : passe de la fenetre au plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas) et inversement, en une seule
+        bascule (voir _poser_plein_ecran). Le mode obtenu est memorise dans les reglages (`mode_fenetre`). A toute erreur : etat de depart conserve, dit dans la console et par un message a l'ecran. -> vrai si la fenetre est en plein ecran."""
+        cible = 1 if oui else 0; R = self.reg
+        if cible == self.mode_fen: R['mode_fenetre'] = cible; return self.est_plein
+        if self._en_bascule: return self.est_plein
+        self._en_bascule = True
+        try:
+            erreur = None
+            try: self._poser_plein_ecran(cible == 1)
+            except Exception as ex: erreur = ex
+            self.mode_fen = 1 if self.fullscreen else 0           # (l'etat reel de la fenetre)
+            R['mode_fenetre'] = self.mode_fen
+            self._journal_fenetre('plein écran' if self.mode_fen else 'fenêtre')
+            if erreur is not None:
+                print('%s impossible (%r) : %s conservé' % ('Plein écran' if cible else 'Fenêtre', erreur, 'plein écran' if self.mode_fen else 'fenêtre'), flush=True)
+                if self._pret: self.toast('%s impossible' % ('Plein écran' if cible else 'Fenêtre'), 3.0)
+        finally: self._en_bascule = False
+        return self.est_plein
 
-    def _poser_mode(self, cible):
-        """Une bascule : toujours par l'etat fenetre (qui rend le mode d'affichage du moniteur s'il avait change : pyglet restore_mode), puis le mode cible. Leve une erreur si le mode n'a pas pu etre pris."""
-        self._echec_simule(cible)
-        if self.fullscreen: self.set_fullscreen(False, *ajuster_taille(*self.taille_fenetre))       # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
-        if cible == 1: self.set_fullscreen(True)
-        elif cible == 2:
-            try: res = (int(self.reg['resolution'][0]), int(self.reg['resolution'][1]))
-            except Exception: res = (1920, 1080)
-            m = choisir_mode_ecran(self.modes_ecran(), *res)
-            if m is None: raise RuntimeError("aucun mode d'affichage disponible")
-            self.set_fullscreen(True, screen=self.screen, mode=m)
-            if not self._mode_applique(m): raise RuntimeError('le moniteur a refusé le mode %d x %d' % (m.width, m.height))
+    def basculer_plein_ecran(self):
+        """F11 / Alt + Entree : fenetre <-> plein ecran."""
+        return self.regler_plein_ecran(not self.est_plein)
 
-    def basculer_exclusif(self):
-        """F11 / Alt + Entree : plein ecran exclusif <-> le mode d'avant (fenetre ou plein ecran, memorise). Le reglage « Fenêtre » suit : le menu montre le mode reel et le prochain lancement le retrouve."""
-        self.regler_mode_fenetre((1 if self.reg['mode_fenetre_retour'] == 1 else 0) if self.mode_fen == 2 else 2)
+    def _poser_plein_ecran(self, plein):
+        """La bascule, en une seule etape (pyglet : un set_fullscreen, qui sur Windows cache la fenetre, change son style et sa taille, puis la remontre et la replace) :
+        - la taille de la fenetre est memorisee avant de la quitter (`taille_fenetre`, la position l'est par pyglet) et rendue d'un coup en y revenant, jamais par un etat intermediaire (plus de set_fullscreen(False) suivi de set_fullscreen(True)) ;
+        - la fenetre est cachee AVANT, donc remontree une seule fois, a sa taille et a sa place definitives, et non pas montree au mauvais endroit puis deplacee ;
+        - une image du jeu est dessinee a la taille definitive pendant qu'elle est cachee (les tampons du rendu hors ecran, postfx.py, ne sont refaits que si la taille a change, une seule fois, ici : plus de reconstruction forcee a chaque
+          bascule), puis affichee, puis la fenetre est montree et la meme image redessinee aussitot (au cas ou le systeme n'aurait pas gardé celle de la fenetre cachee) : aucune trame de taille instable ni de tampon vide.
+        Leve une erreur si le mode n'a pas pu etre pris (l'etat de depart est alors retabli). DQ_BASCULE_SIMPLE=1 : (debogage) un set_fullscreen sans rien d'autre, comme avant."""
+        avant = bool(self.fullscreen)
+        if avant == plein: return
+        if not avant: self.taille_fenetre = (int(self.width), int(self.height))          # (la taille de la fenetre, a retrouver au retour)
+        taille = ajuster_taille(*self.taille_fenetre)              # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
+        if os.environ.get('DQ_BASCULE_SIMPLE'): self._mettre_plein(plein, taille); self._echec_simule(1 if plein else 0); return
+        cachee = False; erreur = None
+        try:
+            if getattr(self, '_visible', True): cachee = True; self.set_visible(False)          # (cachee avant l'appel : un masquage a moitie reussi est quand meme suivi d'un set_visible(True))
+            self._mettre_plein(plein, taille)
+            self._echec_simule(1 if plein else 0)          # (test : l'echec arrive apres le changement, pour essayer le retour a l'etat de depart)
+        except Exception as ex:
+            erreur = ex
+            try: self._mettre_plein(avant, taille)          # (retour a l'etat de depart, fenetre toujours cachee)
+            except Exception as ex2: print("Retour à l'état de départ impossible (%r)" % (ex2,), flush=True)
+        self._image_de_bascule()
+        if cachee:
+            try: self.set_visible(True)
+            except Exception as ex: print('Fenêtre non remontrée (%r)' % (ex,), flush=True)
+            else: self._image_de_bascule()          # (supposé : le systeme peut ne pas garder ce qui est affiche pendant que la fenetre est cachee ; la meme image est redessinee des qu'elle est visible, sans attendre la boucle)
+        if erreur is not None: raise erreur
+
+    def _mettre_plein(self, plein, taille):
+        """Le set_fullscreen de la bascule (un seul appel) ; en revenant en fenetre sans position memorisee (lancee en plein ecran), la fenetre est centree sur le bureau."""
+        if plein: self.set_fullscreen(True)
+        else:
+            self.set_fullscreen(False, *taille)
+            if not getattr(self, '_windowed_location', None) and self.bureau:
+                try: self.set_location(max(0, (self.bureau[0] - self.width) // 2), max(32, (self.bureau[1] - self.height) // 2))
+                except Exception as ex: print('Fenêtre non centrée (%r)' % (ex,), flush=True)
+        if sys.platform == 'win32' and not plein: self._verifier_taille_reelle()          # (Windows peut reduire la fenetre sans prevenir)
+
+    def _image_de_bascule(self):
+        """Fenetre cachee, a sa taille definitive : une image du jeu y est dessinee et affichee (pendant les logos et les chargements : du noir), pour que la premiere chose vue soit une image complete."""
+        try:
+            self.switch_to()
+            if self._pret: self.on_draw()
+            else: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+            self.flip()
+        except Exception as ex:
+            print("Image de la bascule impossible (%r) : noir" % (ex,), flush=True)
+            try: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
+            except Exception: pass
 
     def _raccourci_fenetre(self, symbol, modifiers):
-        """F11 ou Alt + Entree, de n'importe ou (logos, titre, jeu, menu Echap) : bascule du plein ecran exclusif. La touche est avalee (ni validation, ni action du jeu) et, avec Alt, Alt ne vaut plus « discussion de groupe » (voir _fronts). -> True si consommee."""
+        """F11 ou Alt + Entree, de n'importe ou (logos, titre, jeu, menu Echap, saisie du nom, combat) : bascule fenetre <-> plein ecran. La touche est avalee (ni validation, ni action du jeu) et, avec Alt, Alt ne vaut plus
+        « discussion de groupe » (voir _fronts). -> True si consommee."""
         K = pyglet.window.key
-        alt = bool(modifiers & K.MOD_ALT)
+        t = getattr(self, 'touches', None)
+        alt = bool(modifiers & K.MOD_ALT) or (t is not None and bool(t[K.LALT] or t[K.RALT]))          # (le drapeau du systeme, ou l'etat des touches Alt : l'un des deux suffit)
         if not (symbol == K.F11 or (alt and symbol in (K.RETURN, K.ENTER))): return False
         if getattr(self.pause, 'capture', None) is not None: return False                    # menu Commandes en attente d'une touche : F11 y est « réservée » (reglages.RESERVEES)
         self.avalees.add(symbol)
         if alt: self.alt_cand = False
         if self._en_bascule or not hasattr(self, 'post'): return True
-        self._en_bascule = True
-        try: self.basculer_exclusif()
-        except Exception as ex: print('Bascule du plein écran exclusif impossible : %r' % (ex,), flush=True)
-        finally: self._en_bascule = False
+        try: self.basculer_plein_ecran()
+        except Exception as ex: print('Bascule du plein écran impossible : %r' % (ex,), flush=True)
         return True
+
+    if sys.platform == 'win32':
+        try:
+            @pyglet.window._PlatformEventHandler(0x0106)          # WM_SYSCHAR : le caractere de Alt + Entree. Sans ce gestionnaire, Windows (DefWindowProc) fait entendre sa « tonalite d'erreur » a chaque Alt + Entree. Les autres Alt + touche restent a Windows.
+            def _event_syschar(self, msg, wParam, lParam): return 0 if wParam == 13 else None
+        except Exception: pass
 
     def _journal_fenetre(self, quand):
         """Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule."""
         try:
             ec = self.screen; fb = self.get_framebuffer_size()
-            nom = ('fenêtre', 'PLEIN ÉCRAN', 'PLEIN ÉCRAN EXCLUSIF')[self.mode_fen] + ('' if bool(self.fullscreen) == (self.mode_fen > 0) else ' [INCOHÉRENT : fullscreen=%s]' % self.fullscreen)
+            nom = ('fenêtre', 'PLEIN ÉCRAN')[self.mode_fen] + ('' if bool(self.fullscreen) == (self.mode_fen > 0) else ' [INCOHÉRENT : fullscreen=%s]' % self.fullscreen)
             print('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d' % (quand, nom, self.width, self.height, fb[0], fb[1], ec.width, ec.height), flush=True)
         except Exception as ex: print('Fenêtre (%s) : état illisible (%r)' % (quand, ex), flush=True)
 
@@ -2677,15 +2643,13 @@ class Jeu(pyglet.window.Window):
         print('PROJ n=%d' % self.n_boucle, out, flush=True)
 
     def _correction_bords(self):
-        """Intensite (0 a 1) de la correction des bords : option --correction-bords (0 a 100), sinon variable d'environnement DQ_CORRECTION_BORDS (0 a 100), sinon le reglage `correction_bords` (0 / False = aucune, 1 / True = complete)."""
+        """Intensite (0 a 1) de la correction des bords des sprites (villes, donjons, tours ; voir _panneau_ville) : toujours 1 (correction complete), ce n'est plus un reglage du joueur (l'ancienne option « Correction des bords
+        des sprites » est retiree). (Debogage, pour comparer avec le panneau d'origine, penche vers l'exterieur pres des bords) : option --correction-bords ou variable d'environnement DQ_CORRECTION_BORDS, de 0 (aucune) a 100 (complete)."""
         v = getattr(self.args, 'correction_bords', None)
         if v is None and os.environ.get('DQ_CORRECTION_BORDS'):
             try: v = float(os.environ['DQ_CORRECTION_BORDS'])
             except ValueError: v = None
-        if v is None:
-            try: return min(1.0, max(0.0, float(self.reg['correction_bords'])))
-            except Exception: return 1.0
-        return min(1.0, max(0.0, float(v) / 100.0))
+        return 1.0 if v is None else min(1.0, max(0.0, float(v) / 100.0))
 
     @staticmethod
     def _decaler_profondeur(X, F, delta, t, C):
@@ -2890,7 +2854,7 @@ class Jeu(pyglet.window.Window):
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
-                # Correction des bords (reglage « correction_bords », voir _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
+                # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
                 # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
                 a, b, c, d = self._panneau_ville(p, r_, u_, f_, w, h, zb, zb + zh, corr, C_vue)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
@@ -3021,7 +2985,7 @@ class Jeu(pyglet.window.Window):
         lieu = 'Carte du monde' if champ else ('Combat %s' % e.carte if bataille else 'Carte %s' % (e.carte or '?'))
         nom_mode = HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect'
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
-        self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, (' (plein écran)', ' (plein écran exclusif)')[self.mode_fen - 1] if self.est_plein else '', self.moteur.images, e.partie)
+        self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
         self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Anticrénelage : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
             nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))
@@ -3081,8 +3045,8 @@ def main():
     ap.add_argument('--sans-son', action='store_true', help='coupe le son pour cette session (le menu Echap permet de le remettre)')
     ap.add_argument('--volume-musique', type=float, default=None, help='volume des musiques (0 a 1) ; par defaut celui du menu Echap')
     ap.add_argument('--volume-bruitages', type=float, default=None, help='volume des bruitages (0 a 1) ; par defaut celui du menu Echap')
-    ap.add_argument('--plein-ecran', type=int, choices=(0, 1, 2), default=None, help='0 = lance le jeu en fenetre, 1 = en plein ecran (fenetre sans bordure a la resolution du bureau), 2 = en plein ecran exclusif (le moniteur prend la resolution du reglage) ; la fenetre est creee directement dans ce mode ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
-    ap.add_argument('--correction-bords', type=int, default=None, choices=range(0, 101), metavar='0-100', help='sprites des villes : correction de l\'inclinaison vers l\'exterieur pres des bords gauche / droit de l\'ecran, en pourcentage (0 = aucune, comme avant ; 100 = complete) ; par defaut le reglage `correction_bords` (variable d\'environnement DQ_CORRECTION_BORDS pour comparer)')
+    ap.add_argument('--plein-ecran', type=int, choices=(0, 1, 2), default=None, help='0 = lance le jeu en fenetre, 1 = en plein ecran (fenetre sans bordure a la resolution du bureau) ; 2 (ancien plein ecran exclusif, supprime) vaut 1 ; la fenetre est creee directement dans ce mode ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)')
+    ap.add_argument('--correction-bords', type=int, default=None, choices=range(0, 101), metavar='0-100', help="(debogage) correction de l'inclinaison des sprites des villes pres des bords gauche / droit de l'ecran, en pourcentage : 0 = aucune (le panneau d'origine, penche vers l'exterieur), 100 = complete ; par defaut toujours complete, ce n'est plus un reglage du joueur (variable d'environnement DQ_CORRECTION_BORDS pour la meme chose)")
     ap.add_argument('--msaa', type=int, default=None, help='anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap')
     ap.add_argument('--reglages', default=os.path.join(ici, 'reglages.json'), help='fichier des reglages du joueur (menu Echap : affichage, son, touches)')
     ap.add_argument('--script-combat', default=None, help='(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)')
@@ -3103,7 +3067,7 @@ def main():
     if a.msaa is None: a.msaa = reg['msaa']
     else: reg['msaa'] = a.msaa
     if a.plein_ecran is None: a.plein_ecran = 0 if a.shot else reg['mode_fenetre']
-    else: reg['mode_fenetre'] = a.plein_ecran
+    else: a.plein_ecran = reg['mode_fenetre'] = RG.mode_fenetre_valide(a.plein_ecran)          # (2 = l'ancien plein ecran exclusif : 1)
     rs = reg['resolution'] if isinstance(reg['resolution'], (list, tuple)) and len(reg['resolution']) == 2 else (1920, 1080)
     if a.largeur is None: a.largeur = int(rs[0]) if a.hauteur is None else int(round(a.hauteur * 16 / 9))
     if a.hauteur is None: a.hauteur = int(rs[1]) if a.largeur == int(rs[0]) else int(round(a.largeur * 9 / 16))
