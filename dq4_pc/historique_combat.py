@@ -18,7 +18,7 @@ Methode (ETABLI par lecture du moteur desassemble puis par mesure : voir outils/
   j-ieme groupe), seulement quand il y a autant de plaques que de groupes et avant la premiere mort. Sans plaque : « Monstre ».
 Tout est protege : une erreur ne renvoie rien et ne s'ecrit qu'une fois dans la console. Un combat dont on n'a pas vu le debut (etat instantane charge en plein combat, capteur cree pendant un combat) n'est jamais
 rapporte : mieux vaut ne rien dire que de dire faux."""
-import struct
+import re, struct
 
 PARTIE_COMBAT = 0xd
 NB_EMPLACEMENTS = 12                   # g_Monster : 12 monstres au plus
@@ -39,12 +39,18 @@ CROCHETS = (('debut', '_ZN6status11PartyStatus11startBattleEv'), ('mort', '_ZN19
 
 # ---------------------------------------------------------------------------------------------------------------------------------- partie pure (sans emulateur)
 def nom_de_plaque(texte):
-    """Nom affiche sur une plaque de monstre : « Gluant\\n\\n\\t×3 » -> « Gluant » (la mention du nombre est retiree) ; None si vide."""
+    """Nom affiche sur une plaque de monstre ; None si vide. Le jeu ecrit « Gluant\\n\\n\\t×3 » (la mention du nombre, qui commence par une tabulation, est retiree) et coupe les noms longs sur deux lignes :
+    « Armure \\n\\nerrante » -> « Armure errante » ; « Scara-\\n\\nsomniaque » -> « Scara-somniaque » (un tiret en fin de ligne est recolle sans espace). Limite : « Psaro l'Exter-\\n\\nminateur » donne
+    « Psaro l'Exter-minateur » (le moteur ne dit pas si le tiret est une coupure de mot ou un vrai trait d'union)."""
     if not isinstance(texte, str): return None
-    for ligne in texte.replace('\r', '').split('\n'):
-        ligne = ''.join(ch for ch in ligne if ch >= ' ' and ch != '\x7f').strip()
-        if ligne: return ligne
-    return None
+    nom = ''
+    for brut in texte.replace('\r', '').split('\n'):
+        if brut.startswith('\t'): break                                                 # « \t×3 » : le nombre de monstres du groupe
+        ligne = ''.join(ch for ch in brut if ch >= ' ' and ch != '\x7f').strip()
+        if not ligne: continue
+        if re.fullmatch(r'×\s*\d+', ligne): break
+        nom = ligne if not nom else (nom + ligne if nom.endswith('-') else nom + ' ' + ligne)
+    return nom or None
 
 
 def noms_des_groupes(groupes, plaques):
