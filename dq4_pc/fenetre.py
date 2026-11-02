@@ -1267,10 +1267,15 @@ class Jeu(pyglet.window.Window):
         if self.ciel_ext and self.ciel_ext['vl'] is not None: self.ciel_ext['vl'].delete()
         self.ciel_ext = None; self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
-        try:
-            c = self.donnees.carte(src)
-        except Exception as ex:
-            print('carte non chargee :', ex, flush=True); self.carte_nom = nom; return
+        c = erreur = None
+        for cand in [src] + (DO.decors_de_secours(src) if nom.startswith('btl') else []):         # decor de combat sans la variante demandee (heure) : la plus proche, plutot qu'un decor vide
+            try: c = self.donnees.carte(cand)
+            except KeyError as ex: erreur = ex; continue
+            except Exception as ex: erreur = ex
+            if c is not None and cand != src: print('decor %s absent des donnees : %s a la place' % (src, cand), flush=True); src = cand
+            break
+        if c is None:
+            print('carte non chargee :', erreur, flush=True); self.carte_nom = nom; return
         if not os.environ.get('DQ_SANS_DECALAGE'):
             try: DP.decaler(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir decors_plats.py)
             except Exception as ex: print('decors_plats :', ex, flush=True)
