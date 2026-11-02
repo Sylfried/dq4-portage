@@ -1,4 +1,5 @@
 """Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe, et la croix (manette tactile, utilisable a la souris).
+En combat, seul le bouton propre au portage « Vitesse des combats » (Normal, Rapide, Tres rapide ; clic = vitesse suivante) est montre : pas de bouton equivalent dans le jeu mobile, il n'envoie rien au moteur.
 
 Le jeu d'origine les dessine dans la couche Unity (TouchPad : « Map Button » = touche 0x1000, « Command Button » = 0x800, « Talk Button » = 0x400 ; icones 3, 4 et 15 de la feuille
 MenuTexture, rangee de 32 px a y = 224). Le moteur dit quand ils sont visibles par le mot Global.Flag (premier mot de sa sortie) : (Flag & (8 | 0x30047)) == 8 (pad present, ni verrou du
@@ -15,14 +16,16 @@ from pyglet import gl
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
 NOMS = ('carte', 'menu', 'discussion')
 CROIX = 'croix'
-NOMS_ED = NOMS + (CROIX,)                    # elements places dans l'editeur d'interface
-DEFAUT = {'carte': (0.4, 1), 'menu': (0.4, 12), 'discussion': (0.4, 14)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas
+COMBAT = 'combat'                            # bouton « Vitesse des combats » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
+BOUTONS = NOMS + (COMBAT,)                   # tous les boutons rectangulaires
+NOMS_ED = BOUTONS + (CROIX,)                 # elements places dans l'editeur d'interface
+DEFAUT = {'carte': (0.4, 1), 'menu': (0.4, 12), 'discussion': (0.4, 14), COMBAT: (0.4, 8)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas ; vitesse des combats entre les deux : a gauche des fenetres de combat (colonne portrait centree), elle n'en cache aucune
 DECL = {'carte': 0x1000, 'menu': 0x800, 'discussion': 0x400}
 ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
-LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion', CROIX: 'Croix'}
+LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion', COMBAT: 'Vitesse des combats', CROIX: 'Croix'}
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
 # Plaques des boutons (TouchPad.CreateMenuButton 0xD2377C : plaque (t x 40 + 32) x (t x 32 + 32) pour une taille t) en unites de l'interface d'origine (450 x 800) : (largeur, hauteur, cote de l'icone = 48 x taille d'icone)
-PLAQUE_DQ = {'carte': (72.0, 64.0, 57.6), 'menu': (72.0, 64.0, 57.6), 'discussion': (63.0, 56.8, 48.0)}
+PLAQUE_DQ = {'carte': (72.0, 64.0, 57.6), 'menu': (72.0, 64.0, 57.6), 'discussion': (63.0, 56.8, 48.0), COMBAT: (118.0, 60.0, 0.0)}      # (le bouton de vitesse des combats n'a pas d'icone : plaque plus large qui porte « Vitesse » et la vitesse courante)
 COIN_PLAQUE = 16.0                           # coins de la plaque 9 tranches (feuille « Button », partie 7), en unites d'interface
 
 # ---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
@@ -132,6 +135,15 @@ def tracer_grille(W, H):
         l = pyglet.shapes.Line(0, j * H / LIGNES, W, j * H / LIGNES, thickness=1, color=(255, 255, 255)); l.opacity = 38; l.draw()
 
 
+def combat_visible(e):
+    """Le bouton de vitesse des combats est-il montre ? Pas pendant l'ecran noir qui attend la scene du combat (Etat.attente_charge), ni quand un fondu au noir monte ou que l'ecran est noir (debut et fin du combat) :
+    comme les boutons du terrain, que le moteur cache pendant les fondus. Un fondu qui redescend (entree du combat) le laisse apparaitre."""
+    if e.attente_charge is not None: return False
+    for p in (e.fondu, e.fondu_fond):
+        if p['a'] >= 0.999 or (p['n'] >= 1 and p['pas'] > 0): return False
+    return True
+
+
 class Boutons:
     def __init__(self, jeu):
         self.J = jeu; self.spr = {}; self.orig = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
@@ -172,18 +184,18 @@ class Boutons:
         if CROIX in visibles:
             rx, ry, c, _ = self.rect(CROIX)
             if math.hypot(x - rx - c / 2, y - ry - c / 2) <= c / 2 * PRISE_CROIX: return CROIX
-        for nom in reversed(NOMS):
+        for nom in reversed(BOUTONS):
             if nom not in visibles: continue
             rx, ry, w, h = self.rect(nom)
             if rx <= x <= rx + w and ry <= y <= ry + h: return nom
         return None
 
     def visibles(self):
-        """Boutons a montrer : ceux que le moteur autorise (hors menu Echap, combat, effets d'ecran)."""
+        """Boutons a montrer : ceux que le moteur autorise (hors menu Echap, combat, effets d'ecran) ; en combat, le seul bouton de vitesse des combats (hors ecran noir et fondu au noir)."""
         J = self.J
         if not J.reg['boutons'] or J.pause.ouvert or J.moteur.etat.effet is not None: return ()
         from moteur import PARTIE_COMBAT
-        if J.moteur.etat.partie == PARTIE_COMBAT: return ()
+        if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if combat_visible(J.moteur.etat) else ()
         if J.carte_ouverte: return ()                                                  # carte ouverte : plus de bouton a l'ecran (le bouton « mode » et le retour sont ceux de la fenetre de la carte, type 22)
         f = J.moteur.drapeaux()
         if (f & (8 | 0x30047)) != 8: return ()
@@ -275,6 +287,15 @@ class Boutons:
         r = getattr(self.J, 'ui_rendu', None)
         return bool(r is not None and r.plaque(x, y, w, h, (self.J.width, self.J.height), enfonce, coin=COIN_PLAQUE * self.echelle()))
 
+    def _texte_combat(self, x, y, w, h):
+        """Bouton de vitesse des combats : « Vitesse » en petit, au-dessus de la vitesse courante (Normal, Rapide, Très rapide : mots du menu Commandes, jamais « x2 ») ; la vitesse est plus chaude quand elle accelere.
+        Police du menu Pause (celle du jeu mobile), taille proportionnelle a la plaque."""
+        import reglages as RG
+        v = RG.cran_combat(self.J.reg['vitesse_combat']); k = self.echelle(); pa = self.J.pause
+        coul = {1.0: (255, 255, 255, 255), 2.0: (255, 235, 130, 255), 3.0: (255, 176, 80, 255)}[v]
+        sous = pa._ajuster('Vitesse', 15.0 * k, (196, 200, 208, 255), w - 14 * k); sous.x = x + (w - sous.content_width) / 2; sous.y = y + h * 0.60; sous.draw()
+        et = pa._ajuster(RG.NOMS_VITESSE_COMBAT[v], 21.0 * k, coul, w - 14 * k); et.x = x + (w - et.content_width) / 2; et.y = y + h * 0.17; et.draw()
+
     def _art_croix(self):
         """Sprites de la croix (morceaux de la feuille « Button », ancres au centre pour tourner autour)."""
         if self.art is None:
@@ -316,15 +337,17 @@ class Boutons:
         if edition:                                              # voile sombre et grille (facultative)
             fond = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); fond.opacity = 110; fond.draw()
             if grille: tracer_grille(W, H)
-        for nom in NOMS:
+        for nom in BOUTONS:
             if nom not in visibles and not edition: continue
             x, y, w, h = self.rect(nom); actif = self.appui == nom or (self.pris is not None and self.pris[0] == nom)
             vrai = self._plaque(x, y, w, h, actif)
             if not vrai: cadre(x, y, w, h, h / 60.0, 0.45 if actif else 0.0)    # sans les menus d'origine : fond de bouton dessine (fenetre bleu nuit a cadre blanc, comme celles du jeu mobile)
-            ci = PLAQUE_DQ[nom][2] * self.echelle(); s, n = self._sprite(nom, ci)
-            s.update(x=x + (w - ci) / 2, y=y + (h - ci) / 2, scale=ci / (32.0 * n))
-            s.color = (170, 170, 170) if actif and not vrai else (255, 255, 255); s.opacity = 255 if edition else 235
-            s.draw()
+            if nom == COMBAT: self._texte_combat(x, y, w, h)
+            else:
+                ci = PLAQUE_DQ[nom][2] * self.echelle(); s, n = self._sprite(nom, ci)
+                s.update(x=x + (w - ci) / 2, y=y + (h - ci) / 2, scale=ci / (32.0 * n))
+                s.color = (170, 170, 170) if actif and not vrai else (255, 255, 255); s.opacity = 255 if edition else 235
+                s.draw()
             if edition:
                 pyglet.shapes.Box(x, y, w, h, thickness=2, color=(255, 235, 130)).draw()
                 et = self.J._etiq(LIBELLE[nom], max(11.0, h / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + w / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + h + 4, H - et.content_height - 2); et.draw()

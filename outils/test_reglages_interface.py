@@ -15,7 +15,7 @@ import reglages as RG
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
 HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte', 'defilement_force',
-                  'defilement_combat', 'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'taille_degats',
+                  'defilement_combat', 'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches'}
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
@@ -121,12 +121,12 @@ class RemiseAZero(unittest.TestCase):
         hud = types.SimpleNamespace(rect=lambda n: (10.0 * len(n), 20.0, 60.0, 50.0))
         P = PA.Pause(types.SimpleNamespace(reg=r, hud=hud)); P.cible = RG.CIBLE_ECRAN
         masque = lambda: {n: (e[4], e[5]) for n, e in zip(HM.NOMS_ED, P._elements_apercu())}
-        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'croix': (False, False)})      # tout affiche : rien de marque
+        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'combat': (False, True), 'croix': (False, False)})      # tout affiche : rien de marque (le bouton de vitesse des combats est un bouton comme les autres)
         r['croix'] = False                                                                       # « Afficher la croix » = Non : la croix seule est marquee (feminin), les boutons non
-        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'croix': (True, False)})
+        self.assertEqual(masque(), {'carte': (False, True), 'menu': (False, True), 'discussion': (False, True), 'combat': (False, True), 'croix': (True, False)})
         r['boutons'] = False; r['croix'] = True                                                  # interface entiere masquee : boutons (masculin) et croix (feminin)
-        self.assertEqual(masque(), {'carte': (True, True), 'menu': (True, True), 'discussion': (True, True), 'croix': (True, False)})
-        self.assertEqual(len(P._rects_montres()), 4)                                              # (le panneau de l'editeur et la selection ne dependent pas de l'affichage)
+        self.assertEqual(masque(), {'carte': (True, True), 'menu': (True, True), 'discussion': (True, True), 'combat': (True, True), 'croix': (True, False)})
+        self.assertEqual(len(P._rects_montres()), 5)                                              # (le panneau de l'editeur et la selection ne dependent pas de l'affichage)
         r['boutons'] = True; P.cible = 'RootMenu'; P.rect_apercu = (5.0, 6.0, 7.0, 8.0)
         self.assertEqual(P._elements_apercu(), [(5.0, 6.0, 7.0, 8.0, False, False)])
         r['interface_masquees'] = ['RootMenu']

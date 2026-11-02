@@ -266,6 +266,7 @@ class Pause:
     }
     noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
     noms['Messages en combat'] = {0: 'Rapide', 2: 'Moyen', 3: 'Lent', 4: 'Manuel'}                       # OptionStatus.battleSpeed (voir RG.CRANS_DEFILEMENT)
+    noms['Vitesse des combats'] = RG.NOMS_VITESSE_COMBAT                                                  # Normal, Rapide, Très rapide (jamais x1, x2, x3)
     for lib in ('Vitesse de marche', 'Vitesse de caméra', 'Vitesse de transition'): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
     del lib
 
@@ -413,25 +414,28 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et vitesse de l'accelerateur : curseur), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Cinq sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la vitesse des combats : Normal, Rapide, Tres rapide, et sa touche), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None)); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
         modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec un clic molette : remet le zoom à 100 %'
-        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Vitesse de l'accélérateur »)   " + self.AIDE_TOUCHE
+        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
-        vit_acc = vit_acc_curs("Vitesse de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue"
+        vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
+        vit_cb = self._choix('Vitesse des combats', list(RG.VITESSES_COMBAT), lambda: R['vitesse_combat'], lambda v: R.__setitem__('vitesse_combat', v))
+        vit_cb['aide'] = "Combats : animations, déplacements et messages 2 ou 3 fois plus rapides   La musique et les bruitages gardent leur vitesse   Se règle aussi en plein combat (touche ci-dessous, bouton à l'écran)"
+        tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Normal à Rapide, puis à Très rapide, puis à Normal   Marche aussi en plein combat   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra'),
                 *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la direction   Ctrl + clic molette : remet le zoom   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
                 dict(t='sep', l='Vitesses'),
-                vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les combats, les menus et les messages gardent leur vitesse)'),
+                vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)'),
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
                 vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
-                accel, vit_acc,
+                accel, vit_acc, vit_cb, tch_cb,
                 dict(t='sep', l='Actions du jeu'),
                 T('A'), T('menu'), T('B'), T('carte'), T('discussion'),
                 dict(t='sep', l='Autres'),
