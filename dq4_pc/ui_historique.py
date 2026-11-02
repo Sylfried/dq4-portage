@@ -1,11 +1,12 @@
-"""Fenetre « Historique » (page 'historique' du menu Pause, voir pause.py) : trois onglets, Dialogues (hors combat), Combats et Favoris ; le plus recent en bas.
+"""Fenetre « Historique » (page 'historique' du menu Pause, voir pause.py) : deux onglets, Dialogues (hors combat) et Combats ; le plus recent en bas. Une case a cocher « Favoris seulement » (a droite des onglets) ne garde dans
+la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet, et quand on rouvre la fenetre pendant la session : elle n'est pas enregistree).
 
 Chaque element est dessine comme une fenetre de message du jeu (meme cadre noir translucide, meme police d'origine SE-GARRIR, PoliceBitmap) : un dialogue avec le nom du locuteur dans un cartouche SEULEMENT si le jeu
 l'affichait quand il a ete dit ; un combat avec son issue, ses ennemis, l'or et l'experience. Une etoile en haut a droite de chaque element le met en favori (il est alors garde dans un fichier jusqu'a ce qu'on
 retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
 Le moteur est arrete tant que la fenetre est ouverte (Pause.ouvrir -> pause_jeu) : le message affiche reste tel quel et aucune touche n'arrive au jeu.
-Clavier : haut / bas (un element), page precedente / suivante (une page), debut / fin, gauche / droite (onglet), Entree ou Action (etoile de l'element choisi), la touche de l'historique (Dialogues -> Combats -> ferme),
-Echap / Annuler (retour). Souris : molette, barre de defilement, glisser dans la liste, clic sur un onglet, clic sur une etoile."""
+Clavier : haut / bas (un element), page precedente / suivante (une page), debut / fin, gauche / droite (onglet), Entree, Menu ou Action (etoile de l'element choisi), F ou Carte (case « Favoris seulement »), la touche de
+l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette, barre de defilement, glisser dans la liste, clic sur un onglet, sur la case ou sur une etoile."""
 import pyglet
 from pyglet import gl
 import historique as HI
@@ -14,10 +15,12 @@ import reglages as RG
 
 OR = (255, 235, 4); BLANC = (255, 255, 255); GRIS = (150, 150, 150); AIDE = (175, 175, 175); ETOILE = (255, 210, 40); VIDE_ETOILE = (20, 20, 20)
 TOLERANCE_GLISSE = 6.0               # pixels : en dessous, un appui dans la liste n'est pas un glissement
-ONGLETS = (('Dialogues', 'dialogues'), ('Combats', 'combats'), ('Favoris', 'favoris'))
-O_DIALOGUES, O_COMBATS, O_FAVORIS = 0, 1, 2
-VIDES = {'dialogues': 'Aucun dialogue pour l\'instant.', 'combats': 'Aucun combat pour l\'instant.',
-         'favoris': 'Aucun favori : choisis un élément et appuie sur Entrée (ou clique son étoile) pour le garder.'}
+ONGLETS = (('Dialogues', 'dialogues'), ('Combats', 'combats'))
+O_DIALOGUES, O_COMBATS = 0, 1
+LIBELLE_FILTRE = 'Favoris seulement'
+VIDES = {'dialogues': 'Aucun dialogue pour l\'instant.', 'combats': 'Aucun combat pour l\'instant.'}
+VIDES_FAVORIS = {'dialogues': 'Aucun dialogue en favori : décoche « Favoris seulement », choisis un dialogue et appuie sur Entrée (ou clique son étoile) pour le garder.',
+                 'combats': 'Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.'}
 
 
 def heure_jeu(t):
@@ -30,7 +33,7 @@ def onglet_suivant(i, d=1): return (i + d) % len(ONGLETS)
 
 
 def touche_suivante(onglet):
-    """Touche de l'historique dans la fenetre : Dialogues -> Combats ; Combats ou Favoris -> fermer (None)."""
+    """Touche de l'historique dans la fenetre : Dialogues -> Combats ; Combats -> fermer (None)."""
     return O_COMBATS if onglet == O_DIALOGUES else None
 
 
@@ -41,6 +44,7 @@ class VueHistorique:
         self.fin = 0; self.sel = 0; self.vis = 1                      # dernier element visible (en bas), element choisi au clavier, nombre d'elements visibles a la derniere image
         self.zones = []; self.zones_etoile = []; self.zones_onglet = []; self.barre = None; self.glisse_barre = None
         self.zone_ret = None
+        self.favoris_seuls = False; self.zone_filtre = None             # case « Favoris seulement » : cochee ? ; sa zone a l'ecran (clic)
         self.drag = None                                               # glissement dans la liste : [y de depart, fin de depart, deplace ?]
         self._spr = {}; self._lignes = {}
 
@@ -53,7 +57,7 @@ class VueHistorique:
 
     def recharger(self, garder=False):
         h = getattr(self.J, 'historique', None)
-        self.elements = h.liste(ONGLETS[self.onglet][1]) if h is not None else []
+        self.elements = h.liste(ONGLETS[self.onglet][1], self.favoris_seuls) if h is not None else []
         n = len(self.elements)
         if garder: self.fin = max(0, min(n - 1, self.fin)); self.sel = max(0, min(n - 1, self.sel))
         else: self.fin = self.sel = max(0, n - 1)
@@ -63,17 +67,26 @@ class VueHistorique:
         i %= len(ONGLETS)
         if i != self.onglet: self.onglet = i; self.recharger()
 
+    def basculer_filtre(self):
+        """Coche ou decoche « Favoris seulement » (valable pour les deux onglets). L'element choisi, s'il est dans la nouvelle liste, reste choisi ; sinon on se place sur le plus recent."""
+        cur = self.courant(); cle = cur.cle() if cur is not None else None
+        self.favoris_seuls = not self.favoris_seuls; self.recharger()
+        if cle is not None:
+            for i in range(len(self.elements) - 1, -1, -1):
+                if self.elements[i].cle() == cle: self.aller(i); break
+        return self.favoris_seuls
+
     def courant(self):
         return self.elements[self.sel] if 0 <= self.sel < len(self.elements) else None
 
     def etoile(self, i=None):
-        """Met en favori (ou retire des favoris) l'element i (le choisi par defaut) ; -> True si c'est maintenant un favori. Dans l'onglet Favoris, l'element retire disparait de la liste."""
+        """Met en favori (ou retire des favoris) l'element i (le choisi par defaut) ; -> True si c'est maintenant un favori. Avec « Favoris seulement », l'element retire disparait de la liste."""
         h = getattr(self.J, 'historique', None)
         if h is None: return False
         e = self.courant() if i is None else (self.elements[i] if 0 <= i < len(self.elements) else None)
         if e is None: return False
         r = h.basculer_favori(e)
-        if self.onglet == O_FAVORIS: self.recharger(garder=True)
+        if self.favoris_seuls: self.recharger(garder=True)
         return r
 
     # ---- defilement
@@ -117,6 +130,7 @@ class VueHistorique:
         elif symbol == K.END: self.aller(len(self.elements) - 1)
         elif symbol == K.LEFT or act == 'gauche': self.changer_onglet(self.onglet - 1)
         elif symbol == K.RIGHT or act == 'droite': self.changer_onglet(self.onglet + 1)
+        elif symbol == K.F or act == 'carte': self.basculer_filtre()                          # (F, ou la touche Carte : « Favoris seulement »)
         elif symbol in (K.RETURN, K.ENTER) or act in ('menu', 'A'): self.etoile()
         return True
 
@@ -139,6 +153,7 @@ class VueHistorique:
         if self._dans(self.zone_ret, x, y): P.retour(); return
         for z in self.zones_onglet:
             if self._dans(z, x, y): self.changer_onglet(z[4]); return
+        if self._dans(self.zone_filtre, x, y): self.basculer_filtre(); return
         b = self.barre
         if b and b['x0'] <= x <= b['x1'] and b['y0'] <= y <= b['y1']:
             if y > b['ptop']: self.decaler(-1)
@@ -217,6 +232,28 @@ class VueHistorique:
             pyglet.shapes.Star(cx, cy, rayon, rayon * 0.45, 5, rotation=0, color=GRIS + (255,)).draw()
             pyglet.shapes.Star(cx, cy, rayon * 0.6, rayon * 0.27, 5, rotation=0, color=VIDE_ETOILE + (255,)).draw()
 
+    def _filtre(self, bm, sc, taille, asc, k, x_onglets, x_droite, x_gauche, ty, th):
+        """Case a cocher « Favoris seulement » : une plaque a la hauteur des onglets, alignee a droite sur la liste (a gauche de la ligne des onglets si elle n'y tient pas a droite de leur dernier onglet),
+        avec la case, une petite etoile et le libelle ; doree quand elle est cochee. Sa zone (clic) est gardee dans `zone_filtre`."""
+        P = self.P; cb = 18 * k; rs = 8 * k
+        lw = self._larg(bm, LIBELLE_FILTRE, sc, taille); fw = 14 * k + cb + 9 * k + 2 * rs + 7 * k + lw + 14 * k
+        fx = x_droite - fw
+        if fx < x_onglets + 14 * k: fx = max(x_gauche, x_onglets + 14 * k)
+        zone = (fx, ty, fx + fw, ty + th); self.zone_filtre = zone
+        sur = (P._sur(zone) if hasattr(P, '_sur') else False) and P.mode_souris
+        self._plaque(fx, ty, fw, th, k, sur)
+        on = self.favoris_seuls; coul = OR if on else BLANC
+        bx, by = fx + 14 * k, ty + (th - cb) / 2
+        pyglet.shapes.Rectangle(bx, by, cb, cb, color=(0, 0, 0)).draw()
+        for (xa, ya, xb, yb) in ((bx, by, bx + cb, by), (bx, by + cb, bx + cb, by + cb), (bx, by, bx, by + cb), (bx + cb, by, bx + cb, by + cb)):
+            pyglet.shapes.Line(xa, ya, xb, yb, thickness=max(1.5, 1.6 * k), color=coul + (255,)).draw()
+        if on:                                                                      # la coche (deux traits)
+            pyglet.shapes.Line(bx + cb * 0.2, by + cb * 0.5, bx + cb * 0.42, by + cb * 0.22, thickness=max(2.0, 2.6 * k), color=OR + (255,)).draw()
+            pyglet.shapes.Line(bx + cb * 0.42, by + cb * 0.22, bx + cb * 0.84, by + cb * 0.82, thickness=max(2.0, 2.6 * k), color=OR + (255,)).draw()
+        ex = bx + cb + 9 * k + rs; ey = ty + th / 2
+        pyglet.shapes.Star(ex, ey, rs * 1.15, rs * 0.5, 5, rotation=0, color=(ETOILE if on else GRIS) + (255,)).draw()
+        self._ligne(bm, LIBELLE_FILTRE, ex + rs + 7 * k, ty + th / 2 - (asc * 0.37 if bm else 6 * k), sc, coul, taille)
+
     def _plaque(self, x, y, w, h, k, choisi):
         J = self.J; r = getattr(J, 'ui_rendu', None)
         if r is not None and r.plaque(x, y, w, h, (J.width, J.height), choisi, coin=14 * k): return
@@ -244,6 +281,7 @@ class VueHistorique:
             sur = (P._sur(zone) if hasattr(P, '_sur') else False) and P.mode_souris
             self._plaque(zx, ty, tw, th, k, i == self.onglet or sur)
             lf = self._larg(bm, nom, sc, taille); self._ligne(bm, nom, zx + (tw - lf) / 2, ty + th / 2 - (asc * 0.37 if bm else 6 * k), sc, OR if i == self.onglet else BLANC, taille)
+        self._filtre(bm, sc, taille, asc, k, tx + len(ONGLETS) * (tw + gap) - gap, x0 + pw - 34 * k, x0 + 34 * k, ty, th)          # case « Favoris seulement » (a droite des onglets)
         # zone de la liste
         padx, pady, ecart = 16 * k, 10 * k, 12 * k
         lx0, lx1 = x0 + 34 * k, x0 + pw - 30 * k - 12 * k; ly1 = ty - 14 * k; ly0 = y0 + 40 * k
@@ -252,7 +290,7 @@ class VueHistorique:
         self.zones = []; self.zones_etoile = []; self.barre = None
         n = len(self.elements)
         if not n:
-            msg = VIDES[ONGLETS[self.onglet][1]]
+            msg = (VIDES_FAVORIS if self.favoris_seuls else VIDES)[ONGLETS[self.onglet][1]]
             lm = self._larg(bm, msg, sc, taille); self._ligne(bm, msg, x0 + max(20 * k, (pw - lm) / 2), (ly0 + ly1) / 2, sc, GRIS, taille)
         else:
             mouse = P.mode_souris; blocs = []; y = ly0; i = min(self.fin, n - 1)
@@ -295,7 +333,7 @@ class VueHistorique:
         # aide et bouton retour
         ks = (J.reg['touches'].get('historique') or [None])[0] if hasattr(J.reg, '__getitem__') else None
         kn = RG.nom_touche(ks) if ks else None
-        aide = 'Haut / Bas : parcourir     Gauche / Droite : onglet     Entrée : favori ★' + ('     %s : suite' % kn if kn else '') + '     Échap : fermer'
+        aide = 'Haut / Bas : parcourir     Gauche / Droite : onglet     Entrée : favori ★     F : favoris seulement' + ('     %s : suite' % kn if kn else '') + '     Échap : fermer'
         la = self._larg(bm, aide, sc * 0.72, taille * 0.72); self._ligne(bm, aide, x0 + (pw - la) / 2, y0 + 14 * k, sc * 0.72, AIDE, taille * 0.72)
         bx = x0 + pw - bw - 8 * k; by = y0 - 8 * k - bh; self.zone_ret = (bx, by, bx + bw, by + bh)
         P._bouton_retour(bx, by, bw, bh, P._sur(self.zone_ret))

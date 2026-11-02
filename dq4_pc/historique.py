@@ -27,6 +27,7 @@ GENRE_NOM, GENRE_GENERAL = 'n', 'g'                    # message avec un nom que
 CAT_TERRAIN, CAT_COMBAT = 't', 'c'                      # message hors combat / de combat (jamais range dans les dialogues)
 TYPE_DIALOGUE, TYPE_COMBAT = 'd', 'c'
 
+TYPE_DE_LISTE = {'dialogues': TYPE_DIALOGUE, 'combats': TYPE_COMBAT}              # liste de l'historique -> type de ses elements (Historique.liste, filtre « Favoris seulement »)
 ISSUES = ('victoire', 'fuite', 'defaite')
 LIBELLE_ISSUE = {'victoire': 'Victoire', 'fuite': 'Fuite', 'defaite': 'Défaite'}
 
@@ -190,8 +191,10 @@ class Historique:
             return False
 
     # ---- listes
-    def liste(self, onglet):
-        """Elements d'un onglet de l'historique, du plus ancien au plus recent : 'dialogues', 'combats' ou 'favoris'."""
+    def liste(self, onglet, favoris_seuls=False):
+        """Elements d'un onglet de l'historique, du plus ancien au plus recent : 'dialogues' ou 'combats' (et 'favoris' : tous les favoris, voir ci-dessous). `favoris_seuls` : l'option « Favoris seulement » de la fenetre -> seuls les
+        favoris de cette sorte d'element (dialogues ou combats) : ceux du fichier, donc aussi ceux des sessions precedentes, dans l'ordre ou ils ont ete mis en favori (le plus recent en bas)."""
+        if favoris_seuls and onglet in TYPE_DE_LISTE: return [f for f in self.favoris if f.type == TYPE_DE_LISTE[onglet]]
         return list({'dialogues': self.dialogues, 'combats': self.combats, 'favoris': self.favoris}.get(onglet, ()))
 
     # ---- favoris

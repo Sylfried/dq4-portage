@@ -4,10 +4,11 @@
 
 Verifie : nettoyage du texte (le « *: » des paroles sans nom est garde), coupure des lignes, doublons, bornes de taille, mise en forme des combats, favoris (seuls conserves : fichier ecrit tout de suite,
 relu a l'ouverture, retrait par l'etoile, fichier corrompu / entrees invalides / version inconnue), pages d'un message (notees quand le joueur les a lues), messages de combat jamais ranges dans les dialogues,
-combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets, touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
+combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets (Dialogues, Combats : plus d'onglet Favoris), case « Favoris seulement » (clavier, souris, conservee d'un onglet a l'autre,
+favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
 `remplir(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
 """
-import json, os, struct, sys, tempfile, types, unittest
+import json, os, shutil, struct, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
 import pyglet
@@ -122,6 +123,8 @@ class TestFavoris(unittest.TestCase):
         self.assertEqual((h2.favoris[0].nom, h2.favoris[0].texte), ('Alena', 'Voici l\'histoire.'))
         self.assertEqual((h2.favoris[1].ennemis, h2.favoris[1].or_, h2.favoris[1].xp, h2.favoris[1].issue), ([{'nom': 'Gluant', 'total': 3, 'vaincus': 3}], 21, 38, 'victoire'))
         self.assertEqual(h2.liste('favoris'), h2.favoris)
+        self.assertEqual([f.fav for f in h2.liste('dialogues', True)], [f.fav for f in h2.favoris if f.type == 'd'])          # « Favoris seulement » : les favoris du fichier, du type de la liste (aussi ceux d'une session precedente)
+        self.assertEqual([f.type for f in h2.liste('combats', True)], ['c'] * len([f for f in h2.favoris if f.type == 'c'])); self.assertEqual(h2.liste('dialogues'), [])
         self.assertEqual(len({e.n for e in h2.favoris + h2.dialogues}), 2)
 
     def test_copie_independante(self):
@@ -398,17 +401,18 @@ class TestVue(unittest.TestCase):
     def test_onglets(self):
         K = pyglet.window.key; v = vue(n=6, combats=3)
         self.assertEqual((len(v.elements), v.elements[0].type), (6, 'd'))
+        self.assertEqual([n for n, _ in UH.ONGLETS], ['Dialogues', 'Combats'])                                   # plus d'onglet « Favoris » : c'est une case a cocher
         v.touche(K.RIGHT); self.assertEqual((v.onglet, len(v.elements), v.elements[0].type, v.sel), (UH.O_COMBATS, 3, 'c', 2))
-        v.touche(K.RIGHT); self.assertEqual((v.onglet, v.elements), (UH.O_FAVORIS, []))
         v.touche(K.RIGHT); self.assertEqual((v.onglet, len(v.elements)), (UH.O_DIALOGUES, 6))                    # retour au premier
-        v.touche(K.LEFT); self.assertEqual(v.onglet, UH.O_FAVORIS)
+        v.touche(K.LEFT); self.assertEqual(v.onglet, UH.O_COMBATS)
 
     def test_touche_h_en_cycle(self):
         K = pyglet.window.key; v = vue(n=3, combats=2)
         self.assertEqual(v.onglet, UH.O_DIALOGUES)
         self.assertTrue(v.touche(K.H)); self.assertEqual(v.onglet, UH.O_COMBATS); self.assertNotIn('fermer', v.appels)       # 2e appui : les combats
         self.assertTrue(v.touche(K.H)); self.assertEqual(v.appels[-1], 'fermer')                                              # 3e appui : ferme tout
-        v.onglet = UH.O_FAVORIS; v.touche(K.H); self.assertEqual(v.appels.count('fermer'), 2)                                 # depuis les favoris aussi
+        v.basculer_filtre(); self.assertTrue(v.touche(K.H)); self.assertEqual(v.appels.count('fermer'), 2)                      # « Favoris seulement » coche : le cycle de H ne change pas (ici sur les combats : ferme)
+        v.changer_onglet(UH.O_DIALOGUES); v.touche(K.H); self.assertEqual((v.onglet, v.favoris_seuls, v.appels.count('fermer')), (UH.O_COMBATS, True, 2))
 
     def test_fermeture(self):
         K = pyglet.window.key; v = vue()
@@ -439,30 +443,76 @@ class TestVue(unittest.TestCase):
 
     def test_clic_onglet_et_retour(self):
         M = pyglet.window.mouse; v = vue(n=3, combats=2)
-        v.zones_onglet = [(0, 0, 10, 10, 0), (20, 0, 30, 10, 1), (40, 0, 50, 10, 2)]
+        v.zones_onglet = [(0, 0, 10, 10, 0), (20, 0, 30, 10, 1)]
         v.clic(25, 5, M.LEFT); self.assertEqual((v.onglet, len(v.elements)), (UH.O_COMBATS, 2))
-        v.clic(45, 5, M.LEFT); self.assertEqual(v.onglet, UH.O_FAVORIS)
+        v.clic(5, 5, M.LEFT); self.assertEqual(v.onglet, UH.O_DIALOGUES)
         v.clic(500, 500, M.RIGHT); self.assertEqual(v.appels[-1], 'retour')                                      # clic droit : retour
         v.zone_ret = (60, 0, 70, 10); v.clic(65, 5, M.LEFT); self.assertEqual(v.appels.count('retour'), 2)
 
-    def test_onglet_favoris(self):
-        K = pyglet.window.key; v = vue(n=3, combats=1); h = v.J.historique
-        v.etoile(0); v.etoile(2); v.changer_onglet(UH.O_COMBATS); v.etoile(0)                                       # deux dialogues et un combat en favori
-        v.changer_onglet(UH.O_FAVORIS)
-        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2), ('c', 3)]); self.assertEqual(v.sel, 2)
-        v.touche(K.RETURN)                                                                                        # etoile retiree depuis la liste des favoris : l'element disparait
-        self.assertEqual([e.fav for e in v.elements], [1, 2]); self.assertEqual(v.sel, 1); self.assertEqual(len(h.favoris), 2)
-        self.assertIsNone(h.combats[0].fav)                                                                        # et l'element de la session perd son etoile
-        v.touche(K.RETURN); v.touche(K.RETURN); self.assertEqual((v.elements, v.sel), ([], 0)); self.assertEqual(h.favoris, [])
+    def test_filtre_favoris_seulement(self):
+        """Case « Favoris seulement » : ne garde, dans l'onglet ouvert, que ses favoris ; l'etoile retire l'element de la liste filtree ; la case reste cochee quand on change d'onglet."""
+        K = pyglet.window.key; v = vue(n=3, combats=2); h = v.J.historique
+        self.assertFalse(v.favoris_seuls)
+        v.etoile(0); v.etoile(2); v.changer_onglet(UH.O_COMBATS); v.etoile(1); v.changer_onglet(UH.O_DIALOGUES)       # deux dialogues et un combat en favori
+        self.assertEqual(len(v.elements), 3)                                                                      # (case decochee : toute la session)
+        self.assertTrue(v.basculer_filtre())
+        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2)]); self.assertEqual((v.sel, v.fin), (1, 1))      # les favoris de l'onglet, dans l'ordre ou ils ont ete mis
+        v.changer_onglet(UH.O_COMBATS)                                                                            # le filtre est conserve d'un onglet a l'autre
+        self.assertTrue(v.favoris_seuls); self.assertEqual([(e.type, e.fav) for e in v.elements], [('c', 3)])
+        v.changer_onglet(UH.O_DIALOGUES); v.touche(K.RETURN)                                                       # etoile retiree : l'element disparait de la liste filtree
+        self.assertEqual([e.fav for e in v.elements], [1]); self.assertEqual(v.sel, 0); self.assertEqual(len(h.favoris), 2)
+        self.assertIsNone(h.dialogues[2].fav); self.assertEqual(len(v.elements), 1)                                # (et l'element de la session perd son etoile)
+        v.touche(K.RETURN); self.assertEqual((v.elements, v.sel), ([], 0)); self.assertEqual([f.type for f in h.favoris], ['c'])
+        v.touche(K.RETURN); self.assertFalse(v.etoile())                                                           # liste vide : rien a basculer
+        self.assertFalse(v.basculer_filtre()); self.assertEqual(len(v.elements), 3)                                # case decochee : toute la session de nouveau
+
+    def test_filtre_au_clavier_a_la_souris_et_par_la_touche_carte(self):
+        K = pyglet.window.key; M = pyglet.window.mouse; v = vue(n=4)
+        v.etoile(1); v.touche(K.F); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)       # F : coche
+        v.touche(K.F); self.assertFalse(v.favoris_seuls); self.assertEqual(len(v.elements), 4)                   # F : decoche
+        v.touche(K.M); self.assertTrue(v.favoris_seuls)                                                           # la touche Carte (M) fait de meme
+        v.zone_filtre = (100, 100, 200, 130); v.clic(150, 115, M.LEFT); self.assertFalse(v.favoris_seuls)         # clic sur la case : decoche
+        v.clic(150, 115, M.LEFT); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1); self.assertTrue(v.P.mode_souris)
+        v.clic(300, 115, M.LEFT); self.assertTrue(v.favoris_seuls)                                                # (a cote de la case : rien)
+        self.assertTrue(v.touche(K.F))                                                                             # (la touche est consommee : rien n'arrive au jeu)
+
+    def test_filtre_garde_l_element_choisi_et_defile(self):
+        K = pyglet.window.key; v = vue(n=30, vis=5)
+        for i in (3, 10, 11, 12, 20, 25, 26): v.etoile(i)
+        v.aller(11); v.touche(K.F)
+        self.assertEqual(len(v.elements), 7); self.assertEqual(v.courant().texte, 'm11')                         # l'element choisi, s'il est un favori, reste choisi
+        v.touche(K.HOME); self.assertEqual((v.sel, v.fin), (0, 4)); v.touche(K.END); self.assertEqual((v.sel, v.fin), (6, 6))
+        v.molette(1); self.assertEqual(v.fin, 4); v.decaler(100); self.assertEqual(v.fin, 6)                       # molette et glissement bornes a la liste filtree
+        v.touche(K.PAGEUP); self.assertEqual(v.sel, 0)
+        v.touche(K.F); self.assertEqual(len(v.elements), 30)                                                       # decoche : la liste complete
+        v.aller(7); v.touche(K.F); self.assertEqual((v.sel, v.courant().texte), (6, 'm26'))                         # l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree
+
+    def test_favoris_des_sessions_precedentes(self):
+        """Les favoris du fichier (sessions precedentes) ne sont pas dans la session : seule la case « Favoris seulement » les montre, avec leur etoile."""
+        d = tempfile.mkdtemp(prefix='fav_'); self.addCleanup(shutil.rmtree, d, True); f = os.path.join(d, 'fav.json'); h = nouveau(f)
+        h.ajouter('Hier.', 'Alena', 100); h.ajouter_combat(combat(t=50)); h.basculer_favori(h.dialogues[0]); h.basculer_favori(h.combats[0])
+        P = types.SimpleNamespace(mode_souris=False, pos_souris=None, retour=lambda: None, fermer=lambda: None, _repeter=lambda *a: None)
+        P.J = types.SimpleNamespace(historique=nouveau(f), reg=RG.Reglages(None), height=720)                    # nouvelle session : lit le fichier
+        v = UH.VueHistorique(P); v.entrer()
+        self.assertEqual((v.elements, v.sel), ([], 0))
+        v.touche(pyglet.window.key.F); self.assertEqual([(e.nom, e.texte, e.fav) for e in v.elements], [('Alena', 'Hier.', 1)])
+        v.changer_onglet(UH.O_COMBATS); self.assertEqual([(e.type, e.fav) for e in v.elements], [('c', 2)])
+        v.touche(pyglet.window.key.RETURN); self.assertEqual(v.elements, []); self.assertEqual([e.type for e in P.J.historique.favoris], ['d'])      # etoile retiree : le fichier suit
+
+    def test_vide_avec_le_filtre(self):
+        v = vue(n=2); self.assertIn('Aucun dialogue', UH.VIDES['dialogues']); v.basculer_filtre()
+        self.assertEqual(v.elements, []); self.assertIn('Favoris seulement', UH.VIDES_FAVORIS['dialogues']); self.assertIn('Favoris seulement', UH.VIDES_FAVORIS['combats'])
+        self.assertEqual(set(UH.VIDES_FAVORIS), {c for _, c in UH.ONGLETS}); self.assertEqual(set(UH.VIDES), {c for _, c in UH.ONGLETS})
 
     def test_rechargement_a_chaque_ouverture(self):
         v = vue(n=2); v.J.historique.ajouter('Nouveau.', None, 10 ** 6); v.entrer()
         self.assertEqual((len(v.elements), v.sel, v.fin), (3, 2, 2)); v.entrer(UH.O_COMBATS); self.assertEqual(v.onglet, UH.O_COMBATS); v.entrer(99); self.assertEqual(v.onglet, UH.O_DIALOGUES)
+        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre (pas enregistre sur disque)
 
     def test_heure_et_onglets_suivants(self):
         self.assertEqual(UH.heure_jeu(60 * (3600 + 5 * 60 + 12)), '1:05:12'); self.assertEqual(UH.heure_jeu(-5), '0:00:00')
-        self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS), UH.touche_suivante(UH.O_FAVORIS)), (UH.O_COMBATS, None, None))
-        self.assertEqual((UH.onglet_suivant(2), UH.onglet_suivant(0, -1)), (0, 2))
+        self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS)), (UH.O_COMBATS, None))
+        self.assertEqual((UH.onglet_suivant(1), UH.onglet_suivant(0, -1)), (0, 1))
 
 
 class TestPause(unittest.TestCase):
