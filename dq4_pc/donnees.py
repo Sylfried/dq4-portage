@@ -14,13 +14,16 @@ def _quat_mat(x, y, z, w):
 
 
 def euler_mat(rx, ry, rz):
-    """Rotation d'un objet de carte (degres) comme FldObject.rotateXZY (0xCD47F0) : q = AngleAxis(-rx, droite) * AngleAxis(ry, haut) * AngleAxis(-rz, avant) -- angles X et Z inverses, Z appliquee d'abord, puis Y, puis X
-    (et non Quaternion.Euler d'Unity : Z, X, Y). Utilisee par init_fld (rotation de depart), SetCommonAnimation, pmv_func et c_pmv_func (mouvements) : le couvercle d'un coffre, cle X = -60, se releve."""
+    """Rotation d'un objet de carte (degres) comme FldObject.rotateXZY (0xCD47F0, lue au desassemblage) : q = (AngleAxis(ry, haut) * AngleAxis(-rz, avant)) * AngleAxis(-rx, droite) -- les axes sont les
+    Vector3.up / forward / right statiques (decalages 0x18 / 0x48 / 0x3C), les angles X et Z sont inverses, et le produit de quaternions applique X en premier (dans le repere de l'objet), puis Z, puis le cap Y en
+    dernier (dans le repere du monde) : matrice Ry . Rz . Rx. (Ce n'est pas Quaternion.Euler d'Unity, Z-X-Y, et ce n'est pas non plus l'ordre X, Y, Z note par erreur en #21.) Utilisee par init_fld (rotation de depart),
+    SetCommonAnimation, pmv_func et c_pmv_func (mouvements) : le couvercle d'un coffre, cle X = -60, se releve autour de SA charniere quel que soit le cap du coffre (un coffre de cap 90, -90 ou 180 s'ouvrait de cote
+    ou vers l'avant quand le cap etait applique avant la bascule)."""
     a, b, c = math.radians(-rx), math.radians(ry), math.radians(-rz)
     Rx = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
     Ry = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
     Rz = np.array([[math.cos(c), -math.sin(c), 0], [math.sin(c), math.cos(c), 0], [0, 0, 1]])
-    return Rx @ Ry @ Rz
+    return Ry @ Rz @ Rx
 
 
 class Donnees:
@@ -130,7 +133,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte8_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte9_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -387,7 +390,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte8_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte9_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
@@ -395,10 +398,10 @@ class Donnees:
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte6_ : sans les animations de palette et de sequence, coffres enfonces ou au couvercle a l'envers), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte8_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-6]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte[0-8]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 

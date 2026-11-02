@@ -2,7 +2,9 @@
 import os, re, struct, zipfile, unicorn
 import numpy as np
 import emu_core as T
+import priorite_jeu as PJ
 from pktlog import PacketLog
+from historique import Capteur
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
 PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
@@ -10,6 +12,7 @@ PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
 PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 MSGDBG = bool(os.environ.get('DQ_MSGDBG'))     # (test) journal des etats du message du moteur
+FBXLOG = bool(os.environ.get('DQ_FBXLOG'))     # (test) journal des paquets 32 (dragon du titre : position, rotation, couleur, sequence)
 GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
@@ -28,6 +31,7 @@ MSG_ACTIF, MSG_ETAT, MSG_COURANT, MSG_FIN, MSG_VITESSE = 0x25238e, 0x25238c, 0x2
 UI_MSGLOOP_ECRITURE = 0x128                # ui_MsgLoop + 0x128 : `sxth w20, w8` apres `lsl w8, w8, #2` (etat 2 : nombre de lettres ecrites a cette image)
 SXTH_W20_W8 = 0x13003d14
 COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
+DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 
 
@@ -151,11 +155,12 @@ class Etat:
                     self.modeles[a[0]] = a[1]
                     self.mesh_etat[a[0]] = {'shader': 3 if a[1] > 999 else 1, 'vis': True, 'col': (1.0, 1.0, 1.0), 'off': (0.0, 0.0)}      # MeshChara..ctor : shader 1 (DssaMonster0) sauf id > 999 (DssaCharaTransparent) ; couleur blanche
                 else: self.modeles.pop(a[0], None); self.maillages.pop(a[0], None); self.mesh_etat.pop(a[0], None)
-            elif t == 31 and len(a) >= 2:           # cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, tourne de (0, 180, 0), echelle 1
-                if a[1] >= 0: self.fbx[a[0]] = {'id': a[1], 'vis': False, 'pos': (0.0, 0.0, 0.0), 'rot': (0.0, 180.0, 0.0), 'scl': (1.0, 1.0, 1.0), 'col': (1.0, 1.0, 1.0, 1.0), 'anim': []}
+            elif t == 31 and len(a) >= 2:           # cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, sans rotation (le constructeur de FbxObject n'en pose pas ; le moteur envoie la rotation absolue au 1er paquet 32 : FbxObject.SetRotation = Quaternion.Euler puis Transform.set_rotation, 0xCD1748), echelle 1
+                if a[1] >= 0: self.fbx[a[0]] = {'id': a[1], 'vis': False, 'pos': (0.0, 0.0, 0.0), 'rot': (0.0, 0.0, 0.0), 'scl': (1.0, 1.0, 1.0), 'col': (1.0, 1.0, 1.0, 1.0), 'anim': []}
                 else: self.fbx.pop(a[0], None)
             elif t == 32 and a:                     # cmd_fbx : emplacement = v & 0xff ; bits 8-9 : visibilite (bit 8 = visible) ; 10 : forcer l'animation ; 11 : echelle (3 flottants) ; 12 : couleur (4) ; 13 : position (3) ; 14 : rotation, degres (3) ; 15 : animation (un entier : sequence)
                 v = a[0]; m = self.fbx.get(v & 0xff); fl = list(f)
+                if FBXLOG: print('FBX image %d paquet 32 : v=%#x ints=%s flottants=%s' % (self.image, v & 0xffff, list(a[1:]), [round(x, 4) for x in fl]), flush=True)         # (test) DQ_FBXLOG=1 : tous les paquets 32 (position, rotation, echelle, couleur, sequence)
                 if m is not None:
                     if v & 0x300: m['vis'] = bool(v & 0x100)
                     if v & 0x800 and len(fl) >= 3: m['scl'] = tuple(fl[:3]); fl = fl[3:]
@@ -198,8 +203,9 @@ class Etat:
     def _fondu(self, v, f):
         """Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
         entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
+        script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
-        if d > 1 and not v & (0x800 | 0x2000) and Etat.vitesse_fondu > 1.0: d = max(1, int(round(d / Etat.vitesse_fondu)))       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions »
+        if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -375,6 +381,8 @@ class Moteur:
         uc_hook = c.export('_ZN9FLDObject18SetCommonAnimationEii')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sca, None, uc_hook, uc_hook)
         self._crochets_texte()
+        self._crochets_fondu()
+        self.capteur = Capteur(self)             # historique des messages : crochets sur TextBuffer::cat et sur l'objet fouille (installes avant la premiere image : Unicorn garde les blocs deja traduits)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
 
@@ -392,8 +400,9 @@ class Moteur:
             a = c.export('_Z10ui_MsgLoopv')
             if a and struct.unpack('<I', c.mem(a + UI_MSGLOOP_ECRITURE, 4))[0] == SXTH_W20_W8:        # autre version du moteur : on ne touche a rien
                 def _vt(uc, ad, sz, u):
-                    v = self.vitesse_texte
-                    if v == 4.0 or uc.reg_read(c.XREG[8]) & 0xffff != 4: return           # 4 : comme le jeu ; autre que 4 (vitesse 100 des fenetres de combat) : inchange
+                    jeu = uc.reg_read(c.XREG[8]) & 0xffff                                  # lettres que le moteur s'apprete a ecrire (mot de vitesse de la fenetre x 4)
+                    v = PJ.lettres_par_image(self.vitesse_texte, jeu)                      # reglage du joueur seulement tant que le jeu est a sa vitesse standard (4) ; une autre valeur (100 des fenetres de combat, vitesse fixee par le jeu) est la sienne
+                    if v == jeu: return                                                    # vitesse du jeu : inchange (aussi quand le reglage est « comme le jeu », 4)
                     self._acc_texte += v; n = int(self._acc_texte); self._acc_texte -= n
                     uc.reg_write(c.XREG[8], min(n, 4000))
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _vt, None, a + UI_MSGLOOP_ECRITURE, a + UI_MSGLOOP_ECRITURE)
@@ -406,6 +415,34 @@ class Moteur:
                     if self.defilement is not None and self.rappel_defilement is not None and mu <= uc.reg_read(c.XREG[30]) < mu + 0x400: self.rappel_defilement(uc.reg_read(c.XREG[1]) & 0xff)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _sb, None, sb, sb)
         except Exception as ex: print('defilement des combats : crochet non installe :', ex, flush=True)
+
+    def _crochets_fondu(self):
+        """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
+        du script, et attendent eux-memes ce nombre d'images : `isEnd` compte les images) : le paquet 9 recoit la marque PJ.MARQUE_FONDU_SCRIPT, et Etat._fondu ne raccourcit pas ce fondu (reglage « vitesse des
+        transitions » : il vaut pour les fondus du moteur, changements de carte..., pas pour ceux qu'un script a fixes). Sans la marque, le fondu raccourci laisserait l'ecran noir jusqu'a la fin de l'attente du script."""
+        c = self.core; self._fondu_script = False
+        try:
+            ini = [c.export('_ZN13__cmd_fade_in10initializeEPc'), c.export('_ZN14__cmd_fade_out10initializeEPc')]; usf = c.export('_Z12UnitySetFadei')
+            if not all(ini) or not usf: print('fondus de script : fonctions du moteur introuvables, reglage applique a tous les fondus', flush=True); return
+            def fin_de(a):                                                       # adresse apres le `ret` de la fonction
+                for k in range(80):
+                    if struct.unpack('<I', c.mem(a + 4 * k, 4))[0] == 0xd65f03c0: return a + 4 * (k + 1)
+                return None
+            fins = [fin_de(a) for a in ini]
+            if None in fins or struct.unpack('<I', c.mem(usf + 8, 4))[0] != 0x5280012a:        # UnitySetFade : `mov w10, #9` (type du paquet) a +8 ; autre version du moteur : on ne touche a rien
+                print('fondus de script : UnitySetFade inattendu, reglage applique a tous les fondus', flush=True); return
+            def _entree(uc, ad, sz, u): self._fondu_script = True
+            def _sortie(uc, ad, sz, u): self._fondu_script = False
+            def _paquet(uc, ad, sz, u):
+                if self._fondu_script:
+                    self._fondu_script = False
+                    uc.reg_write(c.XREG[0], (uc.reg_read(c.XREG[0]) & 0xffffffff) | PJ.MARQUE_FONDU_SCRIPT)
+            for a, f in zip(ini, fins):
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _entree, None, a, a); c.uc.hook_add(unicorn.UC_HOOK_CODE, _sortie, None, f - 4, f - 4)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _paquet, None, usf, usf)
+            try: c.uc.ctl_flush_tb()                                             # (blocs deja traduits avant les crochets)
+            except Exception: pass
+        except Exception as ex: print('fondus de script : crochet non installe :', ex, flush=True)
 
     def _option(self, decalage):
         """Adresse d'un octet de status::g_Option (OptionStatus : +1 volume de la musique, +2 volume des bruitages (0 a 4), +5 vitesse des messages de combat)."""
