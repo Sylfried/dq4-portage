@@ -30,7 +30,7 @@ CP_L, CP_H, CP_HAUT = 450.0, 40.0005, 25.0003                      # c_copyright
 # Le logo est un maillage du moteur (paquets 21 / 22, carte `ev01`) : modele 8901 = « DRAGON QUEST » + « IV » + « TM » + sous-titre (« L'epopee des Elus »), modele 8900 = l'eclat anime sur le logo ;
 # tous deux a la meme position (0, 1, 0), sommets en coordonnees locales du panneau (x vers la droite de la camera, mirroir d'Unity, y vers le haut), x de -4,549 a 4,549 pour « DRAGON QUEST ».
 LOGO_MODELES = (8900, 8901)
-LOGO_ECHELLE = 2.0                     # facteur d'agrandissement voulu (1 = l'APK)
+LOGO_ECHELLE = 1.5                     # facteur d'agrandissement voulu (1 = l'APK) : 2 d'abord (#108, 19 h 38), ramene a 1,5 sur demande de Sylfried (21 h 05)
 LOGO_DEMI_LARGEUR = 4.549              # demi-largeur locale de « DRAGON QUEST » (lue sur les sommets du paquet 22)
 LOGO_Y_FIXE = 0.70                     # ordonnee locale du point qui ne bouge pas : le logo grandit autour de ce point (ce qui le laisse au-dessus de « Touchez l'ecran » et sous le haut de l'ecran ; voir notes)
 LOGO_MARGE_LARGEUR = 0.96              # le logo agrandi ne depasse jamais 96 % de la largeur de la fenetre (fenetre tres etroite) ; il ne devient jamais plus petit que celui de l'APK
