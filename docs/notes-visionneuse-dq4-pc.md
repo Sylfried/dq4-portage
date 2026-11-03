@@ -937,3 +937,24 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 
 ### Non vérifié
 - Le ressenti sous Windows (butte du prologue, un escalier de ville, une tour). **À confirmer par Sylfried.**
+
+## Avance #118 : fond des villes en dégradé (#111, 03/11/2026)
+
+### Demande (D-212, 19 h 38)
+« La couleur du fond de la map dans le prologue n'est également pas la bonne, il doit y avoir un dégradé comme sur le mobile, là c'est juste une couleur unie. »
+
+### Cause (établi)
+- Côté jeu, `NativeManager.cmd_back_color` (RVA 0xD14F44) lit **six** flottants (haut r, g, b ; bas r, g, b) et appelle `BackColor.SetColor(haut, bas, 0)` (0xCC43F8). `BackColor` est un quadrilatère plein écran (shader « BackColor » : `gl_Position = in_POSITION0`, couleur de sommet, file Background, ZTest Always, ZWrite Off) dont les deux sommets du haut portent la couleur du haut et ceux du bas la couleur du bas : un **dégradé vertical linéaire** sur toute l'image. La visionneuse n'en gardait que la **moyenne** (`Etat.fond`) : fond uni.
+- Les deux couleurs viennent de `param_map_backcolor` (`TownDataManager::setBackcolor`) et **dépendent de l'heure du monde** : village du prologue (`mlout1`) = **aplat le jour et à l'aube**, dégradé rose-gris vers orange **le soir**, bleu nuit vers bleu plus sombre **la nuit**.
+
+### Fait
+- `moteur.py` : `Etat.fond_haut` / `fond_bas` (remis à None à chaque chargement de carte) ; `fond` (la moyenne) reste la couleur d'effacement. `fenetre.py` : `Jeu._tracer_degrade_fond` dessine le quadrilatère après l'effacement et avant la scène, **seulement pour une ville dont les deux couleurs diffèrent**. Aplat (jour, intérieurs noirs, combats, carte du monde) : inchangé au pixel près (`mlout1` de jour : 0 pixel différent). Teinte jour / nuit (`teinte_carte.py`, paquet 33) non touchée.
+- Test : `outils/test_fond_degrade.py` (10 tests : décodage du paquet 8, `degrade_fond`, rendu GL d'un vrai dégradé linéaire, moteur réel `mlout1` à l'heure du soir et du jour).
+- Vu sur capture (Mesa, heure du monde 1984, `mlout1`) : avant, bande unie brun-rose à droite de la carte ; après, dégradé rose-gris en haut vers orange en bas.
+
+### À savoir (décision / confirmation par Sylfried)
+- **De jour, le village du prologue a bien un fond uni dans les données du jeu** (les deux couleurs sont égales) : le dégradé n'apparaît que le **soir et la nuit**. Si le dégradé vu sur mobile était de jour, ce n'est pas cette source.
+- Le changement touche **toutes les villes extérieures** le soir et la nuit (environ 98 cartes) et 7 cartes même de jour : à regarder sur Windows. La carte du monde et les cartes `ev*` n'ont pas été vérifiées.
+
+### Non vérifié
+- Le rendu sous Windows (le tampon d'image de la capture est en 5-6-5 bits : les anneaux concentriques vus sur la capture viennent de là, supposé).

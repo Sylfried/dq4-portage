@@ -19,7 +19,7 @@ Le projet a démarré le 29/10/2026 (avant la création de ce dépôt). Jusqu'au
 | 30/10 | Dépôt GitHub, règles de travail, issues de départ | #37 |
 | 30/10 nuit | Séparation du dépôt d'origine `dq4-pc` : portage natif (ici), essai Unity (`dq4-portage-unity`), patch français (inchangé) | — |
 
-## Les pull requests de `dq4-portage` (#1 à #117)
+## Les pull requests de `dq4-portage` (#1 à #118)
 Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'ils figurent sur GitHub, sans leur préfixe « Avance #N : ». Les « retours de HH h MM » sont les retours de test de Sylfried traités par la pull request. La PR #1 démarre la numérotation de ce dépôt : ses numéros ne sont pas ceux des issues de `dq4-pc`.
 
 | Fusion | PR | Titre |
@@ -85,6 +85,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 | #115 | écran titre : logo et sous-titre deux fois plus grands (#108, D-209) |
 | 03/11 | #116 | « Revenir à l'écran titre » : la boîte d'origine du jeu (Oui / Non) puis son fondu, comme le bouton des Paramètres de l'APK (#109, D-210) |
 | 03/11 | #117 | caméra des villes : les petits reliefs (butte du village du prologue) sont suivis exactement (#110, D-211) |
+| 03/11 | #118 | fond des villes : dégradé vertical du moteur au lieu d'une couleur unie (#111, D-212) |
 
 ## Et maintenant
 Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105 et #107 à #112, jalons 1 à 5 ; 48 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.
