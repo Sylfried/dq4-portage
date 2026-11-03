@@ -3,19 +3,31 @@
     capteur = CapteurCombat(moteur)         # une fois, apres la creation du Moteur (installe des crochets en LECTURE SEULE dans l'emulateur ; n'ecrit rien dans la memoire du moteur)
     for combat in capteur.maj(moteur): ...  # UNE fois par image du moteur, apres moteur.step ; renvoie les combats TERMINES a cette image (le plus souvent une liste vide)
 
-Chaque combat : {'t': temps de jeu a la fin (1/60 s, status::g_Game + 4), 'ennemis': [{'nom': 'Gluant', 'total': 3, 'vaincus': 2}, ...] (un element par espece, dans l'ordre d'apparition),
-'or': int, 'xp': int, 'issue': 'victoire' | 'fuite' | 'defaite'}. Or et experience : ceux du message de victoire du jeu, 0 pour une fuite ou une defaite (le moteur ne les verse pas).
+Chaque combat : {'t': temps de jeu a la fin (1/60 s, status::g_Game + 4), 'ennemis': [{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 0}, ...] (un element par espece, dans l'ordre
+d'apparition ; ce qui reste, total - vaincus - fuis - disparus, est encore la quand le combat se termine : fuite ou defaite du groupe), 'or': int, 'xp': int, 'issue': 'victoire' | 'fuite' | 'defaite',
+'objets': [{'nom': 'Herbe médicinale'}, ...] (les objets que le jeu donne au groupe a la fin du combat : « Le gluant laisse tomber un coffre au trésor ! »)}. Or et experience : ceux du message de victoire
+du jeu, 0 pour une fuite ou une defaite (le moteur ne les verse pas).
 
 Methode (ETABLI par lecture du moteur desassemble puis par mesure : voir outils/test_historique_combat.py) :
 - Les MORTS sont notees par un crochet sur BattleActorManager2::execMonsterDeath(this, i), la fonction que le jeu appelle une fois par monstre vaincu (pas pour un monstre qui s'enfuit ou disparait) et qui ajoute
   l'experience du monstre a g_Party + 0x2f8 et son or a g_Party + 0x2fc. Ce sont ces deux compteurs que BattleExecVictory01 / BattleExecVictory20 lisent pour fabriquer les messages « N points d'experience » et « N pieces d'or »
   (getBattleExp / getBattleGold, apres le doublement eventuel de reflectBattleExp / reflectBattleGold) : on prend donc le plus grand de leurs relevés d'une image a l'autre, jusqu'a leur remise a zero.
+- Les monstres qui S'ENFUIENT et ceux qui DISPARAISSENT sont notes par deux crochets au milieu de BattleActorManager2::checkDeathMonster (la routine qui, a chaque image, passe en revue les monstres morts,
+  enfuis ou disparus ; elle les compte inline dans +0x7d24 / +0x7d28, les lit BattleEndTask::initialize, et n'appelle execMonsterDeath que pour un mort) : juste avant l'incrementation du compteur de fuites
+  (+0x98, `ldr w8, [x23, #0xd24]`) et de disparitions (+0xc0, `ldr w8, [x23, #0xd28]`), w20 est l'indice du monstre (meme indice que pour execMonsterDeath). Chaque monstre n'y passe qu'une fois
+  (un masque des monstres deja traites, +0xd30, l'en protege).
+- Les OBJETS gagnes sont donnes par BattleExecVictory32::setup (la tache qui suit la victoire : « laisse tomber un coffre au trésor ! », « Ragnar l'ouvre. », « Il contient un arc de chasseur ! ») : elle appelle
+  PartyStatus::giveItem(objet = tache + 0xc), qui renvoie l'indice du membre qui le prend, ou -1 quand il va dans le sac (mesure : « Ragnar met l'arc de chasseur dans le sac. » avec -1) ; dans les deux cas l'objet est
+  obtenu. Crochet juste apres l'appel (+0x28, `cmn w0, #1`) : x20 = la tache. NON VERIFIE : ce que fait le jeu quand le sac lui-meme est plein. Le nom de l'objet est demande au
+  moteur lui-meme (TextAPI::extractText(tampon, 0x4000000 | numero), ce que le jeu fait pour la macro « nom d'objet »), entre deux images, jamais dans un crochet ; le « ; » (marque de coupure des noms du patch) est retire.
 - Le DEBUT est PartyStatus::startBattle, la FIN est Global::endBattle(bool) (argument vrai = groupe anéanti), la VICTOIRE BattleExecDefeatMonster::initialize (la routine « tous les ennemis sont vaincus »,
   qui verse l'experience), la FUITE BattleExecEscape::setup (appelee a chaque TENTATIVE de fuite, reussie ou non : la fuite reussie est donc « tentative faite, pas de victoire, combat termine »).
 - Les ENNEMIS sont relevés a chaque image dans g_Monster (12 emplacements de 0x538 octets a partir de +8 ; +0x4f8 = numero du monstre, -1 si vide ; +0x4fc = numero du groupe) : un monstre = un emplacement occupe ;
   l'espece est le numero du monstre. Les renforts appeles en cours de combat s'ajoutent au total.
 - Les NOMS sont ceux des plaques de monstres que le moteur envoie a Unity (Moteur.ui, fenetre de type 31 : « Rat volant », « Gluant\\n\\n\\t×3 » -> « Gluant »), associes aux groupes dans l'ordre (la plaque j porte le
-  j-ieme groupe), seulement quand il y a autant de plaques que de groupes et avant la premiere mort. Sans plaque : « Monstre ».
+  j-ieme groupe), seulement quand il y a autant de plaques que de groupes et avant la premiere mort. Sans plaque (attaque surprise : le jeu n'en affiche pas ; plaques d'un autre nombre de groupes), le nom
+  est demande au moteur lui-meme a la fin du combat, par le numero du monstre (TextAPI::extractText(tampon, 0x6000000 | numero) : « londuleux », « armure ;errante », « scara$somniaque » -> « Londuleux »,
+  « Armure errante », « Scara-somniaque ») ; « Monstre » si le moteur ne repond pas.
 Tout est protege : une erreur ne renvoie rien et ne s'ecrit qu'une fois dans la console. Un combat dont on n'a pas vu le debut (etat instantane charge en plein combat, capteur cree pendant un combat) n'est jamais
 rapporte : mieux vaut ne rien dire que de dire faux."""
 import re, struct
@@ -35,6 +47,18 @@ MAX_SAUT_IMAGES = 8                    # ecart maximal de Moteur.images entre de
 # crochets (symboles du moteur) : evenement -> nom
 CROCHETS = (('debut', '_ZN6status11PartyStatus11startBattleEv'), ('mort', '_ZN19BattleActorManager216execMonsterDeathEi'), ('victoire', '_ZN23BattleExecDefeatMonster10initializeEv'),
             ('fuite', '_ZN16BattleExecEscape5setupEv'), ('fin', '_ZN6Global9endBattleEb'))
+# crochets au MILIEU d'une fonction : (evenement, symbole, decalage, instruction attendue a cet endroit). L'instruction est verifiee avant d'installer le crochet : un moteur different ne recoit pas de crochet
+# au hasard (seul l'evenement correspondant est alors perdu, la capture continue).
+SYM_CONTROLE_MORTS = '_ZN19BattleActorManager217checkDeathMonsterEv'
+SYM_OBJET_GAGNE = '_ZN19BattleExecVictory325setupEv'
+CROCHETS_INTERNES = (('monstre_enfui', SYM_CONTROLE_MORTS, 0x98, 0xb94d26e8),         # ldr w8, [x23, #0xd24] : compteur de fuites de monstres
+                     ('monstre_disparu', SYM_CONTROLE_MORTS, 0xc0, 0xb94d2ae8),       # ldr w8, [x23, #0xd28] : compteur de disparitions
+                     ('objet', SYM_OBJET_GAGNE, 0x28, 0x3100041f))                    # cmn w0, #1 : juste apres PartyStatus::giveItem
+SYM_NOM_OBJET = '_ZN7TextAPI11extractTextEPci'
+GENRE_OBJET = 0x4000000                                                              # « nom d'objet » dans les macros de texte du jeu (setMACRO0(0xa, 0x4000000, numero))
+GENRE_MONSTRE = 0x6000000                                                            # « nom de monstre » (BattleActorMacro::setMacroActor : setMACRO0(1, 0x6000000, numero de monstre))
+OFF_OBJET_TACHE = 0xc                                                                # BattleExecVictory32 : numero de l'objet a donner
+NOM_OBJET_INCONNU = 'Objet n°%d'
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- partie pure (sans emulateur)
@@ -64,11 +88,18 @@ def noms_des_groupes(groupes, plaques):
     return {par_groupe[g]: n for g, n in zip(ordre, noms)}
 
 
+def _monstre(num): return {'num': num, 'vaincu': False, 'fui': False, 'disparu': False}
+
+
+def _sort_de(m): return m['vaincu'] or m['fui'] or m['disparu']
+
+
 class Suivi:
     """Ce que l'on sait d'un combat en cours (donnees pures : aucune dependance au moteur ; voir CapteurCombat pour la lecture de la memoire)."""
 
     def __init__(self):
-        self.monstres = []             # un par monstre vu, dans l'ordre d'apparition : {'num': numero du monstre, 'vaincu': bool}
+        self.monstres = []             # un par monstre vu, dans l'ordre d'apparition : {'num': numero du monstre, 'vaincu': bool, 'fui': bool, 'disparu': bool} (au plus un des trois)
+        self.objets = []               # objets gagnes : {'id': numero, 'nom': nom}, dans l'ordre
         self.places = {}               # emplacement -> indice dans monstres (occupant actuel)
         self.noms = {}                 # numero de monstre -> nom
         self.morts = 0                 # monstres vaincus (crochet execMonsterDeath)
@@ -83,16 +114,32 @@ class Suivi:
         for e, num in occupants:
             vus.add(e); i = self.places.get(e)
             if i is None or self.monstres[i]['num'] != num:
-                self.monstres.append({'num': num, 'vaincu': False}); self.places[e] = len(self.monstres) - 1
+                self.monstres.append(_monstre(num)); self.places[e] = len(self.monstres) - 1
         for e in [e for e in self.places if e not in vus]: del self.places[e]
 
-    def mort(self, emplacement, num):
-        """Le jeu declare vaincu le monstre de cet emplacement. Un monstre jamais vu (mort dans l'image de son apparition) est ajoute."""
-        self.morts += 1
+    def _sort(self, cle, emplacement, num):
+        """Le jeu declare que le monstre de cet emplacement est vaincu / enfui / disparu (cle : 'vaincu', 'fui' ou 'disparu'). Un monstre jamais vu (parti dans l'image de son apparition) est ajoute, de meme qu'un monstre
+        dont le sort est deja note (autre monstre arrive dans le meme emplacement)."""
         i = self.places.get(emplacement)
-        if i is None or self.monstres[i]['num'] != num or self.monstres[i]['vaincu']:
-            self.monstres.append({'num': num, 'vaincu': False}); i = len(self.monstres) - 1; self.places[emplacement] = i
-        self.monstres[i]['vaincu'] = True
+        if i is None or self.monstres[i]['num'] != num or _sort_de(self.monstres[i]):
+            self.monstres.append(_monstre(num)); i = len(self.monstres) - 1; self.places[emplacement] = i
+        self.monstres[i][cle] = True
+
+    def mort(self, emplacement, num):
+        """Le jeu declare vaincu le monstre de cet emplacement (crochet execMonsterDeath)."""
+        self.morts += 1; self._sort('vaincu', emplacement, num)
+
+    def enfui(self, emplacement, num):
+        """Le monstre de cet emplacement s'est enfui (le jeu le compte dans checkDeathMonster)."""
+        self._sort('fui', emplacement, num)
+
+    def disparu(self, emplacement, num):
+        """Le monstre de cet emplacement a disparu (idem)."""
+        self._sort('disparu', emplacement, num)
+
+    def objet(self, numero, nom):
+        """Le jeu donne un objet au groupe a la fin du combat."""
+        self.objets.append({'id': int(numero), 'nom': nom})
 
     def compteurs(self, xp, or_):
         """Relevé des compteurs d'experience et d'or du combat : ils ne font que croitre (doublement compris) jusqu'a leur remise a zero apres le message ; on garde le plus grand."""
@@ -108,17 +155,17 @@ class Suivi:
         """Issue du combat a sa fin : la routine de victoire du jeu a tourne (victoire) ; sinon le groupe est anéanti (defaite) ; sinon tous les monstres vus sont vaincus (victoire) ; sinon le groupe est parti (fuite)."""
         if self.victoire: return 'victoire'
         if defaite: return 'defaite'
-        if self.morts > 0 and all(m['vaincu'] for m in self.monstres): return 'victoire'
+        if self.morts > 0 and all(_sort_de(m) for m in self.monstres): return 'victoire'
         return 'fuite'
 
     def ennemis(self):
-        """[{'nom', 'total', 'vaincus'}] une entree par espece (meme nom, ou meme numero quand le nom est inconnu), dans l'ordre de la premiere apparition."""
+        """[{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] une entree par espece (meme nom, ou meme numero quand le nom est inconnu), dans l'ordre de la premiere apparition."""
         especes = {}
         for m in self.monstres:
             nom = self.noms.get(m['num'])
             cle = ('n', nom) if nom else ('?', m['num'])
-            e = especes.setdefault(cle, {'nom': nom or NOM_INCONNU, 'total': 0, 'vaincus': 0})
-            e['total'] += 1; e['vaincus'] += 1 if m['vaincu'] else 0
+            e = especes.setdefault(cle, {'nom': nom or NOM_INCONNU, 'total': 0, 'vaincus': 0, 'fuis': 0, 'disparus': 0})
+            e['total'] += 1; e['vaincus'] += 1 if m['vaincu'] else 0; e['fuis'] += 1 if m['fui'] else 0; e['disparus'] += 1 if m['disparu'] else 0
         return list(especes.values())
 
 
@@ -126,7 +173,8 @@ def fabriquer_combat(suivi, t, defaite=False):
     """Le combat termine : dict de l'API (voir l'en-tete du module). Or et experience ne comptent que pour une victoire."""
     issue = suivi.issue(defaite)
     gagne = issue == 'victoire'
-    return {'t': int(t), 'ennemis': suivi.ennemis(), 'or': int(suivi.or_) if gagne else 0, 'xp': int(suivi.xp) if gagne else 0, 'issue': issue}
+    return {'t': int(t), 'ennemis': suivi.ennemis(), 'or': int(suivi.or_) if gagne else 0, 'xp': int(suivi.xp) if gagne else 0, 'issue': issue,
+            'objets': [{'nom': o['nom']} for o in suivi.objets] if gagne else []}
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- lecture du moteur
@@ -142,7 +190,7 @@ _PAR_MOTEUR = {}                                                                
 class CapteurCombat:
     def __init__(self, moteur):
         self.actif = False; self.erreur = None
-        self.suivi = None; self.sorties = []; self.evenements = []
+        self.suivi = None; self.sorties = []; self.evenements = []; self._noms_objets = {}; self._noms_monstres = {}; self._tampon = None
         self._etat = None; self._image = -10 ** 9; self._hors_combat = 0; self._anciennes = {}
         self.m = moteur
         try:
@@ -155,6 +203,11 @@ class CapteurCombat:
                 a = c.export(nom)
                 if not a: print('Historique des combats : %s introuvable, capture desactivee' % nom, flush=True); return
             for evt, nom in CROCHETS: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._crochet(evt), None, c.export(nom), c.export(nom))
+            for evt, nom, off, mot in CROCHETS_INTERNES:                               # (en cas de moteur different, seul cet evenement est perdu)
+                a = c.export(nom)
+                if not a or struct.unpack('<I', c.mem(a + off, 4))[0] != mot:
+                    print('Historique des combats : %s inattendu (+%#x), « %s » non suivi' % (nom, off, evt), flush=True); continue
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, self._crochet(evt), None, a + off, a + off)
             try: c.uc.ctl_flush_tb()                                                    # (blocs deja traduits avant les crochets : un capteur cree apres quelques combats)
             except Exception: pass
             self.actif = True
@@ -193,6 +246,13 @@ class CapteurCombat:
                     i = uc.reg_read(c.XREG[1]) & 0xffffffff                              # indice dans les monstres PRESENTS (getMonsterStatus compte les emplacements occupes), pas l'emplacement
                     occ = self._occupes()
                     if 0 <= i < len(occ): self.evenements.append(('mort', occ[i][0], occ[i][1], occ[i][2]))
+                elif evt in ('monstre_enfui', 'monstre_disparu'):
+                    i = uc.reg_read(c.XREG[20]) & 0xffffffff                              # w20 : indice du monstre dans la boucle de checkDeathMonster (meme indice que pour execMonsterDeath)
+                    occ = self._occupes()
+                    if 0 <= i < len(occ): self.evenements.append((evt, occ[i][0], occ[i][1]))
+                elif evt == 'objet':
+                    tache = uc.reg_read(c.XREG[20]) & 0xffffffffffff                      # x20 : la tache BattleExecVictory32 (le numero de l'objet est a +0xc)
+                    self.evenements.append(('objet', struct.unpack('<I', c.mem(tache + OFF_OBJET_TACHE, 4))[0]))
                 elif evt == 'fin':
                     self.evenements.append(('fin', bool(uc.reg_read(c.XREG[1]) & 1), c.mem(self.g_result + OFF_DEFAITE, 1)[0] == 1))
                 else: self.evenements.append((evt,))
@@ -242,10 +302,17 @@ class CapteurCombat:
             self.suivi = Suivi(); self._hors_combat = 0; self._anciennes = self._plaques()                       # (plaques deja la : celles du combat precedent, a ne pas lire)
         elif self.suivi is None: return                                                    # combat dont on n'a pas vu le debut : ignore
         elif nom == 'mort': self.suivi.mort(e[1], e[2])
+        elif nom == 'monstre_enfui': self.suivi.enfui(e[1], e[2])
+        elif nom == 'monstre_disparu': self.suivi.disparu(e[1], e[2])
+        elif nom == 'objet': self.suivi.objet(e[1], self._nom_objet(e[1]))
         elif nom == 'victoire': self.suivi.victoire = True
         elif nom == 'fuite': self.suivi.tentatives_fuite += 1
         elif nom == 'fin':
             s, self.suivi = self.suivi, None
+            for m in s.monstres:                                                          # monstres sans plaque (attaque surprise...) : le nom vient du moteur, par le numero
+                if m['num'] not in s.noms:
+                    n = self._nom_monstre(m['num'])
+                    if n: s.nommer({m['num']: n})
             self.sorties.append(fabriquer_combat(s, self.temps(), defaite=e[1] or e[2]))
 
     def _observer(self, moteur):
@@ -261,6 +328,34 @@ class CapteurCombat:
         xp, or_ = struct.unpack('<2I', self.c.mem(self.g_party + OFF_XP, 8))
         s.compteurs(xp, or_)
         if occ and s.morts == 0 and any(n not in s.noms for _e, n, _g in occ): self._noms(s, occ)
+
+    def _texte_moteur(self, genre, numero):
+        """Texte que le moteur donne pour (genre, numero) -- TextAPI::extractText, ce que le jeu appelle pour une macro de nom -- ; None sans reponse. Appele entre deux images (maj), jamais depuis un crochet.
+        Le « ; » (coupure des noms du patch) est retire, le « $ » (coupure avec trait d'union) devient un tiret."""
+        try:
+            c = self.c; f = c.export(SYM_NOM_OBJET)
+            if not f: return None
+            if self._tampon is None: self._tampon = c.malloc(256)
+            c.mem_w(self._tampon, b'\0' * 16)
+            c.call(f, self._tampon, genre | numero, label='nom du moteur')
+            t = c.read_cstr(self._tampon).decode('utf-8', 'replace').replace(';', '').replace('$', '-').strip()
+            return t if t and not t.startswith('<ERR') else None
+        except Exception:
+            return None
+
+    def _nom_objet(self, numero):
+        """Nom de l'objet (le nom que le jeu affiche) ; garde. Sans reponse : « Objet n°12 »."""
+        nom = self._noms_objets.get(numero)
+        if nom is None: nom = self._noms_objets[numero] = self._texte_moteur(GENRE_OBJET, numero) or NOM_OBJET_INCONNU % numero
+        return nom
+
+    def _nom_monstre(self, numero):
+        """Nom du monstre, avec une majuscule (le moteur donne le nom comme dans une phrase : « londuleux ») ; garde. None sans reponse."""
+        nom = self._noms_monstres.get(numero)
+        if nom is None:
+            t = self._texte_moteur(GENRE_MONSTRE, numero)
+            nom = self._noms_monstres[numero] = (t[:1].upper() + t[1:]) if t else ''
+        return nom or None
 
     def _plaques(self):
         """{fenetre: (dict de chaque plaque, ...)} des plaques de monstres que Moteur.ui a en memoire (fenetre de type 31). On garde les objets eux-memes : le moteur en cree de nouveaux a chaque rafraichissement."""

@@ -28,8 +28,10 @@ def nouveau(chemin=None, horloge=None):
     return HI.Historique(chemin, horloge or Horloge())
 
 
-def combat(t=500, issue='victoire', ennemis=None, or_=21, xp=38):
-    return {'t': t, 'issue': issue, 'or': or_, 'xp': xp, 'ennemis': ennemis if ennemis is not None else [{'nom': 'Gluant', 'total': 3, 'vaincus': 3}]}
+def combat(t=500, issue='victoire', ennemis=None, or_=21, xp=38, objets=None):
+    d = {'t': t, 'issue': issue, 'or': or_, 'xp': xp, 'ennemis': ennemis if ennemis is not None else [{'nom': 'Gluant', 'total': 3, 'vaincus': 3}]}
+    if objets is not None: d['objets'] = objets
+    return d
 
 
 class TestTexte(unittest.TestCase):
@@ -94,9 +96,9 @@ class TestDialogues(unittest.TestCase):
 class TestCombats(unittest.TestCase):
     def test_lignes(self):
         e = HI.element_de_combat(1, combat(ennemis=[{'nom': 'Gluant', 'total': 3, 'vaincus': 3}, {'nom': 'Chauve-souris', 'total': 1, 'vaincus': 1}, {'nom': 'Golem', 'total': 2, 'vaincus': 1}]))
-        self.assertEqual(HI.lignes_combat(e), ['Gluant ×3', 'Chauve-souris', 'Golem : 1 vaincu sur 2', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38'])
+        self.assertEqual(HI.lignes_combat(e), ['Gluant ×3', 'Chauve-souris', 'Golem ×2 : 1 vaincu, 1 resté', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38'])
         e2 = HI.element_de_combat(2, combat(issue='fuite', ennemis=[{'nom': 'Golem', 'total': 4, 'vaincus': 2}]))
-        self.assertEqual(HI.lignes_combat(e2), ['Golem : 2 vaincus sur 4'])                                      # pas d'or ni d'experience sans victoire
+        self.assertEqual(HI.lignes_combat(e2), ['Golem ×4 : 2 vaincus, 2 restés'])                              # pas d'or ni d'experience sans victoire
         self.assertEqual(HI.lignes_combat(HI.element_de_combat(3, combat(ennemis=[]))), ['Ennemis inconnus', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38'])
 
     def test_element_de_combat(self):
@@ -132,11 +134,32 @@ class TestFavoris(unittest.TestCase):
         h2 = nouveau(self.f)                                                                                      # nouvelle session : les dialogues et combats ont disparu, les favoris restent
         self.assertEqual((h2.dialogues, h2.combats, h2.suivant), ([], [], 3)); self.assertEqual([(e.type, e.fav) for e in h2.favoris], [('d', 1), ('c', 2)])
         self.assertEqual((h2.favoris[0].nom, h2.favoris[0].texte), ('Alena', 'Voici l\'histoire.'))
-        self.assertEqual((h2.favoris[1].ennemis, h2.favoris[1].or_, h2.favoris[1].xp, h2.favoris[1].issue), ([{'nom': 'Gluant', 'total': 3, 'vaincus': 3}], 21, 38, 'victoire'))
+        self.assertEqual((h2.favoris[1].ennemis, h2.favoris[1].or_, h2.favoris[1].xp, h2.favoris[1].issue), ([{'nom': 'Gluant', 'total': 3, 'vaincus': 3, 'fuis': 0, 'disparus': 0}], 21, 38, 'victoire'))
         self.assertEqual(h2.liste('favoris'), h2.favoris)
         self.assertEqual([f.fav for f in h2.liste('dialogues', True)], [f.fav for f in h2.favoris if f.type == 'd'])          # « Favoris seulement » : les favoris du fichier, du type de la liste (aussi ceux d'une session precedente)
         self.assertEqual([f.type for f in h2.liste('combats', True)], ['c'] * len([f for f in h2.favoris if f.type == 'c'])); self.assertEqual(h2.liste('dialogues'), [])
         self.assertEqual(len({e.n for e in h2.favoris + h2.dialogues}), 2)
+
+    def test_favori_de_combat_complet_aller_retour_et_ancien_format(self):
+        """#141 : les enfuis, les disparus et les objets sont gardes dans le fichier des favoris ; un favori d'avant le #141 (ni fuis, ni disparus, ni objets) est relu tel quel."""
+        h = nouveau(self.f)
+        c = h.ajouter_combat(combat(t=900, ennemis=[{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 1}], objets=[{'nom': 'herbe ;médicinale'}, {'nom': 'pierre de vie'}]))
+        self.assertEqual(c.objets, [{'nom': 'herbe médicinale'}, {'nom': 'pierre de vie'}]); h.basculer_favori(c)
+        self.assertEqual(self.lire()[0]['objets'], c.objets); self.assertEqual(self.lire()[0]['ennemis'][0]['fuis'], 1)
+        f = nouveau(self.f).favoris[0]; self.assertEqual((f.ennemis, f.objets), (c.ennemis, c.objets)); self.assertEqual(f.cle(), c.cle())
+        self.assertIsNot(h.favoris[0].objets, c.objets)                                                            # (copie independante)
+        ancien = {'version': HI.VERSION, 'suivant': 2, 'favoris': [{'k': 'c', 'id': 1, 't': 5, 'ennemis': [{'nom': 'Gluant', 'total': 3, 'vaincus': 2}], 'or': 4, 'xp': 5, 'issue': 'victoire'}]}
+        with open(self.f, 'w', encoding='utf-8') as fo: json.dump(ancien, fo)
+        a = nouveau(self.f).favoris; self.assertEqual(len(a), 1); self.assertEqual((a[0].ennemis, a[0].objets), ([{'nom': 'Gluant', 'total': 3, 'vaincus': 2, 'fuis': 0, 'disparus': 0}], []))
+        for mauvais in ({'objets': 'x'}, {'objets': [{'x': 1}]}, {'objets': [{'nom': 3}]}, {'ennemis': [{'nom': 'G', 'total': 1, 'vaincus': 0, 'fuis': -1}]}):
+            d = dict(ancien['favoris'][0]); d.update(mauvais); ancien['favoris'] = [d]
+            with open(self.f, 'w', encoding='utf-8') as fo: json.dump(ancien, fo)
+            self.assertEqual(nouveau(self.f).favoris, [], mauvais)                                                   # (favori invalide : ignore)
+
+    def test_cle_d_un_combat_tient_compte_du_detail(self):
+        h = nouveau(); a = h.ajouter_combat(combat(ennemis=[{'nom': 'G', 'total': 2, 'vaincus': 1, 'fuis': 1, 'disparus': 0}])); b = h.ajouter_combat(combat(ennemis=[{'nom': 'G', 'total': 2, 'vaincus': 1, 'fuis': 0, 'disparus': 1}]))
+        c = h.ajouter_combat(combat(ennemis=[{'nom': 'G', 'total': 2, 'vaincus': 1, 'fuis': 1, 'disparus': 0}], objets=[{'nom': 'x'}]))
+        self.assertEqual(len({a.cle(), b.cle(), c.cle()}), 3)
 
     def test_copie_independante(self):
         h = nouveau(self.f); d, _ = self.rempli(h); h.basculer_favori(d)
@@ -187,7 +210,7 @@ class TestFavoris(unittest.TestCase):
         with open(self.f, 'w', encoding='utf-8') as fo: json.dump({'version': HI.VERSION, 'suivant': 2, 'favoris': mauvais[:4] + bons[:1] + mauvais[4:] + bons[1:]}, fo)
         h = nouveau(self.f)
         self.assertEqual([(e.type, e.fav) for e in h.favoris], [('d', 1), ('c', 4)])
-        self.assertEqual((h.favoris[1].issue, h.favoris[1].ennemis), ('fuite', [{'nom': 'Gluant', 'total': 2, 'vaincus': 1}]))
+        self.assertEqual((h.favoris[1].issue, h.favoris[1].ennemis), ('fuite', [{'nom': 'Gluant', 'total': 2, 'vaincus': 1, 'fuis': 0, 'disparus': 0}]))
         self.assertEqual(h.suivant, 5)                                                                            # jamais un numero deja pris
         self.assertFalse(os.path.exists(self.f + '.corrompu'))                                                    # le fichier est garde : seules les entrees invalides sont ignorees
 
@@ -396,7 +419,7 @@ def frappe(v, *touches):
 
 
 class TestBoite(unittest.TestCase):
-    """Taille unique des boites de l'historique : la boite de dialogue du jeu (3 lignes), que le texte fasse 1, 2 ou 3 lignes, dialogue ou combat ; au-dela de 3 lignes : une page de plus."""
+    """Taille des boites de l'historique : la boite de dialogue du jeu (3 lignes) pour un dialogue, que le texte fasse 1, 2 ou 3 lignes (au-dela : une page de plus) ; un combat grandit avec son texte (#141)."""
     @staticmethod
     def mes(t): return 9.0 * len(t)                                            # largeur d'une chaine (unites) : 9 par caractere
 
@@ -453,25 +476,62 @@ class TestBoite(unittest.TestCase):
         B = UH.Boite(); mot = 'mot '; texte = (mot * 60).strip(); r = UH.rangees_de(self.dialogue(1, texte), self.mes, B.largeur_texte())
         self.assertTrue(all(self.mes(l) <= B.largeur_texte() for l in r)); self.assertEqual(' '.join(r), texte)
 
-    def combat(self, ennemis, issue='victoire'):
-        return HI.Element(1, HI.TYPE_COMBAT, 0, ennemis=[{'nom': n, 'total': a, 'vaincus': b} for n, a, b in ennemis], or_=21, xp=38, issue=issue)
+    def combat(self, ennemis, issue='victoire', objets=None):
+        return HI.Element(1, HI.TYPE_COMBAT, 0, ennemis=[dict(nom=n, total=a, vaincus=v, fuis=f, disparus=d) for n, a, v, f, d in [(x + (0, 0))[:5] for x in ennemis]], or_=21, xp=38, issue=issue, objets=objets)
 
-    def test_combat_courant_tient_dans_une_boite(self):
+    def test_combat_grandit_avec_son_texte(self):
+        """#141 : un combat n'est plus coupe en pages de 3 lignes : sa boite a autant de lignes que son texte (entete comprise), 3 au moins, et le cadre du jeu s'allonge d'autant."""
         B = UH.Boite()
-        for en in ([('Gluant', 3, 3)], [('Chauve-souris', 2, 2), ('Gluant', 1, 1)], [('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1), ('Golem', 1, 1)]):
-            e = self.combat(en); p = UH.paginer(UH.rangees_de(e, self.mes, B.largeur_texte()), True, B.LIGNES)
-            self.assertEqual(len(p), 1, en); self.assertLessEqual(len(p[0]) + 1, B.LIGNES)                          # (+ l'entete : issue et heure)
-            self.assertTrue(p[0][-1].startswith('Or'))                                                          # l'or et l'experience : derniere rangee
+        for en, lignes in (([('Gluant', 3, 3)], 3), ([('Chauve-souris', 2, 2), ('Gluant', 1, 1)], 4), ([('Glacyclone', 4, 4), ('Mage-fantôme', 1, 1), ('Golem', 1, 1)], 5)):
+            e = self.combat(en); v, B, blocs = self.vue_boites([e]); self.assertEqual(len(blocs), 1, en)                        # une seule boite
+            self.assertEqual(len(blocs[0][6]), len(en) + 1)                                                                     # une rangee par espece + l'or et l'experience
+            self.assertEqual(blocs[0][4], B.haut_pour(lignes) * 1.0); self.assertEqual(UH.lignes_de_boite(blocs[0][6], True, True), lignes)
+        self.assertEqual(B.haut_pour(3), B.HAUT); self.assertEqual(B.haut_pour(1), B.HAUT); self.assertEqual(B.haut_pour(5), B.HAUT + 2 * B.PAS)
+
+    def test_combat_detaille_une_rangee_par_espece_puis_gains_puis_objets(self):
+        B = UH.Boite(); e = self.combat([('Gluant', 3, 1, 1, 1), ('Golem', 1, 0, 0, 0), ('Dragon', 1, 1, 0, 0)], objets=[{'nom': 'herbe médicinale'}, {'nom': 'pierre de vie'}])
+        self.assertEqual(UH.rangees_de(e, lambda t: 6.0 * len(t), B.largeur_texte()), ['Gluant ×3 : 1 vaincu, 1 enfui, 1 disparu', 'Golem : resté', 'Dragon', 'Or : 21\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : 38',
+                                                                       'Objets : herbe médicinale, pierre de vie'])
 
     def test_combat_defaite_ou_fuite_sans_gain(self):
-        B = UH.Boite(); e = self.combat([('Golem', 2, 1)], 'fuite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Golem : 1 vaincu sur 2'])
+        B = UH.Boite(); e = self.combat([('Golem', 2, 1)], 'fuite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Golem ×2 : 1 vaincu, 1 resté'])
+        e = self.combat([('Golem', 2, 0, 1, 0)], 'defaite', objets=[{'nom': 'x'}]); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Golem ×2 : 1 enfui, 1 resté'])   # pas d'or, d'experience ni d'objets sans victoire
 
-    def test_combat_trop_long_une_page_de_plus_et_meme_cadre(self):
-        en = [('Monstre numéro %d' % i, 3, 3) for i in range(12)]; e = self.combat(en)
+    def test_combat_trop_long_continue_dans_une_boite_suivante(self):
+        en = [('Monstre numéro %d' % i, 3, 3) for i in range(20)]; e = self.combat(en)
         v, B, blocs = self.vue_boites([e]); self.assertGreater(len(blocs), 1)
-        self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})
-        pages = [b[6] for b in blocs]; self.assertLessEqual(len(pages[0]) + 1, B.LIGNES); self.assertTrue(all(len(p) <= B.LIGNES for p in pages[1:]))
-        self.assertTrue(pages[-1][-1].startswith('Or'))                                                           # le gain est dans la derniere page
+        pages = [b[6] for b in blocs]; self.assertEqual(len(pages[0]) + 1, UH.MAX_LIGNES_COMBAT); self.assertTrue(all(len(p) <= UH.MAX_LIGNES_COMBAT for p in pages[1:]))
+        self.assertEqual(blocs[0][4], B.haut_pour(UH.MAX_LIGNES_COMBAT)); self.assertEqual(sum(len(p) for p in pages), 21)           # (20 especes + l'or et l'experience)
+        self.assertEqual(blocs[-1][4], B.haut_pour(UH.lignes_de_boite(pages[-1], False, True)))                                    # la derniere boite a la hauteur de son texte, pas plus
+
+    def test_dialogue_garde_la_boite_du_jeu(self):
+        v, B, blocs = self.vue_boites([self.dialogue(1, 'Oui.'), self.combat([('Gluant', 3, 3), ('Golem', 2, 2), ('Dragon', 1, 1)]), self.dialogue(3, 'Une.\nDeux.\nTrois.')])
+        self.assertEqual([b[4] for b in blocs], [B.HAUT, B.haut_pour(5), B.HAUT])
+
+    def test_disposer_hauteurs_differentes(self):
+        boites, debuts, fins, hc = UH.disposer([(1, False), (2, True, [200.0, 130.0]), (1, False, [300.0])], 100.0, 30.0, 10.0, 5.0, 8.0)
+        self.assertEqual([(b[0], b[1], b[3], b[4], b[5]) for b in boites], [(0, 0, 8.0, 0.0, 100.0), (1, 0, 118.0, 30.0, 200.0), (1, 1, 353.0, 0.0, 130.0), (2, 0, 493.0, 0.0, 300.0)])
+        self.assertEqual((debuts, fins, hc), ([8.0, 118.0, 493.0], [108.0, 483.0, 793.0], 801.0))
+
+    def test_etirer_cadre(self):
+        """Cadre a neuf morceaux (coins de 12 unites) : seuls les sommets de la moitie haute montent ; la mise en page d'origine n'est pas modifiee."""
+        vtx = [[-223.0, -251.0], [-211.0, -251.0], [-211.0, -239.0], [-223.0, -239.0], [-211.0, -137.0], [-223.0, -137.0], [-211.0, -125.0], [-223.0, -125.0], [229.0, -125.0]]
+        copie = [list(v) for v in vtx]; r = UH.etirer_cadre(vtx, 56.0); self.assertEqual(vtx, copie)
+        self.assertEqual([v[1] for v in r], [-251.0, -251.0, -239.0, -239.0, -81.0, -81.0, -69.0, -69.0, -69.0]); self.assertEqual([v[0] for v in r], [v[0] for v in vtx])
+        self.assertEqual(UH.etirer_cadre(vtx, 0.0), vtx); self.assertEqual(UH.etirer_cadre([], 5.0), [])
+
+    def test_cadre_etire_du_jeu(self):
+        """Avec la vraie mise en page : le cadre d'un combat de 5 lignes est plus haut de 2 lignes (56 unites), ses coins gardent leur taille, le cadre d'un dialogue n'est pas touche."""
+        import test_nom_dialogue as N, ui_menu as UM
+        l, c = os.path.join(N.CACHE, 'ui_layout.json'), os.path.join(N.CACHE, 'ui_frameData.bin')
+        if not (os.path.exists(l) and os.path.exists(c)): self.skipTest('cache d\'interface absent')
+        ml = UM.MiseEnPage(l, c); v = vue(0); v.J.ui_rendu = types.SimpleNamespace(ml=ml)
+        f0 = v._fenetre_boite(False); f2 = v._fenetre_boite(False, 2); self.assertIsNot(f0, f2)
+        h = lambda f: max(x[1] for x in f.N['cadre']['vtx']) - min(x[1] for x in f.N['cadre']['vtx'])
+        self.assertEqual(h(f0), 126.0); self.assertEqual(h(f2), 126.0 + 2 * UH.Boite.PAS)
+        basses = lambda f: sorted(x[1] for x in f.N['cadre']['vtx'] if x[1] < -200); self.assertEqual(basses(f0), basses(f2))        # le bas ne bouge pas
+        self.assertEqual(len(f0.N['cadre']['vtx']), len(f2.N['cadre']['vtx'])); self.assertIs(v._fenetre_boite(False, 2), f2)       # (gardee)
+        vt = ml.message['types'][0]['frame_mesh']['vtx']; self.assertEqual(max(x[1] for x in vt) - min(x[1] for x in vt), 126.0)                    # (la mise en page d'origine n'a pas ete modifiee)
 
     def test_combat_sans_ennemi_connu(self):
         B = UH.Boite(); e = self.combat([], 'defaite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Ennemis inconnus'])

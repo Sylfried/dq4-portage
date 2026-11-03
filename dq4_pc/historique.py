@@ -34,22 +34,24 @@ LIBELLE_ISSUE = {'victoire': 'Victoire', 'fuite': 'Fuite', 'defaite': 'Défaite'
 
 # ---------------------------------------------------------------------------------------------------------------------------------- elements
 class Element:
-    """Un element de l'historique : dialogue (type 'd' : nom affiche ou None, texte) ou combat (type 'c' : ennemis [{'nom', 'total', 'vaincus'}], or, xp, issue). `n` : numero d'ordre (cle d'affichage),
-    `t` : heure de jeu (1/60 s), `fav` : numero du favori correspondant (None : pas en favori)."""
-    __slots__ = ('n', 'type', 't', 'nom', 'texte', 'ennemis', 'or_', 'xp', 'issue', 'fav')
+    """Un element de l'historique : dialogue (type 'd' : nom affiche ou None, texte) ou combat (type 'c' : ennemis [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}], or, xp, issue, objets [{'nom'}]).
+    `n` : numero d'ordre (cle d'affichage), `t` : heure de jeu (1/60 s), `fav` : numero du favori correspondant (None : pas en favori)."""
+    __slots__ = ('n', 'type', 't', 'nom', 'texte', 'ennemis', 'or_', 'xp', 'issue', 'fav', 'objets')
 
-    def __init__(self, n, type_, t, nom=None, texte='', ennemis=None, or_=0, xp=0, issue='victoire', fav=None):
+    def __init__(self, n, type_, t, nom=None, texte='', ennemis=None, or_=0, xp=0, issue='victoire', fav=None, objets=None):
         self.n, self.type, self.t, self.nom, self.texte = n, type_, t, nom, texte
         self.ennemis, self.or_, self.xp, self.issue, self.fav = ennemis or [], or_, xp, issue, fav
+        self.objets = objets or []
 
     def cle(self):
         """Ce qui fait l'identite d'un element (pour reconnaitre un doublon, ou un element deja en favori) : le contenu, pas le numero."""
         if self.type == TYPE_DIALOGUE: return (TYPE_DIALOGUE, self.nom, self.texte)
-        return (TYPE_COMBAT, self.t, self.issue, self.or_, self.xp, tuple((e['nom'], e['total'], e['vaincus']) for e in self.ennemis))
+        return (TYPE_COMBAT, self.t, self.issue, self.or_, self.xp, tuple((e['nom'], e['total'], e['vaincus'], e.get('fuis', 0), e.get('disparus', 0)) for e in self.ennemis),
+                tuple(o['nom'] for o in self.objets))
 
     def vers_dict(self):
         if self.type == TYPE_DIALOGUE: return {'k': TYPE_DIALOGUE, 'id': self.fav, 't': self.t, 'nom': self.nom, 'texte': self.texte}
-        return {'k': TYPE_COMBAT, 'id': self.fav, 't': self.t, 'ennemis': [dict(e) for e in self.ennemis], 'or': self.or_, 'xp': self.xp, 'issue': self.issue}
+        return {'k': TYPE_COMBAT, 'id': self.fav, 't': self.t, 'ennemis': [dict(e) for e in self.ennemis], 'or': self.or_, 'xp': self.xp, 'issue': self.issue, 'objets': [dict(o) for o in self.objets]}
 
     @staticmethod
     def depuis_dict(d, n):
@@ -64,19 +66,39 @@ class Element:
             if d['k'] == TYPE_COMBAT:
                 issue, ennemis = d['issue'], d['ennemis']
                 if issue not in ISSUES or not isinstance(ennemis, list): return None
-                es = []
-                for e in ennemis:
-                    nom, tot, vai = e['nom'], e['total'], e['vaincus']
-                    if not isinstance(nom, str) or any(isinstance(x, bool) or not isinstance(x, int) or x < 0 for x in (tot, vai)): return None
-                    es.append({'nom': nom[:60], 'total': tot, 'vaincus': vai})
+                es = ennemis_valides(ennemis)
                 gain = [d.get('or', 0), d.get('xp', 0)]
-                if any(isinstance(x, bool) or not isinstance(x, int) or x < 0 for x in gain): return None
-                return Element(n, TYPE_COMBAT, t, ennemis=es[:12], or_=gain[0], xp=gain[1], issue=issue, fav=ident)
+                if es is None or any(isinstance(x, bool) or not isinstance(x, int) or x < 0 for x in gain): return None
+                obj = objets_valides(d.get('objets', []))                                      # (les favoris d'avant le #141 n'ont ni fuis, ni disparus, ni objets)
+                if obj is None: return None
+                return Element(n, TYPE_COMBAT, t, ennemis=es, or_=gain[0], xp=gain[1], issue=issue, fav=ident, objets=obj)
         except Exception:
             return None
         return None
 
     def __repr__(self): return 'Element(%r)' % (self.vers_dict(),)
+
+
+def ennemis_valides(ennemis):
+    """Liste d'especes [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] verifiee et copiee (fuis et disparus : 0 s'ils manquent, comme dans les favoris d'avant le #141) ; None si elle n'est pas valide."""
+    if not isinstance(ennemis, list): return None
+    es = []
+    for e in ennemis:
+        if not isinstance(e, dict): return None
+        nom, tot, vai, fui, dis = e.get('nom'), e.get('total'), e.get('vaincus'), e.get('fuis', 0), e.get('disparus', 0)
+        if not isinstance(nom, str) or any(isinstance(x, bool) or not isinstance(x, int) or x < 0 for x in (tot, vai, fui, dis)): return None
+        es.append({'nom': sans_marques(nom)[:60], 'total': tot, 'vaincus': vai, 'fuis': fui, 'disparus': dis})
+    return es[:12]
+
+
+def objets_valides(objets):
+    """Liste d'objets gagnes [{'nom'}] verifiee et copiee ; None si elle n'est pas valide."""
+    if not isinstance(objets, list): return None
+    out = []
+    for o in objets:
+        if not isinstance(o, dict) or not isinstance(o.get('nom'), str): return None
+        out.append({'nom': sans_marques(o['nom']).strip()[:60]})
+    return out[:8]
 
 
 def sans_marques(texte):
@@ -116,14 +138,31 @@ def envelopper(texte, largeur, mesure):
     return lignes or ['']
 
 
+def pluriel(n, mot_masc):
+    """« 1 vaincu », « 2 vaincus » (mot au masculin singulier)."""
+    return '%d %s%s' % (n, mot_masc, 's' if n > 1 else '')
+
+
+def ligne_espece(e):
+    """Une espece d'ennemis, sur une ligne : « Gluant ×3 » quand tous sont vaincus (« Gluant » s'il n'y en avait qu'un), sinon le sort de chacun : « Gluant ×3 : 1 vaincu, 1 enfui, 1 disparu » ; ceux qui ne sont ni vaincus,
+    ni enfuis, ni disparus sont encore la quand le combat se termine (le groupe a fui ou a ete vaincu) : « 2 restés »."""
+    tot, vai, fui, dis = e['total'], e['vaincus'], e.get('fuis', 0), e.get('disparus', 0)
+    base = '%s ×%d' % (e['nom'], tot) if tot > 1 else e['nom']
+    if vai >= tot: return base
+    reste = max(0, tot - vai - fui - dis)
+    if tot == 1: return '%s : %s' % (base, 'enfui' if fui else 'disparu' if dis else 'resté')
+    sorts = [pluriel(n, mot) for n, mot in ((vai, 'vaincu'), (fui, 'enfui'), (dis, 'disparu'), (reste, 'resté')) if n > 0]
+    return '%s : %s' % (base, ', '.join(sorts))
+
+
 def lignes_combat(c):
-    """Lignes de texte d'un combat (Element de type 'c') : une par espece d'ennemi (« Gluant ×3 » quand tous sont vaincus, « Gluant : 1 vaincu sur 3 » sinon), puis l'or et l'experience d'une victoire."""
-    out = []
-    for e in c.ennemis:
-        if e['vaincus'] >= e['total']: out.append('%s ×%d' % (e['nom'], e['total']) if e['total'] > 1 else e['nom'])
-        else: out.append('%s : %d vaincu%s sur %d' % (e['nom'], e['vaincus'], 's' if e['vaincus'] > 1 else '', e['total']))
+    """Lignes de texte d'un combat (Element de type 'c'), une par rangee : une par espece d'ennemi (ligne_espece : qui etait la, qui est vaincu, enfui, disparu ou reste), puis, pour une victoire, l'or et l'experience
+    gagnes, puis les objets obtenus (« Objets : Herbe médicinale, Pierre de vie »). Rien n'est ecrit quand il n'y a pas eu d'objet."""
+    out = [ligne_espece(e) for e in c.ennemis]
     if not out: out.append('Ennemis inconnus')
-    if c.issue == 'victoire': out.append('Or : %d\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : %d' % (c.or_, c.xp))          # (espaces insecables : la coupure des lignes ne les fait pas disparaitre)
+    if c.issue == 'victoire':
+        out.append('Or : %d\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : %d' % (c.or_, c.xp))          # (espaces insecables : la coupure des lignes ne les fait pas disparaitre)
+        if c.objets: out.append('Objets : ' + ', '.join(o['nom'] for o in c.objets))
     return out
 
 
@@ -132,8 +171,9 @@ def element_de_combat(n, combat):
     try:
         issue = combat['issue']
         if issue not in ISSUES: return None
-        es = [{'nom': str(e['nom'])[:60], 'total': int(e['total']), 'vaincus': int(e['vaincus'])} for e in combat['ennemis']][:12]
-        return Element(n, TYPE_COMBAT, int(combat['t']), ennemis=es, or_=max(0, int(combat['or'])), xp=max(0, int(combat['xp'])), issue=issue)
+        es = [{'nom': str(e['nom'])[:60], 'total': int(e['total']), 'vaincus': int(e['vaincus']), 'fuis': int(e.get('fuis', 0)), 'disparus': int(e.get('disparus', 0))} for e in combat['ennemis']][:12]
+        objets = [{'nom': sans_marques(str(o['nom'])).strip()[:60]} for o in combat.get('objets', [])][:8]
+        return Element(n, TYPE_COMBAT, int(combat['t']), ennemis=es, or_=max(0, int(combat['or'])), xp=max(0, int(combat['xp'])), issue=issue, objets=objets)
     except Exception:
         return None
 
@@ -141,7 +181,7 @@ def element_de_combat(n, combat):
 # ---------------------------------------------------------------------------------------------------------------------------------- donnees
 class Historique:
     """Dialogues et combats de la session (en memoire) + favoris (fichier). Le fichier est a cote de la visionneuse (jamais dans le dossier des sauvegardes du jeu, que l'on ne modifie pas) :
-    {"version": 2, "suivant": 7, "favoris": [{"k": "d", "id": 3, "t": 12345, "nom": "Alena", "texte": "..."}, {"k": "c", "id": 5, "t": 1, "ennemis": [...], "or": 3, "xp": 4, "issue": "victoire"}]}."""
+    {"version": 2, "suivant": 7, "favoris": [{"k": "d", "id": 3, "t": 12345, "nom": "Alena", "texte": "..."}, {"k": "c", "id": 5, "t": 1, "ennemis": [...], "or": 3, "xp": 4, "issue": "victoire", "objets": [{"nom": "Herbe médicinale"}]}]}."""
 
     def __init__(self, chemin=None, horloge=time.time):
         self.chemin = chemin; self.horloge = horloge
@@ -212,7 +252,7 @@ class Historique:
         if e.fav is not None:
             self.retirer_favori(e.fav); return False
         if len(self.favoris) >= MAX_FAVORIS: del self.favoris[0]
-        copie = Element(self._num(), e.type, e.t, e.nom, e.texte, [dict(x) for x in e.ennemis], e.or_, e.xp, e.issue, fav=self.suivant)
+        copie = Element(self._num(), e.type, e.t, e.nom, e.texte, [dict(x) for x in e.ennemis], e.or_, e.xp, e.issue, fav=self.suivant, objets=[dict(o) for o in e.objets])
         e.fav = self.suivant; self.suivant += 1
         self.favoris.append(copie); self._sale = True; self.enregistrer(True)
         return True
