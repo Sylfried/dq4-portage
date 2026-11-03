@@ -6,6 +6,8 @@
 
 ## En bref
 
+> **Mise à jour du 03/11/2026 à 15 h 50 (lecture de Sylfried)** : voir la section « Lecture du 03/11 » plus bas. Les compteurs ci-dessous (18 / 15 / 11 / 20) datent du 02/11 ; l'état à jour est dans les issues GitHub (#51 à #99) et dans `lacunes_connues.md`.
+
 Le portage fonctionne sur tout ce que j'ai pu essayer sous Linux, mais **rien n'a été validé sous Windows ni sur un vrai GPU** : c'est le premier reste. Ce rapport compte **18 points qui attendent ta décision**, **15 oublis** de ma part, **11 bugs** connus ou probables et **20 points non vérifiés**. Aucun défaut bloquant n'a été vu dans les parcours testés (sauvegardes du chapitre 1) ; deux risques de blocage ne sont pas écartés (murs invisibles, mémoire sur longue session) et les chapitres suivants n'ont jamais été joués.
 
 Lecture : **décision** = c'est à toi de trancher ; **oubli** = c'est à moi de le faire ; **bug** = défaut constaté ou probable ; **non vérifié** = codé ou lu dans le moteur, jamais vu fonctionner pour de vrai. Sources : l'audit du 02/11 (lacunes, couverture, décisions, issues GitHub) et les cinq agents de la PR #44. Les références G-xxx, D-xx, PAQ, CAR, SRV, CAS renvoient à ces fichiers d'audit.
@@ -71,23 +73,54 @@ Relecture de ce rapport avec Sylfried le 03/11 (13 h 45, puis 14 h 04 et 14 h 17
 Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
 
 1. **Validation Windows / vrai GPU** : toujours le premier reste (rien n'est validé sous Windows).
-2. **Clavier complet** : tous les boutons de l'interface atteignables au clavier (inventaire, puis correction), avec la règle du bruitage ci-dessus.
-3. **Manette** : prévue « pour la suite » (aucun code aujourd'hui). À faire après le clavier complet : la navigation au clavier sert de base.
+2. **Clavier complet** : **suspendu le 03/11 à 15 h 50** (D-165) : Sylfried doute que ce soit adapté à une interface tactile ; « à creuser » (#59). La règle du bruitage (même endroit que le mobile) est confirmée (#60).
+3. **Manette** : prévue « pour la suite » (aucun code aujourd'hui) ; pas de menu de choix du périphérique, une 3e colonne dans Commandes, logo selon la manette branchée (D-167, #61). La navigation des menus dépend de #59.
 4. **Chapitre 2** : dès qu'il fournit les sauvegardes, rejouer les PNJ de scénario, les cartes et les menus du chapitre 2 (jamais testés).
-5. **Vérifier la licence d'Unicorn** avant toute redistribution ou `.exe`.
+5. ~~Vérifier la licence d'Unicorn~~ **fait le 03/11** (D-170) : à traiter comme GPL v2 ; choix à faire par Sylfried avant le `.exe` (`docs/licences.md`, #87).
 6. **Paquets du moteur et petits oublis** (liste « Oublis de Claude » ci-dessous), selon ses retours de test.
 
 ## Suivi dans GitHub (depuis le 03/11/2026)
 
-Le reste à faire de ce rapport est repris dans **38 issues de `dq4-portage` (#51 à #88)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute` (premier lancement, sauvegarde à l'église, clavier complet, allocateur, licence d'Unicorn), `bloqué` (attend Sylfried), `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+Le reste à faire de ce rapport est repris dans **48 issues de `dq4-portage` (#51 à #99, dont 7 fermées au 03/11 à 16 h)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
 
 | Jalon | Issues | Contenu |
 |---|---|---|
-| 1. Validation Windows | #51 à #58 | premier lancement, rendu OpenGL, performance, sauvegarde à l'église, comparaison au mobile, combats, historique, teinte jour / nuit |
-| 2. Clavier complet et manette | #59 à #61 | tous les boutons au clavier, bruitage au clavier, manette |
+| 1. Validation Windows | #51 à #58, #90 | premier lancement (fermée), rendu OpenGL, performance, sauvegarde à l'église (fermée), comparaison au mobile (fermée), combats, historique (fermée), teinte jour / nuit et cartes `ml*`, séquences à fondu |
+| 2. Clavier complet et manette | #59 à #61, #93 | interface au clavier et à la manette (à creuser), bruitage au clavier, manette, bruitage du coffre lâché |
 | 3. Chapitre 2 et services | #62 à #65 | chapitre 2 (bloqué : sauvegardes), services, boutiques et bestiaire, casino |
-| 4. Moteur et finitions | #66 à #85 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs |
-| 5. Distribution et extensions | #86 à #88 | licence d'Unicorn, .exe, DQ5 et DQ6 |
+| 4. Moteur et finitions | #66 à #85, #91 à #92, #94 à #99 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs (2 résolus : #78, #82), bouton de vitesse, caméra des attaques, historique au clavier, défilement du texte, accélérateur et jingle, barre de rotation de la croix, classes d'interface, petits restes |
+| 5. Distribution et extensions | #86 à #88 | licence d'Unicorn (fermée : GPL v2), .exe, DQ5 et DQ6 |
+
+## Lecture du 03/11 (14 h 36 à 15 h 50) : ce qui est validé, ce qui reste
+
+Sylfried a lu la liste « tout ce qu'il reste à faire » et répondu point par point (décisions D-163 à D-190 dans `decisions.md` § 5d). **Phase gestion de projet : aucun correctif sur l'outil.** Ci-dessous, les 20 points « Non vérifié » avec leur résultat.
+
+| # | Point | Résultat (Sylfried, Windows) | Suite |
+|---|---|---|---|
+| 1 | Rendu OpenGL | « le reste fonctionne » ; **anticrénelage et suréchantillonnage à tester** ; 2 moniteurs, fenêtre plus grande que l'écran, zoom 4K : pas testés | #52 |
+| 2 | Sauvegarde à l'église | OK, ainsi que sauvegardes auto, hors églises, création et suppression de journal | #54 fermée |
+| 3 | Lanceur `.bat` | « aucun souci » | #51 fermée |
+| 4 | Performance x3, x4, x8 | intitulé expliqué ; pas testé | #53 |
+| 5 | Comparaison avec le mobile | « nickel sur ces points » | #55 fermée |
+| 6 | Historique en jeu | « fonctionnel après un ou plusieurs combats » ; le nouveau défilement n'est pas testé | #57 fermée, #94 |
+| 7 | Bruitage de transition | pas testé | #75 |
+| 8 | Repos des ennemis à x2 et x3 | pas testé | #56 |
+| 9 | Teinte jour / nuit | OK sur la carte et dans les villes ; nom du chapitre 1 à son début OK | #58 (reste les cartes `ml*`) |
+| 10 | Chapitres 2 et suivants | sauvegarde à venir | #62, `plan_tests_chapitre2.md` |
+| 11 | Services | attendent le chapitre 2 | #63 |
+| 12 | Boutiques 28 / 59 / 63 / 70 | attendent le chapitre 2 | #64 |
+| 13 | Banque au clavier | suspendu avec l'exigence du clavier complet | #59 |
+| 14 | Accès au bestiaire | attend le chapitre 2 | #64 |
+| 15 | Décors de combat corrigés | aube et coucher de soleil : Sylfried les teste ; plus aucun défaut visuel la nuit | #56 |
+| 16 | Boss, groupes, Morph, effets, game over | boss du chapitre 1 OK, groupes OK, Morph de la cinématique OK, game over OK ; **effets de sorts à tester** (défense) ; boss final plus tard | #56 |
+| 17 | Retour au titre, nouvelle partie | nouvelle partie sans relancer OK ; **retour au titre depuis un combat ou une boutique : pas testé** | #56 |
+| 18 | Paquets 16, 17, 33 des cartes `ml*` | pas précisé | #58 |
+| 19 | Poker, bingo | attendent le chapitre 2 | #65 |
+| 20 | Ratios autres que 16/9 | « OK » | clos |
+
+**Oublis de Claude** : n° 6 (clavier) suspendu (#59) ; n° 8 (bruitage 300) règle confirmée (#60) ; n° 14 (CI, scripts) CI faite en #49, scripts de recherche introuvables (caduc) ; n° 15 (documentation) à jour en #49, #50 et #100. **Bugs connus** : n° 4 (`dbout`) et n° 8 (vagues d'eau) **résolus** (#78, #82 fermées) ; n° 6 (survol) **confirmé imparfait**, souris et clavier (#80) ; n° 9 (angle de caméra) : décision D-172 (#83) ; n° 1 (bruitage de transition) pas testé (#75). Les autres bugs (n° 2, 3, 5, 7, 10, 11) n'ont pas été rencontrés : à tester ou à corriger plus tard.
+
+**Nouveaux sujets nés de la lecture** : bouton de vitesse dessiné à gauche avant sa place (#91), caméra des attaques (#92), bruitage du coffre lâché (#93), historique message par message et PgHaut / PgBas par 3 (#94), « Défilement du texte » dans Affichage (#95), accélérateur et jingle (#96), barre de rotation de la croix (#97), classes d'interface du jeu (#98), petits restes (#99).
 
 ## Oublis de Claude
 
