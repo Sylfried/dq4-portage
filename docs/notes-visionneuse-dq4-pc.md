@@ -1010,3 +1010,20 @@ Après avoir essayé #112 sous Windows (« Mon écran externe avec baffes intég
 - **Tout sous Windows** : la croix, Alt + F4, le menu Quitter, la fin de tâche, la console. **À confirmer par Sylfried.**
 - Ce que fait exactement le Unity d'origine (moment, `AutoSave(true)` ou `(false)`), faute du code C#.
 - Une fermeture en pleine animation ou en plein événement : la sauvegarde est celle du moteur à cet instant (comme `AutoSave(true)` d'origine) ; non essayé sur un cas précis.
+
+## Avance #125 : l'erreur d'un passage plein écran ↔ fenêtre qui échoue est notée en entier (#123, 03/11/2026)
+
+### Demande (D-218, 22 h 34)
+« Je ne peux plus mettre le jeu en mode fenêtré j'ai un message m'indiquant que c'est impossible, et en faisant ça en plus mon écran clignote. » Son `reglages.json` dit `mode_fenetre` = 1 : le jeu se lance en plein écran, et la sortie du plein écran (« Fenêtre impossible ») échoue.
+
+### Établi
+- Le code de bascule (`regler_plein_ecran`, `_poser_plein_ecran`, `_mettre_plein`) n'a **pas été modifié par la PR #120** ; seul `_creer_plein_ecran` ne choisit plus l'écran (création sur l'écran principal, comme avant quand aucun choix n'était fait). Je n'ai trouvé aucune erreur évidente en relisant ce code ni celui de pyglet 2.1.19 (`Win32Window._create`, `set_fullscreen`).
+- La console ne disait que « Fenêtre impossible (%r) » : le texte de l'exception, pas l'endroit où elle a eu lieu.
+
+### Fait (diagnostic seulement)
+- `Jeu._noter_echec_bascule(cible, erreur)` : à chaque échec d'un passage plein écran ↔ fenêtre, **la pile d'appels complète** de l'erreur (et, si le retour à l'état de départ échoue aussi, cette seconde erreur en note), l'état de la fenêtre (plein écran, taille, taille mémorisée, place d'avant, bureau), l'écran de la fenêtre pour pyglet, les moniteurs détectés (taille, position, principal), les versions de pyglet et de Python, dans la console **et** dans `dq4_pc/erreurs_fenetre.log` (à la suite des précédentes ; ignoré par git comme tous les `*.log` ; `DQ_JOURNAL_FENETRE` : un autre fichier). Jamais d'erreur levée par le journal.
+- Tests : `test_mode_fenetre.py` (42 tests dont 3 nouveaux : l'entrée du journal, un journal inécrivable, aucune entrée sans échec ; les échecs simulés écrivent dans un fichier temporaire).
+
+### Non vérifié
+- La cause du défaut : **inconnue** tant que l'erreur n'a pas été lue sur le PC de Sylfried (il doit refaire l'essai : lancer en plein écran, puis F11).
+
