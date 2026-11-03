@@ -44,7 +44,7 @@ Relecture de ce rapport avec Sylfried le 03/11 à 13 h 45 (il ne pouvait pas tes
 | # | Sujet | Réponse | Suite |
 |---|---|---|---|
 | 1 | Toits et décors | **Garder tel quel** | L'issue dq4-pc #6 (toits transparents) **reste ouverte** : sa fermeture était conditionnée à une vérification sur mobile qu'il n'a pas faite |
-| 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 2 : `workflow.md` et README corrigés (branche `docs-audit48`) ; la suppression des branches fusionnées n'est **pas faite** (à confirmer) ; 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » |
+| 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 2 : `workflow.md` et README corrigés (branche `docs-audit48`) ; la suppression des branches fusionnées n'est **pas faite** (à confirmer) ; 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » (**18 sites qui écrivent** et 27 crochets depuis #47 et #48, au lieu de 16 et 22 : relevé du 03/11 sur `main` b0d71b8, nombre de crochets vérifié à l'exécution) |
 | 10 | Curseur doré | **Sans objet** | Le curseur est fixe dans le code (`pause.py:161-167`) ; la petite flèche est gardée dans l'historique (#48) |
 | 8, 18 | Entrées retirées de l'éditeur ; licence d'Unicorn | **Sans réponse** | 8 : liste des 18 entrées (`FENETRES_RETIREES`) à lui montrer ; 18 : à vérifier avant toute redistribution |
 | D-89 | Libellés « Masqué / Masquée » | **Sans réponse** | à valider |
