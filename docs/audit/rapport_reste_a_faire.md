@@ -141,7 +141,7 @@ Sylfried a répondu aux treize points que je lui avais soumis (décisions D-191 
 | « Sort en trop » | « Exactement » : la rangée fantôme supprimée en #45 | à vérifier sur Windows (#99) |
 | Caméra des attaques | « juste la caméra qui bouge pendant des attaques » ; l'Ornythox n'est plus sûr, l'archer vert est peut-être meilleur | #92 réécrite : vérifier d'abord avec des ennemis du chapitre 1 |
 
-**Reste à lui demander** : l'**étendue** de la suppression des vitesses (marche, caméra et touche d'accélérateur partent-elles aussi ?) et le sort de déplacement (306) dans les transitions raccourcies (#101) ; le sujet « audio réel » et `reglages.json` (#99).
+**Précision de 17 h 01 (D-201)** : la vitesse de marche et l'accélérateur à la touche Maj **restent** ; seul le réglage « Vitesse de transition » disparaît (#101). **Tranché à 17 h 03 (D-202)** : le sort de déplacement (306) n'est pas raccourci, Sylfried le teste lui-même ; « audio réel » et `reglages.json` (#99) : expliqués, rien à décider (à constater en jouant). **Plus rien à lui demander sur ce lot.**
 
 ## Oublis de Claude
 

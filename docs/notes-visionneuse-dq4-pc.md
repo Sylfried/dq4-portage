@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99 et #101, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-200). **Décidé, pas encore codé (D-197, #101)** : les réglages de vitesse hors combat (marche, caméra, transition, accélérateur) vont être retirés ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage ; les passages de ces notes qui décrivent ces réglages décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99 et #101, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-200). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -797,7 +797,7 @@ Rien n'a été exécuté côté outil. Les affirmations sur le code de ce paragr
 ## Avance #102 : réponses de 16 h 47 (03/11/2026, docs seulement)
 
 ### Fait
-- **Issues** : #101 créée (vitesses hors combat) ; #53, #87, #92, #99 réécrites ; #96 fermée (remplacée par #101) ; commentaire sur #75. Bilan : 49 issues (#51 à #99 et #101), 41 ouvertes, 8 fermées (#51, #54, #55, #57, #78, #82, #86, #96).
+- **Issues** : #101 créée (transitions à x4) ; #53, #87, #92, #99 réécrites ; #96 fermée (remplacée par #101) ; commentaire sur #75. Bilan : 49 issues (#51 à #99 et #101), 41 ouvertes, 8 fermées (#51, #54, #55, #57, #78, #82, #86, #96).
 - **Décisions** : D-191 à D-200 (`decisions.md` § 5e) ; D-180, D-182, D-188 et D-190 annotées.
 - **Lacunes** : G-008, G-012, G-015, G-039c, G-058, G-108, G-162, G-205, G-212, G-213 mises à jour.
 - **Licences** : `docs/licences.md` complété (option « `.exe` launcher », « Faut-il un fichier `LICENSE` ? ») ; **aucun fichier `LICENSE` créé** (pas nécessaire aujourd'hui, D-196).
@@ -808,14 +808,26 @@ Rien n'a été exécuté côté outil. Les affirmations sur le code de ce paragr
 Pièces `MAP_DIFF` du plan du monde ; bandeau « Prologue » (cadre doré à fond bleu) ; sens d'ouverture des coffres.
 
 ### Décidé, pas encore codé
-- **Vitesses hors combat** (#101) : ce qu'il faut savoir avant de coder. Les bruitages de transition (lus dans le moteur, **non rejoués**) sont **305** (sortie de ville ou de carte, escalier), **309** (porte), **312** (`TownFallAction`), **330** (`TownSubeAction`) et **306** (sort de déplacement) ; le 305 n'est joué qu'à mi-fondu, donc la transition doit être reconnue à son départ. Voir « Bruitages : transition de carte et coffre d'ennemi » plus haut.
+- **Transitions à x4** (#101 ; seul le réglage « Vitesse de transition » disparaît, marche et Maj restent : D-201) : ce qu'il faut savoir avant de coder. Les bruitages de transition (lus dans le moteur, **non rejoués**) sont **305** (sortie de ville ou de carte, escalier), **309** (porte), **312** (`TownFallAction`), **330** (`TownSubeAction`) et **306** (sort de déplacement) ; le 305 n'est joué qu'à mi-fondu, donc la transition doit être reconnue à son départ. Voir « Bruitages : transition de carte et coffre d'ennemi » plus haut.
 - **Menus simples** : repli automatique seulement, sans option (D-194).
 
 ### À trancher par Sylfried (#102)
-1. **Étendue de la suppression des vitesses** (#101) : « hors combat tu laisses tout par défaut » est lu comme la suppression des vitesses de marche et de caméra et de la touche d'accélérateur ; à confirmer.
-2. **Sort de déplacement (306)** : à raccourcir comme une transition ?
+1. **Étendue de la suppression des vitesses** (#101) : **tranché à 17 h 01 (D-201)** : seul le réglage « Vitesse de transition » disparaît ; la marche et la touche Maj restent.
+2. **Sort de déplacement (306)** : **tranché à 17 h 03 (D-202)** : durée d'origine ; Sylfried le teste, peut-être accélérable avec Maj.
 3. **Format de distribution** (#87) : scripts + `.bat`, `.exe` launcher, ou `.exe` qui embarque Unicorn (GPL v2) : « on verra ».
-4. **Audio réel et `reglages.json`** (#99) : à traiter ou non.
+4. **Audio réel et `reglages.json`** (#99) : **expliqué à 17 h 03 (D-202)** : jamais vus sur son PC (essais sans haut-parleurs, fichiers de réglages fabriqués) ; rien à décider.
 
 ### Non vérifié (#102)
 Rien n'a été exécuté côté outil. Les bruitages 305, 309, 312, 330 et 306 sont lus dans le code du moteur, jamais rejoués. L'idée qu'un `.exe` launcher n'ait pas les obligations d'une redistribution d'Unicorn est une **supposition** (pas un avis juridique). La citation de la documentation GitHub sur les dépôts sans licence a été lue le 03/11/2026.
+
+## Avance #103 : précision de 17 h 01 (03/11/2026, docs seulement)
+
+### Fait
+- **Précision de Sylfried** (D-201) : « Ah pardon si la vitesse de marche et l'accélération à la touche SHIFT doit rester ! je parlais surtout de l'accélération des transitions ! ». Seul le réglage « Vitesse de transition » disparaît ; la marche, la caméra et l'accélérateur Maj ne changent pas. Ma lecture de 16 h 47 (« Avance #102 ») était trop large.
+- **Issues** : #101 retitrée et réécrite (« Transitions : retirer le réglage « Vitesse de transition »… ») ; #53 retrouve son périmètre (marche x3 / x4 et accélérateur, plus combat « Très rapide » et transitions à x4) ; commentaire correctif sur #96 (reste fermée).
+- **17 h 03 (D-202)** : le sort de déplacement (306) n'est pas raccourci (Sylfried le teste lui-même, peut-être avec Maj) ; #99 : « audio réel » et `reglages.json` expliqués, rien à décider.
+- **Documents** : D-197 précisée, D-201 et D-202 ajoutées ; G-008, G-212 et G-213 corrigées ; `reprise.md`, rapport et `historique.md` alignés.
+- Aucun fichier de `dq4_pc/` ni de `outils/` modifié.
+
+### Non vérifié (#103)
+Rien n'a été exécuté côté outil. La lecture « l'accélérateur de la phrase du 15 h 50 était la vitesse de transition » est une **supposition**. Les bruitages 305, 309, 312, 330 et 306 restent lus dans le code, jamais rejoués.
