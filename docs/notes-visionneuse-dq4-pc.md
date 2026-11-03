@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99 et #101, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-200). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101 et #105, jalons 1 à 5 ; 42 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-205). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -842,3 +842,14 @@ Rien n'a été exécuté côté outil. La lecture « l'accélérateur de la phra
 
 ### Non vérifié (#104)
 Rien n'a été exécuté côté outil. « L'audio fonctionne » est le constat de Sylfried, sans détail (volumes, boucles, jingles).
+
+## Avance #106 : test issue par issue (#52 d'abord) et issue #105 (03/11/2026, docs seulement)
+
+### Fait
+- **Issue #105 créée** (jalon 5, `type:feature`, `à décider`, `priorité:basse`) : décider des modificateurs et des triches que Sylfried voudrait ajouter, **à traiter en tout dernier** (D-205). Sa liste reste à fournir ; faisabilité à étudier cas par cas (moteur `libdq4core.so` non modifié sous Unicorn : **supposé, non vérifié**).
+- **Séance de test du soir** (D-204) : Sylfried renonce à la liste globale et teste **une issue à la fois**, à partir de #52 (anticrénelage, suréchantillonnage, deux moniteurs, fenêtre plus grande que l'écran). Fiche de test donnée dans la conversation (menu Échap, page « Affichage » ; critères de l'issue inchangés).
+- Bilan : 50 issues (#51 à #99, #101 et #105), 42 ouvertes, 8 fermées (#51, #54, #55, #57, #78, #82, #86, #96).
+- Aucun fichier de `dq4_pc/` ni de `outils/` modifié.
+
+### Non vérifié
+Rien n'a été exécuté côté outil. Les réglages de la fiche #52 sont lus dans `pause.py` (établi), jamais vus sous Windows par Claude.
