@@ -58,9 +58,10 @@ class Calcul(unittest.TestCase):
         self.MO.Etat.vitesse_fondu = 1.0
         self.assertEqual(self.fondu(0x1000 | FONDU_JEU).rapport_fondu[1], 1.0, 'x1 : duree du jeu')
 
-    def test_pas_de_raccourci_pour_un_combat_ni_une_entree(self):
+    def test_combat_raccourci_comme_les_autres_et_entree_sans_decompte(self):
+        import priorite_jeu as PJ
         self.MO.Etat.vitesse_fondu = 4.0
-        self.assertEqual(self.fondu(0x1000 | FONDU_JEU, partie=self.MO.PARTIE_COMBAT).rapport_fondu[1], 1.0, 'fondu d\'un combat : duree du jeu')
+        self.assertAlmostEqual(self.fondu(0x1000 | FONDU_JEU, partie=self.MO.PARTIE_COMBAT).rapport_fondu[1], PJ.duree_fondu(FONDU_JEU, 4.0) / FONDU_JEU, 6, 'fondu d\'un combat : suit « Vitesse de transition » (#47)')
         self.assertEqual(self.fondu(FONDU_JEU).rapport_fondu[1], 1.0, 'fondu d\'entree (vers la scene) : pas de decompte a ajuster')
 
     def arme(self, m, octet, rapport, image_fondu=None):
