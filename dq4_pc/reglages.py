@@ -51,6 +51,7 @@ DEFAUT = {
     'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte...) durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu ; x1 a x4)
     'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
     'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
+    'historique_favoris_seuls': False,   # fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_historique.py)
     'soin_niveau': False,         # « PV et PM restaurés au niveau supérieur » : quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (le jeu d'origine ne le fait pas) ; desactive = comme le jeu
     'taille_degats': 1.6,         # taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
     'grille_edition': True,       # editeur d'interface : grille de placement affichee (32 x 18 cases)
@@ -110,7 +111,7 @@ def mode_fenetre_valide(v):
 BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_fondu': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'camera_inverser_hb')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'camera_inverser_hb', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
 VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')

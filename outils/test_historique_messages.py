@@ -359,15 +359,30 @@ def remplir(h):
     for e in (h.dialogues[2], h.dialogues[10], h.combats[3]): h.basculer_favori(e)
 
 
-def vue(n=20, vis=5, combats=0):
+def vue(n=20, hv=500.0, combats=0):
     h = nouveau(None)
     for i in range(n): h.ajouter('m%d' % i, 'Perso %d' % i if i % 2 else None, 200 + 5000 * i)
     for i in range(combats): h.ajouter_combat(combat(t=100 + i))
     appels = []
     P = types.SimpleNamespace(mode_souris=False, pos_souris=None, retour=lambda: appels.append('retour'), fermer=lambda: appels.append('fermer'), _repeter=lambda *a: appels.append(('repeter',) + a))
     P.J = types.SimpleNamespace(historique=h, reg=RG.Reglages(None), height=720)
-    v = UH.VueHistorique(P); v.entrer(); v.vis = vis; v.appels = appels
+    v = UH.VueHistorique(P); v.entrer(); v.appels = appels; v.hv0 = hv; poser(v)
     return v
+
+
+def poser(v, hv=None):
+    """Ce que dessiner() fait a chaque image, sans police ni GL : empile les elements de v (boites de 126 pixels, onglet de 32 pour un dialogue avec nom, ecarts du dessin a l'echelle 1) et met a jour la geometrie du defilement
+    (hauteur du contenu, repere, element actif). A appeler apres chaque action qui change la liste ou la position."""
+    if hv is not None: v.hv0 = hv
+    ent = [(1, e.type == HI.TYPE_DIALOGUE and bool(e.nom)) for e in v.elements]
+    boites, debuts, fins, hc = UH.disposer(ent, 126.0, 32.0, UH.ECART_ELEMENTS, UH.ECART_PAGES, UH.MARGE_LISTE)
+    v._geometrie(debuts, fins, hc, v.hv0, 28.0, 1.0)
+    return boites
+
+
+def frappe(v, *touches):
+    """Des touches, avec une image dessinee entre deux."""
+    for t in touches: v.touche(t); poser(v)
 
 
 class TestBoite(unittest.TestCase):
@@ -375,11 +390,13 @@ class TestBoite(unittest.TestCase):
     @staticmethod
     def mes(t): return 9.0 * len(t)                                            # largeur d'une chaine (unites) : 9 par caractere
 
-    def vue_boites(self, elements, fin=None, haut=900.0):
-        """Boites calculees comme dessiner() les place (sans GL) : police du systeme simulee (P._et), echelle 1."""
-        v = vue(0, 5); v.elements = elements; v.fin = len(elements) - 1 if fin is None else fin
+    def vue_boites(self, elements, haut=900.0):
+        """Boites calculees comme dessiner() les place (sans GL) : police du systeme simulee (P._et), echelle 1, fenetre de la liste de `haut` pixels. -> (vue, boite, boites du plus ancien en haut au plus recent en bas,
+        chacune (element, boite, nombre de boites, haut, haut du cadre, haut de l'onglet, rangees de texte))."""
+        v = vue(0); v.elements = elements; v._mise = None
         v.P._et = lambda t, taille: types.SimpleNamespace(content_width=self.mes(t) / 0.9)
-        B = UH.Boite(); return v, B, v._blocs(None, B, 1.0, 20.0, 0.0, haut, 12.0, 4.0)
+        B = UH.Boite(); bs = v._mesurer(None, B, 1.0, 1.0, 20.0, haut)
+        return v, B, [(i, p, nb, h, hb, hn, r) for (i, p, nb, h, hn, hb, r) in bs]
 
     @staticmethod
     def dialogue(n, texte, nom=None): return HI.Element(n, HI.TYPE_DIALOGUE, 0, nom=nom, texte=texte)
@@ -413,13 +430,13 @@ class TestBoite(unittest.TestCase):
                self.dialogue(5, 'Une.\nDeux.\nTrois.', 'Roi Bastien')]
         v, B, blocs = self.vue_boites(els)
         self.assertEqual(len(blocs), 5); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})               # hauteur du cadre : une seule valeur
-        self.assertEqual([len(b[6]) for b in reversed(blocs)], [1, 2, 3, 1, 3])                                  # (le texte, lui, garde ses lignes)
-        self.assertEqual([b[5] for b in reversed(blocs)], [0.0, 0.0, 0.0, B.ONGLET_H, B.ONGLET_H])               # l'onglet du nom s'ajoute au-dessus, seulement avec un nom
+        self.assertEqual([len(b[6]) for b in blocs], [1, 2, 3, 1, 3])                                  # (le texte, lui, garde ses lignes)
+        self.assertEqual([b[5] for b in blocs], [0.0, 0.0, 0.0, B.ONGLET_H, B.ONGLET_H])               # l'onglet du nom s'ajoute au-dessus, seulement avec un nom
 
     def test_texte_de_plus_de_trois_lignes_une_page_de_plus(self):
         long = self.dialogue(1, 'a\nb\nc\nd\ne\nf\ng', 'Alena'); v, B, blocs = self.vue_boites([long])
-        self.assertEqual(len(blocs), 3); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0}); self.assertEqual([b[6] for b in reversed(blocs)], [['a', 'b', 'c'], ['d', 'e', 'f'], ['g']])
-        self.assertEqual([b[5] for b in reversed(blocs)], [B.ONGLET_H, 0.0, 0.0])                                 # le nom n'est que sur la premiere page
+        self.assertEqual(len(blocs), 3); self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0}); self.assertEqual([b[6] for b in blocs], [['a', 'b', 'c'], ['d', 'e', 'f'], ['g']])
+        self.assertEqual([b[5] for b in blocs], [B.ONGLET_H, 0.0, 0.0])                                 # le nom n'est que sur la premiere page
         self.assertEqual({(b[0], b[2]) for b in blocs}, {(0, 3)})
 
     def test_dialogue_coupe_a_la_largeur_de_la_boite(self):
@@ -443,58 +460,160 @@ class TestBoite(unittest.TestCase):
         en = [('Monstre numéro %d' % i, 3, 3) for i in range(12)]; e = self.combat(en)
         v, B, blocs = self.vue_boites([e]); self.assertGreater(len(blocs), 1)
         self.assertEqual({b[4] for b in blocs}, {B.HAUT * 1.0})
-        pages = [b[6] for b in reversed(blocs)]; self.assertLessEqual(len(pages[0]) + 1, B.LIGNES); self.assertTrue(all(len(p) <= B.LIGNES for p in pages[1:]))
+        pages = [b[6] for b in blocs]; self.assertLessEqual(len(pages[0]) + 1, B.LIGNES); self.assertTrue(all(len(p) <= B.LIGNES for p in pages[1:]))
         self.assertTrue(pages[-1][-1].startswith('Or'))                                                           # le gain est dans la derniere page
 
     def test_combat_sans_ennemi_connu(self):
         B = UH.Boite(); e = self.combat([], 'defaite'); self.assertEqual(UH.rangees_de(e, self.mes, B.largeur_texte()), ['Ennemis inconnus'])
 
-    def test_empilement_et_defilement_par_element(self):
+    def test_une_seule_colonne_toute_la_liste(self):
+        """Toute la liste est posee d'un coup, du plus ancien (en haut) au plus recent (en bas), sans trou ni chevauchement, QUELLE QUE SOIT la hauteur de la fenetre : plus de pages, plus de « dernier element visible »."""
         els = [self.dialogue(i, 'Texte %d.' % i, 'Alena' if i % 2 else None) for i in range(10)]
-        v, B, blocs = self.vue_boites(els, haut=500.0)
-        ys = [b[3] for b in blocs]; self.assertEqual(ys, sorted(ys)); self.assertEqual(ys[0], 0.0)                 # de bas en haut, sans trou ni chevauchement
-        for a, b in zip(blocs, blocs[1:]): self.assertGreaterEqual(b[3] - (a[3] + a[4] + a[5]), 12.0 - 1e-9)
-        self.assertLessEqual(blocs[-1][3] + blocs[-1][4] + blocs[-1][5], 500.0); self.assertEqual(v.vis, len(blocs)); self.assertLess(len(blocs), 10)
-        self.assertEqual(blocs[0][0], 9)                                                                          # le plus recent en bas
+        for haut in (200.0, 500.0, 5000.0):
+            v, B, blocs = self.vue_boites(els, haut=haut)
+            self.assertEqual(len(blocs), 10); self.assertEqual([b[0] for b in blocs], list(range(10)))             # le plus ancien en haut
+            ys = [b[3] for b in blocs]; self.assertEqual(ys, sorted(ys)); self.assertEqual(ys[0], UH.MARGE_LISTE)
+            for a, b in zip(blocs, blocs[1:]): self.assertAlmostEqual(b[3] - (a[3] + a[4] + a[5]), UH.ECART_ELEMENTS)           # meme ecart partout
+        self.assertAlmostEqual(v.hc, blocs[-1][3] + blocs[-1][4] + blocs[-1][5] + UH.MARGE_LISTE)                   # hauteur du contenu : marges comprises
 
-    def test_cadre_trop_haut_pour_la_liste_garde_au_moins_une_boite(self):
-        v, B, blocs = self.vue_boites([self.dialogue(1, 'a')], haut=10.0); self.assertEqual(len(blocs), 1); self.assertEqual(v.vis, 1)
+    def test_position_ne_change_pas_la_mise_en_page(self):
+        """Aucun cran : la position du defilement ne fait que deplacer le contenu, les boites ne bougent pas les unes par rapport aux autres."""
+        els = [self.dialogue(i, 'Texte %d.' % i, 'Alena' if i % 2 else None) for i in range(30)]
+        v, B, avant = self.vue_boites(els, haut=500.0)
+        for pos in (0.0, 1.0, 37.5, 1234.0, 1e9): v.pos = pos; apres = v._mesurer(None, B, 1.0, 1.0, 20.0, 500.0); self.assertEqual(apres, v._mise[1]); self.assertEqual([b[3] for b in apres], [b[3] for b in avant])
+
+    def test_disposer_pur(self):
+        b, d, f, h = UH.disposer([(1, False), (3, True), (1, True)], 100.0, 30.0, 10.0, 2.0, 5.0)
+        self.assertEqual([(x[0], x[1], x[2], x[3], x[4], x[5]) for x in b], [(0, 0, 1, 5.0, 0.0, 100.0), (1, 0, 3, 115.0, 30.0, 100.0), (1, 1, 3, 247.0, 0.0, 100.0), (1, 2, 3, 349.0, 0.0, 100.0), (2, 0, 1, 459.0, 30.0, 100.0)])
+        self.assertEqual((d, f, h), ([5.0, 115.0, 459.0], [105.0, 449.0, 589.0], 594.0))
+        self.assertEqual(UH.disposer([], 100.0, 30.0, 10.0, 2.0, 5.0), ([], [], [], 0.0))
+
+    def test_element_au_repere(self):
+        d = [5.0, 115.0, 459.0]
+        self.assertEqual([UH.element_au_repere(d, c) for c in (-50.0, 0.0, 5.0, 114.9, 115.0, 400.0, 459.0, 9999.0)], [0, 0, 0, 0, 1, 1, 2, 2]); self.assertEqual(UH.element_au_repere([], 10.0), 0)
 
     def test_page_sans_texte(self):
         self.assertEqual(UH.paginer([], False), [[]]); self.assertEqual(UH.paginer([], True), [[]]); self.assertEqual(UH.paginer(['a', 'b', 'c'], True), [['a', 'b'], ['c']]); self.assertEqual(UH.paginer(['a', 'b', 'c'], False), [['a', 'b', 'c']])
 
 
 class TestVue(unittest.TestCase):
-    """Onglets, touche H, etoile et defilement (sans dessin : la geometrie est donnee par `vis`, le nombre d'elements visibles a la derniere image)."""
+    """Onglets, touche H, etoile et defilement (sans dessin : la geometrie du defilement est simulee par `poser`, comme dessiner() la met a jour a chaque image)."""
+
+    @staticmethod
+    def geom(v):
+        """(debuts, fins) des elements de v comme poser() les place."""
+        ent = [(1, e.type == HI.TYPE_DIALOGUE and bool(e.nom)) for e in v.elements]
+        return UH.disposer(ent, 126.0, 32.0, UH.ECART_ELEMENTS, UH.ECART_PAGES, UH.MARGE_LISTE)[1:3]
 
     def test_ouverture_en_bas(self):
-        v = vue(); self.assertEqual((v.onglet, v.fin, v.sel, len(v.elements)), (UH.O_DIALOGUES, 19, 19, 20))        # le plus recent en bas, choisi
+        v = vue(); self.assertEqual((v.onglet, v.pos, v.sel, len(v.elements)), (UH.O_DIALOGUES, 0.0, 19, 20))        # tout en bas : le plus recent visible, et actif
+        self.assertGreater(v.plage(), 0); self.assertEqual(v.decal(), 0.0)
 
-    def test_fleches_et_pages(self):
-        K = pyglet.window.key; v = vue()
-        v.touche(K.UP); self.assertEqual((v.sel, v.fin), (18, 19))
-        for _ in range(5): v.touche(K.UP)
-        self.assertEqual((v.sel, v.fin), (13, 17))                                                             # la vue suit la selection quand elle sort par le haut
-        v.touche(K.PAGEDOWN); self.assertEqual(v.sel, 17)
-        v.touche(K.HOME); self.assertEqual((v.sel, v.fin), (0, 4))
-        v.touche(K.UP); self.assertEqual((v.sel, v.fin), (0, 4))                                               # butee en haut
-        v.touche(K.END); self.assertEqual((v.sel, v.fin), (19, 19))
-        v.touche(K.DOWN); self.assertEqual((v.sel, v.fin), (19, 19))                                           # butee en bas
-        self.assertIn(('repeter', K.DOWN, 'v', 1), v.appels)
+    def test_fleches_pas_constant(self):
+        """Haut / bas : un pas constant (une ligne de texte), jamais une entree entiere ni une page ; l'element actif suit le repere."""
+        K = pyglet.window.key; v = vue(); sels = [v.sel]
+        for i in range(1, 31):
+            frappe(v, K.UP); self.assertEqual(v.pos, 28.0 * i); sels.append(v.sel)                              # +28 pixels a chaque appui, du premier au dernier
+        self.assertEqual(sels, sorted(sels, reverse=True)); self.assertLess(sels[-1], sels[0])                  # l'element actif ne revient jamais en arriere
+        for i in range(30): frappe(v, K.DOWN)
+        self.assertEqual((v.pos, v.sel), (0.0, 19)); self.assertIn(('repeter', K.DOWN, 'v', 1), v.appels)         # (repetition de la touche maintenue : Pause.maj)
+        frappe(v, K.DOWN); self.assertEqual((v.pos, v.sel), (0.0, 19))                                              # butee en bas
 
-    def test_molette_et_barre(self):
-        v = vue()
-        v.molette(1); self.assertEqual(v.fin, 17); self.assertLessEqual(v.sel, v.fin)                           # molette vers le haut : les plus anciens
-        v.molette(-1); v.molette(-1); self.assertEqual(v.fin, 19)
-        v.decaler(-100); self.assertEqual(v.fin, 4)                                                            # jamais plus haut que la premiere page pleine
-        self.assertGreaterEqual(v.sel, v.fin - v.vis + 1)
-        v.decaler(100); self.assertEqual(v.fin, 19)
+    def test_pages_debut_fin(self):
+        K = pyglet.window.key; v = vue(hv=500.0)
+        frappe(v, K.PAGEUP); self.assertEqual(v.pos, 500.0 - 2 * 28.0)                                           # une page : la fenetre moins deux lignes (le contexte reste visible)
+        frappe(v, K.PAGEUP); self.assertEqual(v.pos, 2 * (500.0 - 56.0)); frappe(v, K.PAGEDOWN, K.PAGEDOWN); self.assertEqual(v.pos, 0.0)
+        frappe(v, K.HOME); self.assertEqual((v.pos, v.sel), (v.plage(), 0)); frappe(v, K.UP); self.assertEqual((v.pos, v.sel), (v.plage(), 0))      # butee en haut : le premier element
+        frappe(v, K.END); self.assertEqual((v.pos, v.sel), (0.0, 19))
 
-    def test_glissement(self):
-        v = vue(); v.P.J.height = 700; v.drag = [300, v.fin, False]
-        v.glisser(5, 301); self.assertEqual(v.fin, 19)                                                         # sous la tolerance : pas un glissement
-        v.glisser(5, 300 - 160); self.assertLess(v.fin, 19)
+    def test_actions_du_jeu_pour_les_pages(self):
+        """Les touches « Page precedente / suivante » du jeu (L / R : A et R par defaut, PAGE_UP / PAGE_DOWN) font les memes pages."""
+        K = pyglet.window.key; v = vue(); v.touche(K.A); self.assertEqual(v.pos, 444.0); v.touche(K.R); self.assertEqual(v.pos, 0.0)
+
+    def test_molette(self):
+        v = vue(); pas = 28.0 * UH.PAS_MOLETTE
+        v.molette(1); self.assertEqual(v.pos, pas)                                                              # molette vers le haut : les plus anciens, un pas fin et constant
+        v.molette(1); self.assertEqual(v.pos, 2 * pas); v.molette(-1); v.molette(-1); self.assertEqual(v.pos, 0.0)
+        v.molette(-1); self.assertEqual(v.pos, 0.0)                                                              # butee en bas
+        v.defiler(10 ** 9); self.assertEqual(v.pos, v.plage()); v.defiler(-10 ** 9); self.assertEqual(v.pos, 0.0)   # (jamais au-dela de la liste)
+        v.molette(3.0); self.assertEqual(v.pos, 3 * pas)                                                         # pave tactile : proportionnel au mouvement
+
+    def test_barre_de_defilement(self):
+        M = pyglet.window.mouse; v = vue(); p = v.plage(); pas = 28.0
+        v.barre = dict(x0=0, x1=10, y0=0, y1=500, ptop=480, pbot=20, th=40, pouce=(20, 60), n=v.hc, vis=v.hv, base=0)               # curseur en bas (position 0)
+        v.clic(5, 495, M.LEFT); self.assertEqual(v.pos, pas)                                                    # fleche du haut : une ligne
+        v.clic(5, 10, M.LEFT); self.assertEqual(v.pos, 0.0)                                                     # fleche du bas
+        v.barre['pouce'] = (400, 440); v.clic(5, 470, M.LEFT); self.assertEqual(v.pos, v.page_px())          # piste au-dessus du curseur : une page
+        v.clic(5, 100, M.LEFT); self.assertEqual(v.pos, 0.0)
+        v.barre['pouce'] = (20, 60); v.clic(5, 40, M.LEFT); self.assertEqual(v.glisse_barre, 20)                 # curseur saisi : il se deplace sans cran
+        v.glisser(5, 500); self.assertAlmostEqual(v.pos, p, places=6)                                           # tire tout en haut : le plus ancien
+        v.glisser(5, 0); self.assertEqual(v.pos, 0.0)
+        v.glisser(5, 20 + 20 + 440 / 2.0 - 20 + 0); self.assertGreater(v.pos, 0.0); self.assertLess(v.pos, p)  # milieu : position intermediaire, proportionnelle
+        v.relache(5, 0, M.LEFT); self.assertIsNone(v.glisse_barre)
+
+    def test_glissement_dans_la_liste(self):
+        """Le contenu suit le pointeur, pixel par pixel (aucun palier)."""
+        v = vue(); v.drag = [300, v.decal(), False]
+        v.glisser(5, 301); self.assertEqual(v.pos, 0.0)                                                         # sous la tolerance : pas un glissement
+        v.glisser(5, 300 - 160); self.assertEqual(v.pos, 160.0)                                                 # le pointeur descend de 160 : le contenu descend de 160 (on voit des plus anciens)
+        v.glisser(5, 300 - 161); self.assertEqual(v.pos, 161.0)                                                 # un pixel de plus : un pixel de plus (pas de palier)
+        v.glisser(5, 300 + 50); self.assertEqual(v.pos, 0.0)                                                    # le pointeur remonte au-dela de son point de depart : butee en bas
         v.relache(5, 0, 1); self.assertIsNone(v.drag)
+
+    def test_element_actif_toujours_visible(self):
+        """Le repere est toujours dans la fenetre de la liste : l'element actif (cible de la touche Entree) est toujours au moins en partie visible."""
+        v = vue(n=40, hv=500.0); d, f = self.geom(v)
+        for pos in [0.0, 1.0, 13.0, 100.0, 1000.0, v.plage() / 2, v.plage() - 1, v.plage()]:
+            v.pos = pos; poser(v); i = v.sel; decal = v.decal()
+            bas, haut = v.hc - f[i] - decal, v.hc - d[i] - decal                                                # bord bas et bord haut de la boite de i, en pixels depuis le bas de la fenetre
+            self.assertTrue(haut > 0 and bas < v.hv, (pos, i, bas, haut))
+        v.pos = 0.0; poser(v); self.assertEqual(v.sel, 39); v.pos = v.plage(); poser(v); self.assertEqual(v.sel, 0)
+
+    def test_repere_monotone(self):
+        for n, hv in ((3, 500.0), (40, 500.0), (40, 90.0), (2, 1500.0)):
+            v = vue(n=n, hv=hv); h = []
+            for i in range(0, 400):
+                v.pos = i * v.pmax() / 399.0; h.append(v.hauteur_repere())
+            self.assertEqual(h, sorted(h)); self.assertAlmostEqual(h[0], UH.REPERE_BAS); self.assertAlmostEqual(h[-1], UH.REPERE_HAUT)
+
+    def test_tous_les_elements_au_clavier(self):
+        """Quelle que soit la longueur de la liste et la hauteur de la fenetre, des appuis sur Haut parcourent TOUS les elements (du dernier au premier), puis Bas les reparcourent (liste plus courte que la fenetre comprise : la vue ne bouge pas, le repere avance)."""
+        K = pyglet.window.key
+        for n, hv in ((1, 500.0), (2, 500.0), (3, 500.0), (5, 500.0), (7, 500.0), (20, 500.0), (4, 1000.0), (8, 900.0), (3, 120.0), (40, 300.0), (6, 1300.0)):
+            v = vue(n=n, hv=hv); vus = [v.sel]
+            for _ in range(2000):
+                p = v.pos; frappe(v, K.UP); vus.append(v.sel)
+                if v.pos == p: break
+            self.assertEqual(sorted(set(vus)), list(range(n)), (n, hv)); self.assertEqual(v.sel, 0)
+            self.assertEqual(vus, sorted(vus, reverse=True), (n, hv))                                              # (jamais en arriere)
+            vus = [v.sel]
+            for _ in range(2000):
+                p = v.pos; frappe(v, K.DOWN); vus.append(v.sel)
+                if v.pos == p: break
+            self.assertEqual(sorted(set(vus)), list(range(n)), (n, hv)); self.assertEqual((v.sel, v.pos), (n - 1, 0.0))
+
+    def test_liste_courte_collee_en_bas(self):
+        """Liste plus courte que la fenetre : rien a defiler (la molette ne fait rien), le dessin la colle en bas de la fenetre (hc < hv) ; Haut / Bas deplacent l'element actif."""
+        K = pyglet.window.key; v = vue(n=3, hv=900.0); self.assertLess(v.hc, v.hv); self.assertEqual(v.plage(), 0.0)
+        v.molette(1); v.defiler(500); poser(v); self.assertEqual((v.pos, v.sel), (0.0, 2))
+        frappe(v, K.UP); frappe(v, K.UP, K.UP, K.UP); self.assertEqual(v.sel, 0)                                      # le repere avance : le premier element devient actif
+        self.assertEqual(v.decal(), 0.0)                                                                            # ... et la vue n'a pas bouge
+
+    def test_clic_fixe_l_element_actif_jusqu_au_defilement(self):
+        M = pyglet.window.mouse; v = vue(); v.zones = [(0, 0, 10, 10, 5)]
+        v.clic(5, 5, M.LEFT); poser(v); self.assertEqual(v.sel, 5)                                              # un clic choisit l'element, meme loin du repere
+        v.relache(5, 5, M.LEFT); v.molette(1); poser(v); self.assertFalse(v.sel_manuel); self.assertEqual(v.sel, 19)                  # le defilement rend la main au repere (a 56 pixels du bas, c'est encore le dernier element)
+
+    def test_aller_centre_l_element(self):
+        v = vue(n=40, hv=500.0); d, f = self.geom(v); v.aller(10); poser(v)
+        self.assertEqual(v.sel, 10); milieu = v.hc - (d[10] + f[10]) / 2.0 - v.decal(); self.assertAlmostEqual(milieu, v.hv / 2.0, places=6)    # au milieu de la fenetre
+        v.aller(0); poser(v); self.assertEqual((v.sel, v.pos), (0, v.plage()))                                  # (bornee : jamais au-dela du haut de la liste)
+        v.aller(39); poser(v); self.assertEqual((v.sel, v.pos), (39, 0.0))
+
+    def test_redimensionnement_garde_l_endroit(self):
+        v = vue(n=40, hv=500.0); v.pos = 400.0; ent = [(1, False)] * 40
+        b, d, f, hc = UH.disposer(ent, 252.0, 64.0, 24.0, 8.0, 12.0); v._geometrie(d, f, hc, 1000.0, 56.0, 2.0)
+        self.assertAlmostEqual(v.pos, 800.0)                                                                    # l'echelle double : la position aussi (meme endroit de la liste)
 
     def test_onglets(self):
         K = pyglet.window.key; v = vue(n=6, combats=3)
@@ -520,16 +639,17 @@ class TestVue(unittest.TestCase):
     def test_liste_vide(self):
         v = vue(n=0); K = pyglet.window.key
         for t in (K.UP, K.DOWN, K.PAGEUP, K.PAGEDOWN, K.HOME, K.END, K.RIGHT, K.LEFT, K.RETURN): v.touche(t)
-        v.molette(1); v.decaler(-3)
-        self.assertEqual((v.elements, v.sel, v.fin), ([], 0, 0)); self.assertFalse(v.etoile()); self.assertIsNone(v.courant())
+        v.molette(1); v.defiler(-3); poser(v)
+        self.assertEqual((v.elements, v.sel, v.pos), ([], 0, 0.0)); self.assertFalse(v.etoile()); self.assertIsNone(v.courant())
         v2 = vue(); v2.J.historique = None; v2.entrer(); self.assertEqual(v2.elements, [])                       # pas d'historique du tout (jeu lance sans)
         self.assertFalse(v2.etoile())
 
     def test_etoile_au_clavier(self):
         K = pyglet.window.key; v = vue(n=4); h = v.J.historique
-        v.touche(K.UP); self.assertTrue(v.etoile() is True); self.assertEqual((v.elements[2].fav, len(h.favoris)), (1, 1))
-        v.touche(K.RETURN); self.assertIsNone(v.elements[2].fav); self.assertEqual(h.favoris, [])                  # Entree : bascule
-        v.touche(K.RETURN); v.touche(K.DOWN); v.touche(K.RETURN); self.assertEqual(sorted(e.fav for e in h.dialogues if e.fav), [2, 3])
+        self.assertEqual(v.sel, 3); self.assertTrue(v.etoile() is True); self.assertEqual((v.elements[3].fav, len(h.favoris)), (1, 1))       # l'element actif a l'ouverture : le plus recent
+        v.touche(K.RETURN); self.assertIsNone(v.elements[3].fav); self.assertEqual(h.favoris, [])                  # Entree : bascule
+        v.aller(2); poser(v); v.touche(K.RETURN)                                                                   # (un element choisi par un clic ou par la liste : actif jusqu'au prochain defilement)
+        v.aller(3); poser(v); v.touche(K.RETURN); self.assertEqual(sorted(e.fav for e in h.dialogues if e.fav), [2, 3])
 
     def test_etoile_a_la_souris(self):
         M = pyglet.window.mouse; v = vue(n=4); h = v.J.historique
@@ -554,7 +674,7 @@ class TestVue(unittest.TestCase):
         v.etoile(0); v.etoile(2); v.changer_onglet(UH.O_COMBATS); v.etoile(1); v.changer_onglet(UH.O_DIALOGUES)       # deux dialogues et un combat en favori
         self.assertEqual(len(v.elements), 3)                                                                      # (case decochee : toute la session)
         self.assertTrue(v.basculer_filtre())
-        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2)]); self.assertEqual((v.sel, v.fin), (1, 1))      # les favoris de l'onglet, dans l'ordre ou ils ont ete mis
+        self.assertEqual([(e.type, e.fav) for e in v.elements], [('d', 1), ('d', 2)]); self.assertEqual((v.sel, v.pos), (1, 0.0))      # les favoris de l'onglet, dans l'ordre ou ils ont ete mis
         v.changer_onglet(UH.O_COMBATS)                                                                            # le filtre est conserve d'un onglet a l'autre
         self.assertTrue(v.favoris_seuls); self.assertEqual([(e.type, e.fav) for e in v.elements], [('c', 3)])
         v.changer_onglet(UH.O_DIALOGUES); v.touche(K.RETURN)                                                       # etoile retiree : l'element disparait de la liste filtree
@@ -575,15 +695,15 @@ class TestVue(unittest.TestCase):
         self.assertTrue(v.touche(K.F))                                                                             # (la touche est consommee : rien n'arrive au jeu)
 
     def test_filtre_garde_l_element_choisi_et_defile(self):
-        K = pyglet.window.key; v = vue(n=30, vis=5)
+        K = pyglet.window.key; v = vue(n=30, hv=500.0)
         for i in (3, 10, 11, 12, 20, 25, 26): v.etoile(i)
-        v.aller(11); v.touche(K.F)
-        self.assertEqual(len(v.elements), 7); self.assertEqual(v.courant().texte, 'm11')                         # l'element choisi, s'il est un favori, reste choisi
-        v.touche(K.HOME); self.assertEqual((v.sel, v.fin), (0, 4)); v.touche(K.END); self.assertEqual((v.sel, v.fin), (6, 6))
-        v.molette(1); self.assertEqual(v.fin, 4); v.decaler(100); self.assertEqual(v.fin, 6)                       # molette et glissement bornes a la liste filtree
-        v.touche(K.PAGEUP); self.assertEqual(v.sel, 0)
-        v.touche(K.F); self.assertEqual(len(v.elements), 30)                                                       # decoche : la liste complete
-        v.aller(7); v.touche(K.F); self.assertEqual((v.sel, v.courant().texte), (6, 'm26'))                         # l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree
+        v.aller(11); poser(v); v.touche(K.F); poser(v)
+        self.assertEqual(len(v.elements), 7); self.assertEqual(v.courant().texte, 'm11')                         # l'element choisi, s'il est un favori, reste choisi (la vue se recentre sur lui)
+        frappe(v, K.HOME); self.assertEqual((v.sel, v.pos), (0, v.plage())); frappe(v, K.END); self.assertEqual((v.sel, v.pos), (6, 0.0))
+        v.defiler(10 ** 9); poser(v); self.assertEqual((v.pos, v.sel), (v.plage(), 0)); v.defiler(-10 ** 9); poser(v); self.assertEqual((v.pos, v.sel), (0.0, 6))      # molette et glissement bornes a la liste filtree
+        frappe(v, K.PAGEUP); self.assertEqual(v.pos, v.plage() if v.plage() < v.page_px() else v.page_px())
+        avant = v.courant().texte; v.touche(K.F); poser(v); self.assertEqual((len(v.elements), v.courant().texte), (30, avant))                 # decoche : la liste complete, l'element actif (un favori) reste actif
+        v.aller(7); poser(v); v.touche(K.F); poser(v); self.assertEqual((v.sel, v.courant().texte), (6, 'm26'))      # l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree
 
     def test_favoris_des_sessions_precedentes(self):
         """Les favoris du fichier (sessions precedentes) ne sont pas dans la session : seule la case « Favoris seulement » les montre, avec leur etoile."""
@@ -604,13 +724,88 @@ class TestVue(unittest.TestCase):
 
     def test_rechargement_a_chaque_ouverture(self):
         v = vue(n=2); v.J.historique.ajouter('Nouveau.', None, 10 ** 6); v.entrer()
-        self.assertEqual((len(v.elements), v.sel, v.fin), (3, 2, 2)); v.entrer(UH.O_COMBATS); self.assertEqual(v.onglet, UH.O_COMBATS); v.entrer(99); self.assertEqual(v.onglet, UH.O_DIALOGUES)
-        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre (pas enregistre sur disque)
+        self.assertEqual((len(v.elements), v.sel, v.pos), (3, 2, 0.0)); v.entrer(UH.O_COMBATS); self.assertEqual(v.onglet, UH.O_COMBATS); v.entrer(99); self.assertEqual(v.onglet, UH.O_DIALOGUES)
+        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre
 
     def test_heure_et_onglets_suivants(self):
         self.assertEqual(UH.heure_jeu(60 * (3600 + 5 * 60 + 12)), '1:05:12'); self.assertEqual(UH.heure_jeu(-5), '0:00:00')
         self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS)), (UH.O_COMBATS, None))
         self.assertEqual((UH.onglet_suivant(1), UH.onglet_suivant(0, -1)), (0, 1))
+
+
+class TestPersistance(unittest.TestCase):
+    """Point 2 : les favoris (historique_favoris.json) ET l'etat de la case « Favoris seulement » (reglage historique_favoris_seuls dans reglages.json) survivent a la fermeture et a un nouveau lancement. Fichiers temporaires seulement."""
+    def setUp(self):
+        self.d = tempfile.mkdtemp(prefix='persist_'); self.addCleanup(shutil.rmtree, self.d, True)
+        self.fav = os.path.join(self.d, 'historique_favoris.json'); self.rg = os.path.join(self.d, 'reglages.json')
+
+    def session(self):
+        """Une « session » du jeu : Historique (fichier des favoris), Reglages (reglages.json) et la fenetre d'historique, comme fenetre.py les cree."""
+        P = types.SimpleNamespace(mode_souris=False, pos_souris=None, retour=lambda: None, fermer=lambda: None, _repeter=lambda *a: None)
+        P.J = types.SimpleNamespace(historique=nouveau(self.fav), reg=RG.Reglages(self.rg), height=720)
+        v = UH.VueHistorique(P); v.entrer(); v.hv0 = 500.0; poser(v); return v
+
+    @staticmethod
+    def fermer(v):
+        """Fermeture de la visionneuse (Fenetre.on_close) : reglages et favoris ecrits."""
+        v.J.reg.enregistrer(); v.J.historique.enregistrer(True)
+
+    def test_cle_et_valeur_par_defaut(self):
+        self.assertIs(RG.DEFAUT['historique_favoris_seuls'], False); self.assertIn('historique_favoris_seuls', RG.BOOLEENS_SON_TEXTE)           # (decochee par defaut ; une valeur invalide y revient)
+        self.assertIs(RG.Reglages(None)['historique_favoris_seuls'], False)
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc', 'pause.py'), encoding='utf-8').read()
+        self.assertNotIn('historique_favoris_seuls', src)                                                         # pas de ligne dans le menu Pause : la case est dans la fenetre elle-meme
+
+    def test_etat_enregistre_a_chaque_changement(self):
+        v = self.session(); self.assertFalse(v.favoris_seuls); self.assertFalse(os.path.exists(self.rg))
+        v.touche(pyglet.window.key.F)                                                                              # coche : ecrit tout de suite, sans attendre la fermeture
+        with open(self.rg, encoding='utf-8') as f: self.assertIs(json.load(f)['historique_favoris_seuls'], True)
+        v.basculer_filtre()
+        with open(self.rg, encoding='utf-8') as f: self.assertIs(json.load(f)['historique_favoris_seuls'], False)
+
+    def test_aller_retour_des_reglages(self):
+        for etat in (True, False):
+            r = RG.Reglages(self.rg); r['vignette'] = 0.8; r['historique_favoris_seuls'] = etat; r.enregistrer()
+            r2 = RG.Reglages(self.rg); self.assertIs(r2['historique_favoris_seuls'], etat); self.assertEqual(r2['vignette'], 0.8)             # (les autres reglages ne bougent pas)
+
+    def test_valeurs_invalides_ou_absentes(self):
+        for brut in ('"oui"', '1', '0', 'null', '[true]', '{"a": 1}'):
+            with open(self.rg, 'w', encoding='utf-8') as f: f.write('{"historique_favoris_seuls": %s, "vignette": 0.5}' % brut)
+            r = RG.Reglages(self.rg); self.assertIs(r['historique_favoris_seuls'], False, brut); self.assertEqual(r['vignette'], 0.5)
+        with open(self.rg, 'w', encoding='utf-8') as f: f.write('{"vignette": 0.5}')                              # fichier d'avant cette cle : decoche
+        self.assertIs(RG.Reglages(self.rg)['historique_favoris_seuls'], False)
+        with open(self.rg, 'w', encoding='utf-8') as f: f.write('pas du json')                                  # illisible : valeurs par defaut, sans erreur
+        self.assertIs(RG.Reglages(self.rg)['historique_favoris_seuls'], False)
+
+    def test_deux_sessions_favoris_et_case(self):
+        """Session 1 : un dialogue et un combat en favori, case cochee, fermeture. Session 2 (nouveaux objets, memes fichiers) : la case est cochee a l'ouverture de la fenetre et les favoris sont dans la liste, avec leur etoile."""
+        v = self.session(); h = v.J.historique
+        h.ajouter('Un dialogue.', 'Alena', 100); h.ajouter('Un autre.', None, 900); h.ajouter_combat(combat(t=50)); v.entrer()
+        v.etoile(0); v.changer_onglet(UH.O_COMBATS); v.etoile(0); v.changer_onglet(UH.O_DIALOGUES); v.touche(pyglet.window.key.F); self.assertTrue(v.favoris_seuls)
+        self.fermer(v)
+        v2 = self.session()                                                                                       # nouveau lancement
+        self.assertTrue(v2.favoris_seuls); self.assertEqual([(e.nom, e.texte, e.fav is not None) for e in v2.elements], [('Alena', 'Un dialogue.', True)])
+        v2.changer_onglet(UH.O_COMBATS); self.assertEqual([(e.type, e.issue, e.fav is not None) for e in v2.elements], [('c', 'victoire', True)])
+        v2.touche(pyglet.window.key.F); self.assertEqual(len(v2.elements), 0)                                       # decochee : la session est vide (le reste de l'historique n'est pas conserve)
+        self.fermer(v2)
+        v3 = self.session(); self.assertFalse(v3.favoris_seuls)                                                   # ... et la case decochee est conservee aussi
+        v3.touche(pyglet.window.key.F); self.assertEqual(len(v3.elements), 1)                                       # les favoris, eux, sont toujours la
+
+    def test_favoris_survivent_sans_fermeture_propre(self):
+        """Les favoris sont ecrits au moment de l'etoile : une fermeture brutale (sans on_close) ne les perd pas."""
+        v = self.session(); v.J.historique.ajouter('Garde-moi.', 'Roi', 10); v.entrer(); v.etoile(0)
+        h2 = nouveau(self.fav); self.assertEqual([(e.nom, e.texte) for e in h2.liste('dialogues', True)], [('Roi', 'Garde-moi.')])
+
+    def test_erreur_d_ecriture_n_empeche_pas_de_cocher(self):
+        v = self.session()
+        def casse(): raise OSError('disque plein')
+        v.J.reg.enregistrer = casse
+        self.assertTrue(v.basculer_filtre()); self.assertTrue(v.favoris_seuls)
+        v.J.reg = None; self.assertFalse(v.basculer_filtre())                                                       # (pas de reglages du tout : la case marche quand meme)
+        v.entrer(); self.assertFalse(v.favoris_seuls)
+
+    def test_la_fenetre_relit_l_etat_a_l_ouverture(self):
+        v = self.session(); v.J.reg['historique_favoris_seuls'] = True; v.entrer(); self.assertTrue(v.favoris_seuls)
 
 
 class TestPause(unittest.TestCase):
