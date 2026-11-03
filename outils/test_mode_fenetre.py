@@ -301,7 +301,7 @@ class Bascule(unittest.TestCase):
 
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Plein écran » = simple interrupteur Oui / Non, « Résolution » grisee en plein ecran, plus de « Lissage des textures » ni de « Correction des bords des sprites »."""
-    ORDRE = ['Plein écran', 'Écran du plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Centrer la caméra sur le joueur', 'Interface']
+    ORDRE = ['Plein écran', 'Écran du plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Anticrénelage', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Interface']
 
     @classmethod
     def setUpClass(cls):
