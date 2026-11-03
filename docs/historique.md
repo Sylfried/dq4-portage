@@ -19,7 +19,7 @@ Le projet a démarré le 29/10/2026 (avant la création de ce dépôt). Jusqu'au
 | 30/10 | Dépôt GitHub, règles de travail, issues de départ | #37 |
 | 30/10 nuit | Séparation du dépôt d'origine `dq4-pc` : portage natif (ici), essai Unity (`dq4-portage-unity`), patch français (inchangé) | — |
 
-## Les pull requests de `dq4-portage` (#1 à #114)
+## Les pull requests de `dq4-portage` (#1 à #115)
 Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'ils figurent sur GitHub, sans leur préfixe « Avance #N : ». Les « retours de HH h MM » sont les retours de test de Sylfried traités par la pull request. La PR #1 démarre la numérotation de ce dépôt : ses numéros ne sont pas ceux des issues de `dq4-pc`.
 
 | Fusion | PR | Titre |
@@ -82,6 +82,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 | #106 | test « issue par issue » en commençant par #52 (D-204), issue #105 : modificateurs et triches à décider en tout dernier (D-205) |
 | 03/11 | #113 | retours du test de #52 (D-206 à D-213) : libellé « Antialiasing », course acceptée dès l'arrivée sur une carte (#107), issues #107 à #112 |
 | 03/11 | #114 | choix du périphérique de sortie audio, première ligne de la page Son (#112, D-207) |
+| 03/11 | #115 | écran titre : logo et sous-titre deux fois plus grands (#108, D-209) |
 
 ## Et maintenant
 Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105 et #107 à #112, jalons 1 à 5 ; 48 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.

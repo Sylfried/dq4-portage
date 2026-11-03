@@ -26,6 +26,33 @@ CP_PREMIER, CP_SECOND, CP_ACC = 690, 2508, 0.0625                  # c_copyright
 CP_L, CP_H, CP_HAUT = 450.0, 40.0005, 25.0003                      # c_copyrightWidth / Height ; centre a 25 unites au-dessus du bord bas
 
 
+# ---- Logo du titre : ECART VOULU avec l'APK (demande de Sylfried, 03/11/2026, issue #108 : « doubler la taille du logo et du sous-titre »)
+# Le logo est un maillage du moteur (paquets 21 / 22, carte `ev01`) : modele 8901 = « DRAGON QUEST » + « IV » + « TM » + sous-titre (« L'epopee des Elus »), modele 8900 = l'eclat anime sur le logo ;
+# tous deux a la meme position (0, 1, 0), sommets en coordonnees locales du panneau (x vers la droite de la camera, mirroir d'Unity, y vers le haut), x de -4,549 a 4,549 pour « DRAGON QUEST ».
+LOGO_MODELES = (8900, 8901)
+LOGO_ECHELLE = 2.0                     # facteur d'agrandissement voulu (1 = l'APK)
+LOGO_DEMI_LARGEUR = 4.549              # demi-largeur locale de « DRAGON QUEST » (lue sur les sommets du paquet 22)
+LOGO_Y_FIXE = 0.70                     # ordonnee locale du point qui ne bouge pas : le logo grandit autour de ce point (ce qui le laisse au-dessus de « Touchez l'ecran » et sous le haut de l'ecran ; voir notes)
+LOGO_MARGE_LARGEUR = 0.96              # le logo agrandi ne depasse jamais 96 % de la largeur de la fenetre (fenetre tres etroite) ; il ne devient jamais plus petit que celui de l'APK
+
+
+def facteur_logo(largeur_origine, souhaite=LOGO_ECHELLE, marge=LOGO_MARGE_LARGEUR):
+    """Facteur d'agrandissement du logo : `souhaite`, reduit (jusqu'a 1) pour que le logo agrandi tienne dans `marge` de la largeur de la fenetre. `largeur_origine` = largeur du logo
+    de l'APK en fraction de la largeur de la fenetre (0 a 1)."""
+    if largeur_origine <= 0.0: return max(1.0, souhaite)             # largeur non mesurable : on applique le facteur voulu tel quel
+    return max(1.0, min(souhaite, marge / largeur_origine))
+
+
+def agrandir_logo(loc, facteur, y_fixe=LOGO_Y_FIXE):
+    """Sommets locaux (n, 3 : x, y, profondeur) du logo agrandis de `facteur` autour du point (0, y_fixe) du panneau : x et y changent, la profondeur (ordre de dessin des couches du panneau : eclat devant le logo, etc.)
+    reste celle du moteur. Renvoie un nouveau tableau."""
+    import numpy as np
+    sortie = np.array(loc, np.float32, copy=True)
+    sortie[:, 0] *= facteur
+    sortie[:, 1] = y_fixe + facteur * (sortie[:, 1] - y_fixe)
+    return sortie
+
+
 def preparer(dossier_apk, cache, log=print):
     """Extrait des APK (une seule fois) les images et le texte propres a l'avant-partie. -> True si tout est dans le cache. Sans UnityPy ou sans APK : False (le jeu s'en passe)."""
     dest = {n: os.path.join(cache, n) for n in RESSOURCES}
