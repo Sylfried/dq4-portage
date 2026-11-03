@@ -47,6 +47,9 @@ HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) +
 TBZ_W20_0 = 0x36000094
 COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
 STR_W8_X0 = 0xb9000008
+MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
+MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
+MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -470,6 +473,7 @@ class Moteur:
         self._crochets_fondu()
         self._crochets_niveau()
         self._crochets_rencontres()
+        self._crochets_magie()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
@@ -540,6 +544,43 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
+
+    def _crochets_magie(self):
+        """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
+        de succes (la table des actions donne le meme texte au succes et a l'echec : « Les blessures de X guerissent ! » a PV pleins). Le menu Magie lance le sort par `UseAction::execUse` a deux endroits (choix d'une
+        cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
+        Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
+        table des messages) ou aucun, la liste devient le message du jeu « Mais rien ne se passe. » (une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
+        c = self.core; self._magie = None
+        try:
+            cs, nt = c.export('_ZN19TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT14useMagicNoTargetEv')
+            msg, exc = c.export('_ZN6status17BaseActionMessage12actionParam_E'), c.export('_ZN6status10excelParamE')
+            u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]; u64 = lambda a: struct.unpack('<Q', c.mem(a, 8))[0]
+            def est_execuse(a):                                                            # `bl` vers le stub de UseAction::execUse ?
+                w = u32(a); return w & 0xfc000000 == 0x94000000 and a + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) == c.LIB_BASE + MAGIE_EXECUSE_STUB
+            sites = [(cs + MAGIE_CHARSELECT_BL, False), (nt + MAGIE_SANS_CIBLE_BL, True)] if cs and nt and msg and exc else []
+            if not sites or not all(est_execuse(a) for a, _ in sites) or u32(u64(msg) + 0x48 * 201 + 0x14) != MSG_RIEN_NE_SE_PASSE:
+                print('sorts sans effet : menu Magie inattendu, le message de succes est garde', flush=True); return
+            def _avant(uc, ad, sz, u):
+                p = uc.reg_read(c.XREG[0]) & 0xffffffffffff; lanceur = u64(p); action = u32(p + MAGIE_ACTION)
+                cout = c.mem(u64(exc + 0x70) + 0x48 * action + 0x3a, 1)[0]                  # UseAction::getUseMp
+                self._magie = (p, lanceur, struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0], cout, action) if lanceur and cout else None
+            def poser(groupe):
+                def _apres(uc, ad, sz, u):
+                    m, self._magie = self._magie, None
+                    if not m: return
+                    p, lanceur, pm, cout, action = m
+                    if struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0] < pm: return        # PM depenses : le sort a eu un effet
+                    e = u64(msg) + 0x48 * action; r = u32(p + MAGIE_RESULTAT)
+                    if r and r not in (u32(e + 4), u32(e + 0xc)): return                    # le jeu a deja son message d'echec
+                    c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_RIEN_NE_SE_PASSE, 0))
+                    if groupe: c.mem_w(self.L + 0x257f84, b'\x01')                          # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
+                return _apres
+            for (a, groupe) in sites:
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _avant, None, a, a); c.uc.hook_add(unicorn.UC_HOOK_CODE, poser(groupe), None, a + 4, a + 4)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('sorts sans effet : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
