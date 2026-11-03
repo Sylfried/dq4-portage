@@ -15,10 +15,11 @@ if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.op
 import numpy as np
 import reglages as RG
 import pause as PA
+import sortie_audio as SA
 
 K = pyglet.window.key
 GAUCHE = 1
-PAGES = ('racine', 'affichage', 'son', 'commandes', 'modifications', 'etats', 'quitter', 'titre', 'interface')
+PAGES = ('racine', 'affichage', 'son', 'commandes', 'modifications', 'etats', 'quitter', 'interface')
 PAGES_DESSINEES = tuple(p for p in PAGES if p != 'interface')          # (la page Interface dessine l'apercu du jeu : le faux jeu n'en a pas)
 CACHE = os.environ.get('DQ_UICACHE', '/inexistant')                    # (facultatif : cache d'interface du jeu pour la police et les icones ; sans lui, polices du systeme et plaque de repli)
 
@@ -31,6 +32,7 @@ class FauxJeu:
         self.reg = RG.Reglages(None); self.plein = plein; self.ecrans = ecrans; self.res = (1280, 720); self.appels = []; self.etiq = {}
         self.width, self.height = 1280, 720; self.args = types.SimpleNamespace(cache=CACHE); self.souris = None
         self.post = types.SimpleNamespace(max_msaa=None); self.son = types.SimpleNamespace(actif=True, ecoute=False, ecouter=lambda b: None, tick=lambda: None)
+        self.sorties = SA.Sorties(types.SimpleNamespace(set_device=lambda d: self.appels.append(('sortie', d.id))), types.SimpleNamespace(get_output_devices=lambda: [types.SimpleNamespace(id='a', name='Haut-parleurs'), types.SimpleNamespace(id='b', name='Casque')]))
 
     est_plein = property(lambda self: self.plein)
     def regler_plein_ecran(self, v): self.plein = bool(v); self.appels.append(('plein', bool(v)))
@@ -44,6 +46,13 @@ class FauxJeu:
     def regler_ecran_plein(self, v): self.appels.append(('ecran', v))
     def regler_mode(self, v): self.appels.append(('mode', v))
     def regler_distance(self, v): self.appels.append(('distance', v))
+    def valeurs_sortie(self): return self.sorties.valeurs(self.reg['sortie_audio'])
+    def valeur_sortie(self): return self.sorties.valeur(self.reg['sortie_audio'])
+    def nom_sortie(self, v): return self.sorties.nom(v, self.reg['sortie_audio'])
+    def sortie_modifiable(self): return self.sorties.modifiable(self.reg['sortie_audio'])
+    def regler_sortie(self, v):
+        ok, choix = self.sorties.appliquer(v)
+        if ok: self.reg['sortie_audio'] = choix
     def regler_son(self, oui): self.appels.append(('son', oui))
     def appliquer_mixage(self): self.appels.append('mixage')
     def apercu_son(self, cat): self.appels.append(('apercu', cat))
@@ -263,7 +272,7 @@ class TousLesTypes(unittest.TestCase):
         fenetre()
         for page in PAGES_DESSINEES:
             J, p = menu(page); libs = tuple(x['l'] for x in p._entrees() if x['t'] != 'sep')
-            J, p = menu(page, classe=PauseMarquee, inactives=libs); p.sel[page] = 2 if page in ('quitter', 'titre') else 0; sel = p.sel[page]; avant = etat(J, p)
+            J, p = menu(page, classe=PauseMarquee, inactives=libs); p.sel[page] = 2 if page == 'quitter' else 0; sel = p.sel[page]; avant = etat(J, p)
             rendre(p); self.assertEqual(p.sel[page], sel, page)
             for t in (K.DOWN, K.UP, K.LEFT, K.RIGHT, K.RETURN, K.SPACE, K.DELETE, K.HOME, K.PAGEDOWN): p.touche(t)
             p.molette(1); p.molette(-1); self.assertEqual(p.sel[page], sel, page)

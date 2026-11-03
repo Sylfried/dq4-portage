@@ -23,6 +23,8 @@ GLOBAL_PTR = 0x23d438                       # singleton Global
 NOM_RESSOURCE = 0x258290                    # nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
 ECRAN_ETAT = 0xd8                           # Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
 G_IS_AMAZON = 0x24f684                      # octet g_isAmazon du moteur : a 1, la case « Sauv. cloud » du menu de depart n'existe pas
+MSG_RETOUR_TITRE = 0xcba2f                     # identifiant du message de la boite « Revenir a l'ecran titre » des Parametres d'origine (TownMenu_OPERATION_SETTING::menuUpdate + 0x1c8 : `mov w1, #0xba2f ; movk w1, #0xc, lsl #16` puis TownMenu_MESSAGE::addMessage(int)) : b0834000.mpt, 834095
+MESSAGE_RESULTAT = 0x10                        # TownMenu_MESSAGE + 0x10 : reponse de la boite (1 = Oui, 2 = Non ; remis a 0 a l'ouverture) ; lue par TownMenu_OPERATION_SETTING::menuUpdate (etat 5)
 EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
 EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
 CHARGEMENT_COUVERT = 0.9                    # opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (Etat.chargement)
@@ -468,6 +470,7 @@ class Moteur:
         hv = c.export('_ZN8MenuPort10SetVisibleEb')
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
+        self.retour_titre_etat = None            # retour au titre : None, 'ouvrir' (a lancer au prochain pas) ou 'dialogue' (la boite Oui / Non du jeu attend la reponse) ; voir demander_retour_titre
         self.demande_pause = False               # le joueur a choisi « Paramètres » dans le menu Divers : la visionneuse ouvre son menu Pause (voir _detourner_parametres)
         self._detourner_parametres()
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
@@ -658,6 +661,7 @@ class Moteur:
         self.core.mem_w(self.L + G_IS_AMAZON, b'\x01')
         self.remettre_vitesses()
         self.patcher_parametres()
+        self.retour_titre_etat = None            # un etat charge pendant la boite du retour au titre : la boite n'existe plus (memoire du moteur remplacee)
 
     def _elargir_symboles(self):
         """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
@@ -713,13 +717,58 @@ class Moteur:
         self.core.call(self.E('_ZN6Global10startFieldEv'), self._global(), label='startField')
 
     def retour_titre(self):
-        """Retour a l'ecran-titre : ce que fait le bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
-        (sauvegarde automatique, killbank), verrouille le joueur, puis Global::startTitle() (fondu au noir, chapitre 0, la partie suivante est le titre). Les menus et le message du moteur doivent etre fermes."""
+        """Retour a l'ecran-titre : la fin du bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
+        (sauvegarde automatique, killbank), ferme la boite, verrouille le joueur, puis Global::startTitle() (fondu au noir de 30 images lance par UnitySetFade(0x101e), chapitre 0, la partie suivante est le titre). A
+        appeler PENDANT un pas (voir _retour_titre_apres) : le paquet du fondu doit etre lu avec ceux du pas, sinon le fondu est perdu (le tampon est remis a zero au pas suivant) et l'ecran passe au noir d'un coup."""
         c = self.core
         c.call(self.E('_ZN7profile8SaveLoad8killbankEib'), 4, 0, label='killbank')
+        self._fermer_boite_titre()
         c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
         c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 1, label='setLock')
         c.call(self.E('_ZN6Global10startTitleEv'), self._global(), label='startTitle')
+
+    def demander_retour_titre(self):
+        """Menu Pause > « Revenir à l'écran titre » : ouvre la boite du jeu (son texte, Oui / Non) au prochain pas, comme le bouton des Parametres d'origine. -> faux si une demande est deja en cours.
+        « Non » ferme la boite et rend la main au joueur ; « Oui » lance retour_titre, avec le fondu du jeu. Les deux suites sont jouees par `_retour_titre_apres`, apres chaque GameUpdate.
+        Seulement en ville et sur la carte du monde, les deux parties ou le menu des Parametres d'origine existe et ou la boite repond (essai : en combat, la boite s'ouvre mais ne recoit ni les touches ni
+        les clics, le menu de commandes du combat garde la main ; non verifie dans les boutiques et les jeux du casino)."""
+        if self.retour_titre_etat is not None or self.etat.partie not in (PARTIE_VILLE, PARTIE_CHAMP): return False
+        self.retour_titre_etat = 'ouvrir'; return True
+
+    def _boite_titre(self): return self.core.export('gTownMenu_MESSAGE')
+
+    def _fermer_boite_titre(self):
+        c = self.core; m = self._boite_titre()
+        if m and c.call(self.E('_ZN8MenuBase6isOpenEv'), m, label='isOpen') & 1: c.call(self.E('_ZN8MenuBase5closeEv'), m, label='close')
+
+    def _retour_titre_avant(self):
+        """Avant GameUpdate : ouvre la boite. Meme suite d'appels que l'etat 5 du menu des Parametres d'origine (menuUpdate + 0x1ac) : openMessageForMENU, addMessage(0xCBA2F), setYesNo() (curseur sur « Oui »),
+        setYesNoSuperCancel(false) ; le joueur est verrouille comme dans le menu du jeu (PlayerManager::setLock(true), rendu par « Non »)."""
+        if self.retour_titre_etat != 'ouvrir': return
+        c = self.core; m = self._boite_titre(); self.retour_titre_etat = 'dialogue'
+        c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
+        c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 1, label='setLock')
+        c.call(self.E('_ZN16TownMenu_MESSAGE18openMessageForMENUEv'), m, label='openMessageForMENU')
+        c.call(self.E('_ZN16TownMenu_MESSAGE10addMessageEi'), m, MSG_RETOUR_TITRE, label='addMessage')
+        c.call(self.E('_ZN16TownMenu_MESSAGE8setYesNoEv'), m, label='setYesNo')
+        c.call(self.E('_ZN16TownMenu_MESSAGE19setYesNoSuperCancelEb'), m, 0, label='setYesNoSuperCancel')
+        c.mem_w(m + MESSAGE_RESULTAT, bytes(4))                # la reponse d'une boite precedente ne compte pas (MenuBase::menuBaseSetup la remet a 0 quand le menu est ajoute ; ici il peut deja l'etre : message d'un PNJ en cours)
+
+    def _retour_titre_apres(self):
+        """Apres GameUpdate, avant la lecture des paquets : la reponse de la boite (TownMenu_MESSAGE + 0x10, comme le fait menuUpdate du menu des Parametres d'origine). 2 = Non : on ferme la boite et on
+        rend la main (setLock(false), l'inverse de l'ouverture). 1 = Oui : retour_titre, dans ce pas, donc avec son fondu."""
+        if self.retour_titre_etat != 'dialogue': return
+        c = self.core; r = struct.unpack('<I', c.mem(self._boite_titre() + MESSAGE_RESULTAT, 4))[0]
+        if r == 2:
+            self.retour_titre_etat = None; self._fermer_boite_titre()
+            c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
+            c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 0, label='setLock')
+        elif r == 1:
+            self.retour_titre_etat = None; self.retour_titre()
+        elif not c.call(self.E('_ZN8MenuBase6isOpenEv'), self._boite_titre(), label='isOpen') & 1:          # fermee sans reponse (la scene du moteur a repris la boite : un message de plus d'un script, par exemple) : la demande tombe, le joueur est libere
+            self.retour_titre_etat = None
+            c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
+            c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 0, label='setLock')
 
     def demarrer_ville(self, nom):
         """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
@@ -804,7 +853,9 @@ class Moteur:
                 if self.images == im: self.ui.image = self.images; c.call(self.E('_Z27BattleMenu_setHoppingNumbersss'), ch, hh, nn, label='hop')
         self.pk.begin()
         if self.defilement is not None: self.ecrire_defilement()
+        self._retour_titre_avant()
         r = c.call(self.E('GameUpdate'), tenu, decl, label='GameUpdate')
+        self._retour_titre_apres()
         if MSGDBG: self._journal_message()
         if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lignes[-12:]))
         pq = self.pk.packets()
