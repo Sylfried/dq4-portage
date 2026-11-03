@@ -93,6 +93,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 | #132 | plein écran → fenêtre après le branchement d'un écran externe : le moniteur gardé par pyglet est relu avant chaque bascule (sa poignée Windows n'était plus valable : « Descripteur non valide ») (#126, D-220) |
 | 03/11 | #133 | course (accélérateur) et marche accélérée dès que le héros est libre au retour d'un combat, et non à la fin du fondu de retour (30 images) (#127, D-221) |
 | 03/11 | #142 | la sauvegarde automatique est celle du jeu : plus aucune écriture forcée à la fermeture (croix, Alt + F4, menu Quitter, console, fin de session) ; le moteur l'écrit seul (arrivée sur la carte du monde, donjon selon ses conditions) (#128, D-220 ; remplace #124) |
+| 03/11 | #143 | le petit rappel « Échap : menu / F1 : infos » en bas à gauche au démarrage est retiré (#129, D-220) |
 
 ## Et maintenant
 Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131 et #134 à #141, jalons 1 à 5 ; 58 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.

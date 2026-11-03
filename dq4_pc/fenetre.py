@@ -259,7 +259,7 @@ class Jeu(pyglet.window.Window):
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
         self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
-        self.t_demarrage = time.time(); self.etiq_conseil = pyglet.text.Label(self._texte_conseil(), font_name=POLICES, font_size=11, color=(255, 255, 255, 200), x=10, y=8, anchor_x='left', anchor_y='bottom')
+        self.t_demarrage = time.time()
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
@@ -781,11 +781,6 @@ class Jeu(pyglet.window.Window):
     def regler_distance(self, pourcent):
         """Menu Echap : distance de la camera en pourcentage (50 = deux fois plus pres, 200 = deux fois plus loin)."""
         self.regler_zoom(100.0 / max(1.0, float(pourcent)))
-
-    def _texte_conseil(self):
-        """Rappel affiche un instant au demarrage : le menu et la touche des infos a l'ecran."""
-        noms = [n for n in self.reg['touches']['infos'] if n]
-        return 'Échap : menu' + ('    %s : infos' % RG.nom_touche(noms[0]) if noms else '')
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
@@ -3238,8 +3233,6 @@ class Jeu(pyglet.window.Window):
         if self.pause.ouvert:
             if self.pause.veut_miniature: self.pause.mini_tex = self._copier_miniature(); self.pause.veut_miniature = False       # le jeu sans le menu, pour la miniature des etats (copie sur la carte graphique : pas de relecture qui bloque)
             self.pause.dessiner()
-        elif time.time() - self.t_demarrage < 8.0 and not self.aide and not self.args.shot:
-            gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); self.etiq_conseil.draw()
         if self.toasts and time.time() < self.toasts[0][1]:                # message bref en haut de l'ecran
             k = max(0.75, self.height / 900.0); gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
             et = self._etiq(self.toasts[0][0], 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k

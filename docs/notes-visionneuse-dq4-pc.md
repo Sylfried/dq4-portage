@@ -204,7 +204,7 @@ Cause du « il manque l'eau dans les grottes » : la visionneuse n'avait jamais 
 - **Angle de la caméra sur la carte du monde (supprimé en #27 : la carte du monde est toujours vue de dessus)** : un angle **négatif** incline la vue (de 0 à 20 degrés, `CH_INCLINAISON_MAX`) : matrice orthographique inclinée (`y_écran = (hauteur x sin - (z - cz) x cos) / dh`, profondeur le long de l'axe de la caméra), zone de sol chargée agrandie de 1 / cos. C'est une inclinaison **orthographique** : à -20 degrés le sol est raccourci de 6 % en hauteur (peu visible) ; un angle positif ne change rien (la vue est déjà de dessus). Les sprites restent à plat sur le sol. Un rendu en perspective serait plus marqué mais casserait le pixel perfect.
 - **Anticrénelage** : renommé, avec une note rouge sous la valeur (« Sera appliqué au prochain lancement du jeu ») tant que la valeur choisie diffère de celle du lancement (`Jeu.args.msaa`). `_choix(..., note=...)`, la ligne monte de quelques pixels pour laisser la place.
 - **Placement des boutons** : écran `placement` dans la pile du menu (plus un mode à part) : les boutons de l'écran sont dessinés sans voile, le panneau « Disposition de l'interface » est collé en bas (Taille des boutons, Aimantation à la grille, Rétablir les positions d'origine, Terminer) ; un clic hors du panneau saisit un bouton, glisser le déplace (`Pause.cadre_panneau`, `hud.prendre / deplacer / poser`) ; Échap ou clic droit termine (réglages enregistrés).
-- **Touche des infos** : `infos` fait partie de `TOUCHES_DEF` / `ACTIONS` ; `on_key_press` et le menu testent `reg.action_de(symbol) == 'infos'`. Le rappel de démarrage affiche la touche réelle.
+- **Touche des infos** : `infos` fait partie de `TOUCHES_DEF` / `ACTIONS` ; `on_key_press` et le menu testent `reg.action_de(symbol) == 'infos'`. Le petit rappel de démarrage (« Échap : menu    F1 : infos », en bas à gauche, 8 s) a été **retiré** à sa demande (#129, avance #143).
 - **Reste** : zoom de la carte du monde à 400 % après un réglage de l'angle (non reproduit), débordement de l'eau des grottes, murs invisibles de `dbout`, clignotements, ordre des compagnons non vérifié.
 
 ## Touches ZQSD / flèches = caméra, zoom 40-400 %, menu Échap à plat, plaques (31/10/2026, #26)
@@ -1086,3 +1086,15 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - **Sous Windows** : à confirmer par Sylfried (fermer dans une grotte, puis « Sauvegarde automatique » au menu de départ).
 - **Où le menu de départ replace le joueur** après une sauvegarde automatique prise dans un donjon (carte du monde à l'entrée, comme sur mobile, ou dans le donjon). Le chargement brut de la banque écrite à l'entrée du donjon (`loadbank(4)`) reprend dans le donjon (`dab1`) ; le chemin du menu de départ du jeu n'a pas été rejoué. Dans les deux cas c'est le code du moteur, que la visionneuse ne modifie pas.
 - Ce que le jeu fait exactement des conditions `StageStatus` (quand `isAbortSaveDungeon` est vrai) : mesuré seulement sur `dab1` dans l'échantillon.
+
+## Avance #143 : le petit rappel du bas de l'écran est retiré (#129, 03/11/2026)
+
+### Demande (D-220, 23 h 08)
+« Supprime le petit message en bas à gauche "Échap pour le menu, F1 pour les infos" ou un truc du genre. »
+
+### Fait
+- Retiré de `fenetre.py` : l'étiquette `etiq_conseil`, `Jeu._texte_conseil` et le dessin qui l'affichait 8 secondes après le démarrage (hors menu Échap, hors infos F1, hors captures). `t_demarrage` reste (mesures de temps réel). Le menu Échap et la touche F1 ne changent pas.
+- Test : `outils/test_sans_rappel_demarrage.py` (2 tests).
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (aucun texte en bas à gauche au démarrage).
