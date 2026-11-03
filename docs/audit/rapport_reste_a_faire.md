@@ -6,7 +6,7 @@
 
 ## En bref
 
-> **Mise à jour du 03/11/2026 à 15 h 50 (lecture de Sylfried)** : voir la section « Lecture du 03/11 » plus bas. Les compteurs ci-dessous (18 / 15 / 11 / 20) datent du 02/11 ; l'état à jour est dans les issues GitHub (#51 à #99) et dans `lacunes_connues.md`.
+> **Mise à jour du 03/11/2026 à 15 h 50 (lecture de Sylfried)** : voir la section « Lecture du 03/11 » plus bas. Les compteurs ci-dessous (18 / 15 / 11 / 20) datent du 02/11 ; l'état à jour est dans les issues GitHub (#51 à #99 et #101) et dans `lacunes_connues.md` (réponses de 16 h 47 : section « Lecture du 03/11 (16 h 47) »).
 
 Le portage fonctionne sur tout ce que j'ai pu essayer sous Linux, mais **rien n'a été validé sous Windows ni sur un vrai GPU** : c'est le premier reste. Ce rapport compte **18 points qui attendent ta décision**, **15 oublis** de ma part, **11 bugs** connus ou probables et **20 points non vérifiés**. Aucun défaut bloquant n'a été vu dans les parcours testés (sauvegardes du chapitre 1) ; deux risques de blocage ne sont pas écartés (murs invisibles, mémoire sur longue session) et les chapitres suivants n'ont jamais été joués.
 
@@ -81,14 +81,14 @@ Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
 
 ## Suivi dans GitHub (depuis le 03/11/2026)
 
-Le reste à faire de ce rapport est repris dans **48 issues de `dq4-portage` (#51 à #99, dont 7 fermées au 03/11 à 16 h)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+Le reste à faire de ce rapport est repris dans **49 issues de `dq4-portage` (#51 à #99 et #101, dont 8 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
 
 | Jalon | Issues | Contenu |
 |---|---|---|
 | 1. Validation Windows | #51 à #58, #90 | premier lancement (fermée), rendu OpenGL, performance, sauvegarde à l'église (fermée), comparaison au mobile (fermée), combats, historique (fermée), teinte jour / nuit et cartes `ml*`, séquences à fondu |
 | 2. Clavier complet et manette | #59 à #61, #93 | interface au clavier et à la manette (à creuser), bruitage au clavier, manette, bruitage du coffre lâché |
 | 3. Chapitre 2 et services | #62 à #65 | chapitre 2 (bloqué : sauvegardes), services, boutiques et bestiaire, casino |
-| 4. Moteur et finitions | #66 à #85, #91 à #92, #94 à #99 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs (2 résolus : #78, #82), bouton de vitesse, caméra des attaques, historique au clavier, défilement du texte, accélérateur et jingle, barre de rotation de la croix, classes d'interface, petits restes |
+| 4. Moteur et finitions | #66 à #85, #91 à #92, #94 à #95, #97 à #99, #101 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs (2 résolus : #78, #82), bouton de vitesse, caméra des attaques, historique au clavier, défilement du texte, vitesses hors combat (#101 ; #96 « accélérateur et jingle » fermée), barre de rotation de la croix, classes d'interface, petits restes |
 | 5. Distribution et extensions | #86 à #88 | licence d'Unicorn (fermée : GPL v2), .exe, DQ5 et DQ6 |
 
 ## Lecture du 03/11 (14 h 36 à 15 h 50) : ce qui est validé, ce qui reste
@@ -120,7 +120,28 @@ Sylfried a lu la liste « tout ce qu'il reste à faire » et répondu point par 
 
 **Oublis de Claude** : n° 6 (clavier) suspendu (#59) ; n° 8 (bruitage 300) règle confirmée (#60) ; n° 14 (CI, scripts) CI faite en #49, scripts de recherche introuvables (caduc) ; n° 15 (documentation) à jour en #49, #50 et #100. **Bugs connus** : n° 4 (`dbout`) et n° 8 (vagues d'eau) **résolus** (#78, #82 fermées) ; n° 6 (survol) **confirmé imparfait**, souris et clavier (#80) ; n° 9 (angle de caméra) : décision D-172 (#83) ; n° 1 (bruitage de transition) pas testé (#75). Les autres bugs (n° 2, 3, 5, 7, 10, 11) n'ont pas été rencontrés : à tester ou à corriger plus tard.
 
-**Nouveaux sujets nés de la lecture** : bouton de vitesse dessiné à gauche avant sa place (#91), caméra des attaques (#92), bruitage du coffre lâché (#93), historique message par message et PgHaut / PgBas par 3 (#94), « Défilement du texte » dans Affichage (#95), accélérateur et jingle (#96), barre de rotation de la croix (#97), classes d'interface du jeu (#98), petits restes (#99).
+**Nouveaux sujets nés de la lecture** : bouton de vitesse dessiné à gauche avant sa place (#91), caméra des attaques (#92), bruitage du coffre lâché (#93), historique message par message et PgHaut / PgBas par 3 (#94), « Défilement du texte » dans Affichage (#95), accélérateur et jingle (#96, remplacée à 16 h 47 par #101), barre de rotation de la croix (#97), classes d'interface du jeu (#98), petits restes (#99).
+
+## Lecture du 03/11 (16 h 47) : réponses à mes questions
+
+Sylfried a répondu aux treize points que je lui avais soumis (décisions D-191 à D-200, `decisions.md` § 5e). **Toujours en phase gestion de projet : rien n'est codé.**
+
+| Point | Réponse de Sylfried | Suite |
+|---|---|---|
+| « Performances à x3, x4 et x8 » | « prévois que je dois vérifier ça aussi » | #53 réécrite : combat « Très rapide » puis transitions à x4 |
+| `MAP_DIFF` | « c'est bon désormais » | clos (G-039c) |
+| Feuilles d'ombre 193 et 194 ; points « sans issue » | « Oki » | clos |
+| Bandeau « Prologue » (`hyodai1`) | « Yes je vois le cadre » | clos (G-012) |
+| Coffres | « c'est bon dans le bon sens » | clos (G-058, G-205) |
+| Mode « menus simples » | garder comme solution de secours, **pas d'option**, utilisé quand nécessaire | repli automatique déjà en place ; G-108 traité |
+| Format de distribution | « On verra pour les portages » : scripts + `.bat` ou `.exe` launcher | #87 ; pas tranché |
+| Fichier `LICENSE` | « Fais le si il le faut » | pas nécessaire aujourd'hui, pas créé (`docs/licences.md`) |
+| Accélérateur et jingle | « supprime l'option pour choisir la valeur d'accélération… x4 en vitesse de transition… » | **#101** ; #96 fermée |
+| Espace et discussion de groupe | retirée d'Espace, mise sur une autre touche (Alt / Alt Gr) | clos (G-162), lecture corrigée |
+| « Sort en trop » | « Exactement » : la rangée fantôme supprimée en #45 | à vérifier sur Windows (#99) |
+| Caméra des attaques | « juste la caméra qui bouge pendant des attaques » ; l'Ornythox n'est plus sûr, l'archer vert est peut-être meilleur | #92 réécrite : vérifier d'abord avec des ennemis du chapitre 1 |
+
+**Reste à lui demander** : l'**étendue** de la suppression des vitesses (marche, caméra et touche d'accélérateur partent-elles aussi ?) et le sort de déplacement (306) dans les transitions raccourcies (#101) ; le sujet « audio réel » et `reglages.json` (#99).
 
 ## Oublis de Claude
 

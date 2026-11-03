@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c et 5d, D-149 à D-190). État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99 et #101, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-200). **Décidé, pas encore codé (D-197, #101)** : les réglages de vitesse hors combat (marche, caméra, transition, accélérateur) vont être retirés ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage ; les passages de ces notes qui décrivent ces réglages décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -785,11 +785,37 @@ Aucun changement de code dans `dq4_pc/` ni dans les tests (phase gestion de proj
 ### Validé par Sylfried sur Windows (établi par lui)
 Premier lancement du `.bat` ; sauvegardes (église, automatiques, hors églises, création et suppression de journal) ; plein écran (F11, Alt + Entrée) et autres ratios ; comparaison au mobile (tailles de texte, placements, croix, plume, dragon du titre) ; combat de boss du chapitre 1, groupes, Morph de la cinématique, game over, nouvelle partie sans relancer ; historique après combats ; teinte jour / nuit (carte et villes) ; fenêtre « Interface » glissée à la souris ; murs de `dbout` et vagues d'eau des grottes résolus ; ordre de tracé des monstres, fenêtres de combat, escaliers : « tout bon ».
 
-### À trancher par Sylfried (#100)
+### À trancher par Sylfried (#100) (**tranché le 03/11 à 16 h 47 : voir « Avance #102 » ci-dessous**)
 1. **Licence** : (a) rester sur « scripts + `.bat` qui télécharge Unicorn », (b) publier le portage sous GPL v2 pour embarquer Unicorn dans un `.exe`, (c) un autre émulateur ; et choisir une licence pour le code du portage (`docs/licences.md`, #87).
-2. **Accélérateur et jingle** (#96) : lecture retenue (supposé) = pendant un jingle, la touche d'accélérateur est neutre, sauf pour une transition de carte à carte.
+2. **Accélérateur et jingle** (#96) : lecture retenue (supposé) = pendant un jingle, la touche d'accélérateur est neutre, sauf pour une transition de carte à carte. **Remplacé le 03/11 à 16 h 47** (D-197) : plus d'accélérateur hors combat, transitions de porte à x4 fixe (#101) ; #96 fermée.
 3. **Espace et discussion de groupe** : « Espace ne fait plus les discussions de groupe » est lu comme « le cas limite n'arrive plus » ; si c'est la discussion de groupe qui ne s'ouvre plus du tout avec Espace, le dire.
 4. **Petits restes** (#99) : mode « menus simples » (garder, simplifier, retirer ?), bandeau « Prologue » (le cadre doré à fond bleu s'affiche-t-il ?), « sort en trop » (est-ce la rangée fantôme supprimée en #45 ?), coffres (sens d'ouverture).
 
 ### Non vérifié (#100)
 Rien n'a été exécuté côté outil. Les affirmations sur le code de ce paragraphe (pièces `MAP_DIFF` reproduites, rangée fantôme de la liste des sorts supprimée en #45) sont lues dans le code et les notes, non revues à l'écran. Licence : textes publics lus (COPYING, métadonnées), pas d'avis juridique. Les lectures « à confirmer » ci-dessus sont des interprétations de phrases de Sylfried.
+
+## Avance #102 : réponses de 16 h 47 (03/11/2026, docs seulement)
+
+### Fait
+- **Issues** : #101 créée (vitesses hors combat) ; #53, #87, #92, #99 réécrites ; #96 fermée (remplacée par #101) ; commentaire sur #75. Bilan : 49 issues (#51 à #99 et #101), 41 ouvertes, 8 fermées (#51, #54, #55, #57, #78, #82, #86, #96).
+- **Décisions** : D-191 à D-200 (`decisions.md` § 5e) ; D-180, D-182, D-188 et D-190 annotées.
+- **Lacunes** : G-008, G-012, G-015, G-039c, G-058, G-108, G-162, G-205, G-212, G-213 mises à jour.
+- **Licences** : `docs/licences.md` complété (option « `.exe` launcher », « Faut-il un fichier `LICENSE` ? ») ; **aucun fichier `LICENSE` créé** (pas nécessaire aujourd'hui, D-196).
+- **Plan de test du chapitre 2** : caméra des attaques (ennemis du chapitre 1 d'abord), coffres cochés, « sort en trop » à vérifier.
+- Aucun fichier de `dq4_pc/` ni de `outils/` modifié.
+
+### Validé par Sylfried sur Windows (16 h 47, établi par lui)
+Pièces `MAP_DIFF` du plan du monde ; bandeau « Prologue » (cadre doré à fond bleu) ; sens d'ouverture des coffres.
+
+### Décidé, pas encore codé
+- **Vitesses hors combat** (#101) : ce qu'il faut savoir avant de coder. Les bruitages de transition (lus dans le moteur, **non rejoués**) sont **305** (sortie de ville ou de carte, escalier), **309** (porte), **312** (`TownFallAction`), **330** (`TownSubeAction`) et **306** (sort de déplacement) ; le 305 n'est joué qu'à mi-fondu, donc la transition doit être reconnue à son départ. Voir « Bruitages : transition de carte et coffre d'ennemi » plus haut.
+- **Menus simples** : repli automatique seulement, sans option (D-194).
+
+### À trancher par Sylfried (#102)
+1. **Étendue de la suppression des vitesses** (#101) : « hors combat tu laisses tout par défaut » est lu comme la suppression des vitesses de marche et de caméra et de la touche d'accélérateur ; à confirmer.
+2. **Sort de déplacement (306)** : à raccourcir comme une transition ?
+3. **Format de distribution** (#87) : scripts + `.bat`, `.exe` launcher, ou `.exe` qui embarque Unicorn (GPL v2) : « on verra ».
+4. **Audio réel et `reglages.json`** (#99) : à traiter ou non.
+
+### Non vérifié (#102)
+Rien n'a été exécuté côté outil. Les bruitages 305, 309, 312, 330 et 306 sont lus dans le code du moteur, jamais rejoués. L'idée qu'un `.exe` launcher n'ait pas les obligations d'une redistribution d'Unicorn est une **supposition** (pas un avis juridique). La citation de la documentation GitHub sur les dépôts sans licence a été lue le 03/11/2026.
