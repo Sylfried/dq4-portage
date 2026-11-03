@@ -6,7 +6,7 @@ jusqu'à la fin donc pendant le fondu au noir » ; « Les effets de transitions 
 La transition = effet d'ecran de debut (la « cascade » : 57 images du jeu), ecran noir qui attend la scene, fondu d'arrivee du combat, fondus de sortie du combat, fondu de retour a la carte. Regles verifiees :
   - DUREE (images du moteur) : la cascade et chaque fondu durent ce que demande le jeu divise par « Vitesse de transition » (x1 a x4), comme un fondu de changement de carte (priorite_jeu.duree_fondu) ;
   - HORLOGE (temps reel) : la cascade est a l'horloge du jeu (30 images par seconde) quels que soient « Vitesse de combat », vitesse de marche et accelerateur ; des la fin de la cascade (ecran noir, fondu d'arrivee,
-    message « X apparait ») et jusqu'au fondu de fin de combat compris, « Vitesse de combat » (x1, x1, x2, x3) s'applique ; le retour a la carte est a l'horloge du jeu.
+    message « X apparait ») et jusqu'au fondu de fin de combat compris, « Vitesse de combat » (x1, x1, x2, x3) s'applique ; le retour a la carte est a l'horloge du jeu tant que le joueur est verrouille (flag 4) ; des qu'il est libre (image 12 du retour, le heros marche des la 13), la marche acceleree et l'accelerateur agissent (#127, comme #107 pour un changement de carte).
 
     python3 outils/test_transition_combat.py        (Linux sans ecran : pyglet en mode « headless »)
     DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> outils/flux_session/moteur_slot.sh python3 -W ignore outils/test_transition_combat.py     (ajoute le rejeu d'un vrai combat du moteur)
@@ -106,9 +106,9 @@ class Fondus(unittest.TestCase):
 @unittest.skipIf(F is None, 'fenetre.py non importable ici')
 class Horloge(unittest.TestCase):
     @staticmethod
-    def jeu(e, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, menu=None):
+    def jeu(e, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, menu=None, drapeaux=0x28):
         j = types.SimpleNamespace(reg={'vitesse_combat': vitesse_combat, 'vitesse_marche': marche, 'vitesse_accel': accel})
-        j.moteur = types.SimpleNamespace(etat=e, msg_visible=False, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': False}))
+        j.moteur = types.SimpleNamespace(etat=e, msg_visible=False, menu_actif=lambda: menu, drapeaux=lambda: drapeaux, ui=types.SimpleNamespace(msg={'feed': False}))
         j.pad = lambda: MO.HAUT if direction else 0; j._tenue = lambda a: accel_tenue and a == 'accel'
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))
         j.facteur = lambda: F.Jeu._facteur_vitesse(j)
@@ -133,12 +133,16 @@ class Horloge(unittest.TestCase):
             e.garde_trans = 5; e.fondu['n'] = 0
             self.assertEqual(self.jeu(e, *r).facteur(), attendu, 'images entre deux fondus, encore dans la partie combat %s' % (r,))
 
-    def test_retour_a_la_carte_a_l_horloge_du_jeu(self):
+    def test_retour_a_la_carte_horloge_du_jeu_tant_que_le_joueur_est_verrouille(self):
+        """Fondu de retour : horloge du jeu tant que le joueur est verrouille (flag 4, images 1 a 11) et entre deux fondus ; des que le verrou tombe, la marche et l'accelerateur agissent (#127)."""
         for vc, marche, accel, tenue in self.REGLAGES:
-            e = etat(MO.PARTIE_CHAMP); e.fen_retour = 5; e.appliquer([(9, [ENTREE_30], [])], lambda: '')
-            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'fondu de retour %s' % ((vc, marche, accel, tenue),))
+            r = (vc, marche, accel, tenue)
+            e = etat(MO.PARTIE_CHAMP); e.fen_retour = 5; e.appliquer([(9, [ENTREE_30], [])], lambda: ''); self.assertTrue(e.transition_combat())
+            self.assertEqual(self.jeu(e, *r, drapeaux=0x2d).facteur(), 1.0, 'fondu de retour, joueur verrouille %s' % (r,))
+            attendu = max(0.25, min(8.0, marche * (accel if tenue else 1.0)))
+            self.assertEqual(self.jeu(e, *r, drapeaux=0x29).facteur(), attendu, 'fondu de retour, joueur libre %s' % (r,))
             e.fondu['n'] = 0; e.garde_trans = 4
-            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'entre deux fondus sur la carte')
+            self.assertEqual(self.jeu(e, *r, drapeaux=0x1).facteur(), 1.0, 'entre deux fondus sur la carte %s' % (r,))
 
     def test_les_tours_du_combat_continuent_d_accelerer(self):
         for vc in (0.0, 1.0, 2.0, 3.0):
@@ -203,8 +207,8 @@ class MoteurReel(unittest.TestCase):
                 if t == 9: paquets9.append((mo.images, a[0] & 0x7ff, bool(a[0] & 0x1000), bool(a[0] & 0x4000)))
             if mo.etat.partie == MO.PARTIE_COMBAT: vu_combat = True
             e = mo.etat
-            jeux = [Horloge.jeu(e, vc, marche, accel, tenue, menu=mo.menu_actif()) for vc, marche, accel, tenue in cls.reglages]
-            pas.append(dict(im=mo.images, partie=e.partie, effet=e.effet is not None, attente=e.attente_charge is not None, fn=e.fondu['n'], fsortie=e.fondu['fin'] >= 1.0, trans=e.transition_combat(),
+            jeux = [Horloge.jeu(e, vc, marche, accel, tenue, menu=mo.menu_actif(), drapeaux=mo.drapeaux()) for vc, marche, accel, tenue in cls.reglages]
+            pas.append(dict(im=mo.images, partie=e.partie, effet=e.effet is not None, attente=e.attente_charge is not None, fn=e.fondu['n'], fsortie=e.fondu['fin'] >= 1.0, trans=e.transition_combat(), verrou=bool(mo.drapeaux() & MO.DRAPEAU_JOUEUR_VERROUILLE), garde=e.garde_trans,
                             facteurs=[j.facteur() for j in jeux]))
             if vu_combat and prec == MO.PARTIE_COMBAT and e.partie != MO.PARTIE_COMBAT: fin = mo.images
             if fin and mo.images > fin + 90: break
@@ -253,7 +257,7 @@ class MoteurReel(unittest.TestCase):
             self.assertTrue(any(x['attente'] and not x['effet'] for x in pas[fin_casc:fin_casc + 8]) or pas[fin_casc]['partie'] == MO.PARTIE_COMBAT)      # (la premiere image apres la cascade est deja de l'ecran noir ou du combat)
 
     def test_temps_reel(self):
-        """Temps reel = somme des 1 / (30 x facteur) : la cascade dure (57 / vitesse de transition) / 30 s quels que soient les reglages ; le fondu de fin de combat, lui, suit la vitesse de combat ; le retour a la carte reste a l'horloge du jeu."""
+        """Temps reel = somme des 1 / (30 x facteur) : la cascade dure (57 / vitesse de transition) / 30 s quels que soient les reglages ; le fondu de fin de combat, lui, suit la vitesse de combat ; le retour a la carte reste a l'horloge du jeu tant que le joueur est verrouille, puis suit la marche (#127)."""
         for vf, par in self.parcours.items():
             pas = par['pas']; deb, n = self.suites(pas, lambda x: x['effet'])[0]
             retour = self.suites(pas, lambda x: x['partie'] != MO.PARTIE_COMBAT and not x['effet'] and not x['attente'] and x['trans'])
@@ -261,8 +265,10 @@ class MoteurReel(unittest.TestCase):
             for r, (vc, marche, accel, tenue) in enumerate(self.reglages):
                 self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(deb, deb + n)), PJ.duree_fondu(MO.EFFET_COMBAT_IMAGES, vf) * PAS, 9, 'cascade %s x%g' % ((vc, marche, accel, tenue), vf))
                 for d0, m in fins: self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(d0, d0 + m)), m * PAS / max(1.0, vc), 9, 'fondu de fin %s x%g' % ((vc, marche, accel, tenue), vf))
-                for d0, m in retour: self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(d0, d0 + m)), m * PAS, 9, 'retour a la carte %s x%g' % ((vc, marche, accel, tenue), vf))
-
+                for d0, m in retour:
+                    for k in range(d0, d0 + m):                                          # le retour a la carte : horloge du jeu tant que le joueur est verrouille ou entre deux fondus ; le reglage de marche des que le verrou tombe (#127)
+                        attendu = 1.0 if pas[k]['verrou'] or pas[k]['garde'] > 0 else max(0.25, min(8.0, marche * (accel if tenue else 1.0)))
+                        self.assertEqual(pas[k]['facteurs'][r], attendu, 'retour a la carte, pas %d, %s x%g' % (k, (vc, marche, accel, tenue), vf))
 
 if __name__ == '__main__':
     unittest.main()

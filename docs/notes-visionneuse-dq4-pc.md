@@ -1044,3 +1044,21 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows avec un vrai branchement d'écran** : à confirmer par Sylfried (plein écran, brancher l'écran externe, repasser en fenêtre ; idem après débranchement).
 - Le scintillement au retour du plein écran sur l'autre moniteur (non demandé, non traité ; le plein écran recrée la fenêtre, ce que pyglet fait à chaque changement de moniteur).
+
+## Avance #133 : la course agit dès que le héros est libre au retour d'un combat (#127, 03/11/2026)
+
+### Demande (D-221, 23 h 14)
+« J'ai trouvé le même problème sur la touche pour courir qui ne fonctionne pas tout de suite en sortant d'un combat […] analyse partout où ce problème pourrait se trouver et règle le. » (Le problème de #107 : la course n'agissait qu'une seconde après l'arrivée sur une carte.)
+
+### Établi (mesure sur le vrai moteur : combat forcé sur la carte du monde, direction tenue dès la fin du combat)
+- Après la sortie de la partie combat, le fondu de retour dure 30 images. Global.Flag : 0x1 à l'image 0, 0x2d (joueur verrouillé, bit 4) des images 1 à 11, 0x29 dès l'image 12 (joueur libre), 0x28 à l'image 30. Le héros bouge dès l'image 13.
+- `Jeu._facteur_vitesse` rendait 1.0 tant que `Etat.transition_combat()` était vrai (images 0 à 29) : environ 0,6 s sans marche accélérée ni accélérateur, malgré la touche tenue.
+
+### Fait
+- `_facteur_vitesse` : la ligne `transition_combat()` est remplacée par `Etat.garde_trans > 0` (les 1 à 3 images où le moteur change de scène entre deux fondus, joueur ni verrouillé ni libre) ; seul le verrou du joueur (Global.Flag 4) coupe ensuite l'accélération, comme pour #107.
+- **Recherche des autres endroits** où l'accélération est coupée : `Etat.effet` (cascade d'entrée en combat), `attente_charge` (écran noir qui attend la scène d'un combat), `_horloge_combat`, parties de combat et mini-jeux, messages, menus du jeu, verrou du joueur : tous légitimes (le jeu a la main, ou c'est un combat). Aucun autre fondu de carte ne coupe l'accélération depuis #107. Non cherché : un cas où le verrou du joueur lui-même resterait levé trop longtemps (c'est le moteur qui décide).
+- Tests : `test_priorite_jeu.py` (retour de combat joueur libre ou verrouillé, entre deux fondus) et `test_transition_combat.py` (rejeu d'un vrai combat sur le vrai moteur : le facteur de chaque pas du retour est comparé aux vrais drapeaux).
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (tenir la course en sortant d'un combat : elle agit dès que le héros bouge).
+- Avec la course tenue, le fondu de retour (en images du moteur) passe plus vite en temps réel, comme le fondu d'arrivée sur une carte depuis #107 : c'est la conséquence voulue d'une horloge plus rapide dès que le joueur est libre.
