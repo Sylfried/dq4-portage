@@ -52,7 +52,8 @@ STR_W8_X0 = 0xb9000008
 MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
 MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
 MAGIE_NB_CIBLES, MAGIE_FIN_BOUCLE = 0x257f84, 0x2e0       # gTownMenuItemUseManager + 0xaa : nombre de cibles dont le moteur affiche le resultat (et dont il joue le bruitage de soin, une fois chacune) ; useMagicNoTarget + 0x2e0 : sortie de cette boucle
-MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...)
+MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...) ; sert de repere de version du moteur (action 201) : il n'est plus affiche par la regle des sorts sans effet
+MSG_IL_NE_SE_PASSE_RIEN = 0xc3d6d          # identifiant du message du moteur « Mais il ne se passe rien. » (celui qu'Evac' hors donjon met dans param + MAGIE_RESULTAT ; mesure : le champ 5 de la table des actions donne 0xaae7e pour l'action 204, mais ce n'est pas le message affiche) : texte officiel affiche par la regle « sort qui coute des PM sans effet » (demande de Sylfried, #48)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -556,7 +557,7 @@ class Moteur:
         de succes (la table des actions donne le meme texte au succes et a l'echec : « Les blessures de X guerissent ! » a PV pleins). Le menu Magie lance le sort par `UseAction::execUse` a deux endroits (choix d'une
         cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
         Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
-        table des messages) ou aucun, la liste devient le message du jeu « Mais rien ne se passe. » (une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
+        table des messages) ou aucun, la liste devient le message du jeu « Mais il ne se passe rien. » (`MSG_IL_NE_SE_PASSE_RIEN`, une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
         c = self.core; self._magie = None; self._magie_muet = False
         try:
             cs, nt = c.export('_ZN25TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT16useMagicNoTargetEv')
@@ -579,7 +580,7 @@ class Moteur:
                     if struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0] < pm: return        # PM depenses : le sort a eu un effet
                     e = u64(msg) + 0x48 * action; r = u32(p + MAGIE_RESULTAT)
                     if r and r not in (u32(e + 4), u32(e + 0xc)): return                    # le jeu a deja son message d'echec
-                    c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_RIEN_NE_SE_PASSE, 0))
+                    c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_IL_NE_SE_PASSE_RIEN, 0))
                     if groupe: c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x01'); self._magie_muet = True      # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
                 return _apres
             for (a, groupe) in sites:

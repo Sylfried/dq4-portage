@@ -12,13 +12,13 @@ un dialogue avec le nom du locuteur dans l'onglet SEULEMENT si le jeu l'affichai
 beaucoup d'ennemis) continue dans une boite suivante (« 2/2 » : simple etiquette, le defilement ne s'y arrete pas) : le cadre ne grandit jamais. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
 dans un fichier jusqu'a ce qu'on retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
 Le moteur est arrete tant que la fenetre est ouverte (Pause.ouvrir -> pause_jeu) : le message affiche reste tel quel et aucune touche n'arrive au jeu.
-Clavier : haut / bas (une ligne de texte de la boite, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
-(etoile de l'element actif), F ou Carte (case « Favoris seulement »), la touche de l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette (2 lignes par cran), barre de defilement (fleches : une ligne,
+Clavier : haut / bas (message precedent / suivant, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
+(etoile du message choisi), F ou Carte (case « Favoris seulement »), la touche de l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette (2 lignes par cran), barre de defilement (fleches : une ligne,
 piste : une page, curseur : glisser), glisser dans la liste (le contenu suit le pointeur), clic sur un onglet, sur la case ou sur une etoile.
-ELEMENT ACTIF (fleche doree au clavier, cible de la touche Entree) : celui qui est en face d'un repere a l'ecran (toujours dans la fenetre de la liste : l'element actif est toujours visible) ; le repere est au milieu de la fenetre,
-sauf aux extremites ou il rejoint le bas (tout en bas : le dernier element) ou le haut (tout en haut : le premier). Quand toute la liste tient dans la fenetre, la vue ne peut pas bouger : haut / bas deplacent alors le repere
-(donc l'element actif) le long de la liste."""
-import bisect
+MESSAGE CHOISI (`sel`, cible de la touche Entree) : haut / bas passent de message en message (ils ne font pas defiler la liste) ; la vue ne defile QUE pour montrer en entier le message choisi, quand il est coupe par un bord de la
+fenetre ou hors de la fenetre, et du minimum necessaire (son bord rejoint le bord de la fenetre : `decalage_pour_voir`). A la souris, le message survole est le message choisi. Le message choisi porte la petite fleche doree, au clavier
+comme a la souris, et rien d'autre : ni grisé ni eclairci au survol ou au choix (derogation a la regle generale des menus). Defiler a la molette, a la barre ou en glissant ne change pas le message choisi ; au clavier, un message
+choisi qui n'est plus du tout dans la fenetre est d'abord remplace par le plus proche message visible."""
 import pyglet
 from pyglet import gl
 import historique as HI
@@ -40,7 +40,7 @@ VIDES_FAVORIS = {'dialogues': 'Aucun dialogue en favori : décoche « Favoris se
 
 PAS_MOLETTE = 2.0                    # lignes de texte (Boite.PAS : 28 unites) par cran de molette : un pas fin et constant, jamais une entree entiere
 MARGE_LISTE = 6.0                    # (en k) vide au-dessus de la premiere boite et sous la derniere de la liste (le contenu n'est jamais colle au bord de la fenetre de decoupe)
-REPERE_BAS, REPERE_HAUT = 0.12, 0.88          # hauteur du repere de l'element actif dans la fenetre de la liste (fraction depuis le bas) tout en bas / tout en haut de la liste ; au milieu (0,5) entre les deux
+TOLERANCE_PX = 0.5                   # pixels : en dessous, un message est « entierement visible » (arrondis du dessin)
 ECART_ELEMENTS, ECART_PAGES = 12.0, 4.0      # (en k) vide entre deux elements, entre deux boites d'un meme element
 
 
@@ -61,9 +61,30 @@ def disposer(entrees, haut_cadre, haut_onglet, ecart, ecart_page, marge):
     return boites, debuts, fins, ((y - ecart + marge) if entrees else 0.0)
 
 
-def element_au_repere(debuts, c):
-    """Element « en face » du repere place a la distance c du haut du contenu : le dernier dont la premiere boite commence au-dessus de c (le premier si c est au-dessus de tout ; 0 si la liste est vide)."""
-    return max(0, bisect.bisect_right(debuts, c) - 1) if debuts else 0
+def etendue(debuts, fins, hc, i):
+    """Ce qu'il faut montrer pour que le message i soit « entierement visible » : (haut, bas) en pixels depuis le haut du contenu. Le message lui-meme (debuts[i] : onglet du nom compris, fins[i]) ; pour le premier et le dernier
+    de la liste, la marge de la liste en plus (le premier va jusqu'au haut du contenu, le dernier jusqu'au bas : quand on y arrive, la liste est tout en haut / tout en bas)."""
+    return (0.0 if i == 0 else debuts[i]), (hc if i == len(debuts) - 1 else fins[i])
+
+
+def decalage_pour_voir(debuts, fins, hc, hv, decal, i):
+    """Nouveau decalage de la vue (pixels depuis le bas : 0 = tout en bas) qui montre le message i en entier, en changeant le decalage DU MINIMUM : inchange si le message est deja entierement visible, sinon juste ce qu'il faut pour que
+    son bord coupe rejoigne le bord de la fenetre (haut ou bas). Un message plus haut que la fenetre : son debut en haut de la fenetre. La fenetre fait hv pixels et montre, depuis le haut du contenu, de hc - decal - hv a hc - decal."""
+    haut, bas = etendue(debuts, fins, hc, i); top = hc - decal - hv
+    if bas - haut >= hv: top = haut
+    elif haut < top - TOLERANCE_PX: top = haut
+    elif bas > top + hv + TOLERANCE_PX: top = bas - hv
+    else: return decal
+    return min(max(0.0, hc - hv), max(0.0, hc - hv - top))
+
+
+def elements_visibles(debuts, fins, hc, hv, decal, entiers):
+    """Indices des messages visibles dans la fenetre (voir decalage_pour_voir) : ceux qui y sont entierement (`entiers`), sinon ceux dont une partie au moins y est."""
+    top = hc - decal - hv; r = []
+    for i in range(len(debuts)):
+        haut, bas = etendue(debuts, fins, hc, i)
+        if (haut >= top - TOLERANCE_PX and bas <= top + hv + TOLERANCE_PX) if entiers else (fins[i] > top and debuts[i] < top + hv): r.append(i)
+    return r
 
 
 def heure_jeu(t):
@@ -152,9 +173,10 @@ class VueHistorique:
         self.P = pause; self.J = pause.J
         self.onglet = O_DIALOGUES; self.elements = []
         self.pos = 0.0                                                  # position de defilement, en pixels : 0 = tout en bas (le plus recent visible), plus grand = plus ancien (voir decal et repere)
-        self.sel = 0; self.sel_manuel = False                           # element actif (fleche doree, touche Entree) ; vrai quand il vient d'un clic (sinon il suit le repere du defilement)
+        self.sel = 0                                                    # message choisi (fleche doree, touche Entree) : choisi par haut / bas, par un clic ou, a la souris, par le survol (voir dessiner)
         self.hc = self.hv = 0.0; self.pas = Boite.PAS                  # hauteur du contenu, de la fenetre de la liste (pixels) et d'une ligne de texte (pixels), mesures a la derniere image ; avant la premiere image : rien a defiler
         self.centrer = None                                             # element a ramener au milieu de la vue des que la liste est mesuree (aller)
+        self.debuts = []; self.fins = []                               # haut de la premiere boite et bas de la derniere de chaque element, pixels depuis le haut du contenu (mesures a la derniere image ; vides tant que la liste n'est pas mesuree)
         self.zones = []; self.zones_etoile = []; self.zones_onglet = []; self.barre = None; self.glisse_barre = None
         self.zone_ret = None
         self.favoris_seuls = self._lire_filtre(); self.zone_filtre = None  # case « Favoris seulement » : cochee ? (reglage enregistre) ; sa zone a l'ecran (clic)
@@ -173,9 +195,9 @@ class VueHistorique:
     def recharger(self, garder=False):
         h = getattr(self.J, 'historique', None)
         self.elements = h.liste(ONGLETS[self.onglet][1], self.favoris_seuls) if h is not None else []
-        n = len(self.elements); self._mise = None; self.centrer = None
+        n = len(self.elements); self._mise = None; self.centrer = None; self.debuts = []; self.fins = []
         if garder: self.sel = max(0, min(n - 1, self.sel))
-        else: self.pos = 0.0; self.sel = max(0, n - 1); self.sel_manuel = False
+        else: self.pos = 0.0; self.sel = max(0, n - 1)
         self.zones = []; self.zones_etoile = []
 
     def changer_onglet(self, i):
@@ -223,49 +245,50 @@ class VueHistorique:
         """Decalage reel de la vue (pixels) : la position bornee a la plage de defilement."""
         return min(max(self.pos, 0.0), self.plage())
 
-    def pmax(self):
-        """Course de la position : la plage de defilement, ou, si la liste est a peine plus haute que la fenetre (ou tient dedans : la vue ne peut pas bouger), une course virtuelle (la moitie de la hauteur de la liste) qui permet de
-        parcourir tous les elements au clavier : la vue reste en place et c'est le repere (l'element actif) qui continue."""
-        return max(self.plage(), self.hc / 2.0)
-
-    def hauteur_repere(self):
-        """Hauteur du repere dans la fenetre de la liste, en fraction de sa hauteur depuis le bas : REPERE_BAS quand la position est 0 (il designe le dernier element), il monte jusqu'au milieu (0,5) sur une hauteur de fenetre de
-        defilement, y reste, puis rejoint REPERE_HAUT sur la derniere hauteur de fenetre (il designe le premier element en haut de la liste). Monotone en la position : le repere ne revient jamais en arriere."""
-        pm = self.pmax(); pos = min(max(self.pos, 0.0), pm); r = min(self.hv, pm / 2.0)
-        if r <= 0: return REPERE_BAS
-        return REPERE_BAS + (REPERE_HAUT - REPERE_BAS) / 2.0 * (min(1.0, pos / r) + max(0.0, (pos - (pm - r)) / r))
-
-    def repere(self):
-        """Distance (pixels, depuis le haut du contenu) du repere qui designe l'element actif : le point du contenu qui est, a l'ecran, a la hauteur `hauteur_repere` de la fenetre de la liste (donc toujours DANS la fenetre :
-        l'element actif est toujours visible)."""
-        return self.hc - self.decal() - self.hv * self.hauteur_repere()
-
     def page_px(self): return max(self.pas, self.hv - 2 * self.pas)
 
-    def _fleche(self, px):
-        """Clavier : un pas de `px` pixels vers les anciens (positif) ou les recents (negatif), sans jamais s'arreter sur une entree. Borne par la course (pmax)."""
-        self.pos = min(self.pmax(), max(0.0, self.pos + px)); self.sel_manuel = False
+    def _visibles(self, entiers):
+        n = len(self.elements)
+        if not n or len(self.debuts) != n: return []
+        return elements_visibles(self.debuts, self.fins, self.hc, self.hv, self.decal(), entiers)
+
+    def _ramener(self, entiers=False):
+        """Le message choisi doit etre dans la fenetre : sinon (la liste a defile sans lui : molette, barre, glissement, page), c'est le plus proche message visible (le premier s'il est au-dessus de la fenetre, le dernier s'il est
+        en dessous). `entiers` : seuls comptent les messages entierement visibles (a defaut, ceux qui le sont en partie). -> True si le message choisi a change."""
+        v = self._visibles(entiers) or (self._visibles(False) if entiers else [])
+        if not v or self.sel in v: return False
+        self.sel = v[0] if self.sel < v[0] else v[-1]; return True
+
+    def _montrer(self, i):
+        """Defile du minimum pour montrer le message i en entier (rien si la liste n'est pas encore mesuree : la vue se placera des qu'elle le sera)."""
+        if len(self.debuts) != len(self.elements): self.centrer = i; return
+        self.pos = decalage_pour_voir(self.debuts, self.fins, self.hc, self.hv, self.decal(), i)
 
     def bouger(self, d):
-        """Haut / bas : d lignes de texte vers le bas (negatif : vers les anciens). Repete par Pause.maj tant que la touche est maintenue."""
-        self._fleche(-d * self.pas)
+        """Haut / bas : le message d rangs plus loin (negatif : plus ancien, vers le haut de l'ecran), borne a la liste ; la vue defile seulement si ce message n'est pas entierement visible, du minimum necessaire. Repete par Pause.maj tant que la touche est maintenue."""
+        n = len(self.elements)
+        if not n: return
+        if not self._ramener(): self.sel = max(0, min(n - 1, self.sel + int(d)))          # (un message choisi sorti de la fenetre par la molette ou la barre : cet appui le remplace par le plus proche message visible, sans avancer d'un rang de plus)
+        self._montrer(self.sel)
 
     def page(self, d):
-        """Page precedente (d negatif) / suivante : la hauteur de la fenetre moins deux lignes."""
-        self._fleche(-d * self.page_px())
+        """Page precedente (d negatif) / suivante : la vue defile de la hauteur de la fenetre moins deux lignes ; le message choisi, s'il sort de la fenetre, devient le plus proche message entierement visible."""
+        self.pos = min(self.plage(), max(0.0, self.decal() - d * self.page_px())); self._ramener(True)
 
-    def vers_haut(self): self.pos = self.pmax(); self.sel_manuel = False
-    def vers_bas(self): self.pos = 0.0; self.sel_manuel = False
+    def vers_haut(self):
+        if self.elements: self.sel = 0; self.pos = self.plage()
+    def vers_bas(self):
+        if self.elements: self.sel = len(self.elements) - 1; self.pos = 0.0
 
     def defiler(self, px):
         """Souris (molette, barre, glissement) : la vue monte de `px` pixels vers les anciens (positif) ou descend vers les recents (negatif), bornee a la plage de defilement."""
-        self.pos = min(self.plage(), max(0.0, self.decal() + px)); self.sel_manuel = False
+        self.pos = min(self.plage(), max(0.0, self.decal() + px))
 
     def aller(self, i):
         """Choisit l'element i ; la vue se recentre sur lui des que la liste est mesuree (dessin suivant)."""
         n = len(self.elements)
         if not n: return
-        self.sel = max(0, min(n - 1, i)); self.sel_manuel = True; self.centrer = self.sel
+        self.sel = max(0, min(n - 1, i)); self.centrer = self.sel
 
     # ---- entrees
     def touche(self, symbol, modifiers=0):
@@ -319,9 +342,9 @@ class VueHistorique:
             else: self.defiler(-self.page_px())
             return
         for z in self.zones_etoile:
-            if self._dans(z, x, y): self.sel = z[4]; self.sel_manuel = True; self.etoile(z[4]); return
+            if self._dans(z, x, y): self.sel = z[4]; self.etoile(z[4]); return
         for (x0, y0, x1, y1, i) in self.zones:
-            if x0 <= x <= x1 and y0 <= y <= y1: self.sel = i; self.sel_manuel = True; break
+            if x0 <= x <= x1 and y0 <= y <= y1: self.sel = i; break
         self.drag = [y, self.decal(), False]
 
     def relache(self, x, y, bouton):
@@ -334,7 +357,7 @@ class VueHistorique:
             libre = b['ptop'] - b['pbot'] - b['th']
             if libre > 0:
                 depuis_le_haut = max(0.0, min(1.0, (b['ptop'] - (y + self.glisse_barre)) / libre)) * (b['n'] - b['vis'])      # le curseur de la barre donne la distance depuis le haut du contenu
-                self.pos = min(self.plage(), max(0.0, self.plage() - depuis_le_haut)); self.sel_manuel = False
+                self.pos = min(self.plage(), max(0.0, self.plage() - depuis_le_haut))
             return
         d = self.drag
         if d is None: return
@@ -434,8 +457,9 @@ class VueHistorique:
             self._fens[avec] = f
         return f or None
 
-    def _boite_dessin(self, B, bx, by, s, k, nom, choisi, bm, taille):
-        """Cadre de la boite dont le coin bas gauche est (bx, by), a l'echelle s : le cadre du jeu (et l'onglet du nom avec son texte, comme le jeu les pose), sinon un cadre simple ; plus clair quand l'element est choisi."""
+    def _boite_dessin(self, B, bx, by, s, k, nom, bm, taille):
+        """Cadre de la boite dont le coin bas gauche est (bx, by), a l'echelle s : le cadre du jeu (et l'onglet du nom avec son texte, comme le jeu les pose), sinon un cadre simple. Toujours le meme : le message choisi n'est ni
+        grise ni eclairci (il porte seulement la petite fleche, voir dessiner)."""
         J = self.J; r = getattr(J, 'ui_rendu', None); f = self._fenetre_boite(bool(nom)) if r is not None else None
         fait = False
         if f is not None:
@@ -449,14 +473,12 @@ class VueHistorique:
                 HM.cadre(bx + 4 * s, by + (B.HAUT - 6) * s, (B.ONGLET_L - 8) * s, (B.ONGLET_H + 2) * s, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)
                 sc = s * B.texte_ech if bm else 1.0; lw = self._larg(bm, nom, sc, taille)
                 self._ligne(bm, nom, bx + (B.NOM_X - 0.0) * s - lw / 2, by + (B.HAUT + 7) * s, sc, BLANC, taille)
-        if choisi:
-            v = pyglet.shapes.Rectangle(bx + 7 * s, by + 7 * s, (B.LARG - 14) * s, (B.HAUT - 14) * s, color=(255, 255, 255)); v.opacity = 38; v.draw()
 
     def _mesurer(self, bm, B, s, k, taille, hv):
         """Pose TOUTE la liste dans une colonne (disposer : toutes les boites ont la MEME hauteur de cadre, celle de la boite de dialogue du jeu, que le texte tienne sur 1, 2 ou 3 rangees ; seul l'onglet du nom, sur la premiere boite d'un
         dialogue avec nom, s'y ajoute au-dessus), pour l'echelle s et une fenetre de liste de hauteur hv (pixels). La mise en page ne depend jamais de la position de defilement. Met a jour la geometrie du defilement (hauteur du contenu,
-        de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et determine l'element actif (celui qui est en face du repere, sauf
-        s'il vient d'un clic). -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu."""
+        de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et garde les bords des elements (debuts, fins) pour la navigation
+        au clavier. -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu."""
         els = self.elements; n = len(els)
         cle = (id(els), n, int(s * 100), int(k * 100), bm is not None)
         if self._mise is None or self._mise[0] != cle:
@@ -470,15 +492,15 @@ class VueHistorique:
 
     def _geometrie(self, debuts, fins, hc, hv, pas, s):
         """Partie pure de _mesurer (testee sans police ni GL) : la liste fait `hc` pixels de haut (debuts / fins : haut de la premiere boite et bas de la derniere de chaque element), la fenetre de la liste `hv`, une ligne de texte `pas`,
-        a l'echelle s. Garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et determine l'element actif (celui qui est en face du repere, sauf s'il vient d'un clic)."""
+        a l'echelle s. Garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et garde les bords des elements pour la navigation au clavier."""
         n = len(debuts)
         if self._s_prec and abs(s - self._s_prec) > 1e-6: self.pos *= s / self._s_prec                 # fenetre redimensionnee : la vue reste au meme endroit de la liste
         self._s_prec = s; self.hc, self.hv, self.pas = hc, float(hv), pas
         if self.centrer is not None:
             i, self.centrer = self.centrer, None
             if 0 <= i < n: self.pos = min(self.plage(), max(0.0, hc - (debuts[i] + fins[i]) / 2.0 - self.hv / 2.0)); self.sel = i
-        self.pos = min(self.pmax(), max(0.0, self.pos))
-        if n and not self.sel_manuel: self.sel = element_au_repere(debuts, self.repere())
+        self.debuts, self.fins = list(debuts), list(fins)
+        self.pos = min(self.plage(), max(0.0, self.pos))
         self.sel = max(0, min(n - 1, self.sel)) if n else 0
 
     def _decouper(self, x, y, w, h):
@@ -522,7 +544,7 @@ class VueHistorique:
         # aide (une ou deux lignes, selon la largeur de la fenetre)
         ks = (J.reg['touches'].get('historique') or [None])[0] if hasattr(J.reg, '__getitem__') else None
         kn = RG.nom_touche(ks) if ks else None
-        aide = ['Haut / Bas / Molette : défiler', 'Gauche / Droite : onglet', 'Entrée : favori ★', 'F : favoris seulement'] + (['%s : suite' % kn] if kn else []) + ['Échap : fermer']
+        aide = ['Haut / Bas : message précédent / suivant', 'Molette : défiler', 'Gauche / Droite : onglet', 'Entrée : favori ★', 'F : favoris seulement'] + (['%s : suite' % kn] if kn else []) + ['Échap : fermer']
         la_max = pw - 24 * k; mes_aide = lambda t: self._larg(bm, t, su * 0.72, taille * 0.72)
         lignes_aide = []; cur = ''
         for a in aide:
@@ -551,12 +573,12 @@ class VueHistorique:
                     (i, p, np_, haut, hn, hb, rangees) = b; yb = haut_ecran - haut - hn - hb; yt = yb + hb + hn
                     if yt <= ly0 or yb >= ly1 or (not decoupe and (yb < ly0 or yt > ly1)): continue
                     vues.append((b, yb, yt)); haut_de[i] = min(haut_de.get(i, p), p)       # (page la plus haute montree de chaque element : la fleche dorée n'y est dessinee qu'une fois)
+                    if mouse and self.glisse_barre is None and not glisse and P._pointeur_dans((lx0, max(yb, ly0), lx1, min(yt, ly1))): self.sel = i      # a la souris, le message survole est le message choisi (choisi avant le dessin : une seule fleche)
                 for ((i, p, np_, haut, hn, hb, rangees), yb, yt) in vues:
                     e = self.elements[i]; nom = e.nom if (e.type == HI.TYPE_DIALOGUE and p == 0 and e.nom) else None
                     zone = (lx0, max(yb, ly0), lx1, min(yt, ly1)); self.zones.append(zone + (i,))                      # (la zone d'une boite coupee ne depasse pas la fenetre de la liste : pas de clic sur les onglets ou l'aide)
-                    choisi = (P._pointeur_dans(zone) and self.glisse_barre is None and not glisse) if mouse else i == self.sel
-                    self._boite_dessin(B, lx0, yb, s, k, nom, choisi, bm, taille_b)                       # cadre du jeu (+ onglet et nom)
-                    if choisi and not mouse and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))
+                    self._boite_dessin(B, lx0, yb, s, k, nom, bm, taille_b)                               # cadre du jeu (+ onglet et nom) : aucun grisé au survol ni au choix
+                    if i == self.sel and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))      # le message choisi (clavier ou souris) : la petite fleche, et rien d'autre
                     rang = 0
                     if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite
                         base = yb + hb - B.base(0) * s; self._ligne(bm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)

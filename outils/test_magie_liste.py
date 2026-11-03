@@ -14,7 +14,7 @@ visible et cliquable : un toucher y envoyait au moteur un sort inexistant (<ERR 
 
 Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seule, le moteur ecrit dans un dossier temporaire ; groupe de l'emplacement 1 : Ragnar sans PM et Doc, 30 PM, qui sait « Premiers secours ») :
   5. liste de Doc : une seule rangee, « Premiers secours », code de rangee 2, rangees 1 a 3 cachees ;
-  6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) et, hors combat, « Mais rien ne se passe. » a la place du message de succes
+  6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) et, hors combat, « Mais il ne se passe rien. » (message officiel d'Evac', id 0xc3d6d) a la place du message de succes
      des soins (crochet Moteur._crochets_magie ; ATTENDU CHANGE VOLONTAIREMENT : avant, le moteur affichait « Les blessures de Ragnar guerissent ! » sans depenser de PM) ;
   7. usages sans effet decides par le moteur : Rappel sur un vivant, Antipoison sans poison : « Mais rien ne se passe. », aucun PM depense ; PM insuffisants : « Pas assez de PM ! » ;
   8. Rappel sur un mort : « revient a la vie », PM depenses ; Antipoison sur un empoisonne : « n'est plus empoisonne » ;
@@ -255,7 +255,7 @@ class MoteurReel(unittest.TestCase):
         mo = self.pret(pv={self.RAGNAR: 47}); textes = self.lancer(mo)
         self.assertEqual(_stat(mo, self.DOC)[2], 30, 'le moteur ne depense pas de PM quand le soin n\'a servi a rien')
         self.assertEqual(_stat(mo, self.RAGNAR)[0], 47)
-        self.assertEqual(textes, ['Doc lance le sort Premiers secours !', 'Mais rien ne se passe.'])          # le message du jeu (comme Rappel sur un vivant), pas « Les blessures de Ragnar guérissent ! »
+        self.assertEqual(textes, ['Doc lance le sort Premiers secours !', 'Mais il ne se passe rien.'])          # le message officiel d'Evac' (id 0xc3d6d), pas « Les blessures de Ragnar guérissent ! »
 
     def test_pm_insuffisants(self):
         mo = self.pret(pv={self.RAGNAR: 20}, pm=1); textes = self.lancer(mo)
@@ -274,11 +274,11 @@ class MoteurReel(unittest.TestCase):
     def test_soins_a_pv_pleins_toutes_puissances(self):
         for sort, nom in ((self.PREMIERS_SECOURS + 1, 'Soins partiels'), (self.PREMIERS_SECOURS + 2, 'Soins complets')):
             mo, textes, pm0, pm1 = self.sort_sur(sort, {self.RAGNAR: 47})
-            self.assertEqual(textes, ['Doc lance le sort %s !' % nom, 'Mais rien ne se passe.']); self.assertEqual((pm0, pm1), (30, 30), nom)
+            self.assertEqual(textes, ['Doc lance le sort %s !' % nom, 'Mais il ne se passe rien.']); self.assertEqual((pm0, pm1), (30, 30), nom)
 
     def test_soin_de_groupe_en_pleine_forme(self):
         mo, textes, pm0, pm1 = self.sort_sur(self.MULTISOIN, {self.RAGNAR: 47, self.DOC: 35}, groupe=True)
-        self.assertEqual(textes, ['Doc lance le sort Multisoin !', 'Mais rien ne se passe.'], 'une seule fois, pas une fois par personnage'); self.assertEqual((pm0, pm1), (30, 30))
+        self.assertEqual(textes, ['Doc lance le sort Multisoin !', 'Mais il ne se passe rien.'], 'une seule fois, pas une fois par personnage'); self.assertEqual((pm0, pm1), (30, 30))
         self.assertEqual(mo.core.mem(mo.L + 0x257f84, 1)[0], 0, 'plus de bruitage de soin en attente (le moteur en joue un par cible restante)')
 
     def test_soin_de_groupe_avec_un_blesse_garde_ses_messages_et_ses_pm(self):
