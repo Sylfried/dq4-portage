@@ -5,7 +5,7 @@
 Verifie : nettoyage du texte (le « *: » des paroles sans nom est garde), coupure des lignes, doublons, bornes de taille, mise en forme des combats, favoris (seuls conserves : fichier ecrit tout de suite,
 relu a l'ouverture, retrait par l'etoile, fichier corrompu / entrees invalides / version inconnue), pages d'un message (notees quand le joueur les a lues), messages de combat jamais ranges dans les dialogues,
 combats termines recus du CapteurCombat, crochet TextBuffer::cat (nom affiche ou non, combat), onglets (Dialogues, Combats : plus d'onglet Favoris), case « Favoris seulement » (clavier, souris, conservee d'un onglet a l'autre,
-favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement.
+favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement ; haut / bas message par message (defilement du minimum necessaire, #48), aucun grisé sur le message choisi.
 Taille unique des boites (la boite de dialogue du jeu : 1, 2 ou 3 lignes, dialogue ou combat ; une page de plus au-dela de 3 lignes).
 `remplir(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
 """
@@ -488,9 +488,35 @@ class TestBoite(unittest.TestCase):
         self.assertEqual((d, f, h), ([5.0, 115.0, 459.0], [105.0, 449.0, 589.0], 594.0))
         self.assertEqual(UH.disposer([], 100.0, 30.0, 10.0, 2.0, 5.0), ([], [], [], 0.0))
 
-    def test_element_au_repere(self):
-        d = [5.0, 115.0, 459.0]
-        self.assertEqual([UH.element_au_repere(d, c) for c in (-50.0, 0.0, 5.0, 114.9, 115.0, 400.0, 459.0, 9999.0)], [0, 0, 0, 0, 1, 1, 2, 2]); self.assertEqual(UH.element_au_repere([], 10.0), 0)
+    GEO = dict(zip(('b', 'd', 'f', 'hc'), UH.disposer([(1, False)] * 5, 100.0, 30.0, 10.0, 2.0, 5.0)))          # 5 messages de 100 : debuts 5, 115, 225, 335, 445 ; fins 105, ..., 545 ; hauteur 550
+
+    def test_decalage_pour_voir_du_minimum(self):
+        """Message deja entierement visible : rien ne bouge. Coupe en haut ou en bas, ou hors fenetre : la vue ne defile que de ce qui manque (le bord du message rejoint le bord de la fenetre). Premier et dernier : avec la marge de la liste."""
+        g = self.GEO; d, f, hc, hv = g['d'], g['f'], g['hc'], 250.0                 # fenetre de 250 : a decal 0, elle montre de 300 a 550 depuis le haut du contenu
+        voir = lambda decal, i: UH.decalage_pour_voir(d, f, hc, hv, decal, i)
+        self.assertEqual([UH.etendue(d, f, hc, i) for i in (0, 1, 4)], [(0.0, 105.0), (115.0, 215.0), (445.0, 550.0)])      # (le premier va jusqu'au haut du contenu, le dernier jusqu'au bas)
+        self.assertEqual((voir(0.0, 4), voir(0.0, 3)), (0.0, 0.0))                      # entierement visibles : inchange
+        self.assertEqual(voir(0.0, 2), 75.0)                                            # 225 a 325 : coupe en haut (la fenetre commence a 300) : il faut monter de 75 exactement
+        self.assertEqual((voir(0.0, 1), voir(0.0, 0)), (185.0, 300.0))                  # hors fenetre : son bord haut en haut de la fenetre ; le premier : jusqu'au haut du contenu (marge comprise)
+        self.assertEqual((voir(300.0, 0), voir(300.0, 1)), (300.0, 300.0))              # fenetre en haut (0 a 250) : les deux premiers y sont deja
+        self.assertEqual((voir(300.0, 2), voir(300.0, 3), voir(300.0, 4)), (225.0, 115.0, 0.0))      # coupe ou hors fenetre en bas : son bord bas rejoint le bas de la fenetre (le dernier : jusqu'au bas du contenu)
+        self.assertEqual((voir(100.0, 4), voir(100.0, 3), voir(100.0, 2), voir(100.0, 1)), (0.0, 100.0, 100.0, 185.0))
+
+    def test_decalage_pour_voir_bornes_et_grand_message(self):
+        g = self.GEO; d, f, hc = g['d'], g['f'], g['hc']
+        for decal in (0.0, 40.0, 150.0, 300.0):
+            for i in range(5):
+                n = UH.decalage_pour_voir(d, f, hc, 250.0, decal, i); self.assertTrue(0.0 <= n <= hc - 250.0, (decal, i, n))
+                top = hc - n - 250.0; haut, bas = UH.etendue(d, f, hc, i); self.assertTrue(haut >= top - 0.5 and bas <= top + 250.5, (decal, i))         # toujours entierement visible
+        self.assertEqual(UH.decalage_pour_voir(d, f, hc, 90.0, 0.0, 2), hc - 90.0 - d[2])          # un message plus haut que la fenetre (100 > 90) : son debut en haut de la fenetre
+        c = dict(zip(('b', 'd', 'f', 'hc'), UH.disposer([(1, False)] * 2, 100.0, 30.0, 10.0, 2.0, 5.0)))
+        self.assertEqual([UH.decalage_pour_voir(c['d'], c['f'], c['hc'], 250.0, 0.0, i) for i in (0, 1)], [0.0, 0.0])      # liste plus courte que la fenetre : rien a defiler
+
+    def test_elements_visibles(self):
+        g = self.GEO; d, f, hc = g['d'], g['f'], g['hc']
+        self.assertEqual(UH.elements_visibles(d, f, hc, 250.0, 0.0, True), [3, 4]); self.assertEqual(UH.elements_visibles(d, f, hc, 250.0, 0.0, False), [2, 3, 4])      # l'element 2 (225 a 325) est coupe : visible en partie seulement
+        self.assertEqual(UH.elements_visibles(d, f, hc, 250.0, 300.0, True), [0, 1]); self.assertEqual(UH.elements_visibles(d, f, hc, 1000.0, 0.0, True), [0, 1, 2, 3, 4])
+        self.assertEqual(UH.elements_visibles([], [], 0.0, 250.0, 0.0, True), [])
 
     def test_page_sans_texte(self):
         self.assertEqual(UH.paginer([], False), [[]]); self.assertEqual(UH.paginer([], True), [[]]); self.assertEqual(UH.paginer(['a', 'b', 'c'], True), [['a', 'b'], ['c']]); self.assertEqual(UH.paginer(['a', 'b', 'c'], False), [['a', 'b', 'c']])
@@ -509,21 +535,47 @@ class TestVue(unittest.TestCase):
         v = vue(); self.assertEqual((v.onglet, v.pos, v.sel, len(v.elements)), (UH.O_DIALOGUES, 0.0, 19, 20))        # tout en bas : le plus recent visible, et actif
         self.assertGreater(v.plage(), 0); self.assertEqual(v.decal(), 0.0)
 
-    def test_fleches_pas_constant(self):
-        """Haut / bas : un pas constant (une ligne de texte), jamais une entree entiere ni une page ; l'element actif suit le repere."""
-        K = pyglet.window.key; v = vue(); sels = [v.sel]
-        for i in range(1, 31):
-            frappe(v, K.UP); self.assertEqual(v.pos, 28.0 * i); sels.append(v.sel)                              # +28 pixels a chaque appui, du premier au dernier
-        self.assertEqual(sels, sorted(sels, reverse=True)); self.assertLess(sels[-1], sels[0])                  # l'element actif ne revient jamais en arriere
-        for i in range(30): frappe(v, K.DOWN)
+    @staticmethod
+    def entier(v, i):
+        """Le message i est-il entierement dans la fenetre de la liste ?"""
+        haut, bas = UH.etendue(v.debuts, v.fins, v.hc, i); top = v.hc - v.decal() - v.hv
+        return haut >= top - 0.5 and bas <= top + v.hv + 0.5
+
+    def test_fleches_message_par_message(self):
+        """Haut / bas : le message precedent / suivant, un a la fois (jamais une ligne ni une page) ; la vue ne defile que si ce message n'est pas entierement visible, du minimum necessaire (son bord rejoint le bord de la fenetre)."""
+        K = pyglet.window.key; v = vue(); self.assertTrue(self.entier(v, 19)); defiles = 0
+        for i in range(18, -1, -1):
+            avant, vis = v.decal(), self.entier(v, i); frappe(v, K.UP)
+            self.assertEqual(v.sel, i); self.assertTrue(self.entier(v, i), i)                                  # le message choisi est toujours entierement visible
+            if vis: self.assertEqual(v.decal(), avant, 'deja visible en entier : la vue ne bouge pas (%d)' % i)
+            else:
+                defiles += 1; haut, bas = UH.etendue(v.debuts, v.fins, v.hc, i); self.assertAlmostEqual(haut, v.hc - v.decal() - v.hv, places=6)      # son bord haut est exactement en haut de la fenetre : pas un pixel de plus
+        self.assertGreater(defiles, 0); self.assertLess(defiles, 19)                                          # (la vue a defile par moments seulement)
+        frappe(v, K.UP); self.assertEqual(v.sel, 0)                                                              # butee en haut
+        for i in range(1, 20):
+            avant, vis = v.decal(), self.entier(v, i); frappe(v, K.DOWN)
+            self.assertEqual(v.sel, i); self.assertTrue(self.entier(v, i), i)
+            if vis: self.assertEqual(v.decal(), avant)
+            else: haut, bas = UH.etendue(v.debuts, v.fins, v.hc, i); self.assertAlmostEqual(bas, v.hc - v.decal(), places=6)           # son bord bas est exactement en bas de la fenetre
         self.assertEqual((v.pos, v.sel), (0.0, 19)); self.assertIn(('repeter', K.DOWN, 'v', 1), v.appels)         # (repetition de la touche maintenue : Pause.maj)
         frappe(v, K.DOWN); self.assertEqual((v.pos, v.sel), (0.0, 19))                                              # butee en bas
+
+    def test_fleche_sur_un_message_coupe_le_montre_en_entier(self):
+        """Un message coupe par le haut de la fenetre : un seul appui sur Haut le choisit ET defile juste de ce qui manque ; un message coupe par le bas, de meme avec Bas."""
+        K = pyglet.window.key; v = vue(n=40, hv=500.0); v.sel = 30; v.pos = 700.0; poser(v)
+        vus = [i for i in range(40) if self.entier(v, i)]; premier, dernier = vus[0], vus[-1]
+        self.assertGreater(premier, 0); v.sel = premier; avant = v.decal()                                       # le message juste au-dessus du premier entier est coupe (ou tout juste hors fenetre)
+        frappe(v, K.UP); self.assertEqual(v.sel, premier - 1); self.assertTrue(self.entier(v, premier - 1)); self.assertGreater(v.decal(), avant); self.assertLess(v.decal() - avant, 126.0 + 32.0 + UH.ECART_ELEMENTS + 1)
+        v.sel = dernier; poser(v); avant = v.decal(); frappe(v, K.DOWN)
+        self.assertEqual(v.sel, dernier + 1); self.assertTrue(self.entier(v, dernier + 1))
 
     def test_pages_debut_fin(self):
         K = pyglet.window.key; v = vue(hv=500.0)
         frappe(v, K.PAGEUP); self.assertEqual(v.pos, 500.0 - 2 * 28.0)                                           # une page : la fenetre moins deux lignes (le contexte reste visible)
-        frappe(v, K.PAGEUP); self.assertEqual(v.pos, 2 * (500.0 - 56.0)); frappe(v, K.PAGEDOWN, K.PAGEDOWN); self.assertEqual(v.pos, 0.0)
-        frappe(v, K.HOME); self.assertEqual((v.pos, v.sel), (v.plage(), 0)); frappe(v, K.UP); self.assertEqual((v.pos, v.sel), (v.plage(), 0))      # butee en haut : le premier element
+        self.assertTrue(self.entier(v, v.sel)); self.assertEqual(v.sel, [i for i in range(20) if self.entier(v, i)][-1])      # le message choisi est sorti de la fenetre : il devient le dernier message entierement visible
+        frappe(v, K.PAGEUP); self.assertEqual(v.pos, 2 * (500.0 - 56.0)); self.assertTrue(self.entier(v, v.sel))
+        frappe(v, K.PAGEDOWN, K.PAGEDOWN); self.assertEqual(v.pos, 0.0); self.assertTrue(self.entier(v, v.sel))
+        frappe(v, K.HOME); self.assertEqual((v.pos, v.sel), (v.plage(), 0)); frappe(v, K.UP); self.assertEqual((v.pos, v.sel), (v.plage(), 0))      # butee en haut : le premier message
         frappe(v, K.END); self.assertEqual((v.pos, v.sel), (0.0, 19))
 
     def test_actions_du_jeu_pour_les_pages(self):
@@ -560,49 +612,55 @@ class TestVue(unittest.TestCase):
         v.glisser(5, 300 + 50); self.assertEqual(v.pos, 0.0)                                                    # le pointeur remonte au-dela de son point de depart : butee en bas
         v.relache(5, 0, 1); self.assertIsNone(v.drag)
 
-    def test_element_actif_toujours_visible(self):
-        """Le repere est toujours dans la fenetre de la liste : l'element actif (cible de la touche Entree) est toujours au moins en partie visible."""
-        v = vue(n=40, hv=500.0); d, f = self.geom(v)
-        for pos in [0.0, 1.0, 13.0, 100.0, 1000.0, v.plage() / 2, v.plage() - 1, v.plage()]:
-            v.pos = pos; poser(v); i = v.sel; decal = v.decal()
-            bas, haut = v.hc - f[i] - decal, v.hc - d[i] - decal                                                # bord bas et bord haut de la boite de i, en pixels depuis le bas de la fenetre
-            self.assertTrue(haut > 0 and bas < v.hv, (pos, i, bas, haut))
-        v.pos = 0.0; poser(v); self.assertEqual(v.sel, 39); v.pos = v.plage(); poser(v); self.assertEqual(v.sel, 0)
+    def test_message_choisi_toujours_visible_apres_une_touche(self):
+        """Apres n'importe quelle touche de la liste, le message choisi (cible de la touche Entree) est entierement visible (si la fenetre peut le contenir)."""
+        K = pyglet.window.key; v = vue(n=40, hv=500.0)
+        for t in (K.UP, K.UP, K.PAGEUP, K.DOWN, K.PAGEUP, K.PAGEUP, K.UP, K.PAGEDOWN, K.DOWN, K.DOWN, K.HOME, K.DOWN, K.END, K.UP):
+            frappe(v, t); self.assertTrue(self.entier(v, v.sel), (t, v.sel, v.pos))
+            self.assertTrue(0 <= v.sel < 40)
 
-    def test_repere_monotone(self):
-        for n, hv in ((3, 500.0), (40, 500.0), (40, 90.0), (2, 1500.0)):
-            v = vue(n=n, hv=hv); h = []
-            for i in range(0, 400):
-                v.pos = i * v.pmax() / 399.0; h.append(v.hauteur_repere())
-            self.assertEqual(h, sorted(h)); self.assertAlmostEqual(h[0], UH.REPERE_BAS); self.assertAlmostEqual(h[-1], UH.REPERE_HAUT)
-
-    def test_tous_les_elements_au_clavier(self):
-        """Quelle que soit la longueur de la liste et la hauteur de la fenetre, des appuis sur Haut parcourent TOUS les elements (du dernier au premier), puis Bas les reparcourent (liste plus courte que la fenetre comprise : la vue ne bouge pas, le repere avance)."""
+    def test_tous_les_messages_au_clavier(self):
+        """Quelle que soit la longueur de la liste et la hauteur de la fenetre, des appuis sur Haut parcourent TOUS les messages un par un (du dernier au premier), puis Bas les reparcourent (liste plus courte que la fenetre comprise : la vue ne bouge pas)."""
         K = pyglet.window.key
-        for n, hv in ((1, 500.0), (2, 500.0), (3, 500.0), (5, 500.0), (7, 500.0), (20, 500.0), (4, 1000.0), (8, 900.0), (3, 120.0), (40, 300.0), (6, 1300.0)):
+        for n, hv in ((1, 500.0), (2, 500.0), (3, 500.0), (5, 500.0), (7, 500.0), (20, 500.0), (4, 1000.0), (8, 900.0), (3, 120.0), (40, 300.0), (6, 1300.0), (5, 90.0)):
             v = vue(n=n, hv=hv); vus = [v.sel]
-            for _ in range(2000):
-                p = v.pos; frappe(v, K.UP); vus.append(v.sel)
-                if v.pos == p: break
-            self.assertEqual(sorted(set(vus)), list(range(n)), (n, hv)); self.assertEqual(v.sel, 0)
-            self.assertEqual(vus, sorted(vus, reverse=True), (n, hv))                                              # (jamais en arriere)
+            for _ in range(n + 5): frappe(v, K.UP); vus.append(v.sel)
+            self.assertEqual(vus[:n], list(range(n - 1, -1, -1)), (n, hv)); self.assertEqual(v.sel, 0)                  # un par un, sans en sauter un seul
             vus = [v.sel]
-            for _ in range(2000):
-                p = v.pos; frappe(v, K.DOWN); vus.append(v.sel)
-                if v.pos == p: break
-            self.assertEqual(sorted(set(vus)), list(range(n)), (n, hv)); self.assertEqual((v.sel, v.pos), (n - 1, 0.0))
+            for _ in range(n + 5): frappe(v, K.DOWN); vus.append(v.sel)
+            self.assertEqual(vus[:n], list(range(n)), (n, hv)); self.assertEqual(v.sel, n - 1)
+            if hv >= 160.0: self.assertEqual(v.pos, 0.0)                                                          # (fenetre plus basse qu'un message : le dernier est montre par son debut)
+            if v.plage() == 0: self.assertEqual(v.decal(), 0.0)
 
     def test_liste_courte_collee_en_bas(self):
-        """Liste plus courte que la fenetre : rien a defiler (la molette ne fait rien), le dessin la colle en bas de la fenetre (hc < hv) ; Haut / Bas deplacent l'element actif."""
+        """Liste plus courte que la fenetre : rien a defiler (la molette ne fait rien), le dessin la colle en bas de la fenetre (hc < hv) ; Haut / Bas deplacent le message choisi sans bouger la vue."""
         K = pyglet.window.key; v = vue(n=3, hv=900.0); self.assertLess(v.hc, v.hv); self.assertEqual(v.plage(), 0.0)
         v.molette(1); v.defiler(500); poser(v); self.assertEqual((v.pos, v.sel), (0.0, 2))
-        frappe(v, K.UP); frappe(v, K.UP, K.UP, K.UP); self.assertEqual(v.sel, 0)                                      # le repere avance : le premier element devient actif
-        self.assertEqual(v.decal(), 0.0)                                                                            # ... et la vue n'a pas bouge
+        frappe(v, K.UP); self.assertEqual(v.sel, 1); frappe(v, K.UP, K.UP, K.UP); self.assertEqual(v.sel, 0)
+        self.assertEqual((v.decal(), v.pos), (0.0, 0.0))                                                           # ... et la vue n'a pas bouge
 
-    def test_clic_fixe_l_element_actif_jusqu_au_defilement(self):
-        M = pyglet.window.mouse; v = vue(); v.zones = [(0, 0, 10, 10, 5)]
-        v.clic(5, 5, M.LEFT); poser(v); self.assertEqual(v.sel, 5)                                              # un clic choisit l'element, meme loin du repere
-        v.relache(5, 5, M.LEFT); v.molette(1); poser(v); self.assertFalse(v.sel_manuel); self.assertEqual(v.sel, 19)                  # le defilement rend la main au repere (a 56 pixels du bas, c'est encore le dernier element)
+    def test_clic_choisit_et_le_defilement_a_la_souris_n_y_change_rien(self):
+        M = pyglet.window.mouse; K = pyglet.window.key; v = vue(n=40, hv=500.0); v.zones = [(0, 0, 10, 10, 5)]
+        v.clic(5, 5, M.LEFT); poser(v); self.assertEqual(v.sel, 5)                                              # un clic choisit le message
+        v.relache(5, 5, M.LEFT); v.molette(1); poser(v); self.assertEqual(v.sel, 5)                              # la molette defile, le message choisi reste le meme
+        v.sel = 39; v.pos = 0.0; v.molette(5); v.molette(5); v.molette(5); poser(v); self.assertEqual(v.sel, 39); self.assertFalse(self.entier(v, 39))      # ... meme s'il sort de la fenetre
+        frappe(v, K.UP); self.assertTrue(self.entier(v, v.sel)); self.assertLess(v.sel, 39)                        # au clavier : le plus proche message visible remplace le message sorti (le dernier de la fenetre) ...
+        dernier = v.sel; self.assertEqual(dernier, [i for i in range(40) if self.entier(v, i) or v.sel == i][-1]); frappe(v, K.UP); self.assertEqual(v.sel, dernier - 1)      # ... sans avancer d'un rang de plus ; l'appui suivant avance
+
+    def test_aucun_grise_sur_le_message_choisi(self):
+        """Derogation a la regle generale des menus : ni eclairci ni grise au survol ou au choix (souris ou clavier), seule la petite fleche marque le message choisi. La boite est dessinee de la meme facon qu'elle soit choisie ou non."""
+        import inspect, hud_mobile as HM
+        self.assertNotIn('choisi', inspect.signature(UH.VueHistorique._boite_dessin).parameters)
+        dessins = []; v = vue(); B = UH.Boite(); orig = (pyglet.shapes.Rectangle, HM.cadre)
+        class Faux:
+            def __init__(self, *a, **k): dessins.append(('rectangle', a, k)); self.opacity = 255
+            def draw(self): dessins.append('draw')
+        pyglet.shapes.Rectangle = Faux; HM.cadre = lambda *a, **k: dessins.append('cadre')
+        try:
+            v._boite_dessin(B, 10.0, 20.0, 1.0, 1.0, None, None, 20.0)
+            self.assertEqual(dessins, ['cadre'])                                                                 # le cadre seul : aucun rectangle blanc translucide par-dessus
+            for mouse in (False, True): v.P.mode_souris = mouse; dessins.clear(); v._boite_dessin(B, 10.0, 20.0, 1.0, 1.0, None, None, 20.0); self.assertEqual(dessins, ['cadre'])
+        finally: pyglet.shapes.Rectangle, HM.cadre = orig
 
     def test_aller_centre_l_element(self):
         v = vue(n=40, hv=500.0); d, f = self.geom(v); v.aller(10); poser(v)
@@ -700,7 +758,7 @@ class TestVue(unittest.TestCase):
         v.aller(11); poser(v); v.touche(K.F); poser(v)
         self.assertEqual(len(v.elements), 7); self.assertEqual(v.courant().texte, 'm11')                         # l'element choisi, s'il est un favori, reste choisi (la vue se recentre sur lui)
         frappe(v, K.HOME); self.assertEqual((v.sel, v.pos), (0, v.plage())); frappe(v, K.END); self.assertEqual((v.sel, v.pos), (6, 0.0))
-        v.defiler(10 ** 9); poser(v); self.assertEqual((v.pos, v.sel), (v.plage(), 0)); v.defiler(-10 ** 9); poser(v); self.assertEqual((v.pos, v.sel), (0.0, 6))      # molette et glissement bornes a la liste filtree
+        v.defiler(10 ** 9); poser(v); self.assertEqual(v.pos, v.plage()); v.defiler(-10 ** 9); poser(v); self.assertEqual((v.pos, v.sel), (0.0, 6))      # molette et glissement bornes a la liste filtree (le message choisi ne change pas)
         frappe(v, K.PAGEUP); self.assertEqual(v.pos, v.plage() if v.plage() < v.page_px() else v.page_px())
         avant = v.courant().texte; v.touche(K.F); poser(v); self.assertEqual((len(v.elements), v.courant().texte), (30, avant))                 # decoche : la liste complete, l'element actif (un favori) reste actif
         v.aller(7); poser(v); v.touche(K.F); poser(v); self.assertEqual((v.sel, v.courant().texte), (6, 'm26'))      # l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree

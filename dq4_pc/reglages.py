@@ -52,7 +52,8 @@ DEFAUT = {
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
-    'vitesse_fondu': 2.0,         # transitions : les fondus au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) et la cascade qui ouvre un combat durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu ; x1 a x4)
+    'vitesse_fondu': 1.0,         # transitions : les fondus au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) et la cascade qui ouvre un combat durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu, defaut depuis #48 ; x1 a x4)
+    'vitesse_fondu_v': 2,         # version du defaut de 'vitesse_fondu' : v1 (avant #48) = x2 ; v2 = x1. Un fichier enregistre avant (sans cette cle) dont la vitesse est encore l'ancien defaut x2 passe a x1 une seule fois (ensuite la cle est enregistree et le choix du joueur fait foi, x2 compris)
     'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
     'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
     'historique_favoris_seuls': False,   # fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_historique.py)
@@ -230,8 +231,10 @@ class Reglages:
                     ts = self.v['touches']
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
+                if d.get('vitesse_fondu_v') != DEFAUT['vitesse_fondu_v'] and self.v['vitesse_fondu'] == 2.0: self.v['vitesse_fondu'] = DEFAUT['vitesse_fondu']      # ancien defaut x2 -> nouveau defaut x1, une seule fois (#48)
                 self.v['touches_v'] = DEFAUT['touches_v']
                 self.v['interface_v'] = DEFAUT['interface_v']
+                self.v['vitesse_fondu_v'] = DEFAUT['vitesse_fondu_v']
                 for ts in self.v['touches'].values():                   # une touche reservee (F11 : bascule fenetre / plein ecran) ne peut plus etre une touche d'action : retiree d'un ancien fichier
                     for i in range(2):
                         if ts[i] in RESERVEES: ts[i] = None
