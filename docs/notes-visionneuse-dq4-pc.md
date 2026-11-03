@@ -867,3 +867,20 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 ### Non vérifié
 - La course après une porte **sous Windows** (Sylfried confirme) ; le bruitage et la durée des transitions n'ont pas été rejoués au clavier.
 - #108 à #112 : en cours (voir les PR suivantes).
+
+## Avance #114 : choix du périphérique de sortie audio (#112, 03/11/2026)
+
+### Demande (D-207, 19 h 38)
+« pouvoir changer de périphérique pour le son peut être vraiment top aussi, à rajouter tout en haut de la fenêtre pour régler les volumes ».
+
+### Fait
+- **Établi (lu dans le code de pyglet 2.1.19, non exécutable ici : Linux)** : sous Windows 8 et plus, pyglet prend d'abord le pilote XAudio2 ; `pyglet.media.devices.get_audio_device_manager().get_output_devices()` liste les sorties actives (`id`, `name`) et `get_audio_driver().set_device(device)` recrée le moteur audio sur cette sortie puis chaque lecteur en cours reprend (`Player.on_driver_reset`). Sans `set_device` (autre pilote, audio coupé), la ligne est grisée.
+- **`dq4_pc/sortie_audio.py`** (logique pure, testable avec de faux pilotes) : liste des sorties gardée 1,5 s, valeurs du menu (Automatique, sorties détectées, puis la sortie enregistrée si elle n'est plus branchée, libellé « … (non branchée) »), changement, retour à Automatique (`set_device` avec `id = None` : la sortie par défaut, que le pilote suit tout seul), remise de la sortie enregistrée au lancement. Tout est dans des `try / except` : une erreur laisse le son comme il était et s'affiche dans la console.
+- **Réglage** `sortie_audio` de `reglages.json` : `null` = Automatique (défaut), sinon `{id, nom}` ; une valeur illisible redevient Automatique.
+- **Menu Échap > Son** : « Périphérique de sortie » tout en haut de la page (liste déroulante, bouton rond « par défaut » = Automatique) ; au changement, un bruitage d'essai est joué sur la nouvelle sortie. La page s'ouvre sur cette ligne (le test de clavier de la page Son a été recalé).
+- Tests : `outils/test_sortie_audio.py` (11 tests : réglage, liste, cache, sortie non branchée, changement, erreurs, lancement), `test_pause_pages.py` (ligne en tête, grisée sans pilote capable). Démarrage de la visionneuse sous xvfb (audio « silent ») : sans erreur.
+
+### Non vérifié (à faire par Sylfried sur Windows)
+- Le changement de sortie **réel** (casque, haut-parleurs, TV) : jamais essayé ; la musique en cours doit reprendre sur la nouvelle sortie, les bruitages suivants aussi ; la sortie enregistrée doit revenir au lancement suivant.
+- Le retour à « Automatique » après avoir choisi une sortie (supposé : `set_device` avec `id = None`).
+- Débrancher la sortie choisie pendant le jeu : non géré (le pilote de pyglet réagit comme il le fait d'habitude) ; seul le lancement suivant retombe sur la sortie par défaut.
