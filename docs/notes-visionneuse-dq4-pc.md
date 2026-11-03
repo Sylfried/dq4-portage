@@ -1236,3 +1236,22 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - Un monstre « resté » = ni vaincu, ni enfui, ni disparu quand le combat se termine (fuite ou défaite du groupe) : c'est une déduction (le moteur ne le dit pas).
 - En défaite, comme en fuite, le jeu ne verse ni or, ni expérience, ni objets : rien n'est affiché.
 - Hors périmètre, constaté : `test_defaite` du vrai moteur (3 × monstre n° 150) donne une victoire avec la sauvegarde de ce poste (échec identique avant ce correctif).
+
+## Avance #153 : touches de distance de la caméra (#146, 04/11/2026)
+
+### Demande (D-225, 03/11 23 h 47)
+« J'ai dit qu'on supprimait l'option pour choisir la vitesse de transition non ? Comme pour les options pour changer la distance de la caméra depuis le menu, il faut plutôt ajouter 2 nouvelles entrées pour les contrôler aussi au clavier ». **Lecture retenue (supposé)** : le réglage « Vitesse de transition » disparaît (c'est #101, pas encore faite : elle reste ouverte et n'est pas touchée ici) et la distance de la caméra, déjà réglable par le curseur « Distance caméra » et la molette, reçoit deux touches réattribuables.
+
+### Fait
+- `reglages.py` : deux actions, `cam_pres` (« Caméra (Rapprocher) », pavé + ou E) et `cam_loin` (« Caméra (Éloigner) », pavé − ou W). Touches par défaut libres (ni ZQSD, ni flèches, ni les chiffres des états, ni V, ni M, ni H, ni A / R). Un ancien `reglages.json` reçoit ces touches ; si le joueur avait pris l'une d'elles pour une autre action, elle lui reste et la nouvelle action n'a pas cette touche.
+- `fenetre.py` : `_maj_distance_clavier` (à chaque image affichée, avec `_maj_camera`) : un pas de **5 %** à l'appui, puis, touche maintenue plus de **0,4 s**, un pas toutes les **0,08 s** (environ 60 % par seconde) ; arrondi au pas de 5 % (91 % → 90 % ou 95 %) ; bornes **50 à 200 %** ; passe par `regler_distance`, donc la même valeur que le curseur, la molette et les infos F1. Mêmes conditions que la molette (`_zoom_possible` : terrain libre d'une ville, d'un donjon, d'une tour ou carte du monde ; jamais un menu, un message ou un combat). Les deux touches ensemble ne font rien.
+- `pause.py` : deux lignes dans la section « Caméra au clavier » de Commandes, à la suite des quatre flèches, avec une aide.
+- Tests : `outils/test_distance_camera_clavier.py` (18 tests : actions et touches par défaut sans conflit, ancien fichier, réattribution, lignes du menu, pas, répétition, bornes, arrondi, rien hors du terrain). Suites voisines OK.
+- **Établi (vraie fenêtre et vrai moteur, sous Xvfb, sauvegarde 2 = ville de Caf1)** : les événements de touche simulés par `on_key_press` / `on_key_release` font passer la distance de 100 % à 105 % à l'appui, puis, maintenue, jusqu'à 200 % (pas de 5 %, environ 60 % par seconde) ; pavé + et E rapprochent (195 → 190 …), pavé − et W éloignent ; la valeur s'arrête à 200 %.
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (touches, cadence de la répétition, lignes du menu).
+- Les touches par défaut (pavé + / −, E / W) sont un choix de Claude : modifiables dans Commandes.
+- Pas de 5 % et cadence de répétition : choisis pour coller au curseur du menu (pas de 5 %) ; à ajuster si trop lent ou trop rapide.
+- « Vitesse de transition » est toujours dans Commandes (#101 non faite).
+- Hors périmètre, constaté : `test_vitesse_combat.test_hors_combat_la_marche_garde_ses_reglages` échoue (faux jeu du test sans `pause`, depuis #151).

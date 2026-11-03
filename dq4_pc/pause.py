@@ -484,6 +484,7 @@ class Pause:
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra au clavier'),
                 *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance   Ctrl + clic molette : remet les deux   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
+                *[dict(T(a), aide='Distance de la caméra par pas de 5 %, de 50 à 200 % (maintenue : continue)   Même réglage que « Distance caméra » du menu Affichage et que la molette   Ctrl + molette : remet 100 %   Sans effet en combat, dans un menu ou un message   ' + self.AIDE_TOUCHE) for a in ('cam_pres', 'cam_loin')],
                 dict(t='sep', l='Caméra à la souris'),
                 inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
                 inverse('Inverser haut / bas', 'camera_inverser_hb', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens haut / bas   Non : glisser vers le haut incline comme la flèche haut   Les flèches du clavier ne changent pas"),
