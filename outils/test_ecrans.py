@@ -201,7 +201,7 @@ class PleinEcran(unittest.TestCase):
     def test_ecran_choisi_absent_repli_sur_la_fenetre_sans_plantage(self):
         f = self.deux(); f.regler_ecran_plein(1); f2 = fen([A()])                                                 # au lancement suivant, B n'est plus branche
         f2.reg['ecran_plein'] = dict(f.reg['ecran_plein'])
-        self.assertEqual(f2.valeur_ecran(), 'absent'); self.assertEqual(f2.valeurs_ecran(), ['auto', 0, 'absent']); self.assertIn('absent', f2.nom_ecran('absent')); self.assertIn('Écran absent', f2.note_ecran())
+        self.assertEqual(f2.valeur_ecran(), 'absent'); self.assertEqual(f2.valeurs_ecran(), ['auto', 0, 'absent']); self.assertIn('absent', f2.nom_ecran('absent')); self.assertTrue(f2.ecran_modifiable())          # (le moniteur enregistre est absent : on peut le remplacer, la ligne reste active)
         f2.regler_plein_ecran(True); self.assertTrue(f2.fullscreen); self.assertEqual((f2.width, f2.height), (1920, 1080))
         self.assertEqual(f2.reg['ecran_plein']['indice'], 1)                                                      # (le choix reste enregistre : il resservira si B revient)
         f2.regler_ecran_plein('absent'); self.assertEqual(f2.reg['ecran_plein']['indice'], 1)
@@ -269,7 +269,7 @@ class PageAffichage(unittest.TestCase):
         f, P, e = self.page(); l = e['Écran du plein écran']
         self.assertEqual(l['vals'], ['auto', 0, 1]); self.assertTrue(l['liste']); self.assertFalse(l['sw']); self.assertTrue(l['aide'])
         self.assertEqual([P._nom_valeur('Écran du plein écran', v) for v in l['vals']], ['Automatique (écran de la fenêtre)', 'Écran 1 (1920x1080), principal, Moniteur A', 'Écran 2 (2560x1440), Moniteur B'])
-        self.assertEqual(l['v'](), 'Automatique (écran de la fenêtre)'); self.assertEqual(l['note'](), '')
+        self.assertEqual(l['v'](), 'Automatique (écran de la fenêtre)'); self.assertFalse(l['off']); self.assertNotIn('note', l)          # (deux moniteurs : ligne active ; plus de note rouge)
 
     def test_choisir_applique_et_le_bouton_rond_remet_automatique(self):
         f, P, e = self.page(); l = e['Écran du plein écran']
@@ -280,8 +280,17 @@ class PageAffichage(unittest.TestCase):
         l['defaut'](); self.assertIsNone(f.reg['ecran_plein']); self.assertTrue({x['l']: x for x in P._e_affichage()}['Écran du plein écran']['est_defaut']())
         l['moins'](); l['plus']()                                                                                   # (gauche / droite parcourent la liste)
 
-    def test_un_seul_moniteur_note(self):
-        f, P, e = self.page([A()]); l = e['Écran du plein écran']; self.assertEqual(l['vals'], ['auto', 0]); self.assertEqual(l['note'](), 'Un seul écran détecté')
+    def test_un_seul_moniteur_ligne_inactive(self):
+        """Un seul moniteur : rien a choisir, la ligne est inactive (grisee ; ni choisie, ni survolee, ni cliquee : voir test_lignes_inactives) et il n'y a plus de texte rouge « Un seul écran détecté »."""
+        f, P, e = self.page([A()]); l = e['Écran du plein écran']; self.assertEqual(l['vals'], ['auto', 0]); self.assertTrue(l['off']); self.assertNotIn('note', l); self.assertFalse(f.ecran_modifiable())
+
+    def test_ecran_modifiable(self):
+        self.assertTrue(fen([A(), B()]).ecran_modifiable()); self.assertFalse(fen([A()]).ecran_modifiable())            # (plusieurs moniteurs : active ; un seul : inactive)
+        f = fen([A(), B()]); f.regler_ecran_plein(1); f2 = fen([A()]); f2.reg['ecran_plein'] = dict(f.reg['ecran_plein'])
+        self.assertTrue(f2.ecran_modifiable())                                                                           # un seul moniteur mais le moniteur enregistre est absent : on peut le remplacer (retour a Automatique)
+        f2.regler_ecran_plein('auto'); self.assertFalse(f2.ecran_modifiable())                                          # ... une fois remplace, plus rien a choisir
+        f3 = fen([A(), B()]); f3.display = types.SimpleNamespace(get_screens=lambda: [])                                 # moniteurs illisibles : rien a choisir
+        self.assertFalse(f3.ecran_modifiable())
 
     def test_choisi_en_plein_ecran_est_immediat(self):
         f, P, e = self.page(plein=True); l = e['Écran du plein écran']; f.journal.clear(); l['set'](1)
