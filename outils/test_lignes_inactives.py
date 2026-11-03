@@ -246,7 +246,7 @@ class TousLesTypes(unittest.TestCase):
             for ligne in self.lignes_de(page):
                 lib = ligne['l']; J, p = menu(page, classe=PauseMarquee, inactives=(lib,)); e = p._entrees(); idx = libelles(e).index(lib); vus.add(ligne['t'])
                 p.sel[page] = idx; rendre(p)
-                self.assertNotEqual(p.sel[page], idx, (page, lib, 'le curseur quitte la ligne inactive'))
+                if any(p._actif(x) for x in e): self.assertNotEqual(p.sel[page], idx, (page, lib, 'le curseur quitte la ligne inactive'))          # (page d'une seule ligne : le curseur n'a nulle part ou aller)
                 z, actif = zone_de(p, idx)
                 if z is None: continue                                                                      # (ligne hors de la vue d'une liste qui défile : rien à cliquer)
                 self.assertFalse(actif, (page, lib)); self.assertNotIn(idx, p.barres); self.assertNotIn(idx, p.zones_val); self.assertNotIn(idx, p.zones_def); self.assertNotIn(idx, p.zones_mute)

@@ -684,7 +684,7 @@ class Pause:
         e = self._entrees(); i = min(self.sel.get(self.ecran, 0), len(e) - 1)
         if e and e[i]['t'] == 'sep':
             self._bouger(1); i = min(self.sel.get(self.ecran, 0), len(e) - 1)
-        return e[i] if e and not self._inactif(e[i]) else None
+        return e[i] if e and e[i]['t'] != 'sep' and not self._inactif(e[i]) else None
 
     def _ligne_active(self, e, i):
         """Indice de la ligne que le curseur doit occuper : i s'il est actif, sinon la premiere ligne active apres lui, puis avant lui ; i si aucune ligne n'est active (page sans rien a choisir : le curseur n'est pas dessine)."""
