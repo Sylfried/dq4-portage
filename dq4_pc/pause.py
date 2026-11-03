@@ -297,7 +297,7 @@ class Pause:
 
     noms = {
         'Shader': {0: 'Aucun', 1: 'EPX x8', 4: 'Pixel perfect'},
-        'Anticrénelage': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
+        'Antialiasing': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
         'Suréchantillonnage': {1.0: 'Aucun', 1.5: 'x1,5', 2.0: 'x2'},
         'Action': {'creer': 'Créer un état', 'charger': 'Charger un état', 'supprimer': 'Supprimer un état'},
     }
@@ -319,7 +319,7 @@ class Pause:
         res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution du bureau"
         ecr = self._choix('Écran du plein écran', J.valeurs_ecran(), J.valeur_ecran, J.regler_ecran_plein, off=not J.ecran_modifiable(), defaut=EK.AUTO)          # (moniteur du plein ecran : voir Jeu.regler_ecran_plein ; un seul ecran : rien a choisir, ligne inactive)
         ecr['aide'] = "Moniteur utilisé en plein écran (F11, Alt + Entrée, interrupteur)   Automatique : celui où se trouve la fenêtre   En plein écran, le changement est immédiat   Au retour en fenêtre, la fenêtre revient là où elle était   Grisé quand un seul écran est détecté"
-        msaa = self._choix('Anticrénelage', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), defaut=RG.DEFAUT['msaa'])
+        msaa = self._choix('Antialiasing', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), defaut=RG.DEFAUT['msaa'])
         if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa: msaa['aide'] = 'Limité à x%d par cette carte graphique' % J.post.max_msaa          # (ancienne note rouge : plus qu'une infobulle)
         return [fen, ecr, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
