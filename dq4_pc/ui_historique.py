@@ -453,15 +453,21 @@ class VueHistorique:
             boites, debuts, fins, hc = disposer(ent, B.HAUT * s, B.ONGLET_H * s, ECART_ELEMENTS * k, ECART_PAGES * k, MARGE_LISTE * k)
             self._mise = (cle, [(i, p, nb, h, hn, hb, pages[i][p]) for (i, p, nb, h, hn, hb) in boites], debuts, fins, hc)
         boites, debuts, fins, hc = self._mise[1:]
+        self._geometrie(debuts, fins, hc, hv, B.PAS * s, s)
+        return boites
+
+    def _geometrie(self, debuts, fins, hc, hv, pas, s):
+        """Partie pure de _mesurer (testee sans police ni GL) : la liste fait `hc` pixels de haut (debuts / fins : haut de la premiere boite et bas de la derniere de chaque element), la fenetre de la liste `hv`, une ligne de texte `pas`,
+        a l'echelle s. Garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et determine l'element actif (celui qui est en face du repere, sauf s'il vient d'un clic)."""
+        n = len(debuts)
         if self._s_prec and abs(s - self._s_prec) > 1e-6: self.pos *= s / self._s_prec                 # fenetre redimensionnee : la vue reste au meme endroit de la liste
-        self._s_prec = s; self.hc, self.hv, self.pas = hc, float(hv), B.PAS * s
+        self._s_prec = s; self.hc, self.hv, self.pas = hc, float(hv), pas
         if self.centrer is not None:
             i, self.centrer = self.centrer, None
             if 0 <= i < n: self.pos = min(self.plage(), max(0.0, hc - (debuts[i] + fins[i]) / 2.0 - self.hv / 2.0)); self.sel = i
         self.pos = min(self.pmax(), max(0.0, self.pos))
         if n and not self.sel_manuel: self.sel = element_au_repere(debuts, self.repere())
         self.sel = max(0, min(n - 1, self.sel)) if n else 0
-        return boites
 
     def _decouper(self, x, y, w, h):
         """Cadre de decoupe (glScissor) sur le rectangle (x, y, w, h) de la fenetre (pixels de la fenetre : mis a l'echelle du tampon d'image sur un ecran a forte densite) : ce qui deborde de la liste est coupe, comme un texte qui defile.
