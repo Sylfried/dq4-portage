@@ -1,4 +1,4 @@
-> **Copie du Claude Doc « DQ4 PC — Ce qu'il reste après l'audit »** (lien : https://claude.ai/artifact/5q6Cs8Br27SGqahx1AkvD4), exportée le 02/11/2026 au soir. Le rapport date de l'état **#44**. Depuis, l'avance **#45** (PR fusionnée, `main` 71fcd53) a traité : les **poses couchées** (oubli n° 1, paquets 16 / 17 / 18, shader `CharaSleep`), la cause de l'effet de rideau au lancement et des micro-images au changement de carte, le décor de combat selon l'heure (le soir existe, l'aube non), l'effet de coup critique, les rencontres aléatoires à marche accélérée, le menu Magie. Le reste de la liste est **inchangé** et doit être reconfirmé avant d'être cité. Les points nouveaux de #45 sont dans `docs/notes-visionneuse-dq4-pc.md` (« Avance #45 », sous-sections « À trancher par Sylfried » et « Non vérifié (#45) »).
+> **Copie du Claude Doc « DQ4 PC — Ce qu'il reste après l'audit »** (lien : https://claude.ai/artifact/5q6Cs8Br27SGqahx1AkvD4), exportée le 02/11/2026 au soir. Le rapport date de l'état **#44**. Depuis, l'avance **#45** (PR fusionnée, `main` 71fcd53) a traité : les **poses couchées** (oubli n° 1, paquets 16 / 17 / 18, shader `CharaSleep`), la cause de l'effet de rideau au lancement et des micro-images au changement de carte, le décor de combat selon l'heure (le soir existe, l'aube non), l'effet de coup critique, les rencontres aléatoires à marche accélérée, le menu Magie. Puis **#46** (docs et audit versés au dépôt), **#47** (retours de 22 h 29 : pause, caméra toujours centrée, titre, combat, historique, sorts, bruitages) et **#48** (retours de 07 h 33 du 03/11 : sorts sans effet, transition x1, historique au clavier). Le reste de la liste est **inchangé** et doit être reconfirmé avant d'être cité ; les réponses de Sylfried du 03/11 sont dans la section « Réponses de Sylfried (03/11/2026) » ci-dessous. Les points nouveaux de #45 sont dans `docs/notes-visionneuse-dq4-pc.md` (« Avance #45 », sous-sections « À trancher par Sylfried » et « Non vérifié (#45) »).
 
 # DQ4 PC — Ce qu'il reste après l'audit
 
@@ -36,6 +36,24 @@ Dix-huit points où je ne peux pas trancher à ta place. Pour chacun, ma recomma
 | 18 | Licence d'Unicorn | GPL v2 ou BSD : les sources se contredisent | Vérifier avant toute redistribution | G-013, D-05 |
 
 La fusion de « Messages en combat » et « Vitesse des combats » dans la PR #44 rend sans objet la validation du mapping Moyen / Lent et du doublon de libellé « Rapide » (D-88, C-16). Les libellés « Masqué / Masquée » (D-89) restent à valider.
+
+## Réponses de Sylfried (03/11/2026)
+
+Relecture de ce rapport avec Sylfried le 03/11 à 13 h 45 (il ne pouvait pas tester : au travail). Il a répondu à trois questions ; pour le reste il a laissé la règle « si tu ne dis rien, je suis ma recommandation ».
+
+| # | Sujet | Réponse | Suite |
+|---|---|---|---|
+| 1 | Toits et décors | **Garder tel quel** | L'issue dq4-pc #6 (toits transparents) **reste ouverte** : sa fermeture était conditionnée à une vérification sur mobile qu'il n'a pas faite |
+| 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 2 : `workflow.md` et README corrigés (branche `docs-audit48`) ; la suppression des branches fusionnées n'est **pas faite** (à confirmer) ; 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » (**18 sites qui écrivent** et 27 crochets depuis #47 et #48, au lieu de 16 et 22 : relevé du 03/11 sur `main` b0d71b8, nombre de crochets vérifié à l'exécution) |
+| 10 | Curseur doré | **Sans objet** | Le curseur est fixe dans le code (`pause.py:161-167`) ; la petite flèche est gardée dans l'historique (#48) |
+| 8, 18 | Entrées retirées de l'éditeur ; licence d'Unicorn | **Sans réponse** | 8 : liste des 18 entrées (`FENETRES_RETIREES`) à lui montrer ; 18 : à vérifier avant toute redistribution |
+| D-89 | Libellés « Masqué / Masquée » | **Sans réponse** | à valider |
+
+**Issues de l'ancien dépôt `dq4-pc`** : Sylfried a demandé de fermer les **7** issues **#2, #5, #7, #10, #22, #23, #41** (avec un commentaire qui renvoie à la PR qui les résout). **Non fait** : la session n'a pas accès à `Sylfried/dq4-pc` (le dépôt n'est pas dans les dépôts autorisés de la session, l'API répond 403) ; il faut donner l'accès à l'application GitHub ou fermer ces issues à la main. #6 reste ouverte.
+
+**Chantiers choisis** : « Docs + CI à jour » seulement (cette branche : rebase des docs, fichiers d'audit périmés mis à jour, test de la CI sur GitHub). **Non choisis** : les « petits oublis » (sauvegarde rapide au clavier, bruitage 300 par Entrée / Espace / M, icône du genre 18, fichier Excel) et les « paquets du moteur » (6, 30, effets d'écran 3 / 5 / 6).
+
+**Points de ce rapport rendus caducs** : G-104 (curseur oscillant), G-211 / D-47 (option de caméra supprimée), G-073 pour le roulis de la caméra de combat (appliqué par `_rot_camera`) ; voir `lacunes_connues.md` et `decisions.md`.
 
 ## Oublis de Claude
 
