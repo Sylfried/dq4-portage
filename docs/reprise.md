@@ -21,8 +21,8 @@
 | Quoi | Où |
 |---|---|
 | README (usage, touches, nouveautés) | `README.md` |
-| État de la visionneuse, par avance (#25 → #45), « reste à faire », « Non vérifié » | `docs/notes-visionneuse-dq4-pc.md` (section **« Avance #45 »** à la fin ; en tête de section : « À trancher par Sylfried ») |
-| Faits techniques moteur / protocole / chronologies | `docs/notes-technique-portage-dq4.md` (**« Avance #45 : faits techniques »**) |
+| État de la visionneuse, par avance (#25 → #47), « reste à faire », « Non vérifié » | `docs/notes-visionneuse-dq4-pc.md` (section **« Avance #47 »** à la fin ; en tête de section : « À trancher par Sylfried ») |
+| Faits techniques moteur / protocole / chronologies | `docs/notes-technique-portage-dq4.md` (**« Avance #47 : faits techniques »**) |
 | Manière de travailler (branches, issues) | `docs/workflow.md` (périmé : dit « pas de push direct sur main + issues » ; l'usage réel est le **suivi par PR**, à corriger, cf. décision 2 du rapport) |
 | Rapport « Ce qu'il reste après l'audit » (18 décisions, 15 oublis, 11 bugs, 20 non vérifiés) | `docs/audit/rapport_reste_a_faire.md` (copie du Claude Doc https://claude.ai/artifact/5q6Cs8Br27SGqahx1AkvD4) |
 | Audit détaillé : registre des décisions D-xx, lacunes G-xxx, couverture fonctionnelle, issues GitHub | `docs/audit/{decisions,lacunes_connues,couverture,github_issues}.md` |
