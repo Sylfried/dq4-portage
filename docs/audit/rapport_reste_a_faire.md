@@ -44,7 +44,7 @@ Relecture de ce rapport avec Sylfried le 03/11 (13 h 45, puis 14 h 04 et 14 h 17
 | # | Sujet | Réponse | Suite |
 |---|---|---|---|
 | 1 | Toits et décors | **Laisser tel quel : « c'est le fonctionnement du mobile »** | **Clos** (D-93 validé, G-050 clos) ; rien à faire |
-| 2 | Suivi du projet | Recommandation suivie (suivi par PR). **Nouveau** : « `dq4-pc` n'existe plus, on fait tout depuis `dq4-portage`, même sur GitHub » | Docs corrigées (#49, #50). **Question ouverte** : veut-il aussi des issues dans `dq4-portage` pour le reste à faire ? (jusqu'ici : aucune) |
+| 2 | Suivi du projet | **Issues pour le reste à faire : oui** (14 h 25) ; « `dq4-pc` n'existe plus, on fait tout depuis `dq4-portage`, même sur GitHub » | **Fait** : 38 issues #51 à #88 (voir « Suivi dans GitHub » ci-dessous). Pas d'issues rétroactives pour le travail fait (choix de Claude, D-161). Suppression des 56 branches fusionnées : en attente de son « oui » (D-162) |
 | 3 | Piste Unity | Recommandation suivie : en pause, hors périmètre | L'issue #57 a disparu avec `dq4-pc` ; la décision tient |
 | 4 | Manette | **« Pour la suite, on pourra prévoir d'utiliser une manette »** | **Retenue pour la suite** (pas maintenant) : à planifier ; aucun code de manette n'existe (G-019) |
 | 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » (**18 sites qui écrivent** et 27 crochets depuis #47 et #48, au lieu de 16 et 22 : relevé du 03/11 sur `main` b0d71b8, nombre de crochets vérifié à l'exécution) |
@@ -76,6 +76,18 @@ Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
 4. **Chapitre 2** : dès qu'il fournit les sauvegardes, rejouer les PNJ de scénario, les cartes et les menus du chapitre 2 (jamais testés).
 5. **Vérifier la licence d'Unicorn** avant toute redistribution ou `.exe`.
 6. **Paquets du moteur et petits oublis** (liste « Oublis de Claude » ci-dessous), selon ses retours de test.
+
+## Suivi dans GitHub (depuis le 03/11/2026)
+
+Le reste à faire de ce rapport est repris dans **38 issues de `dq4-portage` (#51 à #88)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute` (premier lancement, sauvegarde à l'église, clavier complet, allocateur, licence d'Unicorn), `bloqué` (attend Sylfried), `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+
+| Jalon | Issues | Contenu |
+|---|---|---|
+| 1. Validation Windows | #51 à #58 | premier lancement, rendu OpenGL, performance, sauvegarde à l'église, comparaison au mobile, combats, historique, teinte jour / nuit |
+| 2. Clavier complet et manette | #59 à #61 | tous les boutons au clavier, bruitage au clavier, manette |
+| 3. Chapitre 2 et services | #62 à #65 | chapitre 2 (bloqué : sauvegardes), services, boutiques et bestiaire, casino |
+| 4. Moteur et finitions | #66 à #85 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs |
+| 5. Distribution et extensions | #86 à #88 | licence d'Unicorn, .exe, DQ5 et DQ6 |
 
 ## Oublis de Claude
 

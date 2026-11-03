@@ -759,9 +759,12 @@ Aucun changement de code dans `dq4_pc/` ni dans les tests. Relecture du rapport 
 ### Reste à faire (structuré, rien de lancé)
 1. Validation Windows / vrai GPU. 2. Clavier complet : inventaire des boutons qui n'y sont pas (cas connu : « Sauvegarde rapide » de l'écran Divers, G-096), puis correction, avec la règle du bruitage (G-173). 3. Manette. 4. Chapitre 2 (jouer ses cartes, PNJ et menus dès les sauvegardes). 5. Licence d'Unicorn. 6. Paquets du moteur (6, 30, effets d'écran 3 / 5 / 6) et petits oublis.
 
+### Suivi par issues (03/11/2026, PR #89)
+Sylfried (14 h 25) : « je veux bien des issues sur le reste à faire ». **38 issues créées dans `dq4-portage` (#51 à #88)**, en 5 jalons (1 Validation Windows #51-#58, 2 Clavier complet et manette #59-#61, 3 Chapitre 2 et services #62-#65, 4 Moteur et finitions #66-#85 dont 11 bugs, 5 Distribution et extensions #86-#88) ; nouvelles étiquettes `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `bloqué`. Pas d'issues rétroactives pour le travail déjà fait (choix de Claude : les 50 PR « Avance #N » et `docs/historique.md` font foi). Issues et PR partagent la même numérotation : `pr.sh` prend le plus grand numéro + 1, donc la PR suivante est #89 (la série « Avance #N » saute de #50 à #89). Détail : `docs/workflow.md`, `docs/audit/rapport_reste_a_faire.md` (« Suivi dans GitHub »).
+
 ### À trancher par Sylfried (#50)
-1. **Issues dans `dq4-portage` ?** « On fait tout depuis dq4-portage, même sur GitHub » : veut-il des issues pour le reste à faire (jusqu'ici : suivi par PR seulement, aucune issue) ? Les modèles `.github/ISSUE_TEMPLATE` existent mais demandent des étiquettes `type:` absentes de ce dépôt.
-2. **Branches fusionnées** : supprimer les ~55 branches distantes déjà fusionnées (décision 2 de l'audit) ? Non fait sans son accord.
+1. ~~**Issues dans `dq4-portage` ?**~~ **Réglé le 03/11 à 14 h 25** : oui, pour le reste à faire (voir ci-dessus).
+2. **Branches fusionnées** : supprimer les 56 branches distantes déjà fusionnées (décision 2 de l'audit) ? Il a demandé si cela change quelque chose : non (tout est dans `main`, les PR restent consultables) ; **non fait** sans un « oui » explicite.
 
 ### Non vérifié (#50)
 Tout ce qui a été vu l'a été sous Linux (Mesa) ; la CI n'a tourné qu'une fois (verte), sans essai d'un fichier interdit réel (le motif a été essayé en local).
