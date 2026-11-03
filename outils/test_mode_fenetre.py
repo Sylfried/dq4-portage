@@ -183,8 +183,7 @@ class FausseFenetre:
         self.bureau = bureau; self.echec = echec; self._windowed_location = None if plein else (100, 80); self._windowed_size = taille
         self.taille_fenetre = taille; self.mode_fen = 1 if plein else 0; self._pret = True; self._en_bascule = False; self.reg = RG.Reglages(None)
         self.toasts = []; self.post = types.SimpleNamespace(cle=('cle', 1))
-        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein',
-                    'regler_ecran_plein', 'valeurs_ecran', 'valeur_ecran', 'nom_ecran', 'ecran_modifiable'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
+        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
         self._echec_simule = FE.Jeu._echec_simule; self.bureau_ = bureau
         self._verifier_taille_reelle = lambda: self.journal.append('verifier')
         self.toast = lambda t, d=3.0: self.toasts.append(t)
@@ -301,7 +300,7 @@ class Bascule(unittest.TestCase):
 
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Plein écran » = simple interrupteur Oui / Non, « Résolution » grisee en plein ecran, plus de « Lissage des textures » ni de « Correction des bords des sprites »."""
-    ORDRE = ['Plein écran', 'Écran du plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Antialiasing', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Interface']
+    ORDRE = ['Plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Antialiasing', 'Suréchantillonnage', 'Luminosité', 'Distance caméra', 'Interface']
 
     @classmethod
     def setUpClass(cls):
@@ -314,8 +313,7 @@ class PageAffichage(unittest.TestCase):
         J = self.J = types.SimpleNamespace(reg=reg, mode_fen=int(plein), mode=4, zoom=1.0, post=types.SimpleNamespace(max_msaa=None), est_plein=plein,
                                   resolutions=lambda: [(1280, 720), (1920, 1080)], resolution_courante=lambda: (1920, 1080),
                                   regler_resolution=lambda v: appels.append(('res', v)), regler_plein_ecran=lambda v: appels.append(('plein', v)),
-                                  regler_mode=lambda v: None, regler_distance=lambda v: None,
-                                  valeurs_ecran=lambda: ['auto', 0], valeur_ecran=lambda: 'auto', nom_ecran=lambda v: str(v), ecran_modifiable=lambda: True, regler_ecran_plein=lambda v: appels.append(('ecran', v)))
+                                  regler_mode=lambda v: None, regler_distance=lambda v: None)
         self.P = self.PA.Pause(J); return self.P._e_affichage(), appels
 
     def test_ordre(self):
@@ -333,10 +331,10 @@ class PageAffichage(unittest.TestCase):
 
     def test_resolution_grisee_en_plein_ecran(self):
         for plein in (False, True):
-            e, appels = self.page(plein); r = e[2]
+            e, appels = self.page(plein); r = e[1]
             self.assertEqual(bool(r['off']), plein, 'plein %s' % plein)
             self.assertNotIn('note', r)                                                        # (plus de texte rouge « Sans effet en plein écran » : la ligne est seulement grisee)
-            self.P.pile = ['affichage']; self.P.sel['affichage'] = 2; self.P.touche(self.PA.pyglet.window.key.RIGHT)          # (au clavier, par le menu : une ligne grisee ne change rien)
+            self.P.pile = ['affichage']; self.P.sel['affichage'] = 1; self.P.touche(self.PA.pyglet.window.key.RIGHT)          # (au clavier, par le menu : une ligne grisee ne change rien)
             self.assertEqual(len(appels), 0 if plein else 1)
 
     def test_plus_d_options_lissage_ni_correction_des_bords(self):

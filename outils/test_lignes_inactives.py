@@ -1,4 +1,4 @@
-"""Test des lignes inactives du menu Pause (page Affichage : « Résolution » en plein écran, « Écran du plein écran » avec un seul écran ; page États : emplacements vides) et du libellé « Modifications ».
+"""Test des lignes inactives du menu Pause (page Affichage : « Résolution » en plein écran ; page États : emplacements vides) et du libellé « Modifications ».
 
     python3 outils/test_lignes_inactives.py
 
@@ -15,7 +15,6 @@ if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.op
 import numpy as np
 import reglages as RG
 import pause as PA
-import sortie_audio as SA
 
 K = pyglet.window.key
 GAUCHE = 1
@@ -25,34 +24,21 @@ CACHE = os.environ.get('DQ_UICACHE', '/inexistant')                    # (facult
 
 
 class FauxJeu:
-    """Ce que le menu Pause demande à la fenêtre ; `plein` et `ecrans` peuvent changer à tout moment (les lignes se recalculent à chaque image)."""
+    """Ce que le menu Pause demande à la fenêtre ; `plein` peut changer à tout moment (les lignes se recalculent à chaque image)."""
     mode = 4; zoom = 1.0
 
-    def __init__(self, plein=False, ecrans=1):
-        self.reg = RG.Reglages(None); self.plein = plein; self.ecrans = ecrans; self.res = (1280, 720); self.appels = []; self.etiq = {}
+    def __init__(self, plein=False):
+        self.reg = RG.Reglages(None); self.plein = plein; self.res = (1280, 720); self.appels = []; self.etiq = {}
         self.width, self.height = 1280, 720; self.args = types.SimpleNamespace(cache=CACHE); self.souris = None
         self.post = types.SimpleNamespace(max_msaa=None); self.son = types.SimpleNamespace(actif=True, ecoute=False, ecouter=lambda b: None, tick=lambda: None)
-        self.sorties = SA.Sorties(types.SimpleNamespace(set_device=lambda d: self.appels.append(('sortie', d.id))), types.SimpleNamespace(get_output_devices=lambda: [types.SimpleNamespace(id='a', name='Haut-parleurs'), types.SimpleNamespace(id='b', name='Casque')]))
 
     est_plein = property(lambda self: self.plein)
     def regler_plein_ecran(self, v): self.plein = bool(v); self.appels.append(('plein', bool(v)))
     def resolutions(self): return [(1280, 720), (1920, 1080), (2560, 1440)]
     def resolution_courante(self): return self.res
     def regler_resolution(self, v): self.res = tuple(v); self.appels.append(('res', tuple(v)))
-    def valeurs_ecran(self): return ['auto'] + list(range(self.ecrans))
-    def valeur_ecran(self): return 'auto'
-    def nom_ecran(self, v): return 'Automatique (écran de la fenêtre)' if v == 'auto' else 'Écran %d' % (v + 1)
-    def ecran_modifiable(self): return self.ecrans > 1
-    def regler_ecran_plein(self, v): self.appels.append(('ecran', v))
     def regler_mode(self, v): self.appels.append(('mode', v))
     def regler_distance(self, v): self.appels.append(('distance', v))
-    def valeurs_sortie(self): return self.sorties.valeurs(self.reg['sortie_audio'])
-    def valeur_sortie(self): return self.sorties.valeur(self.reg['sortie_audio'])
-    def nom_sortie(self, v): return self.sorties.nom(v, self.reg['sortie_audio'])
-    def sortie_modifiable(self): return self.sorties.modifiable(self.reg['sortie_audio'])
-    def regler_sortie(self, v):
-        ok, choix = self.sorties.appliquer(v)
-        if ok: self.reg['sortie_audio'] = choix
     def regler_son(self, oui): self.appels.append(('son', oui))
     def appliquer_mixage(self): self.appels.append('mixage')
     def apercu_son(self, cat): self.appels.append(('apercu', cat))
@@ -83,8 +69,8 @@ class PauseMarquee(PA.Pause):
         return e
 
 
-def menu(page, plein=False, ecrans=1, classe=PA.Pause, **attrs):
-    J = FauxJeu(plein, ecrans); p = classe(J); p.ouvert = True; p.pile = [page]
+def menu(page, plein=False, classe=PA.Pause, **attrs):
+    J = FauxJeu(plein); p = classe(J); p.ouvert = True; p.pile = [page]
     for k, v in attrs.items(): setattr(p, k, v)
     return J, p
 
@@ -129,72 +115,65 @@ def zone_de(p, idx):
 
 
 class PageAffichage(unittest.TestCase):
-    """Les deux cas de la capture de Sylfried : « Écran du plein écran » (un seul écran) et « Résolution » (plein écran)."""
-    def lignes(self, plein, ecrans):
-        J, p = menu('affichage', plein, ecrans); e = p._entrees(); return J, p, e, {x['l']: i for i, x in enumerate(e)}
+    """« Résolution » est inactive en plein écran (le choix du moniteur du plein écran n'existe plus : le plein écran se fait sur l'écran de la fenêtre)."""
+    def lignes(self, plein):
+        J, p = menu('affichage', plein); e = p._entrees(); return J, p, e, {x['l']: i for i, x in enumerate(e)}
 
     def test_etats_des_lignes(self):
         for plein in (False, True):
-            for ecrans in (1, 2):
-                J, p, e, n = self.lignes(plein, ecrans)
-                self.assertEqual(p._inactif(e[n['Résolution']]), plein, (plein, ecrans)); self.assertEqual(p._inactif(e[n['Écran du plein écran']]), ecrans == 1, (plein, ecrans))
-                self.assertFalse(p._inactif(e[n['Plein écran']])); self.assertFalse(p._inactif(e[n['Netteté']])); self.assertFalse(p._inactif(e[n['Interface']]))
+            J, p, e, n = self.lignes(plein)
+            self.assertEqual(p._inactif(e[n['Résolution']]), plein, plein); self.assertNotIn('Écran du plein écran', n)
+            self.assertFalse(p._inactif(e[n['Plein écran']])); self.assertFalse(p._inactif(e[n['Netteté']])); self.assertFalse(p._inactif(e[n['Interface']]))
 
     def test_plus_aucun_texte_rouge_de_note(self):
         for plein in (False, True):
-            J, p, e, n = self.lignes(plein, 1)
+            J, p, e, n = self.lignes(plein)
             for x in e: self.assertNotIn('note', x, x.get('l'))
         with open(PA.__file__, encoding='utf-8') as f: src = f.read()
         self.assertNotIn("en['note']", src); self.assertNotIn('note=', src); self.assertNotIn('dec = ', src)                    # (plus de paramètre `note`, plus de place réservée sous la valeur ; restent en rouge : le message d'erreur du pied du cadre et « Masquée » de l'éditeur, qui ne sont pas des notes sous les valeurs)
         for texte in ('Un seul écran détecté', 'Sans effet en plein écran'): self.assertNotIn("'%s" % texte, src)
 
     def test_navigation_saute_les_lignes_inactives(self):
-        J, p, e, n = self.lignes(False, 1); p.sel['affichage'] = n['Plein écran']                  # fenêtre, un seul écran : « Écran du plein écran » est sautée
+        J, p, e, n = self.lignes(False); p.sel['affichage'] = n['Plein écran']                      # fenêtre : rien n'est sauté
         p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Résolution'])
         p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Plein écran'])
-        J, p, e, n = self.lignes(True, 1); p.sel['affichage'] = n['Plein écran']                    # plein écran, un seul écran : les deux le sont
+        J, p, e, n = self.lignes(True); p.sel['affichage'] = n['Plein écran']                       # plein écran : « Résolution » est sautée
         p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Netteté'])
         p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Plein écran'])
         p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Interface'])                        # (le tour de la liste reprend par la fin)
         p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Plein écran'])
-        J, p, e, n = self.lignes(False, 2); p.sel['affichage'] = n['Plein écran']                  # deux écrans : rien n'est sauté
-        p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Écran du plein écran']); p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Résolution'])
 
     def test_molette_saute_les_lignes_inactives(self):
-        J, p, e, n = self.lignes(True, 1); p.sel['affichage'] = n['Plein écran']
+        J, p, e, n = self.lignes(True); p.sel['affichage'] = n['Plein écran']
         p.molette(1); self.assertEqual(p.sel['affichage'], n['Netteté'])                            # (molette vers le haut = ligne suivante)
 
     def test_clavier_sans_effet_sur_une_ligne_inactive(self):
-        for plein, ecrans, lib in ((True, 2, 'Résolution'), (False, 1, 'Écran du plein écran'), (True, 1, 'Résolution'), (True, 1, 'Écran du plein écran')):
-            J, p, e, n = self.lignes(plein, ecrans); p.sel['affichage'] = n[lib]; avant = etat(J, p)
+        for plein, lib in ((True, 'Résolution'),):
+            J, p, e, n = self.lignes(plein); p.sel['affichage'] = n[lib]; avant = etat(J, p)
             for t in (K.RETURN, K.SPACE, K.LEFT, K.RIGHT, K.DELETE, K.HOME): p.touche(t); p.sel['affichage'] = n[lib]
-            self.assertEqual(etat(J, p), avant, (plein, ecrans, lib)); self.assertIsNone(p._courante())
+            self.assertEqual(etat(J, p), avant, (plein, lib)); self.assertIsNone(p._courante())
 
     def test_ligne_active_toujours_reglable(self):
-        J, p, e, n = self.lignes(False, 1); p.sel['affichage'] = n['Résolution']; p.touche(K.RIGHT)          # fenêtre : la résolution se règle
+        J, p, e, n = self.lignes(False); p.sel['affichage'] = n['Résolution']; p.touche(K.RIGHT)          # fenêtre : la résolution se règle
         self.assertEqual(J.appels, [('res', (1920, 1080))])
-        J, p, e, n = self.lignes(False, 2); p.sel['affichage'] = n['Écran du plein écran']; p.touche(K.RIGHT)
-        self.assertEqual(J.appels, [('ecran', 0)])
 
     def test_etat_recalcule_a_chaque_image(self):
         """Une ligne grisée parce qu'une autre valeur la rend sans effet redevient active dès que cette valeur change (et inversement)."""
-        J, p = menu('affichage', False, 2); n = {x['l']: i for i, x in enumerate(p._entrees())}
+        J, p = menu('affichage', False); n = {x['l']: i for i, x in enumerate(p._entrees())}
         self.assertFalse(p._inactif(p._entrees()[n['Résolution']]))
         p.sel['affichage'] = n['Plein écran']; p.touche(K.RETURN)                                          # Entrée sur l'interrupteur : plein écran
         self.assertTrue(J.plein); self.assertTrue(p._inactif(p._entrees()[n['Résolution']]))              # ... « Résolution » est grisée tout de suite
         p.touche(K.RETURN); self.assertFalse(J.plein); self.assertFalse(p._inactif(p._entrees()[n['Résolution']]))      # ... et se rallume au retour en fenêtre
-        J.ecrans = 1; self.assertTrue(p._inactif(p._entrees()[n['Écran du plein écran']]))               # un écran débranché : la ligne se grise
-        J.ecrans = 2; self.assertFalse(p._inactif(p._entrees()[n['Écran du plein écran']]))              # ... et se rallume au branchement
 
     def test_la_selection_quitte_la_ligne_devenue_inactive(self):
-        J, p = menu('affichage', False, 2); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre()
+        J, p = menu('affichage', False); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre()
         p.sel['affichage'] = n['Résolution']; rendre(p); self.assertEqual(p.sel['affichage'], n['Résolution'])
         J.plein = True; rendre(p); self.assertEqual(p.sel['affichage'], n['Netteté'])                      # F11 pendant que « Résolution » est choisie : le curseur passe à la ligne active suivante
-        J.plein = False; J.ecrans = 1; p.sel['affichage'] = n['Écran du plein écran']; rendre(p); self.assertEqual(p.sel['affichage'], n['Résolution'])
+        J.plein = False; rendre(p); self.assertEqual(p.sel['affichage'], n['Netteté'])                    # (revenue en fenêtre : la ligne se rallume, le curseur reste où il est)
 
     def test_clic_survol_et_infobulle(self):
-        J, p = menu('affichage', True, 1); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); rendre(p)
-        for lib in ('Résolution', 'Écran du plein écran'):
+        J, p = menu('affichage', True); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); rendre(p)
+        for lib in ('Résolution',):
             z, actif = zone_de(p, n[lib]); self.assertFalse(actif, lib)
             for f in (0.05, 0.3, 0.5, 0.7, 0.95):                                                          # (libellé, valeur, flèche, bouton ↺ : n'importe où dans la case)
                 x, y = z[0] + f * (z[2] - z[0]), (z[1] + z[3]) / 2; avant = etat(J, p); sel = p.sel['affichage']
@@ -203,15 +182,14 @@ class PageAffichage(unittest.TestCase):
                 p.relache(x, y, GAUCHE)
             self.assertTrue(p._aide_ligne(p._entrees()[n[lib]]), lib)                                      # (elle garde son aide : elle dit pourquoi)
         self.assertNotIn('Entrée', p._aide_ligne(p._entrees()[n['Résolution']]))                           # (mais plus de consigne « Entrée ou clic : ouvrir la liste »)
-        self.assertIn('Grisé quand un seul écran', p._aide_ligne(p._entrees()[n['Écran du plein écran']]))
         z, actif = zone_de(p, n['Netteté']); self.assertTrue(actif)                                      # une ligne active, elle, répond
         p.survol((z[0] + z[2]) / 2, (z[1] + z[3]) / 2); self.assertEqual(p.sel['affichage'], n['Netteté'])
 
     def test_pixels_aucun_surlignage_au_survol(self):
         """La ligne inactive est identique avec ou sans pointeur dessus ; une ligne active change (contrôle du test)."""
-        J, p = menu('affichage', True, 1); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); loin = (5.0, 5.0)
+        J, p = menu('affichage', True); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); loin = (5.0, 5.0)
         p.mode_souris = True; p.pos_souris = loin; rendre(p); fond = rendre(p)
-        for lib, change in (('Résolution', False), ('Écran du plein écran', False), ('Netteté', True), ('Luminosité', True)):
+        for lib, change in (('Résolution', False), ('Netteté', True), ('Luminosité', True)):
             z, actif = zone_de(p, n[lib]); self.assertEqual(actif, change, lib)
             p.pos_souris = ((z[0] + z[2]) / 2, (z[1] + z[3]) / 2); p.tt = None; dessus = rendre(p); p.pos_souris = loin; p.tt = None
             egal = np.array_equal(rogner(fond, z), rogner(dessus, z))
@@ -220,7 +198,7 @@ class PageAffichage(unittest.TestCase):
 
     def test_case_entiere_grisee(self):
         """La plaque d'une ligne inactive est plus sombre que celle d'une ligne active, et son texte est gris (pas blanc)."""
-        J, p = menu('affichage', True, 1); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); p.mode_souris = False; img = rendre(p)
+        J, p = menu('affichage', True); n = {x['l']: i for i, x in enumerate(p._entrees())}; fenetre(); p.mode_souris = False; img = rendre(p)
         zr, _ = zone_de(p, n['Résolution']); zn, _ = zone_de(p, n['Netteté'])
         def lum(z): c = rogner(img, z, 6).astype(float); return c[..., :3].mean(), c[..., :3].max()
         (m_r, max_r), (m_n, max_n) = lum(zr), lum(zn)

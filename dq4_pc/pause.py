@@ -13,7 +13,6 @@ import hd as HD
 import hud_mobile as HM
 import entrees as EN
 import ui_historique as UH
-import ecrans as EK
 
 NB_ETATS = 9                 # emplacements d'etats instantanes (touches 1 a 9)
 DELAI_REPETITION, PAS_REPETITION = 0.40, 0.07
@@ -281,7 +280,6 @@ class Pause:
 
     def _nom_valeur(self, label, v):
         if label == 'Interface à modifier': return self.nom_cible(v)
-        if label == 'Écran du plein écran': return self.J.nom_ecran(v)
         n = self.noms.get(label, {}).get(v)
         if n is not None: return n
         if isinstance(v, bool): return 'Oui' if v else 'Non'
@@ -315,14 +313,12 @@ class Pause:
                 if f: f(v)                 # (les reglages sont enregistres a la fermeture du menu)
             return s
         fen = self._choix('Plein écran', [False, True], lambda: J.est_plein, J.regler_plein_ecran, defaut=False)          # (interrupteur : l'ancien reglage d'avant la #42 ; F11 et Alt + Entree font la meme chose)
-        fen['aide'] = "Plein écran : fenêtre sans bordure à la résolution du bureau (l'écran ne change pas)   F11 ou Alt + Entrée : passe du plein écran à la fenêtre et inversement"
+        fen['aide'] = "Plein écran : fenêtre sans bordure à la résolution de l'écran où se trouve la fenêtre (l'affichage de l'écran ne change pas)   F11 ou Alt + Entrée : passe du plein écran à la fenêtre et inversement"
         res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, defaut=tuple(RG.DEFAUT['resolution']))          # (plein ecran : ligne inactive, relue a chaque image : voir _inactif)
-        res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution du bureau"
-        ecr = self._choix('Écran du plein écran', J.valeurs_ecran(), J.valeur_ecran, J.regler_ecran_plein, off=not J.ecran_modifiable(), defaut=EK.AUTO)          # (moniteur du plein ecran : voir Jeu.regler_ecran_plein ; un seul ecran : rien a choisir, ligne inactive)
-        ecr['aide'] = "Moniteur utilisé en plein écran (F11, Alt + Entrée, interrupteur)   Automatique : celui où se trouve la fenêtre   En plein écran, le changement est immédiat   Au retour en fenêtre, la fenêtre revient là où elle était   Grisé quand un seul écran est détecté"
+        res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution de l'écran"
         msaa = self._choix('Antialiasing', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), defaut=RG.DEFAUT['msaa'])
         if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa: msaa['aide'] = 'Limité à x%d par cette carte graphique' % J.post.max_msaa          # (ancienne note rouge : plus qu'une infobulle)
-        return [fen, ecr, res,
+        return [fen, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
                 self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode), defaut=RG.DEFAUT['mode_sprites']),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),

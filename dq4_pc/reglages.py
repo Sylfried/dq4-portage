@@ -1,7 +1,6 @@
 """Reglages du joueur (menu Echap) : affichage, son, touches. Enregistres dans reglages.json (a cote de fenetre.py, ignore par git)."""
 import json, os
 import pyglet
-import ecrans as EC
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
@@ -44,7 +43,6 @@ DEFAUT = {
     'volume_general': 1.0, 'volume_jingles': 1.0, 'volume_interface': 1.0,      # son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir son.py ; « bruitages » = les effets sonores du jeu)
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
-    'ecran_plein': None,          # moniteur du plein ecran : None = automatique (l'ecran ou se trouve la fenetre) ; sinon l'ecran choisi, enregistre avec son indice, sa position, ses dimensions et son nom (voir ecrans.py) pour le retrouver au lancement suivant ; un ecran qui n'est plus branche : l'ecran de la fenetre sert
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'camera_inverser_gd': False,  # camera deplacee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
@@ -96,8 +94,8 @@ def fenetre_defaut(nom):
 
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
-# 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees ; 'camera_centree' et 'suivi_camera_v' aussi (#47 : la camera est toujours centree sur le heros, sauf quand le jeu la prend).
-CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v')
+# 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees ; 'camera_centree' et 'suivi_camera_v' aussi (#47 : la camera est toujours centree sur le heros, sauf quand le jeu la prend). 'ecran_plein' (choix du moniteur du plein ecran, #52) et 'sortie_audio' (choix du peripherique audio, #112) sont retires le 03/11/2026 a la demande de Sylfried : le plein ecran se fait sur l'ecran de la fenetre, le son reste sur la sortie par defaut de Windows.
+CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v', 'ecran_plein', 'sortie_audio')
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -251,7 +249,6 @@ class Reglages:
                 bp = self.v['bouton_vitesse_pos']; self.v['bouton_vitesse_pos'] = [float(x) for x in bp] if isinstance(bp, list) and len(bp) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in bp) else []
                 if isinstance(self.v['boutons_pos'], dict): self.v['boutons_pos'] = {n: x for n, x in self.v['boutons_pos'].items() if n != 'combat'}      # (la position du bouton de vitesse n'est plus ici)
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
-                self.v['ecran_plein'] = EC.valide(self.v['ecran_plein'])          # (moniteur du plein ecran : une description propre ou None = automatique)
                 self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre'])          # (2 = ancien plein ecran exclusif -> 1)
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
