@@ -980,9 +980,10 @@ class Rendu:
             self._mdl_plaque = m
         return m or None
 
-    def plaque(self, x, y, w, h, vp, choisi=False, coin=None):
+    def plaque(self, x, y, w, h, vp, choisi=False, coin=None, grise=False):
         """Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (celles du modele : 16 unites de coin pour sa hauteur),
         le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). coin : cote des coins en pixels (les 16 unites d'origine, quelle que soit la hauteur : boutons de l'ecran).
+        grise : bouton inactif (shader gris du jeu, et assombri a 55 % : la couleur retiree se voit a peine sur cette plaque grise).
         -> False si la plaque du jeu est indisponible."""
         mod = self._modele_plaque()
         if mod is None or 1 not in self.tex: return False
@@ -992,11 +993,12 @@ class Rendu:
         X = {xs[0]: x, xs[1]: x + cap, xs[2]: x + w - cap, xs[3]: x + w}; Y = {zs[3]: y + h, zs[2]: y + h - cap, zs[1]: y + cap, zs[0]: y}
         px = np.array([X[round(float(v[0]), 2)] for v in vtx[idx]], np.float32); py = np.array([Y[round(float(v[1]), 2)] for v in vtx[idx]], np.float32)
         uu = uv[idx] + (np.array(self.ml.pousse, np.float32) if choisi else 0.0)
+        if grise: col = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55, col[3]]
         a = np.column_stack([px, py, uu[:, 0], uu[:, 1], np.tile(np.array(col, np.float32), (len(idx), 1))]).astype(np.float32)
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA); gl.glDisable(gl.GL_DEPTH_TEST)
         self.prog.use(); self.prog['vp'] = (float(vp[0]), float(vp[1]))
         vl = self.prog.vertex_list(len(a), gl.GL_TRIANGLES, position=('f', a[:, 0:2].ravel()), tex_coords=('f', a[:, 2:4].ravel()), colors=('f', a[:, 4:8].ravel()))
-        t = self.tex[1]; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 0
+        t = self.tex[1]; gl.glActiveTexture(gl.GL_TEXTURE0); gl.glBindTexture(t.target, t.id); self.prog['mode'] = 1 if grise else 0
         vl.draw(gl.GL_TRIANGLES); vl.delete(); self.prog.stop()
         return True
 

@@ -943,11 +943,11 @@ class Jeu(pyglet.window.Window):
     def valeur_ecran(self): return EK.valeur_choisie(self.reg['ecran_plein'], self._lire_ecrans()[1])
     def nom_ecran(self, v): return EK.nom_valeur(v, self.reg['ecran_plein'], self._lire_ecrans()[1])
 
-    def note_ecran(self):
-        """Note rouge de la ligne « Écran du plein écran » : le moniteur enregistre n'est plus branche, ou il n'y en a qu'un."""
+    def ecran_modifiable(self):
+        """La ligne « Écran du plein écran » a-t-elle un choix a offrir ? Oui avec plusieurs moniteurs detectes, ou quand le moniteur enregistre n'est plus branche (on peut le remplacer) ; avec un seul moniteur (ou aucun de lisible)
+        la ligne est inactive (grisee, ni choisie ni survolee ni cliquee : voir Pause._inactif). Relue a chaque image (la liste des moniteurs est gardee 1,5 s)."""
         desc = self._lire_ecrans()[1]
-        if EK.valeur_choisie(self.reg['ecran_plein'], desc) == EK.ABSENT: return "Écran absent : l'écran de la fenêtre sert"
-        return 'Un seul écran détecté' if len(desc) <= 1 else ''
+        return len(desc) > 1 or EK.valeur_choisie(self.reg['ecran_plein'], desc) == EK.ABSENT
 
     def regler_ecran_plein(self, v):
         """Page Affichage, « Écran du plein écran » : `v` = EK.AUTO (l'ecran ou se trouve la fenetre), l'indice d'un moniteur detecte, ou EK.ABSENT (l'ecran enregistre qui n'est plus la : rien ne change). Le choix est enregistre
