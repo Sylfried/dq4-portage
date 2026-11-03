@@ -1,7 +1,7 @@
 """Test de la priorite du jeu sur les reglages du joueur : « quand le jeu fixe lui-meme une valeur par script, il prime sur le reglage du joueur ».
 
   1. regles pures (priorite_jeu.py) : valeur_effective, facteur_effectif, lettres_par_image, duree_fondu ;
-  2. vitesse de marche (`Jeu._facteur_vitesse`, sur un faux objet) : sans effet pendant un evenement (verrou du joueur) ou un fondu, appliquee en terrain libre ;
+  2. vitesse de marche (`Jeu._facteur_vitesse`, sur un faux objet) : sans effet pendant un evenement (verrou du joueur, dont le fondu de sortie), appliquee en terrain libre et pendant le fondu d'arrivee (#107) ;
   3. zoom de la camera (`Jeu._camera_ville`, faux objet) : appliquee, sauf camera libre d'une scene (cadrage du jeu) ;
   4. moteur d'origine (si --apk et --saves sont donnes) : vitesse du texte fixee par le jeu (le mot de vitesse du message est modifie en cours de route) ; fondu lance par une commande de script du jeu
      (la sauvegarde --slot-fondu, par defaut 2 : debut du prologue, commande fade_out de 30 images) non raccourci, fondu du moteur raccourci.
@@ -78,8 +78,13 @@ class VitesseDeMarche(unittest.TestCase):
     def test_le_jeu_a_la_main(self):
         self.assertEqual(self.facteur(drapeaux=0x28 | 0x4), 1.0, 'verrou du joueur (evenement, scene) sans message : marche non acceleree')
         self.assertEqual(self.facteur(drapeaux=0x3c, accel_tenue=True), 1.0)
-        self.assertEqual(self.facteur(drapeaux=0x28 | 0x1), 1.0, 'fondu en cours : non acceleree')
-        self.assertEqual(self.facteur(drapeaux=0x28 | 0x5), 1.0)
+        self.assertEqual(self.facteur(drapeaux=0x28 | 0x5), 1.0, 'fondu de sortie (joueur verrouille) : non acceleree')
+        self.assertEqual(self.facteur(drapeaux=0x3d), 1.0)
+
+    def test_fondu_d_arrivee_joueur_libre(self):
+        """#107 : le fondu d'arrivee sur une carte (flag 1 seul, le heros marche deja) n'empeche plus la marche acceleree (mesure : flags 0x39 pendant les 30 images, 0x3d + verrou pendant le fondu de sortie)."""
+        self.assertEqual(self.facteur(drapeaux=0x39), 2.0)
+        self.assertEqual(self.facteur(drapeaux=0x39, accel_tenue=True), 3.0, 'accelerateur tenu des la premiere image apres la porte')
 
     def test_inchange(self):
         self.assertEqual(self.facteur(msg=True), 1.0)

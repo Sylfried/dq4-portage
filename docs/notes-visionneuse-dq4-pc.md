@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101 et #105, jalons 1 à 5 ; 42 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-205). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105 et #107 à #112, jalons 1 à 5 ; 48 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-213). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -853,3 +853,17 @@ Rien n'a été exécuté côté outil. « L'audio fonctionne » est le constat d
 
 ### Non vérifié
 Rien n'a été exécuté côté outil. Les réglages de la fiche #52 sont lus dans `pause.py` (établi), jamais vus sous Windows par Claude.
+
+## Avance #113 : retours du test de #52, libellé « Antialiasing », course après une porte (03/11/2026)
+
+### Retours (Sylfried, 19 h 38 et 19 h 41)
+Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux moniteurs validés, suréchantillonnage x2 qui saccade, résolution 4K absente de la liste (voulu), six nouvelles issues (#107 à #112), phase « gestion de projet » levée pour les corrections du soir.
+
+### Fait
+- **Libellé « Antialiasing »** (D-206) : page Affichage du menu Échap (`pause.py`) et affichage de test (`fenetre.py`) ; test `test_mode_fenetre.py` mis à jour. La clé `msaa` de `reglages.json` ne change pas.
+- **Course après une porte (#107, D-208)** : **mesure sur le vrai moteur** (sauvegarde 1, porte de l'église, direction tenue) : fondu de sortie = drapeaux `0x3d` (fondu + joueur verrouillé), chargement `0x3c`, fondu d'arrivée = `0x39` pendant 30 images alors que le héros marche dès la 12e image, puis `0x38`. `Jeu._facteur_vitesse` coupait la marche accélérée pendant tout le drapeau « fondu » (1 s) : **elle ne le fait plus**, seul le verrou du joueur (bit 4) la coupe. Le fondu d'arrivée suit donc l'accélération quand la touche est tenue (supposé acceptable ; il durait 1 s). Les fondus de combat (`Etat.transition_combat`) restent à l'horloge du jeu. Ce passage remplace, pour le fondu, la règle « facteur 1 si `Global.Flag & (1 | 4)` » de la section « Marche x1-x4 + accélérateur » plus haut. Tests : `test_priorite_jeu.py` (nouveau cas, 0x39 → accéléré ; 0x3d et 0x2d restent à 1), `test_casino_bestiaire.py`, `test_transition_combat.py`, `test_vitesse_combat.py` : OK.
+- **Résolutions** : pas de changement (la liste ne propose que les tailles qui tiennent sur l'écran, `Jeu.resolutions`) ; le test « résolution enregistrée 3840 x 2160 » (#52) passe par `reglages.json`.
+
+### Non vérifié
+- La course après une porte **sous Windows** (Sylfried confirme) ; le bruitage et la durée des transitions n'ont pas été rejoués au clavier.
+- #108 à #112 : en cours (voir les PR suivantes).

@@ -81,7 +81,7 @@ Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
 
 ## Suivi dans GitHub (depuis le 03/11/2026)
 
-Le reste à faire de ce rapport est repris dans **50 issues de `dq4-portage` (#51 à #99, #101 et #105, dont 8 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+Le reste à faire de ce rapport est repris dans **56 issues de `dq4-portage` (#51 à #99, #101, #105 et #107 à #112, dont 8 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
 
 | Jalon | Issues | Contenu |
 |---|---|---|
@@ -144,6 +144,8 @@ Sylfried a répondu aux treize points que je lui avais soumis (décisions D-191 
 **Précision de 17 h 01 (D-201)** : la vitesse de marche et l'accélérateur à la touche Maj **restent** ; seul le réglage « Vitesse de transition » disparaît (#101). **Tranché à 17 h 03 (D-202)** : le sort de déplacement (306) n'est pas raccourci, Sylfried le teste lui-même ; « audio réel » et `reglages.json` (#99) : expliqués ; **réglés à 17 h 07 (D-203)** : « l'audio fonctionne », la conversion de `reglages.json` n'a pas besoin de test (bouton ↺). **Plus rien à lui demander sur ce lot.**
 
 **À 17 h 19 (D-204) et 17 h 22 (D-205)** : Sylfried renonce à une liste globale de tout ce qu'il doit tester : il teste **issue par issue, en rentrant ce soir, en commençant par #52** (fiche de test donnée à 17 h 20). Nouvelle issue **#105** (jalon 5, `à décider`, `priorité:basse`) : décider des modificateurs et des triches qu'il voudrait ajouter, **à traiter en tout dernier** ; sa liste reste à fournir (Claude n'en propose aucune d'office).
+
+**Retours du test de #52 (19 h 38, D-206 à D-212)** : antialiasing x2 / x4 / x8 « fonctionne » (pas de différence visible) et à renommer « Antialiasing » (fait, #113) ; suréchantillonnage x2 saccade (→ #53) ; deux moniteurs « Nickel » ; la liste des résolutions ne montre que les tailles qui tiennent sur l'écran (voulu : le test 3840 x 2160 passe par `reglages.json`). Nouvelles issues : **#107** course après une transition (corrigée dans #113, à confirmer), **#108** logo et sous-titre du titre x2, **#109** retour au titre comme l'original (dialogue Oui / Non puis transition), **#110** caméra sur la butte du village du prologue, **#111** fond dégradé du prologue, **#112** choix du périphérique de sortie audio. **À 19 h 41 (D-213)** : « tu peux directement appliquer les correctifs nécessaires » : la phase « gestion de projet » est levée pour ces corrections.
 
 ## Oublis de Claude
 
