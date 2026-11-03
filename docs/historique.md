@@ -19,7 +19,7 @@ Le projet a démarré le 29/10/2026 (avant la création de ce dépôt). Jusqu'au
 | 30/10 | Dépôt GitHub, règles de travail, issues de départ | #37 |
 | 30/10 nuit | Séparation du dépôt d'origine `dq4-pc` : portage natif (ici), essai Unity (`dq4-portage-unity`), patch français (inchangé) | — |
 
-## Les pull requests de `dq4-portage` (#1 à #125)
+## Les pull requests de `dq4-portage` (#1 à #132)
 Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'ils figurent sur GitHub, sans leur préfixe « Avance #N : ». Les « retours de HH h MM » sont les retours de test de Sylfried traités par la pull request. La PR #1 démarre la numérotation de ce dépôt : ses numéros ne sont pas ceux des issues de `dq4-pc`.
 
 | Fusion | PR | Titre |
@@ -90,6 +90,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 | #120 | plus de choix du moniteur du plein écran ni du périphérique audio : plein écran sur l'écran de la fenêtre, son sur la sortie par défaut de Windows (#112 non retenue, D-216 et D-217) |
 | 03/11 | #124 | sauvegarde automatique du jeu à la fermeture de l'application (croix, Alt + F4, menu Quitter, fin de tâche, console, Ctrl + C, fin de session) ; « Revenir à l'écran titre » l'efface toujours (#122, D-218 et D-219) |
 | 03/11 | #125 | passage plein écran → fenêtre qui échoue : l'erreur complète (pile d'appels, état de la fenêtre et des moniteurs) est notée dans `erreurs_fenetre.log` pour trouver la cause (#123 ; correction à venir) |
+| 03/11 | #132 | plein écran → fenêtre après le branchement d'un écran externe : le moniteur gardé par pyglet est relu avant chaque bascule (sa poignée Windows n'était plus valable : « Descripteur non valide ») (#126, D-220) |
 
 ## Et maintenant
-Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105, #107 à #112 et #121 à #123, jalons 1 à 5 ; 45 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.
+Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105, #107 à #112, #121 à #123 et #126 à #131, jalons 1 à 5 ; 50 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.

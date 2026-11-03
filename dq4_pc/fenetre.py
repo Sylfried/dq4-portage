@@ -944,6 +944,7 @@ class Jeu(pyglet.window.Window):
         Leve une erreur si le mode n'a pas pu etre pris (l'etat de depart est alors retabli). DQ_BASCULE_SIMPLE=1 : (debogage) un set_fullscreen sans rien d'autre, comme avant."""
         avant = bool(self.fullscreen)
         if avant == plein and not (plein and ecran is not None and not self._deja_sur(ecran)): return
+        self._rafraichir_ecran()          # (AVANT tout : le moniteur que pyglet garde peut ne plus etre valable, voir _rafraichir_ecran)
         if not avant: self.taille_fenetre = (int(self.width), int(self.height))          # (la taille de la fenetre, a retrouver au retour)
         ecran_avant = getattr(self, 'screen', None) if avant else None              # (le moniteur a retrouver si le deplacement echoue)
         taille = ajuster_taille(*self.taille_fenetre)              # (une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
@@ -1010,6 +1011,26 @@ class Jeu(pyglet.window.Window):
             print('Moniteurs illisibles (%r)' % (ex,), flush=True); res = (t, [], [])
         self._ecrans_cache = res
         return res[1], res[2]
+
+    def _rafraichir_ecran(self):
+        """Remet a jour le moniteur que pyglet garde pour la fenetre (`_screen`) avant une bascule (#126). Sous Windows, ce Screen garde la poignee (HMONITOR) du moniteur telle qu'elle etait a la creation de la fenetre ;
+        quand on branche (ou debranche) un ecran, Windows peut en attribuer d'autres et la poignee gardee n'est plus valable : `set_fullscreen` recree alors la fenetre (`Win32Window._create`), qui lit la densite du moniteur
+        (`Screen.get_dpi` -> GetDpiForMonitor) et echoue avec « Descripteur non valide » (le journal de Sylfried du 03/11/2026 : plein ecran, puis un ecran externe branche, puis plus de retour en fenetre).
+        Le moniteur est cherche dans une enumeration neuve : celui qui a les memes position et dimensions que l'ancien, sinon celui ou se trouve la fenetre, sinon le principal. Ne leve jamais d'erreur.
+        -> vrai si un moniteur valable a ete mis en place."""
+        try:
+            actuel = getattr(self, '_screen', None); ecrans, desc = self._lire_ecrans(True)
+            if actuel is None or not ecrans or not desc: return False
+            ancien = (int(actuel.x), int(actuel.y), int(actuel.width), int(actuel.height))
+            i = next((k for k, d in enumerate(desc) if (d['x'], d['y'], d['largeur'], d['hauteur']) == ancien), None)
+            if i is None: i = EK.cible(desc, self._indice_ecran_fenetre(desc))
+            if i is None: return False
+            neuf = ecrans[desc[i]['source']]
+            if (int(neuf.x), int(neuf.y), int(neuf.width), int(neuf.height)) != ancien:
+                print('Moniteur de la fenêtre remis à jour : %d x %d en (%d, %d) (avant : %d x %d en (%d, %d))' % (neuf.width, neuf.height, neuf.x, neuf.y, ancien[2], ancien[3], ancien[0], ancien[1]), flush=True)
+            self._screen = neuf; return True
+        except Exception as ex:
+            print('Moniteur de la fenêtre non remis à jour (%r)' % (ex,), flush=True); return False
 
     def _indice_ecran_fenetre(self, desc):
         """Indice (dans `desc`) du moniteur ou se trouve la fenetre (celui de son centre) ; None si elle n'existe pas encore ou si sa place est illisible."""

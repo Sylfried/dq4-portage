@@ -81,7 +81,7 @@ Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
 
 ## Suivi dans GitHub (depuis le 03/11/2026)
 
-Le reste à faire de ce rapport est repris dans **59 issues de `dq4-portage` (#51 à #99, #101, #105, #107 à #112 et #121 à #123, dont 14 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+Le reste à faire de ce rapport est repris dans **65 issues de `dq4-portage` (#51 à #99, #101, #105, #107 à #112, #121 à #123 et #126 à #131, dont 15 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `lacunes_connues.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
 
 | Jalon | Issues | Contenu |
 |---|---|---|

@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112 et #121 à #123, jalons 1 à 5 ; 45 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-219). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112, #121 à #123 et #126 à #131, jalons 1 à 5 ; 50 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-222). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -1027,3 +1027,20 @@ Après avoir essayé #112 sous Windows (« Mon écran externe avec baffes intég
 ### Non vérifié
 - La cause du défaut : **inconnue** tant que l'erreur n'a pas été lue sur le PC de Sylfried (il doit refaire l'essai : lancer en plein écran, puis F11).
 
+## Avance #132 : plein écran → fenêtre après le branchement d'un écran externe (#126, 03/11/2026)
+
+### Demande (D-220, 23 h 08)
+Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre échoue ; après un relancement tout va bien, et en faisant glisser la fenêtre sur l'autre écran le plein écran marche (avec quelques scintillements au retour du plein écran sur l'autre moniteur). Son journal (`erreurs_fenetre.log`, PR #125) est joint.
+
+### Établi (lu dans son journal)
+- `OSError: [WinError -2147024890] Descripteur non valide` dans `Win32Window._create` → `Screen.get_dpi` → `GetDpiForMonitor`, pyglet 2.1.19, Python 3.14.8, Windows ; ses moniteurs : 1920 x 1200 en (0, 0) (principal) et 2560 x 1440 en (-331, -1440).
+- pyglet garde pour la fenêtre un objet moniteur (`_screen`) qui porte la poignée Windows (HMONITOR) du moment de la création. Après le branchement d'un écran, Windows peut attribuer d'autres poignées : `set_fullscreen(False)` recrée la fenêtre avec cette poignée périmée et échoue ; le retour à l'état de départ réutilise la même poignée et échoue aussi (« Retour à l'état de départ impossible aussi » dans son journal), d'où « plein écran conservé » et le clignotement.
+- Le plein écran vers un moniteur passé à `set_fullscreen(True, screen=…)` vient d'une lecture neuve de la liste : il marche, ce qu'il constate.
+
+### Fait
+- `Jeu._rafraichir_ecran()` : relit les moniteurs (`display.get_screens()`, objets neufs) et remplace `_screen` par celui de **mêmes position et dimensions** que l'ancien, sinon celui où se trouve la fenêtre, sinon le principal. Appelée au début de `_poser_plein_ecran`, avant que le moniteur de départ soit retenu (le retour à l'état de départ en profite aussi), dans les deux sens (plein écran → fenêtre, fenêtre → plein écran sans moniteur imposé). Ne lève jamais d'erreur (une relecture impossible laisse l'ancien moniteur).
+- Tests : `test_mode_fenetre.py` (48 tests dont 6 nouveaux : un faux moniteur périmé qui lève la même erreur que Windows ; plein écran → fenêtre, fenêtre → plein écran, retour à l'état de départ, moniteur débranché, relecture impossible). Les 4 tests de comportement échouent avec l'ancien comportement (vérifié en neutralisant la méthode).
+
+### Non vérifié
+- **Sous Windows avec un vrai branchement d'écran** : à confirmer par Sylfried (plein écran, brancher l'écran externe, repasser en fenêtre ; idem après débranchement).
+- Le scintillement au retour du plein écran sur l'autre moniteur (non demandé, non traité ; le plein écran recrée la fenêtre, ce que pyglet fait à chaque changement de moniteur).
