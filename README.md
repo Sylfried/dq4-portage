@@ -15,15 +15,15 @@ Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par u
 - `dq4_pc/postfx.py` : rendu hors écran (anticrénelage MSAA, suréchantillonnage, netteté, luminosité) ; `dq4_pc/decors_plats.py` : fin du scintillement des décors plats superposés ;
 - `dq4_pc/pause.py` / `reglages.py` : menu Pause (Échap) et réglages du joueur (`reglages.json`) ; `dq4_pc/etats.py` : états instantanés ; `dq4_pc/historique.py`, `historique_combat.py`, `ui_historique.py` : historique des dialogues et des combats ; `dq4_pc/hud_mobile.py` : boutons et croix tactiles à l'écran ;
 - `dq4_pc/avant_partie.py`, `saisie_nom.py`, `ecran_sauvegardes.py` / `sauvegardes.py` : avant la partie (logos, titre, menu de départ, nom du héros, export / import des sauvegardes) ;
-- `outils/` : les tests (`test_*.py`, 39 fichiers), la lecture de la mise en page des menus (`ui_il2cpp/`, `dump_il2cpp.bat`, `generer_ui.bat`), les scripts de la session de travail (`flux_session/`) et les scripts de recherche non maintenus (`recherche/`).
+- `outils/` : les tests (`test_*.py`, 45 fichiers), la lecture de la mise en page des menus (`ui_il2cpp/`, `dump_il2cpp.bat`, `generer_ui.bat`), les scripts de la session de travail (`flux_session/`) et les scripts de recherche non maintenus (`recherche/`).
 
 ## Les dépôts du projet
 | Dépôt | Rôle |
 |---|---|
-| **`dq4-portage`** (celui-ci) | le portage natif, sans Unity ; suivi **par pull request** (« Avance #N : titre », de #1 à #46 au 02/11/2026), sans issues (voir [`docs/workflow.md`](docs/workflow.md)) |
+| **`dq4-portage`** (celui-ci) | le portage natif, sans Unity ; suivi **par pull request** (« Avance #N : titre », de #1 à #50 au 03/11/2026), sans issues (voir [`docs/workflow.md`](docs/workflow.md)) |
 | `dq4-portage-unity` | essai « Unity comme afficheur » (piste 3), alimenté par le moteur de ce dépôt |
 | `dq456-traductions-fr` | patch français des APK (jamais modifié ici) |
-| `dq4-pc` (ancien) | dépôt d'origine, avant la séparation : ses issues et ses pull requests (une seule numérotation, #1 à #79 au 02/11/2026, dont 27 issues encore ouvertes) restent la référence des anciens numéros « #n » cités dans les notes |
+| ~~`dq4-pc`~~ (supprimé le 03/11/2026) | l'ancien dépôt d'origine n'existe plus : **tout se fait ici, dans `dq4-portage`**. Les numéros « issue #n » ou « PR #n » cités dans les notes et dans les anciennes pull requests y renvoient ; l'état de ses 43 issues au 02/11/2026 est conservé dans [`docs/audit/github_issues.md`](docs/audit/github_issues.md) |
 
 ## ⚠️ Aucun contenu Square Enix ici
 Ce dépôt ne contient **que du code et des notes**. Le programme lit *tes* fichiers (APK patchés, sauvegardes) sur *ton* PC ; rien n'est copié ni distribué. Les APK, `.so`, données Unity, sauvegardes, caches et captures du jeu sont exclus par `.gitignore` : ne jamais les forcer (`git add -f`).

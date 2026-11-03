@@ -35,25 +35,47 @@ Dix-huit points où je ne peux pas trancher à ta place. Pour chacun, ma recomma
 | 17 | Paquets 1 et 27 | Leur rôle n'est pas décodé et la carte du monde marche sans eux : les implémenter ? | Les laisser ignorés jusqu'à un défaut visible | G-040, PAQ-8, PAQ-9 |
 | 18 | Licence d'Unicorn | GPL v2 ou BSD : les sources se contredisent | Vérifier avant toute redistribution | G-013, D-05 |
 
-La fusion de « Messages en combat » et « Vitesse des combats » dans la PR #44 rend sans objet la validation du mapping Moyen / Lent et du doublon de libellé « Rapide » (D-88, C-16). Les libellés « Masqué / Masquée » (D-89) restent à valider.
+La fusion de « Messages en combat » et « Vitesse des combats » dans la PR #44 rend sans objet la validation du mapping Moyen / Lent et du doublon de libellé « Rapide » (D-88, C-16). Les libellés « Masqué / Masquée » (D-89) ont été validés le 03/11.
 
 ## Réponses de Sylfried (03/11/2026)
 
-Relecture de ce rapport avec Sylfried le 03/11 à 13 h 45 (il ne pouvait pas tester : au travail). Il a répondu à trois questions ; pour le reste il a laissé la règle « si tu ne dis rien, je suis ma recommandation ».
+Relecture de ce rapport avec Sylfried le 03/11 (13 h 45, puis 14 h 04 et 14 h 17). Il ne pouvait pas tester : au travail. Ce qu'il a dit sert à **structurer le projet et le reste à faire**, pas à lancer un chantier tout de suite. Ses phrases sont reproduites dans `decisions.md` (§ 5c, D-149 à D-160).
 
 | # | Sujet | Réponse | Suite |
 |---|---|---|---|
-| 1 | Toits et décors | **Garder tel quel** | L'issue dq4-pc #6 (toits transparents) **reste ouverte** : sa fermeture était conditionnée à une vérification sur mobile qu'il n'a pas faite |
-| 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 2 : `workflow.md` et README corrigés (branche `docs-audit48`) ; la suppression des branches fusionnées n'est **pas faite** (à confirmer) ; 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » (**18 sites qui écrivent** et 27 crochets depuis #47 et #48, au lieu de 16 et 22 : relevé du 03/11 sur `main` b0d71b8, nombre de crochets vérifié à l'exécution) |
+| 1 | Toits et décors | **Laisser tel quel : « c'est le fonctionnement du mobile »** | **Clos** (D-93 validé, G-050 clos) ; rien à faire |
+| 2 | Suivi du projet | Recommandation suivie (suivi par PR). **Nouveau** : « `dq4-pc` n'existe plus, on fait tout depuis `dq4-portage`, même sur GitHub » | Docs corrigées (#49, #50). **Question ouverte** : veut-il aussi des issues dans `dq4-portage` pour le reste à faire ? (jusqu'ici : aucune) |
+| 3 | Piste Unity | Recommandation suivie : en pause, hors périmètre | L'issue #57 a disparu avec `dq4-pc` ; la décision tient |
+| 4 | Manette | **« Pour la suite, on pourra prévoir d'utiliser une manette »** | **Retenue pour la suite** (pas maintenant) : à planifier ; aucun code de manette n'existe (G-019) |
+| 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17 | voir tableau ci-dessus | **Recommandation suivie** (par défaut) | 15 : règle reformulée dans les notes techniques, section « Écritures et crochets en mémoire du moteur » (**18 sites qui écrivent** et 27 crochets depuis #47 et #48, au lieu de 16 et 22 : relevé du 03/11 sur `main` b0d71b8, nombre de crochets vérifié à l'exécution) |
+| 8 | Entrées retirées de l'éditeur d'interface | **« Il fallait supprimer tout ce qui n'avait pas d'élément à modifier »** (son cas de test : rien à modifier, section vide) | **Clos** : le retrait des 18 entrées (`FENETRES_RETIREES`) suit ce critère ; les fenêtres du lancement du jeu en sont exclues comme il l'avait demandé (D-127). Pas de liste à lui montrer |
 | 10 | Curseur doré | **Sans objet** | Le curseur est fixe dans le code (`pause.py:161-167`) ; la petite flèche est gardée dans l'historique (#48) |
-| 8, 18 | Entrées retirées de l'éditeur ; licence d'Unicorn | **Sans réponse** | 8 : liste des 18 entrées (`FENETRES_RETIREES`) à lui montrer ; 18 : à vérifier avant toute redistribution |
-| D-89 | Libellés « Masqué / Masquée » | **Sans réponse** | à valider |
+| 18 | Licence d'Unicorn | **« Ok pour la vérification »** | **À faire** (lecture seule : licence réelle du paquet `unicorn`, avant toute redistribution) |
+| D-89 | Libellés « Masqué / Masquée » | Il demande ce qu'il y a à valider | Je lui ai répondu : seulement l'**accord du mot** (« Masquée » pour la croix et les fenêtres, « Masqué » pour les boutons). **Validé par Sylfried le 03/11 à 14 h 19** (« ça me va ») ; clos |
 
-**Issues de l'ancien dépôt `dq4-pc`** : Sylfried a demandé de fermer les **7** issues **#2, #5, #7, #10, #22, #23, #41** (avec un commentaire qui renvoie à la PR qui les résout). **Non fait** : la session n'a pas accès à `Sylfried/dq4-pc` (le dépôt n'est pas dans les dépôts autorisés de la session, l'API répond 403) ; il faut donner l'accès à l'application GitHub ou fermer ces issues à la main. #6 reste ouverte.
+**Nouvelles exigences et décisions du 03/11 (14 h 17)** : voir aussi la section « Cap fixé » ci-dessous.
 
-**Chantiers choisis** : « Docs + CI à jour » seulement (cette branche : rebase des docs, fichiers d'audit périmés mis à jour, test de la CI sur GitHub). **Non choisis** : les « petits oublis » (sauvegarde rapide au clavier, bruitage 300 par Entrée / Espace / M, icône du genre 18, fichier Excel) et les « paquets du moteur » (6, 30, effets d'écran 3 / 5 / 6).
+- **Tous les boutons de l'interface doivent être accessibles au clavier** (exigence générale ; « Sauvegarde rapide » de l'écran Divers n'en est qu'un cas, G-096). Inventaire complet à faire avant de corriger.
+- **Bruitage au clavier : uniquement dans les mêmes situations qu'au toucher.** S'il y a un bip pour chaque caractère du nom au doigt, alors le clavier le joue aussi ; sinon on n'en ajoute pas « de force ». Remplace la formulation de l'oubli n° 8.
+- **`Menu_Echap_DQ4_PC.xlsx` : n'est plus d'actualité.** Rien à régénérer (oubli n° 7 clos ; G-107 et G-143 clos).
+- **Tout tenir à jour : CI, documents, fichiers `.md`.** Fait pour cette fois en #49 (docs, audit, CI) et #50 (dépôt `dq4-pc`, décisions du 03/11) ; à refaire à chaque PR.
+- **Sauvegardes du chapitre 2** : il les fournira dès que possible (elles permettront de jouer au-delà du chapitre 1 ; les tests actuels n'utilisent que le chapitre 1).
+- **`dq4-pc` n'existe plus** : ses 27 issues ouvertes ne peuvent plus être fermées ni lues. Les 7 à fermer (#2, #5, #7, #10, #22, #23, #41) n'ont plus rien à fermer. L'état de chacune au 02/11 reste dans `docs/audit/github_issues.md`.
 
-**Points de ce rapport rendus caducs** : G-104 (curseur oscillant), G-211 / D-47 (option de caméra supprimée), G-073 pour le roulis de la caméra de combat (appliqué par `_rot_camera`) ; voir `lacunes_connues.md` et `decisions.md`.
+**Chantiers choisis le 03/11** : « Docs + CI à jour » seulement. **Non choisis** : « petits oublis » (sauvegarde rapide au clavier, bruitage 300, icône du genre 18) et « paquets du moteur » (6, 30, effets d'écran 3 / 5 / 6).
+
+**Points de ce rapport rendus caducs** : G-104 (curseur oscillant), G-211 / D-47 (option de caméra supprimée), G-073 pour le roulis de la caméra de combat (appliqué par `_rot_camera`), G-107 / G-143 (Excel), G-050 (toits) ; voir `lacunes_connues.md` et `decisions.md`.
+
+## Cap fixé par Sylfried (03/11/2026) : ce qui structure la suite
+
+Rien de ceci n'est lancé. Ordre indicatif, à confirmer par lui.
+
+1. **Validation Windows / vrai GPU** : toujours le premier reste (rien n'est validé sous Windows).
+2. **Clavier complet** : tous les boutons de l'interface atteignables au clavier (inventaire, puis correction), avec la règle du bruitage ci-dessus.
+3. **Manette** : prévue « pour la suite » (aucun code aujourd'hui). À faire après le clavier complet : la navigation au clavier sert de base.
+4. **Chapitre 2** : dès qu'il fournit les sauvegardes, rejouer les PNJ de scénario, les cartes et les menus du chapitre 2 (jamais testés).
+5. **Vérifier la licence d'Unicorn** avant toute redistribution ou `.exe`.
+6. **Paquets du moteur et petits oublis** (liste « Oublis de Claude » ci-dessous), selon ses retours de test.
 
 ## Oublis de Claude
 
@@ -66,16 +88,16 @@ Quinze choses que j'ai laissées de côté ou pas finies. Les quatre premières 
 | 3 | Échelle du terrain `field_scale` (paquet 30) | Problème possible avec le ballon | PAQ-6, G-040 |
 | 4 | Effets d'écran 3, 5 et 6 | Flashs de certains sorts absents | PAQ-7, G-071 |
 | 5 | PNJ de scénario qui apparaissent ou disparaissent | Jamais rejoués, comportement inconnu | CAR-14 |
-| 6 | « Sauvegarde rapide » de l'écran Divers | Reste à la souris, le clavier ne l'atteint pas | G-096 |
-| 7 | `Menu_Echap_DQ4_PC.xlsx` | Ta spécification n'a pas été régénérée après les réorganisations | G-107 |
-| 8 | Bruitage 300 (clic) | Entrée, Espace et M ne le jouent pas, le clic à l'écran oui | G-173 |
+| 6 | Boutons de l'interface inaccessibles au clavier | **Exigence du 03/11 : tous les boutons doivent être accessibles au clavier.** Cas connu : « Sauvegarde rapide » de l'écran Divers (reste à la souris) ; inventaire complet à faire | G-096, D-155 |
+| 7 | ~~`Menu_Echap_DQ4_PC.xlsx`~~ | **Plus d'actualité** (Sylfried, 03/11) : rien à régénérer | G-107, G-143, D-157 |
+| 8 | Bruitage 300 (clic) | **Règle du 03/11** : au clavier, un bruitage seulement là où le toucher en joue un (une note par caractère à la saisie du nom *si* le toucher en joue une), jamais ajouté de force. Entrée, Espace et M ne jouent pas le bruitage 300 que joue le clic sur le bouton : à aligner sous cette règle, cas par cas | G-173, D-156 |
 | 9 | Événements FEMV, bateaux animés au chargement | Absents | G-053 |
 | 10 | Icône de genre 18, emplacements 10 à 12 de la carte du monde | Possibles éléments non dessinés | G-033, G-034 |
 | 11 | Son : table de volumes, fondus entre musiques, bruitages 3D | Jamais étudiés | G-047 |
 | 12 | Fond de combat estimé, roulis de la caméra de combat, priorité des fondus | Approximations connues | G-072, G-073, G-046 |
 | 13 | Autres modèles 3D (boss, autres dragons) | Lien identifiant de modèle vers objet non résolu | G-119, G-147, #16 |
 | 14 | CI minimale, scripts de recherche à ranger dans `outils/` | Pas de garde-fou automatique | G-016, G-018 |
-| 15 | Documentation périmée | `workflow.md`, README (PR #1 à #78), `historique.md`, `depot-github-dq4-pc.md` du Projet, listes « prochaines étapes » des notes, « issue #55 » qui n'existe pas | G-141 à G-150 |
+| 15 | Documentation périmée | **Mise à jour en #49 et #50** : `workflow.md`, README, reprise, notes, audit, document du Projet sur les dépôts. À tenir à jour à chaque PR (demande du 03/11) | G-141 à G-150 |
 
 Les cartes vides, les PNJ jamais dessinés, la teinte jour et nuit, l'échelle des sprites, le poker invisible et les pages du Statut au clavier ne figurent plus ici : ils sont traités dans la PR #44 (dernière section).
 
@@ -97,18 +119,16 @@ Onze défauts constatés ou probables. Les trois plus sérieux (n° 2 à 4) peuv
 | 10 | Zoom de la minicarte à 400 % | Basse | Garde-fou ajouté, cause non reproduite | G-039b |
 | 11 | Blocage de 0,1 à 0,5 s au chargement d'une carte | Basse | Environ 55 textures envoyées d'un coup | G-126 |
 
-## Issues GitHub
+## Anciennes issues (dépôt `dq4-pc`, supprimé)
 
-Sur les 27 issues ouvertes de `dq4-pc`, 7 sont faites et peuvent être fermées, 2 attendent ta confirmation, 16 ont un reste réel et 2 dépendent d'une décision. Je n'en ai fermé, ouvert ou commenté aucune. `dq4-portage` n'a aucune issue ; son suivi se fait par PR (42 à l'audit).
+Le dépôt `dq4-pc` n'existe plus (Sylfried, 03/11/2026) : ses 27 issues ouvertes ne peuvent plus être consultées ni fermées. Leur contenu et leur état réel au 02/11 sont conservés dans `docs/audit/github_issues.md` ; les restes qui comptent sont repris dans ce rapport. `dq4-portage` n'a aucune issue ; son suivi se fait par PR (« Avance #N »).
 
-| Verdict | Issues | Raison |
+| Verdict au 02/11 | Issues | Suite |
 |---|---|---|
-| Fermer, c'est fait (7) | #2 (sauf les classes `IBase`), #5, #7 (sauf les coffres, traités en #43), #10, #22, #23, #41 | Preuves dans l'audit ; #22 et #41 sont obsolètes |
-| Fermer après ta confirmation (2) | #40 (« à reconfirmer sur pdc »), #17 (son : vérifier les haut-parleurs) | Code fait, confirmation manquante |
-| Garder ouvertes (16) | #3, #4, #8 (manette), #9 (**priorité haute** : sauvegarde réelle sous Windows), #11 (allocateur), #12 (Python 3.15), #13 (paquets 1, 6, 16, 17, 18, 27, 30, 33), #15, #16, #18, #19, #20, #21, #24, #45, #56 | Reste réel, voir bugs et oublis |
-| À décider (2) | #6 (toits), #57 (piste Unity) | Décisions 1 et 3 plus haut |
-
-Si tu me dis « ferme les 7 », je le fais avec un commentaire renvoyant à la PR qui les résout. La #13 est en partie traitée depuis la PR #44 (paquet 33 : teinte des décors) ; il resterait les paquets 1, 6, 16, 17, 18, 27 et 30.
+| Faites (7) | #2 (sauf les classes `IBase`), #5, #7 (sauf les coffres, traités en #43), #10, #22, #23, #41 | Plus rien à fermer ; les restes (`IBase`) sont dans « Oublis » |
+| Faites côté code, confirmation manquante (2) | #40 (« à reconfirmer sur pdc »), #17 (son : vérifier les haut-parleurs) | À confirmer avec le test Windows |
+| Reste réel (16) | #3, #4, #8 (manette : voir « Cap fixé »), #9 (**priorité haute** : sauvegarde réelle sous Windows), #11 (allocateur), #12 (Python 3.15), #13 (paquets 1, 6, 16, 17, 18, 27, 30, 33), #15, #16, #18, #19, #20, #21, #24, #45, #56 | Suivis dans ce rapport (oublis, bugs, non vérifié) |
+| Décidées (2) | #6 (toits : on garde, c'est le fonctionnement du mobile), #57 (piste Unity : en pause) | Décisions 1 et 3 |
 
 ## Non vérifié
 
