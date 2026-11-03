@@ -99,7 +99,7 @@ class Pause:
         self.action_etat = 'creer'; self.etat_suppr = None                                  # menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
         self.barre_liste = None; self.glisse_liste = None; self.liste_top = None; self.liste_cur_vu = None      # liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
         self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
-        self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
+        self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0; self.pan_plier_a = None             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
         self.cadre_liste = None; self.pan_dim = None                                    # appui en cours sur la barre de titre {t0, x, y, dx, dy, long (souleve : suit le pointeur), double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
 
     def _et(self, texte, taille, couleur=BLANC):
@@ -189,7 +189,7 @@ class Pause:
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
-        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None
+        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None; self.pan_plier_a = None
         self._garde().clavier(self.pos_souris)                    # la selection est au clavier tant que le pointeur ne s'est pas vraiment deplace (ecart cumule depuis son point d'ouverture : entrees.GardeSouris)
         if page: self.pile = [page]; self.sel[page] = 2           # ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
         self.J.pause_jeu(True)
@@ -207,7 +207,7 @@ class Pause:
     def ecran(self): return self.pile[-1]
 
     def retour(self):
-        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None; self.pan_appui = None                # fin de l'edition de l'interface
+        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None; self.pan_appui = None; self.pan_plier_a = None                # fin de l'edition de l'interface
         if len(self.pile) > 1: self.pile.pop()
         else: self.fermer()
 
@@ -580,7 +580,7 @@ class Pause:
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
         if self.popup is not None: self._touche_popup(symbol, act); return True
-        if self.ecran == 'interface' and symbol == K.TAB: self.plie = not self.plie; return True              # (editeur : plier / deplier le panneau)
+        if self.ecran == 'interface' and symbol == K.TAB: self.plie = not self.plie; self.pan_plier_a = None; return True              # (editeur : plier / deplier le panneau)
         if self.ecran == 'interface' and self.plie and not (symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B'): return True
         if self.deroule is not None: self._touche_liste(symbol, act); return True
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
@@ -603,6 +603,7 @@ class Pause:
         S = self.J.son; ecoute = self.ecran == 'son'
         if ecoute != S.ecoute: S.ecouter(ecoute)
         if ecoute: S.tick()
+        if self.pan_plier_a is not None and self.pan_appui is None and time.time() >= self.pan_plier_a: self._plier_en_attente()          # clic simple sur la barre de titre : le pliage a lieu quand le delai du double clic est ecoule sans second appui (#145)
         a = self.pan_appui
         if a is not None and not (a['long'] or a['double']) and time.time() - a['t0'] >= DELAI_APPUI_LONG: a['long'] = True          # appui maintenu sans bouger : le panneau se soulève (il suivra le pointeur au premier mouvement)
         if not self.rep: return
@@ -862,21 +863,26 @@ class Pause:
 
     def _appui_barre(self, x, y):
         """Appui sur la barre de titre du panneau de l'editeur (le geste se joue dans glisser, maj et relache) : le panneau suit le pointeur des que celui-ci s'eloigne de plus de TOLERANCE_APPUI du point d'appui (glisser
-        tout de suite, sans attendre) ou apres un appui maintenu DELAI_APPUI_LONG (il se souleve) ; appui court sans bouger = replier / deplier ; deuxieme appui court dans DELAI_DOUBLE_CLIC = retour a la position
-        d'origine (les deux pliages s'annulent)."""
+        tout de suite, sans attendre) ou apres un appui maintenu DELAI_APPUI_LONG (il se souleve) ; appui court sans bouger = replier / deplier, une fois le delai du double clic ecoule sans second appui ; deuxieme appui court
+        dans DELAI_DOUBLE_CLIC = retour a la position d'origine, sans aucun pliage (#145)."""
         t = time.time(); c = self.cadre_panneau
         if not c: return
         if self.deroule is not None: self.deroule = None
         if self.saisie is not None: self._fin_saisie(True)
         self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, double=t - self.pan_clic_t < DELAI_DOUBLE_CLIC)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
 
+    def _plier_en_attente(self):
+        """Le pliage d'un clic simple sur la barre de titre (editeur d'interface) n'a lieu qu'une fois le delai du double clic ecoule : replie / deplie le panneau et n'attend plus rien (sans effet si aucun clic n'attend)."""
+        if self.pan_plier_a is None: return
+        self.pan_plier_a = None; self.plie = not self.plie
+
     def relache(self, x, y, bouton):
         if self.ecran == 'historique': return self.hist.relache(x, y, bouton)
         self.glisse = None; self.glisse_barre = None; self.glisse_liste = None
         a, self.pan_appui = self.pan_appui, None
-        if a is not None and not a['long']:                                       # appui court (sans mouvement) : replier / deplier ; deuxieme appui d'un double clic : position d'origine, le pliage du premier est annule
-            if a['double']: self.pan_pos = None
-            self.plie = not self.plie; self.pan_clic_t = 0.0 if a['double'] else time.time()
+        if a is not None and not a['long']:                                       # appui court (sans mouvement) : un clic simple replie / deplie APRES le delai du double clic (voir maj) ; deuxieme appui d'un double clic : position d'origine, sans plier ni deplier (#145)
+            if a['double']: self.pan_pos = None; self.pan_plier_a = None; self.pan_clic_t = 0.0
+            else: self.pan_clic_t = time.time(); self.pan_plier_a = self.pan_clic_t + DELAI_DOUBLE_CLIC
         if self.ecran == 'interface' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
         if self.drag is not None: self.drag = None; self.J.reg.enregistrer()
 
@@ -885,7 +891,7 @@ class Pause:
         if self.ecran == 'historique': return self.hist.glisser(x, y)
         a = self.pan_appui
         if a is not None:                                                                    # panneau de l'editeur : il suit le pointeur des que celui-ci a quitte le point d'appui (le panneau se souleve, ni pliage ni double clic), ou apres un appui maintenu
-            if not a['long'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['long'] = True; a['double'] = False
+            if not a['long'] and math.hypot(x - a['x'], y - a['y']) > TOLERANCE_APPUI: a['long'] = True; a['double'] = False; self._plier_en_attente()          # un clic puis un glisser tout de suite : le clic plie d'abord, puis le panneau suit le pointeur
             if a['long']: self.pan_pos = (x - a['dx'], y - a['dy'])
             return
         if self.glisse_liste is not None: self._glisser_barre_liste(y); return

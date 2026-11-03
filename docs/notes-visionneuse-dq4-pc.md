@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131 et #134 à #141, jalons 1 à 5 ; 58 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-224). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131, #134 à #141 et #145 à #146, jalons 1 à 5 ; 60 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-225). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -1117,3 +1117,19 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - Le sens « rang plus grand = devant » du tracé à plat est lu dans le code (hauteur 0,04 + rang × 0,0005, caméra de dessus, `GL_LESS`), pas vérifié par une capture GL ; de même `SpriteCharacter::setDepth` plus grand = devant n'est pas vérifié dans le code Unity.
 - L'objet « Aile de chimère » lui-même n'a pas été essayé, seulement le sort Téléportation (même chemin natif `ruraUp` / `ruraDown` / `startField`, non vérifié identique).
 - Atterrissage dans une ville ou un donjon : le moteur y empile aussi le groupe, mais le dessin des villes (panneaux par emplacement) n'a pas été mesuré ; si le défaut y persiste, regarder l'échelle `ech` et la profondeur du panneau entre les emplacements 0 et 1.
+
+## Avance #147 : fenêtre Interface, un clic simple attend le délai du double clic (#145, 03/11/2026)
+
+### Demande (D-225, 23 h 45)
+« La fenêtre interface, il faut qu'elle attende de savoir si je fais un double clic avant qu'elle se ferme car elle doit se replier ou se déplier uniquement via un seul clic mais du coup via un double clic elle change 2 fois d'état c'est perturbant. »
+
+### Établi
+- Avant : le panneau de l'éditeur d'interface (`pause.py`, barre de titre) se repliait dès le relâchement d'un appui court ; le second appui d'un double clic (dans `DELAI_DOUBLE_CLIC` = 0,40 s) remettait le panneau à sa place mais, le premier clic ayant déjà plié, l'état changeait deux fois à l'écran.
+
+### Fait
+- Un appui court seul arme un pliage (`pan_plier_a` = relâchement + `DELAI_DOUBLE_CLIC`) que `Pause.maj` exécute une fois le délai écoulé sans second appui (`_plier_en_attente`). Un double clic annule le pliage en attente et remet seulement le panneau à sa place : aucun changement d'état. Un clic suivi tout de suite d'un glisser plie d'abord (comme avant) puis le panneau suit le pointeur. Tab reste immédiat et annule un pliage en attente ; la fermeture de l'éditeur ou du menu l'annule aussi.
+- Tests : `outils/test_panneau_interface.py` (14 tests, dont : un clic simple ne change l'état qu'une fois, après le délai ; un double clic ne le change jamais, replié ou déplié ; troisième clic après un double clic ; clic puis glisser).
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (le délai de 0,40 s peut être changé par `DQ_DOUBLE_CLIC`).
+- Le délai est celui de la visionneuse, pas le délai de double clic du système Windows.

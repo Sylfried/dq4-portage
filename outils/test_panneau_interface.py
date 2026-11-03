@@ -85,22 +85,58 @@ class Panneau(unittest.TestCase):
 
     def test_appui_court_replie(self):
         S, P = self.S, self.P
-        S.appui(900, 670); S.attendre(0.1); S.relache(); self.assertTrue(P.plie)
-        S.attendre(1.0); S.appui(900, 670); S.attendre(0.1); S.relache(); self.assertFalse(P.plie)       # (assez tard : pas un double clic)
+        S.appui(900, 670); S.attendre(0.1); S.relache(); S.attendre(0.6); self.assertTrue(P.plie)       # (le pliage attend la fin du delai du double clic : #145)
+        S.attendre(1.0); S.appui(900, 670); S.attendre(0.1); S.relache(); S.attendre(0.6); self.assertFalse(P.plie)       # (assez tard : pas un double clic)
         self.assertIsNone(P.pan_pos)
 
     def test_secousse_de_la_souris(self):
         """Quelques pixels de tremblement pendant un clic (moins de TOLERANCE_APPUI) : c'est un clic, pas un glisser."""
         S, P = self.S, self.P
-        S.geste((900, 670), [(903, 669), (905, 672), (902, 668)])
+        S.geste((900, 670), [(903, 669), (905, 672), (902, 668)]); S.attendre(0.6)
         self.assertTrue(P.plie); self.assertIsNone(P.pan_pos)
 
     def test_double_clic_position_d_origine(self):
         S, P = self.S, self.P
         P.pan_pos = (700.0, 500.0)
-        S.appui(900, 670); S.attendre(0.08); S.relache(); self.assertTrue(P.plie)              # premier clic : replie
+        S.appui(900, 670); S.attendre(0.08); S.relache(); self.assertFalse(P.plie)             # premier clic : rien ne bouge encore (on attend un eventuel second clic)
         S.attendre(0.1); S.appui(900, 670); S.attendre(0.08); S.relache()                         # deuxieme clic dans DELAI_DOUBLE_CLIC
-        self.assertFalse(P.plie); self.assertIsNone(P.pan_pos)                                 # le pliage est annule, le panneau revient a sa place d'origine
+        self.assertFalse(P.plie); self.assertIsNone(P.pan_pos)                                 # le panneau revient a sa place d'origine, sans avoir change d'etat
+        S.attendre(1.0); self.assertFalse(P.plie)                                              # et le pliage du premier clic n'a pas lieu apres coup
+
+    def test_clic_simple_un_seul_changement_apres_le_delai(self):
+        """#145 : un clic simple ne plie qu'une fois le delai du double clic ecoule, et une seule fois."""
+        S, P = self.S, self.P
+        etats = []
+        S.appui(900, 670); S.attendre(0.05); S.relache()
+        for _ in range(60): S.attendre(0.016); etats.append(P.plie)
+        self.assertFalse(etats[0]); self.assertTrue(etats[-1])                                 # replie, mais pas tout de suite
+        self.assertEqual(sum(1 for a, b in zip(etats, etats[1:]) if a != b), 1)                # un seul changement d'etat
+        self.assertGreaterEqual(etats.index(True) * 0.016, PA.DELAI_DOUBLE_CLIC - 0.05)        # pas avant (a un pas d'image pres) la fin du delai
+
+    def test_double_clic_ne_change_jamais_l_etat(self):
+        """#145 : un double clic sur un panneau replie ou deplie ne le replie ni ne le deplie, a aucun moment."""
+        S, P = self.S, self.P
+        for depart in (False, True):
+            P.plie = depart; P.pan_pos = (700.0, 500.0); P.pan_clic_t = 0.0; P.pan_plier_a = None
+            S.attendre(1.0)
+            vus = set()
+            S.appui(900, 670); S.attendre(0.05); S.relache(); vus.add(P.plie)
+            S.attendre(0.1); vus.add(P.plie); S.appui(900, 670); S.attendre(0.05); S.relache(); vus.add(P.plie)
+            for _ in range(60): S.attendre(0.016); vus.add(P.plie)
+            self.assertEqual(vus, {depart}, 'depart replie=%s' % depart); self.assertIsNone(P.pan_pos)
+
+    def test_troisieme_clic_apres_un_double_clic_est_un_clic_simple(self):
+        S, P = self.S, self.P
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.1); S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(1.0)
+        self.assertFalse(P.plie)
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.6); self.assertTrue(P.plie)
+
+    def test_clic_puis_glisser_plie_puis_deplace(self):
+        """Un clic suivi tout de suite d'un glisser : le clic plie d'abord (comme avant), puis le panneau suit le pointeur."""
+        S, P = self.S, self.P
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.1)
+        S.geste((900, 670), [(880, 650), (700, 500)])
+        self.assertTrue(P.plie); self.assertIsNotNone(P.pan_pos); S.attendre(1.0); self.assertTrue(P.plie)      # (un seul pliage)
 
     def test_double_appui_puis_glisser(self):
         """Un glisser juste apres un clic deplace le panneau (il ne revient pas a l'origine)."""
