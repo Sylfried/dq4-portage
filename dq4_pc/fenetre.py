@@ -132,6 +132,7 @@ CAM_SAUT_VILLE = 1.5                                                         # u
 CAM_MENE_DIST = 1.0                                                      # camera verrouillee sans cible (mode 0) : le jeu la mene ailleurs que sur le joueur quand sa cible est a plus de 1 unite du heros
 CAM_Y_TAU = 1.0                                                             # escaliers, rampes, ponts (#47) : la camera ne suit plus la hauteur du heros a chaque pas ; sa hauteur de reference rejoint celle de la cible du jeu en exp(-t / CAM_Y_TAU) (secondes reelles ; 0 = comme le jeu)
 CAM_Y_MAX = 3.0                                                             # ... sans jamais s'ecarter de plus de 3 unites de la hauteur du jeu (etages hauts, tours : le heros reste a moins de ~15 % de la hauteur de l'ecran du centre)
+CAM_Y_RELIEF = 0.6                                                         # (#110, butte du village du prologue : +0,5 u en 8 pas) bande morte du lissage : tant que la hauteur du jeu reste a moins de 0,6 unite de la hauteur de repos de la camera, elle suit le jeu EXACTEMENT, comme le mobile (buttes, rampes, bosses du terrain) ; le lissage ci-dessus ne porte que sur ce qui depasse (escaliers, etages) ; voir `hauteur_camera`
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
@@ -163,6 +164,19 @@ def rot_unity(ex, ey, ez):
 def camera_libre(e):
     """Camera libre : position + rotation (comme en combat), pas de cible. Paquet 11 bit 7 (scenes, titre) ; casino : le moteur envoie la position et la rotation (paquet 10, masque 5) sans paquet 11."""
     return bool(e.cam_libre or (getattr(e, 'partie', None) == MO.PARTIE_CASINO and e.cam_rot is not None))
+
+
+def hauteur_camera(zone, ref, cible, dt):
+    """Hauteur des villes : -> (zone, ref, dy), `dy` = decalage a ajouter a la camera et a sa cible (la camera du jeu est rigide sur la hauteur du heros : TownCamera::execute, SceneCamera.Update, aucun lissage en Y).
+    `cible` = hauteur de la cible du jeu ; `zone` = hauteur de repos (operateur « jeu » : elle ne bouge que si la cible s'en ecarte de plus de CAM_Y_RELIEF, et la suit alors a CAM_Y_RELIEF pres) ; `ref` = hauteur de reference
+    qui rejoint `zone` en exp(-dt / CAM_Y_TAU), a CAM_Y_MAX pres ; dy = ref - zone. Une butte, une rampe douce, une bosse (denivele < CAM_Y_RELIEF) : zone et ref ne bougent pas, dy = 0 : la camera suit le jeu exactement
+    (#110). Un escalier, un etage (denivele plus grand) : au-dela de CAM_Y_RELIEF, la camera retarde comme avant (#47), le heros s'eleve a l'ecran puis est recentre a l'arret. dy est continu, et sa vitesse ne depasse jamais celle de la cible
+    (la zone est une contraction de la cible) : aucun a-coup, a la montee comme a la descente. `zone` ou `ref` None (coupure du jeu, premiere image) : la camera est celle du jeu."""
+    if zone is None or ref is None: return cible, cible, 0.0
+    zone = min(cible + CAM_Y_RELIEF, max(cible - CAM_Y_RELIEF, zone))
+    ref += (zone - ref) * (1.0 - math.exp(-dt / CAM_Y_TAU))
+    ref = min(zone + CAM_Y_MAX, max(zone - CAM_Y_MAX, ref))
+    return zone, ref, ref - zone
 
 
 def sans_validation(mo, ui_g, port):
@@ -223,7 +237,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_ref_y = None; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_ref_y = None; self.cam_zone_y = None; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
@@ -1212,12 +1226,13 @@ class Jeu(pyglet.window.Window):
         # Hauteur (#47, escaliers) : tant que le joueur a la camera, sa hauteur ne suit plus le heros a chaque pas (le jeu la recalcule sur le heros : TownCamera::execute, setTarget(joueur), aucun lissage en Y ; la montee
         # ressentie venait de la). Hauteur de reference = celle de la cible du jeu, rejointe lentement (CAM_Y_TAU), a 3 unites pres au plus (CAM_Y_MAX) ; coupure du jeu (changement de carte, plan, teleportation) ou
         # camera prise par le jeu : la reference est celle du jeu aussitot (aucun glissement). Au repos (etage plat) l'ecart est nul : le heros est au centre, comme avant.
+        # #110 : bande morte (CAM_Y_RELIEF) : un petit relief (butte, rampe douce, bosse) est suivi exactement comme le mobile (le sol defile quand le heros monte, le heros reste au centre ; avant, la camera « restait sur le
+        # meme plan » et le heros montait a l'ecran) ; seul ce qui depasse (escaliers, etages) est lisse. Voir `hauteur_camera`.
         dy = 0.0
         if centre and CAM_Y_TAU > 0:
-            if self.cam_ref_y is None or saut: self.cam_ref_y = float(cib[1])
-            else: self.cam_ref_y += (float(cib[1]) - self.cam_ref_y) * (1.0 - math.exp(-dt / CAM_Y_TAU))
-            self.cam_ref_y = min(float(cib[1]) + CAM_Y_MAX, max(float(cib[1]) - CAM_Y_MAX, self.cam_ref_y)); dy = self.cam_ref_y - float(cib[1])
-        else: self.cam_ref_y = None
+            if saut: self.cam_zone_y = self.cam_ref_y = None
+            self.cam_zone_y, self.cam_ref_y, dy = hauteur_camera(getattr(self, 'cam_zone_y', None), self.cam_ref_y, float(cib[1]), dt)
+        else: self.cam_ref_y = self.cam_zone_y = None
         if abs(dy) > 1e-6: pos[1] += dy; cib[1] += dy
         # Aucune borne de la visionneuse (cadrage 16/9 retire avec l'option) : Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), la camera va jusqu'au bord de la carte et le cadre
         # du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi.

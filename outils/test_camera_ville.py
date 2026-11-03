@@ -4,6 +4,8 @@
      [0] et [5], s_yOffset) a l'ecran portrait d'origine (0,5625) ;
   2. camera TOUJOURS centree sur le joueur (plus d'option, #47) : le heros reste au centre de l'image meme quand la cible du jeu est ailleurs (bord de la carte), a toute vitesse du jeu (x1 a x4) et toute cadence
      d'affichage, et apres l'arret ; aucune borne de la visionneuse ;
+  2 bis. hauteur (#47, #110) : un relief de moins de CAM_Y_RELIEF (la butte du village du prologue, +0,5 u) est suivi EXACTEMENT comme le mobile (le heros ne bouge pas a l'ecran) ; au-dela (escaliers, etages) la
+     camera retarde comme avant (lissage CAM_Y_TAU, borne CAM_Y_MAX), sans a-coup, et recentre le heros a l'arret ; coupure du jeu = hauteur du jeu aussitot ;
   3. camera prise par le jeu (travelling, cible = un personnage, camera libre d'une scene, mini-jeu) : la visionneuse n'ajoute RIEN (ni centrage, ni borne) : le rendu ne depend plus du heros ;
   4. `Jeu._camera_menee` : verrou de la TownCamera du moteur qui mene la camera ailleurs que sur le joueur, ou qui la tient sur le joueur.
 
@@ -121,6 +123,94 @@ class TestCameraVille(unittest.TestCase):
             ref_, _ = self.montee(1 / 60, tau=0.0)                              # CAM_Y_TAU = 0 : exactement la camera du jeu (le heros reste au meme point de l'image)
             self.assertLess(max(ref_) - min(ref_), 1e-9)
         finally: F.CAM_Y_TAU = tau
+
+    def parcours(self, dt, pas_y, repos=4.0, **kw):
+        """Comme `montee`, mais la hauteur du heros a chaque pas du moteur est donnee (`pas_y`, liste de hauteurs de sol) : NDC y du heros a chaque image."""
+        HORLOGE[0] = 0.0; j = faux_jeu(**kw); ys = []; y_prec = None
+        for k in range(len(pas_y) + int(repos * 30)):
+            hy = 0.047 + pas_y[min(k, len(pas_y) - 1)]; a = 0.0
+            while a < 1.0 - 1e-9:
+                a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
+                HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
+                M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1])
+            y_prec = hy
+        return ys, j
+
+    @staticmethod
+    def profil_butte(haut=0.5, pas_montee=8, plateau=30):
+        """Hauteur du sol sous le heros, pas du moteur par pas : rampe de `haut` unites en `pas_montee` pas, plateau, descente symetrique (la butte du village du prologue, carte mlout1 : +0,5 u en ~8 pas)."""
+        mont = [haut * (i + 1) / pas_montee for i in range(pas_montee)]
+        return [0.0] * 10 + mont + [haut] * plateau + mont[::-1][1:] + [0.0] * 3
+
+    def test_butte_suivie_exactement(self):
+        """#110 (retour de Sylfried : « en marchant sur la butte la camera reste sur le meme plan ») : le moteur d'origine suit la hauteur du heros a chaque pas (setTarget(joueur), aucun lissage en Y ; SceneCamera.Update
+        non plus), donc sur un relief de moins de CAM_Y_RELIEF (la butte : +0,5 u) le heros reste exactement au meme point de l'image, a la montee comme a la descente, a toute cadence d'affichage. Avant : le lissage
+        de #47 retardait la camera et le heros montait puis descendait a l'ecran (18 a 29 px a 720 p)."""
+        for dt in (1 / 30, 1 / 60, 1 / 144):
+            for haut in (0.2, 0.5, 0.58):
+                ys, j = self.parcours(dt, self.profil_butte(haut))
+                self.assertLess(max(ys) - min(ys), 1e-9, 'butte de %s u, dt=1/%d : le heros doit rester au meme point de l\'image' % (haut, round(1 / dt)))
+            ys, _ = self.parcours(dt, self.profil_butte(0.5), jeu=True)              # la camera du jeu (scene) : toujours exacte
+            self.assertLess(max(ys) - min(ys), 1e-9)
+
+    def test_butte_ancien_lissage_visible(self):
+        """Garde-fou du test precedent : avec CAM_Y_RELIEF = 0 (lissage de #47 seul) la meme butte ferait bien bouger le heros a l'ecran (c'est le defaut de #110)."""
+        relief = F.CAM_Y_RELIEF
+        try:
+            F.CAM_Y_RELIEF = 0.0
+            ys, _ = self.parcours(1 / 60, self.profil_butte(0.5))
+            self.assertGreater((max(ys) - min(ys)) * 360, 10.0, 'sans bande morte : le heros bouge de plus de 10 px (720 p)')
+        finally: F.CAM_Y_RELIEF = relief
+
+    def test_escalier_reste_lisse_au_dela_de_la_bande_morte(self):
+        """Un denivele plus grand que CAM_Y_RELIEF (escalier, etage : +1,9 u en 16 pas) garde l'effet de #47 : le heros s'eleve a l'ecran, jamais hors champ, et la camera le recentre a l'arret ; la bande morte
+        ne retarde pas plus que le lissage seul (plus petit retard), et le mouvement du heros a l'ecran n'est jamais plus brusque (d'une image a l'autre) qu'avec le lissage seul."""
+        relief = F.CAM_Y_RELIEF
+        try:
+            for haut, pas in ((1.0, 8), (1.9, 16), (3.0, 20), (-1.9, 16), (6.0, 40)):
+                prof = [0.0] * 10 + [haut * (i + 1) / pas for i in range(pas)] + [haut] * 30
+                if haut < 0: prof = [-haut] * 10 + [-haut + haut * (i + 1) / pas for i in range(pas)] + [0.0] * 30
+                F.CAM_Y_RELIEF = relief; nou, _ = self.parcours(1 / 60, prof, repos=10.0)
+                F.CAM_Y_RELIEF = 0.0; anc, _ = self.parcours(1 / 60, prof, repos=10.0)
+                self.assertGreater(max(abs(y - nou[0]) for y in nou), 0.005 if abs(haut) < 2 else 0.02, 'haut=%s : le heros doit s\'elever a l\'ecran' % haut)
+                self.assertLess(max(abs(y - nou[0]) for y in nou), 0.45, 'haut=%s : jamais hors champ' % haut)
+                self.assertLess(max(abs(y - nou[0]) for y in nou), max(abs(y - anc[0]) for y in anc) + 1e-9, 'haut=%s : pas plus de retard qu\'avec le lissage seul' % haut)
+                self.assertLess(abs(nou[-1] - nou[0]), 2e-3, 'haut=%s : recentre a l\'arret' % haut)
+                brusque = lambda ys: max(abs(b - a) for a, b in zip(ys, ys[1:]))
+                self.assertLessEqual(brusque(nou), brusque(anc) + 1e-9, 'haut=%s : pas de saut d\'une image a l\'autre plus grand qu\'avec le lissage seul' % haut)
+        finally: F.CAM_Y_RELIEF = relief
+
+    def test_hauteur_camera_invariants(self):
+        """`hauteur_camera` (fonction pure) sur des profils aleatoires : la zone de repos reste a CAM_Y_RELIEF de la cible et ne bouge jamais plus vite qu'elle (contraction : aucun a-coup), la reference reste a CAM_Y_MAX
+        de la zone, le decalage est nul tant que la cible reste dans la bande morte, et `None` (coupure, premiere image) rend la camera du jeu."""
+        self.assertEqual(F.hauteur_camera(None, None, 3.0, 1 / 60), (3.0, 3.0, 0.0))
+        self.assertEqual(F.hauteur_camera(1.0, None, 3.0, 1 / 60), (3.0, 3.0, 0.0))
+        rng = np.random.default_rng(7)
+        for _ in range(200):
+            c = float(rng.uniform(-5, 5)); zone, ref, dy = F.hauteur_camera(None, None, c, 1 / 60)
+            for _ in range(300):
+                c2 = c + float(rng.normal(0, rng.choice([0.01, 0.1, 1.0]))); dt = float(rng.choice([1 / 30, 1 / 60, 1 / 144]))
+                z2, r2, dy = F.hauteur_camera(zone, ref, c2, dt)
+                self.assertLessEqual(abs(z2 - c2), F.CAM_Y_RELIEF + 1e-9)
+                self.assertLessEqual(abs(z2 - zone), abs(c2 - c) + 1e-9)             # contraction : la zone ne s'emballe jamais
+                self.assertLessEqual(abs(r2 - z2), F.CAM_Y_MAX + 1e-9); self.assertAlmostEqual(dy, r2 - z2, 12)
+                zone, ref, c = z2, r2, c2
+        zone, ref, dy = F.hauteur_camera(None, None, 0.0, 1 / 60)
+        for c in (0.1, -0.3, 0.55, -0.6, 0.0):
+            zone, ref, dy = F.hauteur_camera(zone, ref, c, 1 / 60); self.assertEqual(dy, 0.0, 'cible a %s : dans la bande morte' % c)
+
+    def test_butte_coupure_remet_la_zone(self):
+        """Coupure du jeu (teleportation, changement de carte) : la zone de repos et la reference sont remises sur la hauteur du jeu (aucun glissement) ; camera prise par le jeu : plus aucun etat."""
+        HORLOGE[0] = 0.0; j = faux_jeu(); e = faux_etat((0.0, 0.0, 0.78), (0.0, 0.047, 0.78))
+        for _ in range(30): HORLOGE[0] += 1 / 60; F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        e = faux_etat((0.0, 0.5, 0.78), (0.0, 0.547, 0.78))
+        for _ in range(30): HORLOGE[0] += 1 / 60; F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        self.assertAlmostEqual(j.cam_zone_y, 0.0, 9); self.assertAlmostEqual(j.cam_ref_y, 0.0, 9)           # la butte (+0,5 u) est dans la bande morte
+        e = faux_etat((0.0, 6.0, 0.78), (0.0, 6.047, 0.78)); j.cam_saut = True; HORLOGE[0] += 1 / 60
+        F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        self.assertAlmostEqual(j.cam_zone_y, 6.0, 9); self.assertAlmostEqual(j.cam_ref_y, 6.0, 9)
+        j.cam_jeu = True; HORLOGE[0] += 1 / 60; F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        self.assertIsNone(j.cam_zone_y); self.assertIsNone(j.cam_ref_y)
 
     def test_escalier_a_toute_vitesse_de_jeu(self):
         """Marche acceleree (x4 : 4 fois plus de pas du moteur par seconde) ou tres grande hauteur (tour) : l'ecart de la camera au jeu est borne par CAM_Y_MAX, le heros ne sort jamais de l'ecran."""
