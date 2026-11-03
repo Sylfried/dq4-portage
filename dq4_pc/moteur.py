@@ -32,6 +32,8 @@ FENETRE_ENTREE_COMBAT = 12                  # images apres le chargement de la s
 FENETRE_RETOUR_COMBAT = 12                  # images apres la sortie de la partie combat pendant lesquelles un fondu lance par le moteur est le fondu de retour a la carte
 GARDE_TRANSITION = 8                        # images ou la transition de combat reste « en cours » apres la fin de l'un de ses fondus (le moteur change de scene 1 a 3 images plus tard, puis lance le fondu suivant)
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
+DECOMPTE_SORTIE = 0x258254                  # octet de la bibliotheque lu par Global::NativeExec : decompte (en images) du bruitage de sortie ; startTown, startField, ChangeGamePart, startFirstTown et startDebugTown l'arment a 15 quand le jeu quitte une ville ou la carte du monde,
+                                            # NativeExec le decremente a chaque image et, a 0, appelle TownSystem::playTownExitSE / FieldSystem::playFieldExitSE (bruitage 305 : seulement si l'ancienne scene vit encore, son octet 0 = 1) ; voir Moteur._decompte_sortie
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
 HAUT, BAS, GAUCHE, DROITE, A, B = 0x1, 0x2, 0x4, 0x8, 0x10, 0x20
@@ -107,6 +109,7 @@ class Etat:
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
+        self.rapport_fondu = (-99, 1.0)             # dernier fondu au noir lance par le moteur : (image du moteur, duree jouee / duree d'origine) ; 1.0 = duree du jeu (voir Moteur._decompte_sortie)
         self.fen_entree = 0; self.fen_retour = 0; self.garde_trans = 0      # transition de combat (voir transition_combat) : images restantes de la fenetre « arrivee en combat », de la fenetre « retour a la carte », de la garde entre deux fondus
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
@@ -119,7 +122,7 @@ class Etat:
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
         self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None); self.__dict__.setdefault('dort_haut', 0.0)
-        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0)
+        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0); self.__dict__.setdefault('rapport_fondu', (-99, 1.0))
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
@@ -273,8 +276,10 @@ class Etat:
         entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
         script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
-        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : il garde la duree du jeu d'origine, voir transition_combat
+        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : marque pour transition_combat (sa duree suit « Vitesse de transition » comme tout fondu au noir, #47)
+        d0 = d
         if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
+        self.rapport_fondu = (self.image, (d / d0) if d0 > 1 and v & 0x1000 else 1.0)      # fondu au noir raccourci : le decompte du bruitage de sortie du moteur suit (Moteur._decompte_sortie)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -448,7 +453,7 @@ class Moteur:
         self.etat = Etat()
         self.msgs_ui = []                        # messages moteur -> interface (menus), derniere image
         self.ui = Interface()                    # fenetres de menu memorisees
-        self.images = 0
+        self.images = 0; self._decompte = 0; self._decompte_arme = -99; self._decompte_fait = True      # decompte du bruitage de sortie (voir _decompte_sortie)
         # animations d'objets de la carte (portes...) : le moteur attend qu'Unity les termine (bit0 de l'octet +0x14 de l'entree)
         self.anims = []                          # [(image d'echeance, index d'objet)]
         self.duree_anim = None                   # (objet, numero) -> images avant la fin de l'animation commune (donnee par la fenetre, d'apres les donnees de la carte) ; None = DUREE_ANIM
@@ -818,6 +823,7 @@ class Moteur:
         avant = self.etat.cartes_chargees
         self.etat.image = self.images
         self.etat.appliquer(pq, self._nom_carte)
+        self._decompte_sortie()
         for t, a, f in pq:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
         ac = self.etat.attente_charge
@@ -833,6 +839,23 @@ class Moteur:
         else: self._lire_monde()
         self.images += 1
         return pq
+
+    def _decompte_sortie(self):
+        """Bruitage de transition de carte (porte, sortie, entree de village, escalier, carte du monde <-> ville) : cause de sa perte avec les fondus raccourcis (« Vitesse de transition » x3 et plus, marginal a x2).
+        Quand le jeu quitte une ville ou la carte du monde, il lance un fondu au noir de 30 images ET arme un decompte de 15 images (DECOMPTE_SORTIE) ; a 0, NativeExec appelle playTownExitSE / playFieldExitSE, qui ne jouent le
+        bruitage 305 que si l'ancienne scene vit encore. Dans le jeu d'origine, le chargement de la carte suivante n'arrive qu'a la fin du fondu (30 images) : le bruitage est demande a mi-fondu. Le fondu raccourci de la
+        visionneuse (Etat._fondu) amene le chargement avant les 15 images : l'ancienne scene est detruite, le moteur ne demande plus rien (aucun paquet 35). On remet donc le decompte a la meme proportion que le fondu
+        (duree jouee / duree d'origine) : le bruitage reste demande a mi-fondu, la duree du fondu et celle du bruitage ne changent pas. Sans fondu raccourci (rapport 1), rien n'est touche."""
+        c = self.core; b = c.mem(self.L + DECOMPTE_SORTIE, 1)[0]
+        if b > self._decompte: self._decompte_arme = self.images; self._decompte_fait = False       # armé pendant ce pas (le moteur l'a deja decremente une fois)
+        self._decompte = b
+        if self._decompte_fait or b == 0 or b > 15: return
+        im, r = self.etat.rapport_fondu
+        if self.images - self._decompte_arme > 2: self._decompte_fait = True; return
+        if im < self._decompte_arme - 2 or im > self.images: return           # le fondu de cette sortie n'est pas (encore) arrive
+        self._decompte_fait = True
+        if r < 1.0:
+            nb = max(1, int(round(b * r))); c.mem_w(self.L + DECOMPTE_SORTIE, bytes([nb])); self._decompte = nb
 
     def _journal_message(self):
         """(test, DQ_MSGDBG=1) une ligne a chaque changement d'etat du message : image du moteur, etat, lettres ecrites / lettres de la ligne, vitesse du type de fenetre."""

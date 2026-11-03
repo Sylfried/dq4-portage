@@ -122,6 +122,22 @@ class Lecture(unittest.TestCase):
         x.debut -= 10.0; s.tick(); self.assertEqual(len(s.se), 1)             # en lecture : garde
         x.fin = 0.0; s.tick(); self.assertEqual(s.se, [])                    # duree depassee : libere
 
+    def test_bruitages_de_transition_joues_en_entier(self):
+        """Porte (309) puis transition de carte (305, demande par le moteur entre le debut du fondu et le chargement : voir test_bruitage_transition) : le chargement de la carte bloque la boucle jusqu'a 0,5 s et le moteur
+        fait plusieurs pas a la suite (marche acceleree) ; les deux bruitages restent joues, a leur volume, jusqu'a la fin de leur duree d'origine, puis sont liberes."""
+        s = nouveau_son(); s.dec['SE0309'] = donnees(1.5, False, volume=0.4); s.dec['SE0305'] = donnees(1.0, False, volume=0.5)
+        s.evenements([(35, 309)]); [s.tick() for _ in range(6)]
+        s.evenements([(35, 305)]); [s.tick() for _ in range(6)]
+        self.assertEqual([x.ident for x in s.se], [309, 305]); self.assertEqual([x.cat for x in s.se], ['effets', 'effets'])
+        self.assertEqual([round(x.p.volume, 3) for x in s.se], [0.4, 0.5])
+        for x in s.se: x.debut -= 0.5; x.fin -= 0.5                          # le chargement de la carte a bloque la boucle 0,5 s
+        s.tick()
+        self.assertEqual([x.ident for x in s.se], [309, 305]); self.assertFalse(any(x.p.supprime for x in s.se))
+        for x in s.se: x.debut -= 0.9; x.fin -= 0.9                          # 1,4 s ecoulees : le 305 (1,0 s + 0,5 s de marge) est encore la, le 309 (1,5 s) aussi
+        s.tick(); self.assertEqual([x.ident for x in s.se], [309, 305])
+        for x in s.se: x.fin = 0.0                                           # duree depassee : liberes
+        s.tick(); self.assertEqual(s.se, [])
+
     def test_boucle_coupee_puis_rouverte(self):
         s = nouveau_son(); s.regler_mixage(actifs={'effets': False})
         s.jouer_se(500)
