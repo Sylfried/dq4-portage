@@ -905,9 +905,29 @@ class Jeu(pyglet.window.Window):
             self._journal_fenetre('plein écran' if self.mode_fen else 'fenêtre')
             if erreur is not None:
                 print('%s impossible (%r) : %s conservé' % ('Plein écran' if cible else 'Fenêtre', erreur, 'plein écran' if self.mode_fen else 'fenêtre'), flush=True)
+                self._noter_echec_bascule(cible, erreur)
                 if self._pret: self.toast('%s impossible' % ('Plein écran' if cible else 'Fenêtre'), 3.0)
         finally: self._en_bascule = False
         return self.est_plein
+
+    def _noter_echec_bascule(self, cible, erreur):
+        """Echec d'un passage plein ecran <-> fenetre : l'erreur COMPLETE (la pile d'appels, pas seulement son texte) avec l'etat de la fenetre et des moniteurs, dans la console et dans `erreurs_fenetre.log` (a cote des reglages ;
+        ignore par git ; `DQ_JOURNAL_FENETRE` : un autre fichier). La ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue. Ne leve jamais d'erreur."""
+        try:
+            import traceback
+            etat = []
+            try: etat.append('fenêtre : plein écran = %s, %d x %d, taille mémorisée %s, place d\'avant %s, bureau %s' % (self.fullscreen, self.width, self.height, getattr(self, 'taille_fenetre', None), getattr(self, '_windowed_location', None), getattr(self, 'bureau', None)))
+            except Exception as ex: etat.append('fenêtre illisible (%r)' % (ex,))
+            try: ec = self.screen; etat.append('écran de la fenêtre pour pyglet : %d x %d en (%d, %d)' % (ec.width, ec.height, ec.x, ec.y))
+            except Exception as ex: etat.append('écran de la fenêtre illisible (%r)' % (ex,))
+            try: etat.append('moniteurs : ' + ' ; '.join('%d x %d en (%d, %d)%s' % (d['largeur'], d['hauteur'], d['x'], d['y'], ' (principal)' if d['principal'] else '') for d in self._lire_ecrans(True)[1]))
+            except Exception as ex: etat.append('moniteurs illisibles (%r)' % (ex,))
+            etat.append('pyglet %s, Python %s, %s' % (pyglet.version, sys.version.split()[0], sys.platform))
+            texte = '--- %s : passage en %s impossible ---\n%s%s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), 'plein écran' if cible else 'fenêtre', ''.join(traceback.format_exception(erreur)), '\n'.join(etat))
+            print(texte, flush=True)
+            chemin = os.environ.get('DQ_JOURNAL_FENETRE') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'erreurs_fenetre.log')
+            with open(chemin, 'a', encoding='utf-8') as f: f.write(texte + '\n')
+        except Exception as ex: print('Erreur de la bascule non notée (%r)' % (ex,), flush=True)
 
     def basculer_plein_ecran(self):
         """F11 / Alt + Entree : fenetre <-> plein ecran."""
@@ -936,7 +956,10 @@ class Jeu(pyglet.window.Window):
         except Exception as ex:
             erreur = ex
             try: self._mettre_plein(avant, taille, ecran_avant)          # (retour a l'etat de depart, fenetre toujours cachee, sur le moniteur de depart)
-            except Exception as ex2: print("Retour à l'état de départ impossible (%r)" % (ex2,), flush=True)
+            except Exception as ex2:
+                print("Retour à l'état de départ impossible (%r)" % (ex2,), flush=True)
+                try: erreur.add_note("Retour à l'état de départ impossible aussi : %r" % (ex2,))
+                except Exception: pass
         self._image_de_bascule()
         if cachee:
             try: self.set_visible(True)

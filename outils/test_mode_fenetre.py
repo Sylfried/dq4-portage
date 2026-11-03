@@ -183,7 +183,7 @@ class FausseFenetre:
         self.bureau = bureau; self.echec = echec; self._windowed_location = None if plein else (100, 80); self._windowed_size = taille
         self.taille_fenetre = taille; self.mode_fen = 1 if plein else 0; self._pret = True; self._en_bascule = False; self.reg = RG.Reglages(None)
         self.toasts = []; self.post = types.SimpleNamespace(cle=('cle', 1))
-        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
+        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein', '_noter_echec_bascule'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
         self._echec_simule = FE.Jeu._echec_simule; self.bureau_ = bureau
         self._verifier_taille_reelle = lambda: self.journal.append('verifier')
         self.toast = lambda t, d=3.0: self.toasts.append(t)
@@ -232,10 +232,11 @@ class Bascule(unittest.TestCase):
 
     def setUp(self):
         os.environ.pop('DQ_SIM_ECHEC', None); os.environ.pop('DQ_BASCULE_SIMPLE', None)
+        self.journal_erreurs = os.path.join(tempfile.mkdtemp(prefix='journal_fenetre_'), 'erreurs_fenetre.log'); os.environ['DQ_JOURNAL_FENETRE'] = self.journal_erreurs          # (les echecs simules ne s'ecrivent pas dans le depot)
         self.zone = self.FE.zone_utile; self.FE.zone_utile = lambda: (1904, 1040)          # (un bureau 1920 x 1080 : la taille de l'ecran de test ne compte pas)
 
     def tearDown(self):
-        self.FE.zone_utile = self.zone; os.environ.pop('DQ_SIM_ECHEC', None); os.environ.pop('DQ_BASCULE_SIMPLE', None)
+        self.FE.zone_utile = self.zone; os.environ.pop('DQ_SIM_ECHEC', None); os.environ.pop('DQ_BASCULE_SIMPLE', None); os.environ.pop('DQ_JOURNAL_FENETRE', None)
 
     def fen(self, **k): return FausseFenetre(self.FE, **k)
 
@@ -282,6 +283,25 @@ class Bascule(unittest.TestCase):
         f = self.fen(); f.regler_plein_ecran(True); os.environ['DQ_SIM_ECHEC'] = '0'
         self.assertTrue(f.regler_plein_ecran(False)); self.assertTrue(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (1, 1))
         self.assertEqual(f.toasts, ['Fenêtre impossible'])
+
+    def test_l_erreur_complete_est_notee_dans_le_journal(self):
+        """Issue #123 : la ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue : la pile d'appels complete, l'etat de la fenetre et des moniteurs vont dans erreurs_fenetre.log (et la console)."""
+        f = self.fen(plein=True, echec='set_fullscreen(False,1280x720)'); self.assertTrue(f.regler_plein_ecran(False))      # (l'echec est unique : le retour a l'etat de depart reussit)
+        self.assertEqual(f.toasts, ['Fenêtre impossible'])
+        txt = open(self.journal_erreurs, encoding='utf-8').read()
+        self.assertIn('passage en fenêtre impossible', txt); self.assertIn('Traceback', txt); self.assertIn('RuntimeError', txt); self.assertIn('echec de set_fullscreen(False,1280x720)', txt)
+        self.assertIn('_mettre_plein', txt)                                                                          # la pile : ou ca a echoue
+        self.assertIn('fenêtre : plein écran = ', txt); self.assertIn('moniteurs : 1920 x 1080 en (0, 0) (principal)', txt); self.assertIn('pyglet ', txt)
+        f2 = self.fen(plein=True, echec='visible(False)'); f2.regler_plein_ecran(False)
+        self.assertEqual(open(self.journal_erreurs, encoding='utf-8').read().count('impossible ---'), 2)             # (une entree de plus, a la suite : le journal n'est jamais ecrase)
+
+    def test_une_erreur_du_journal_ne_gene_pas_la_bascule(self):
+        os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(self.journal_erreurs, 'dossier', 'inexistant', 'x.log')       # (inecrivable)
+        f = self.fen(plein=True, echec='set_fullscreen(False,1280x720)'); self.assertTrue(f.regler_plein_ecran(False))
+        self.assertEqual(f.toasts, ['Fenêtre impossible']); self.assertTrue(f.fullscreen)
+
+    def test_pas_d_entree_sans_echec(self):
+        f = self.fen(); f.regler_plein_ecran(True); f.regler_plein_ecran(False); self.assertFalse(os.path.exists(self.journal_erreurs))
 
     def test_erreur_de_la_fenetre_pyglet(self):
         for appel in ('set_fullscreen(True)', 'visible(False)'):
