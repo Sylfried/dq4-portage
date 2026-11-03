@@ -54,6 +54,7 @@ COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [
 STR_W8_X0 = 0xb9000008
 MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
 MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
+MAGIE_SON_SOIN, SUB_W8_W8_C4 = 0x100, 0x51031108          # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x100 : `sub w8, w8, #0xc4` (w8 = numero de l'action ; si le resultat est <= 2, c'est un sort de soin et le moteur joue le bruitage 501, `playSe(0x1f5)`, quel que soit son effet)
 MAGIE_NB_CIBLES, MAGIE_FIN_BOUCLE = 0x257f84, 0x2e0       # gTownMenuItemUseManager + 0xaa : nombre de cibles dont le moteur affiche le resultat (et dont il joue le bruitage de soin, une fois chacune) ; useMagicNoTarget + 0x2e0 : sortie de cette boucle
 MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...) ; sert de repere de version du moteur (action 201) : il n'est plus affiche par la regle des sorts sans effet
 MSG_IL_NE_SE_PASSE_RIEN = 0xc3d6d          # identifiant du message du moteur « Mais il ne se passe rien. » (celui qu'Evac' hors donjon met dans param + MAGIE_RESULTAT ; mesure : le champ 5 de la table des actions donne 0xaae7e pour l'action 204, mais ce n'est pas le message affiche) : texte officiel affiche par la regle « sort qui coute des PM sans effet » (demande de Sylfried, #48)
@@ -562,8 +563,10 @@ class Moteur:
         de succes (la table des actions donne le meme texte au succes et a l'echec : « Les blessures de X guerissent ! » a PV pleins). Le menu Magie lance le sort par `UseAction::execUse` a deux endroits (choix d'une
         cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
         Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
-        table des messages) ou aucun, la liste devient le message du jeu « Mais il ne se passe rien. » (`MSG_IL_NE_SE_PASSE_RIEN`, une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
-        c = self.core; self._magie = None; self._magie_muet = False
+        table des messages) ou aucun, la liste devient le message du jeu « Mais il ne se passe rien. » (`MSG_IL_NE_SE_PASSE_RIEN`, une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas.
+        Bruitages (mesures au moteur reel) : le lancement joue le bruitage 306 (le meme pour tous les sorts : il reste toujours) ; le message de resultat joue ensuite le bruitage de soin 501 (`menuUpdate` + 0x110, pour les actions 196 a 198 : Premiers secours, Soins
+        partiels, Soins complets, SANS regarder si le soin a servi) : quand le sort n'a eu aucun effet, ce deuxieme bruitage est coupe (un seul `sub` modifie avant l'instruction : la sortie de comparaison passe a 3, au-dessus de 2). Un sort de groupe sans effet ne le joue deja plus (boucle des cibles vide)."""
+        c = self.core; self._magie = None; self._magie_muet = False; self._magie_sans_effet = False
         try:
             cs, nt = c.export('_ZN25TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT16useMagicNoTargetEv')
             msg, exc = c.export('_ZN6status17BaseActionMessage12actionParam_E'), c.export('_ZN6status10excelParamE')
@@ -576,7 +579,7 @@ class Moteur:
             def _avant(uc, ad, sz, u):
                 p = uc.reg_read(c.XREG[0]) & 0xffffffffffff; lanceur = u64(p); action = u32(p + MAGIE_ACTION)
                 cout = c.mem(u64(exc + 0x70) + 0x48 * action + 0x3a, 1)[0]                  # UseAction::getUseMp
-                self._magie = (p, lanceur, struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0], cout, action) if lanceur and cout else None
+                self._magie = (p, lanceur, struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0], cout, action) if lanceur and cout else None; self._magie_sans_effet = False
             def poser(groupe):
                 def _apres(uc, ad, sz, u):
                     m, self._magie = self._magie, None
@@ -586,6 +589,7 @@ class Moteur:
                     e = u64(msg) + 0x48 * action; r = u32(p + MAGIE_RESULTAT)
                     if r and r not in (u32(e + 4), u32(e + 0xc)): return                    # le jeu a deja son message d'echec
                     c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_IL_NE_SE_PASSE_RIEN, 0))
+                    if not groupe: self._magie_sans_effet = True                              # le bruitage de soin de l'etape suivante est coupe (voir _son)
                     if groupe: c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x01'); self._magie_muet = True      # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
                 return _apres
             for (a, groupe) in sites:
@@ -593,6 +597,11 @@ class Moteur:
             def _fin(uc, ad, sz, u):                                                       # sortie de la boucle des cibles : plus de bruitage de soin en attente (menuUpdate en joue un par cible restante) si rien ne s'est passe
                 if self._magie_muet: self._magie_muet = False; c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x00')
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _fin, None, nt + MAGIE_FIN_BOUCLE, nt + MAGIE_FIN_BOUCLE)
+            if u32(cs + MAGIE_SON_SOIN) == SUB_W8_W8_C4:
+                def _son(uc, ad, sz, u):                                                   # avant `sub w8, w8, #0xc4` : le sort n'a eu aucun effet -> w8 = 0xc7 (resultat 3 > 2) : pas de bruitage de soin
+                    if self._magie_sans_effet: self._magie_sans_effet = False; uc.reg_write(c.XREG[8], 0xc7)
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _son, None, cs + MAGIE_SON_SOIN, cs + MAGIE_SON_SOIN)
+            else: print('sorts sans effet : bruitage de soin inattendu, il est garde', flush=True)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('sorts sans effet : crochet non installe :', ex, flush=True)
