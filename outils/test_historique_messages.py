@@ -920,5 +920,31 @@ class TestPause(unittest.TestCase):
         p.clic(100, 100, M.RIGHT); self.assertFalse(p.ouvert)                                                      # clic droit : retour, comme dans les autres pages
 
 
+class TestMessageVide(unittest.TestCase):
+    """#140 : le message de la liste vide (surtout « Aucun dialogue en favori : ... », long) etait dessine sur une seule ligne et depassait du cadre : il est coupe aux espaces."""
+    larg = staticmethod(lambda t: 10.0 * len(t))                      # police d'essai : 10 unites par caractere
+
+    def test_aucune_ligne_ne_depasse(self):
+        for msg in list(UH.VIDES.values()) + list(UH.VIDES_FAVORIS.values()):
+            for limite in (200.0, 400.0, 800.0, 1600.0):
+                ls = UH.couper_mots(msg, self.larg, limite)
+                self.assertEqual(' '.join(ls).split(), msg.split())                                       # aucun mot perdu ni change
+                for l in ls: self.assertLessEqual(self.larg(l), max(limite, max(self.larg(m) for m in msg.split())), (limite, l))
+
+    def test_message_court_reste_sur_une_ligne(self):
+        self.assertEqual(UH.couper_mots(UH.VIDES['dialogues'], self.larg, 10000.0), [UH.VIDES['dialogues']])
+        self.assertEqual(UH.couper_mots('', self.larg, 100.0), [''])
+
+    def test_message_long_est_coupe(self):
+        ls = UH.couper_mots(UH.VIDES_FAVORIS['dialogues'], self.larg, 600.0); self.assertGreater(len(ls), 1)
+
+    def test_mot_trop_large_reste_seul(self):
+        self.assertEqual(UH.couper_mots('a ABCDEFGHIJ b', self.larg, 50.0), ['a', 'ABCDEFGHIJ', 'b'])
+
+    def test_le_dessin_coupe_le_message(self):
+        src = open(os.path.join(os.path.dirname(UH.__file__), 'ui_historique.py'), encoding='utf-8').read()
+        self.assertIn('couper_mots(msg,', src)                                                              # la liste vide passe par la coupure (plus de ligne unique)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

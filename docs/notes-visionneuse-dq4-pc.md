@@ -1150,3 +1150,20 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows** : à confirmer par Sylfried (les dialogues avec un nom d'objet n'affichent plus de « ; »).
 - Les textes du patch ont été relevés dans le paquet de données ; je n'ai pas rejoué chaque dialogue du jeu.
+
+## Avance #149 : le message de la liste vide de l'historique tient dans son cadre (#140, 03/11/2026)
+
+### Demande (D-224, 23 h 38)
+« Le texte en fond dans la fenêtre d'historique dépasse de l'encadrement quand on filtre sur tous les favoris et qu'on n'en a pas. »
+
+### Établi (reproduit hors moteur avec le vrai code de dessin, `ui_historique.py`, fenêtre de 900 x 720)
+- Avec « Favoris seulement » coché et aucun favori, la liste est vide et le message « Aucun dialogue en favori : décoche « Favoris seulement », choisis un dialogue et appuie sur Entrée (ou clique son étoile) pour le garder. » était dessiné **sur une seule ligne**, centrée : bien plus large que la fenêtre, il sortait du cadre des deux côtés (même chose pour « Aucun combat en favori… »). Les messages sans favori coché (« Aucun dialogue pour l'instant. ») sont courts et tenaient.
+
+### Fait
+- `ui_historique.couper_mots(texte, largeur, larg_max)` coupe le message aux espaces ; le dessin de la liste vide l'appelle avec la largeur de la fenêtre moins 2 x 20 unités, puis centre chaque ligne, le bloc étant centré verticalement dans la liste. Un mot plus large que la limite resterait seul sur sa ligne (il ne peut pas être coupé).
+- Capture après correction (900 x 720) : 3 lignes centrées dans le cadre.
+- Test : `outils/test_historique_messages.py` (105 tests, dont la classe `TestMessageVide`).
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (fenêtre d'historique, case « Favoris seulement » cochée, aucun favori, onglets Dialogues puis Combats).
+- Fenêtre très étroite : testée seulement à 900 x 720 et 1280 x 720 (hors moteur).
