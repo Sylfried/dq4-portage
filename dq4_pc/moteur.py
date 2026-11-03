@@ -132,8 +132,8 @@ class Etat:
 
     def transition_combat(self):
         """Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
-        entre deux de ces fondus) ? Depuis #47 sa duree en images suit « Vitesse de transition » (Etat._fondu, Moteur._debut_effet_combat) comme tout fondu ; son horloge reste celle du jeu pour la cascade et pour le retour a la
-        carte (ni vitesse de marche ni accelerateur : Jeu._facteur_vitesse), alors que « Vitesse de combat » agit des la fin de la cascade (ecran noir, fondu d'arrivee, messages) jusqu'au fondu de fin compris."""
+        entre deux de ces fondus) ? Depuis #47 sa duree en images suit « Vitesse de transition » (Etat._fondu, Moteur._debut_effet_combat) comme tout fondu ; son horloge reste celle du jeu pour la cascade et, au retour a la
+        carte, tant que le joueur est verrouille ou entre deux fondus (Jeu._facteur_vitesse : des qu'il est libre, la marche acceleree et l'accelerateur agissent, #127), alors que « Vitesse de combat » agit des la fin de la cascade (ecran noir, fondu d'arrivee, messages) jusqu'au fondu de fin compris."""
         return (self.effet is not None or self.attente_charge is not None or self.garde_trans > 0
                 or (self.fondu['n'] >= 1 and bool(self.fondu.get('combat'))) or (self.fondu_fond['n'] >= 1 and bool(self.fondu_fond.get('combat'))))
 

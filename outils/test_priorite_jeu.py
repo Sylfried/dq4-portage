@@ -62,8 +62,8 @@ class ReglesPures(unittest.TestCase):
         finally: MO.Etat.vitesse_fondu = 1.0
 
 
-def faux_jeu_marche(marche=2.0, accel=1.5, drapeaux=0x28, msg=False, partie=MO.PARTIE_VILLE, direction=MO.DROITE, accel_tenue=False):
-    mo = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=None, attente_charge=None, transition_combat=lambda: False), msg_visible=msg, menu_actif=lambda: None, drapeaux=lambda: drapeaux)
+def faux_jeu_marche(marche=2.0, accel=1.5, drapeaux=0x28, msg=False, partie=MO.PARTIE_VILLE, direction=MO.DROITE, accel_tenue=False, garde_trans=0):
+    mo = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=None, attente_charge=None, garde_trans=garde_trans, transition_combat=lambda: False), msg_visible=msg, menu_actif=lambda: None, drapeaux=lambda: drapeaux)
     return types.SimpleNamespace(reg={'vitesse_marche': marche, 'vitesse_accel': accel}, moteur=mo, pad=lambda: direction, _tenue=lambda a: accel_tenue and a == 'accel', _horloge_combat=lambda: False)           # (hors combat : la branche « vitesse des combats » de Jeu._facteur_vitesse ne joue pas)
 
 
@@ -85,6 +85,18 @@ class VitesseDeMarche(unittest.TestCase):
         """#107 : le fondu d'arrivee sur une carte (flag 1 seul, le heros marche deja) n'empeche plus la marche acceleree (mesure : flags 0x39 pendant les 30 images, 0x3d + verrou pendant le fondu de sortie)."""
         self.assertEqual(self.facteur(drapeaux=0x39), 2.0)
         self.assertEqual(self.facteur(drapeaux=0x39, accel_tenue=True), 3.0, 'accelerateur tenu des la premiere image apres la porte')
+
+    def test_retour_de_combat_joueur_libre(self):
+        """#127 : au retour d'un combat le fondu de retour dure 30 images mais le joueur est libre des l'image 12 (mesure sur le vrai moteur : flags 0x2d jusqu'a l'image 11, puis 0x29, le heros marche des l'image 13) :
+        la marche acceleree et l'accelerateur (course) agissent des que le verrou tombe, et non a la fin du fondu."""
+        self.assertEqual(self.facteur(drapeaux=0x29), 2.0)
+        self.assertEqual(self.facteur(drapeaux=0x29, accel_tenue=True), 3.0, 'course tenue des la fin du verrou, fondu de retour encore en cours')
+        self.assertEqual(self.facteur(drapeaux=0x2d, accel_tenue=True), 1.0, 'joueur verrouille (images 1 a 11 du retour) : horloge du jeu')
+
+    def test_entre_deux_fondus_d_un_combat(self):
+        """Le moteur change de scene 1 a 3 images apres la sortie au noir (Etat.garde_trans) : horloge du jeu, meme si le verrou n'est pas encore pose (image 0 du retour : flags 0x1)."""
+        self.assertEqual(self.facteur(drapeaux=0x1, garde_trans=5, accel_tenue=True), 1.0)
+        self.assertEqual(self.facteur(drapeaux=0x29, garde_trans=0, accel_tenue=True), 3.0)
 
     def test_inchange(self):
         self.assertEqual(self.facteur(msg=True), 1.0)
