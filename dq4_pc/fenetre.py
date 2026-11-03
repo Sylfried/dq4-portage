@@ -1090,10 +1090,11 @@ class Jeu(pyglet.window.Window):
         self.appliquer_defilement()
 
     def pause_jeu(self, oui):
-        """Menu Echap ouvert (oui) ou ferme : le moteur et le son s'arretent ; a la reprise, les touches deja tenues ne comptent pas comme un nouvel appui."""
-        self.son.mettre_en_pause(oui)
+        """Menu « Paramètres » (Echap) ouvert (oui) ou ferme. Le jeu continue de tourner derriere lui, sans aucune entree (voir `tick`) ; seules les pages de Pause.PAGES_FIGEES l'arretent (moteur et son : `_synchroniser_gel`, a chaque image).
+        A la fermeture, les touches deja tenues ne comptent pas comme un nouvel appui."""
         self.acc = 0.0; self.t_boucle = None
         if not oui:
+            if self._jeu_fige: self._jeu_fige = False; self.son.mettre_en_pause(False)
             self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}; self.survol = None; self.appui = None; self.survol_nd = None
             self.garde_souris.clavier(self.souris)             # le pointeur ne choisit rien dans les menus du jeu tant qu'il ne s'est pas ecarte de sa position d'avant (la selection au clavier ne doit pas sauter ; voir entrees.GardeSouris)
 
@@ -2758,13 +2759,23 @@ class Jeu(pyglet.window.Window):
 
     _se_images = None                                                  # bruitages deja lances pendant l'image affichee en cours quand le combat est accelere (None : pas de filtre ; voir _boucle et vitesse_combat.sons_a_jouer)
 
+    _jeu_fige = False                                                  # le moteur et le son sont-ils arretes derriere le menu ? (voir _synchroniser_gel)
+
+    def _synchroniser_gel(self):
+        """Arret du son et de l'horloge du moteur quand le menu passe sur une page qui arrete le jeu (Pause.PAGES_FIGEES), reprise quand il la quitte ; au retour, pas de rattrapage du temps passe."""
+        arret = self.pause.fige_le_jeu()
+        if arret != self._jeu_fige:
+            self._jeu_fige = arret; self.son.mettre_en_pause(arret); self.acc = 0.0; self.t_boucle = None
+
     def _boucle(self, dt):
         """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
         self.n_boucle += 1
         if self.args.touches_test or self.args.shots_boucle: self._touches_test()
         if self.args.options_test: self._options_test()
         if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
-        if self.pause.ouvert: self.pause.maj(); self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # menu Echap : le moteur est arrete
+        if self.pause.ouvert:
+            self.pause.maj(); self._synchroniser_gel()
+            if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # historique, question « Quitter » : le moteur est arrete ; sur les autres pages, il tourne sans entree (tick)
         self._maj_camera()
         t = time.perf_counter()
         dt = 0.0 if self.t_boucle is None else t - self.t_boucle
@@ -2786,6 +2797,7 @@ class Jeu(pyglet.window.Window):
         R = self.reg; mo = self.moteur; e = mo.etat
         if e.effet is not None: return 1.0          # cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Moteur._debut_effet_combat) ; ni vitesse de combat, ni de marche, ni accelerateur
         if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat, des la fin de la cascade (ecran noir, fondu d'arrivee, message « X apparait ») jusqu'au fondu de fin compris : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if self.pause.ouvert: return 1.0          # menu « Paramètres » : pas de marche acceleree (aucune direction n'est envoyee au jeu)
         if e.garde_trans > 0: return 1.0          # entre deux fondus d'un combat (le moteur change de scene 1 a 3 images plus tard) : horloge du jeu. Le fondu de RETOUR a la carte, lui, n'est plus coupe d'office (#127) : seul le verrou du joueur (plus bas) compte, comme pour le fondu d'arrivee sur une carte (#107)
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
@@ -3043,7 +3055,7 @@ class Jeu(pyglet.window.Window):
                     continue
                 if self.n == c[0]: (self.on_mouse_press(c[1], self.height - c[2], pyglet.window.mouse.RIGHT if c[3] else pyglet.window.mouse.LEFT, 0))
                 if self.n == c[0] + 3: self.on_mouse_release(c[1], self.height - c[2], pyglet.window.mouse.LEFT, 0)
-        p, decl = (0, 0) if muet else self._entrees(p)
+        p, decl = (0, 0) if (muet or self.pause.ouvert) else self._entrees(p)          # menu « Paramètres » ouvert : le jeu tourne mais ne recoit ni touche ni clic (les touches du menu ne font pas marcher le heros)
         mo = self.moteur
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)

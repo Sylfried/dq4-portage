@@ -185,6 +185,12 @@ class Pause:
             e = 62.4 / 64.0 * w; ic.blit(x + (w - e) / 2, y + (h - e) / 2, width=e, height=e)
 
     # ---- ouverture / fermeture
+    PAGES_FIGEES = ('historique', 'quitter')          # pages qui arretent le jeu derriere elles (lecture de l'historique, question de sortie) ; sur les autres, le jeu continue de tourner (sans touche ni clic : voir Fenetre.tick)
+
+    def fige_le_jeu(self):
+        """Le jeu est-il arrete derriere le menu ? Non sur la racine « Paramètres » et ses pages de reglages (le jeu tourne, il ne recoit aucune entree) ; oui sur l'historique et la question « Quitter »."""
+        return self.ouvert and self.ecran in self.PAGES_FIGEES
+
     def ouvrir(self, page=None):
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
@@ -1130,7 +1136,7 @@ class Pause:
         if n and (ecr != 'quitter' or e[i_sel]['t'] != 'sep'): i_sel = self.sel[ecr] = self._ligne_active(e, i_sel)          # (la selection saute les intertitres et les lignes inactives, y compris a l'ouverture de l'ecran ou quand la ligne choisie vient de devenir inactive)
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
+        titres = {'racine': 'Paramètres', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
         titres['modifications'] = 'Modifications'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
