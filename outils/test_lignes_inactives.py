@@ -18,7 +18,7 @@ import pause as PA
 
 K = pyglet.window.key
 GAUCHE = 1
-PAGES = ('racine', 'affichage', 'son', 'commandes', 'modifications', 'etats', 'quitter', 'titre', 'interface')
+PAGES = ('racine', 'affichage', 'son', 'commandes', 'modifications', 'etats', 'quitter', 'interface')
 PAGES_DESSINEES = tuple(p for p in PAGES if p != 'interface')          # (la page Interface dessine l'apercu du jeu : le faux jeu n'en a pas)
 CACHE = os.environ.get('DQ_UICACHE', '/inexistant')                    # (facultatif : cache d'interface du jeu pour la police et les icones ; sans lui, polices du systeme et plaque de repli)
 
@@ -263,7 +263,7 @@ class TousLesTypes(unittest.TestCase):
         fenetre()
         for page in PAGES_DESSINEES:
             J, p = menu(page); libs = tuple(x['l'] for x in p._entrees() if x['t'] != 'sep')
-            J, p = menu(page, classe=PauseMarquee, inactives=libs); p.sel[page] = 2 if page in ('quitter', 'titre') else 0; sel = p.sel[page]; avant = etat(J, p)
+            J, p = menu(page, classe=PauseMarquee, inactives=libs); p.sel[page] = 2 if page == 'quitter' else 0; sel = p.sel[page]; avant = etat(J, p)
             rendre(p); self.assertEqual(p.sel[page], sel, page)
             for t in (K.DOWN, K.UP, K.LEFT, K.RIGHT, K.RETURN, K.SPACE, K.DELETE, K.HOME, K.PAGEDOWN): p.touche(t)
             p.molette(1); p.molette(-1); self.assertEqual(p.sel[page], sel, page)

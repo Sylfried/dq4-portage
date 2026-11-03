@@ -222,7 +222,7 @@ class Pause:
     def _aller(self, nom):
         def va():
             self.pile.append(nom)
-            if nom in ('quitter', 'titre'): self.sel[nom] = 2        # « Non » preselectionne
+            if nom == 'quitter': self.sel[nom] = 2        # « Non » preselectionne
         return va
 
     def _e_racine(self):
@@ -233,7 +233,8 @@ class Pause:
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
                 dict(t='act', l='Commandes', ok=self._aller('commandes'), sous=True),
                 dict(t='act', l='Modifications', ok=self._aller('modifications'), sous=True),
-                dict(t='act', l="Revenir à l'écran titre", ok=self._aller('titre'))]          # (confirmation, puis retour au titre : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
+                dict(t='act', l="Revenir à l'écran titre", ok=self._vers_titre, off=lambda: not getattr(self.J, 'retour_titre_possible', lambda: True)(),
+                     aide="Disponible en ville et sur la carte du monde seulement : la boîte du jeu (Oui / Non) n'est prévue que là")]          # (le menu se ferme, le jeu ouvre sa boite Oui / Non : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
 
     def _choix(self, label, valeurs, get, set_, off=False, defaut=SANS, retablir=None, est_defaut=None):
         """Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
@@ -530,11 +531,9 @@ class Pause:
     def _e_quitter(self):
         return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self.J.quitter), dict(t='act', l='Non', ok=self.retour)]
 
-    def _e_titre(self):
-        return [dict(t='sep', l='En êtes-vous sûr ?'), dict(t='act', l='Oui', ok=self._vers_titre), dict(t='act', l='Non', ok=self.retour)]
-
     def _vers_titre(self):
-        """« Oui » : le menu se ferme (le jeu reprend) puis le moteur revient a son ecran-titre."""
+        """« Revenir à l'écran titre » : le menu se ferme (le jeu reprend) et le moteur ouvre la boite d'origine du bouton des Paramètres du jeu (texte du jeu, Oui / Non) ; la suite (Oui : fondu puis titre, Non : retour au jeu)
+        est le travail du moteur (Moteur.demander_retour_titre)."""
         self.fermer(); self.J.retour_titre()
 
     # ---- actions
@@ -1130,10 +1129,10 @@ class Pause:
         if editeur and self.plie: e = []; n = 0                                           # panneau de l'editeur replie : seule la barre de titre reste
         self._purger_inactif(e)
         i_sel = min(self.sel.get(ecr, 0), max(0, n - 1))
-        if n and (ecr not in ('quitter', 'titre') or e[i_sel]['t'] != 'sep'): i_sel = self.sel[ecr] = self._ligne_active(e, i_sel)          # (la selection saute les intertitres et les lignes inactives, y compris a l'ouverture de l'ecran ou quand la ligne choisie vient de devenir inactive)
+        if n and (ecr != 'quitter' or e[i_sel]['t'] != 'sep'): i_sel = self.sel[ecr] = self._ligne_active(e, i_sel)          # (la selection saute les intertitres et les lignes inactives, y compris a l'ouverture de l'ecran ou quand la ligne choisie vient de devenir inactive)
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter', 'titre': 'Écran titre'}
+        titres = {'racine': 'Pause', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
         titres['modifications'] = 'Modifications'
         avec_mini = ecr == 'etats'
         msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
