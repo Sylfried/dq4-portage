@@ -335,11 +335,11 @@ class Pause:
 
     def _ov(self):
         """[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu)."""
-        return self.J.reg['interface_fenetres'].get(self.cible) or list(RG.FENETRE_DEFAUT)
+        return self.J.reg['interface_fenetres'].get(self.cible) or list(RG.fenetre_defaut(self.cible))
 
     def _poser_ov(self, i, v):
         d = dict(self.J.reg['interface_fenetres']); o = list(self._ov()); o[i] = v
-        if all(abs(a - b) < 1e-6 for a, b in zip(o, RG.FENETRE_DEFAUT)): d.pop(self.cible, None)
+        if self.cible not in RG.DEFAUT['interface_fenetres'] and all(abs(a - b) < 1e-6 for a, b in zip(o, RG.FENETRE_DEFAUT)): d.pop(self.cible, None)          # (une fenetre qui a une taille par defaut propre garde son entree, meme a 100 %)
         else: d[self.cible] = [round(o[0], 4), round(o[1], 4), round(o[2], 4)]
         self.J.reg['interface_fenetres'] = d
 
@@ -374,9 +374,9 @@ class Pause:
             e.append(self._curs('Taille du bouton', lambda: R['bouton_vitesse_taille'], lambda v: R.__setitem__('bouton_vitesse_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['bouton_vitesse_taille']))
             e.append(dict(t='act', l='Replacer sous la boîte de combat', ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient collé au coin bas gauche de la boîte du bas (position d'origine) ; glisse-le pour le placer ailleurs"))
         else:
-            e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[0]),
-                  self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[1]),
-                  self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.FENETRE_DEFAUT[2])]
+            e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.fenetre_defaut(self.cible)[0]),
+                  self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.fenetre_defaut(self.cible)[1]),
+                  self._curs('Position verticale', lambda: self._ov()[2], lambda v: self._poser_ov(2, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.fenetre_defaut(self.cible)[2])]
         e += [self._choix('Aimantation à la grille', [True, False], lambda: R['boutons_aimant'], lambda v: R.__setitem__('boutons_aimant', v), defaut=RG.DEFAUT['boutons_aimant']),            # (pour toutes les interfaces)
               self._choix('Afficher la grille', [True, False], lambda: R['grille_edition'], lambda v: R.__setitem__('grille_edition', v), defaut=RG.DEFAUT['grille_edition'])]
         cette = dict(t='act', l='Rétablir cette interface', ok=self._remettre_cette)

@@ -17,7 +17,7 @@ HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'suivi_ca
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
                   'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera)
+HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb', 'interface_v'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera) ; version des tailles par defaut des fenetres (#47)
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
 AUTRES = {'boutons': False, 'croix': False, 'croix_taille': 1.7, 'boutons_taille': 1.4, 'boutons_pos': {'carte': [10, 5], 'menu': [3, 2.5], 'discussion': [0, 9], 'croix': [20, 9]},
@@ -105,7 +105,7 @@ class RemiseAZero(unittest.TestCase):
     def test_pas_de_partage_avec_defaut(self):
         r = RG.Reglages(None); r.remettre_interfaces()
         r['interface_fenetres']['X'] = [2.0, 0.0, 0.0]; r['interface_masquees'].append('X'); r['boutons_pos']['carte'] = [1, 1]
-        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({}, [], {}))       # DEFAUT n'est jamais modifie par une remise a zero
+        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({n: [RG.LARGEUR_COMMANDES, 0.0, 0.0] for n in RG.FENETRES_COMMANDES_COMBAT}, [], {}))       # DEFAUT n'est jamais modifie par une remise a zero (#47 : seules les fenetres de commandes du combat ont une taille par defaut)
         r2 = RG.Reglages(None); r2.remettre_interface('X'); r2.remettre_interface(RG.CIBLE_ECRAN)
         self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({}, [], {}))
 

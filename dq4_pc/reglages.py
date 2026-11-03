@@ -25,6 +25,12 @@ NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Ma
         'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
         'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
 
+# Fenetres de commandes du combat (le cadre du bas : Combattre / Fuir, Attaquer / Magie / Objets / Defense, cibles, objets et sorts, infos) : cadre de 459 unites d'interface, alors que les messages d'action du combat
+# (types 2 et 3 de la fenetre de message) en font 510. Par defaut ces fenetres sont agrandies a la largeur des boites de dialogue (510 / 459) : le bouton de vitesse, colle au coin bas gauche de la boite du bas, ne se
+# decale plus quand un message d'action remplace le menu au debut d'un tour (#47). Meme mecanique que toute fenetre reglee dans l'editeur : [taille relative, decalage x, decalage y].
+FENETRES_COMMANDES_COMBAT = ('BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleChangeInfo')
+LARGEUR_COMMANDES = round(510.0 / 459.0, 4)
+
 DEFAUT = {
     'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
     'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
@@ -57,9 +63,10 @@ DEFAUT = {
     'boutons': True,              # boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
     'croix': True, 'croix_taille': 1.0,      # croix (manette tactile) a l'ecran, utilisable a la souris : affichee ou non ; taille relative (en plus de l'option « Taille de la croix » du jeu)
     'boutons_taille': 1.0, 'boutons_aimant': True,       # taille relative ; positions posees sur une grille (aimantation)
-    'interface_fenetres': {},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
+    'interface_fenetres': {n: [LARGEUR_COMMANDES, 0.0, 0.0] for n in FENETRES_COMMANDES_COMBAT},     # fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
     'boutons_pos': {},            # bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py) ; le bouton de vitesse de combat a la sienne (bouton_vitesse_pos)
     'bouton_vitesse': True, 'bouton_vitesse_taille': 1.0, 'bouton_vitesse_pos': [],      # interface « Combat : bouton de vitesse » (sortie de « Boutons et croix de l'ecran ») : affiche en combat ou non ; taille relative ; [colonne, ligne] de son coin superieur gauche (vide : colle sous la boite du bas, voir hud_mobile.Boutons.ancre)
+    'interface_v': 2,             # version des tailles par defaut des fenetres du jeu (interface_fenetres) : un fichier enregistre avant (sans cette cle) recoit une seule fois les nouvelles tailles par defaut, sauf pour une fenetre que le joueur a reglee ; v2 : fenetres de commandes du combat a la largeur des dialogues
     'interface_masquees': [],     # editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
     'touches_v': 5,               # version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; v4 -> v5 : « Menu » = Entree et Tab (si « Menu » avait encore l'ancien defaut, Entree seule, et que Tab est libre) ; une action ajoutee depuis prend sa touche par defaut
     'touches': {k: list(v) for k, v in TOUCHES_DEF.items()},
@@ -81,6 +88,12 @@ CLES_FENETRES = ('interface_fenetres', 'interface_masquees')                    
 CLES_EDITEUR = ('grille_edition', 'boutons_aimant')                                # options de l'editeur lui-meme, communes a toutes les interfaces : grille affichee, aimantation
 CLES_INTERFACE = CLES_ECRAN + CLES_VITESSE + CLES_FENETRES + CLES_EDITEUR
 FENETRE_DEFAUT = (1.0, 0.0, 0.0)                           # fenetre du jeu sans reglage enregistre : taille relative, decalage x, decalage y (fractions de l'ecran)
+
+
+def fenetre_defaut(nom):
+    """Taille relative, decalage x, decalage y d'une fenetre du jeu sans reglage du joueur : celle de DEFAUT (fenetres de commandes du combat) ou, sinon, FENETRE_DEFAUT (comme le jeu)."""
+    return tuple(DEFAUT['interface_fenetres'].get(nom, FENETRE_DEFAUT))
+
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
 # 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees.
@@ -197,6 +210,11 @@ class Reglages:
                         for a, ts in x.items():
                             if a in TOUCHES_DEF and isinstance(ts, list): self.v['touches'][a] = (list(ts) + [None, None])[:2]
                     elif k in DEFAUT and k != 'touches' and k != 'taille_degats': self.v[k] = x          # (la taille des nombres de degats n'est plus un reglage : valeur fixe)
+                if d.get('interface_v') != DEFAUT['interface_v'] and isinstance(self.v['interface_fenetres'], dict):      # anciennes tailles par defaut des fenetres -> nouvelles, une seule fois (ensuite la cle est enregistree et le choix du joueur fait foi) : fenetre sans reglage ou a l'ancienne taille par defaut (1, 0, 0)
+                    fw = dict(self.v['interface_fenetres'])
+                    for n, nv in DEFAUT['interface_fenetres'].items():
+                        if n not in fw or fw[n] == list(FENETRE_DEFAUT): fw[n] = list(nv)
+                    self.v['interface_fenetres'] = fw
                 if d.get('suivi_camera_v') != DEFAUT['suivi_camera_v']: self.v['camera_centree'] = True; self.v['suivi_camera_v'] = DEFAUT['suivi_camera_v']          # (une seule fois : ensuite la cle est enregistree et le choix du joueur fait foi)
                 if v_enreg == 3:                                      # v3 -> v4 : nouvelles valeurs par defaut, sans toucher a ce que le joueur a regle lui-meme
                     ts = self.v['touches']
@@ -215,6 +233,7 @@ class Reglages:
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
+                self.v['interface_v'] = DEFAUT['interface_v']
                 for ts in self.v['touches'].values():                   # une touche reservee (F11 : bascule fenetre / plein ecran) ne peut plus etre une touche d'action : retiree d'un ancien fichier
                     for i in range(2):
                         if ts[i] in RESERVEES: ts[i] = None

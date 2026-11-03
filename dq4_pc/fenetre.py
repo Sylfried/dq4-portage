@@ -1235,25 +1235,28 @@ class Jeu(pyglet.window.Window):
     ancre_combat = None                                                # rattachement du bouton de vitesse de combat (voir _ancrer_vitesse_combat et hud_mobile.Boutons.ancre)
 
     def _ancrer_vitesse_combat(self, liste, msg, dz, s, cx, repere, tf_msg):
-        """Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Parmi les fenetres visibles,
-        on prend celle dont le cadre descend le plus bas ; la plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
-        -> self.ancre_combat = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre) ; inchange tant qu'aucune boite n'est visible (la plaque reste la ou elle etait)."""
+        """Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Seules comptent la fenetre de message
+        et les fenetres de commandes (RG.FENETRES_COMMANDES_COMBAT) : parmi elles, celle dont le cadre descend le plus bas ; les autres (bandeau de l'equipe en haut, noms des monstres au milieu) n'ont rien a voir avec le bas de
+        l'ecran (#47 : le bouton sautait sous elles pendant une image entre deux boites). La plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
+        Aucune boite visible (entre deux boites) : l'ancre reste ou elle etait ; toute premiere image du combat (aucune ancre encore) : la boite des messages a sa place d'avance (le bouton n'apparait jamais a la position
+        par defaut de la grille, a gauche de l'ecran). -> self.ancre_combat = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre)."""
         if self.moteur.etat.partie != MO.PARTIE_COMBAT: self.ancre_combat = None; return
-        cands = []; dims = None
-        if msg and self.ui_msg is not None:
+        cands = []
+        def boite_message(dzm, tf):
             c = self.ui_msg.N.get('cadre')
-            if c and c['vtx']:
-                tf = tf_msg or (cx, repere('msg')[0] + dz * s, s)
-                cands.append((tf[1] + min(c['pos'][2] + v[1] for v in c['vtx']) * tf[2], tf[0] + min(c['pos'][0] + v[0] for v in c['vtx']) * tf[2], None))
+            if c and c['vtx']: cands.append((tf[1] + (min(c['pos'][2] + v[1] for v in c['vtx']) + dzm) * tf[2], tf[0] + min(c['pos'][0] + v[0] for v in c['vtx']) * tf[2], None))      # (tf : repere sans le decalage dzm du message)
+        if msg and self.ui_msg is not None: boite_message(dz, tf_msg or (cx, repere('msg')[0], s))
         for _, p in liste:
             fe = self.ui_g.f[p]
-            if p in self.ui_suit or self._cachee(fe.typ): continue
+            if p in self.ui_suit or self._cachee(fe.typ) or self._nom_de_type(fe.typ) not in RG.FENETRES_COMMANDES_COMBAT: continue
             rs = fe.rects(); tf = self.ui_tf.get(p)
             if not rs or tf is None: continue
             cad = max(rs, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))                          # le cadre de la fenetre : le plus grand rectangle
             fuir = [r for r in rs if r is not cad and r[3] <= cad[1] + 2.0 and r[2] >= cad[2] - 12.0]          # plaque accrochee sous le cadre, a son bord droit
             d = (min((r[2] - r[0]) * tf[2] for r in fuir), min((r[3] - r[1]) * tf[2] for r in fuir)) if fuir else None
             cands.append((tf[1] + cad[1] * tf[2], tf[0] + cad[0] * tf[2], d))
+        if not cands and self.ancre_combat is None and self.ui_msg is not None:
+            ov = self.reg['interface_fenetres'].get('msg'); boite_message(CB_MSG_BAS - self.ui_msg.bas(), self._ui_perso('bas', s, ov) if ov else (cx, repere('msg')[0], s))
         if not cands: return
         bas, gauche, d = min(cands, key=lambda c: c[0])
         d = d or (self.ancre_combat and self.ancre_combat.get('w') and (self.ancre_combat['w'], self.ancre_combat['h'])) or None
@@ -2033,7 +2036,7 @@ class Jeu(pyglet.window.Window):
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
         k, gr, modes = self._ui_echelle([(e[0] + dz, e[1] + dz)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'
-        v = self.reg['interface_fenetres'].get(cle) or RG.FENETRE_DEFAUT
+        v = self.reg['interface_fenetres'].get(cle) or RG.fenetre_defaut(cle)
         cx, cy, s2 = self._ui_perso(mode, s, v)
         fe.sel = None; fe.sel_nd = None; fe.appui_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
