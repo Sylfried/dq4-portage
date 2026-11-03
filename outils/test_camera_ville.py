@@ -23,7 +23,7 @@ HORLOGE = [0.0]
 
 
 def faux_jeu(bornes_x=None, jeu=False):
-    j = types.SimpleNamespace(zoom=1.0, reg={}, cam_jeu=jeu, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, t_centre=None, fixe_test=False,
+    j = types.SimpleNamespace(zoom=1.0, reg={}, cam_jeu=jeu, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, cam_ref_y=None, t_centre=None, fixe_test=False,
                               bornes_x=bornes_x, lacet=0.0, angle_cam=0.0, cam_bloquee=False, carte_nom='x', n_boucle=0, _cadre_vue=None)
     j._rot_camera = lambda e: None
     return j
@@ -93,21 +93,55 @@ class TestCameraVille(unittest.TestCase):
         for dt in (1 / 30, 1 / 60, 1 / 144):
             for f in (1.0, 1.5, 2.0, 3.0, 4.0): self.assertLess(self.course(dt, f), 1e-6, 'dt=1/%d x%s' % (round(1 / dt), f))
 
-    def test_pente_sans_glissement_vertical(self):
-        """Escaliers, rampes, ponts, echelles (retour #45 : « effet de descente ou de montee de la camera ») : le jeu d'origine suit la hauteur du heros a l'identique (TownCamera::execute : setTarget(joueur) a chaque pas,
-        position = cible + (0 ; 28,89 ; -27), aucun amortissement en Y ; mesure sur la rampe de `ckf4` : cible Y = heros Y - 0,047 et camera Y = heros Y + 28,89 au pas pres) et la visionneuse n'ajoute AUCUN lissage en Y :
-        le heros reste au meme point de l'image (NDC y) pendant la montee, a l'arret et a toute cadence (images interpolees entre deux pas)."""
-        for dt in (1 / 30, 1 / 60, 1 / 144):
-            HORLOGE[0] = 0.0; j = faux_jeu(); ys = []; y_prec = None
-            for pas in range(60):
-                hy = 0.047 + (min(pas, 30) * 0.113 if pas < 45 else 3.39 - (pas - 44) * 0.16)             # monte de 0,113 par pas (45 degres a la marche), s'arrete, puis redescend plus vite (course)
-                a = 0.0
-                while a < 1.0 - 1e-9:
-                    a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
-                    HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
-                    M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1])
-                y_prec = hy
-            self.assertLess(max(ys) - min(ys), 1e-9, 'dt=1/%d' % round(1 / dt))
+    def montee(self, dt, vy=0.113, pas=30, repos=8.0, jeu=False, tau=None):
+        """Le heros monte `pas` pas du moteur de `vy` (rampe a 45 degres a la marche), s'arrete, puis `repos` secondes : NDC y du heros a chaque image (la cible du jeu suit le heros a 0,047 pres, comme le moteur)."""
+        if tau is not None: F.CAM_Y_TAU = tau
+        HORLOGE[0] = 0.0; j = faux_jeu(jeu=jeu); ys = []; y_prec = None; ys_hero = []
+        for k in range(pas + int(repos * 30)):
+            hy = 0.047 + min(k, pas) * vy; a = 0.0
+            while a < 1.0 - 1e-9:
+                a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
+                HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
+                M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1]); ys_hero.append(h)
+            y_prec = hy
+        return ys, j
+
+    def test_escalier_hauteur_lissee(self):
+        """Escaliers, rampes, ponts (retour #45 + reponse de Sylfried, #47) : le moteur d'origine suit la hauteur du heros a chaque pas (TownCamera::execute : setTarget(joueur), aucun amortissement en Y ; mesure sur
+        la rampe de `ckf4` : cible Y = heros Y - 0,047) et c'est ce qui donnait « l'effet de montee ». La visionneuse garde maintenant une hauteur de reference qui rejoint lentement celle du jeu (CAM_Y_TAU) : pendant la
+        montee le heros s'eleve a l'ecran au lieu de rester fixe, bien moins que la montee, jamais hors champ ; a l'arret la camera le recentre exactement, a toute cadence d'affichage."""
+        tau = F.CAM_Y_TAU
+        try:
+            for dt in (1 / 30, 1 / 60, 1 / 144):
+                ys, j = self.montee(dt)
+                exc = max(abs(y - ys[0]) for y in ys)
+                self.assertGreater(exc, 0.02, 'la camera ignore une partie de la montee (dt=1/%d)' % round(1 / dt))
+                self.assertLess(exc, 0.3, 'le heros reste bien dans l\'ecran (dt=1/%d)' % round(1 / dt))
+                self.assertLess(abs(ys[-1] - ys[0]), 2e-3, 'recentre a l\'arret (dt=1/%d)' % round(1 / dt))
+            ref_, _ = self.montee(1 / 60, tau=0.0)                              # CAM_Y_TAU = 0 : exactement la camera du jeu (le heros reste au meme point de l'image)
+            self.assertLess(max(ref_) - min(ref_), 1e-9)
+        finally: F.CAM_Y_TAU = tau
+
+    def test_escalier_a_toute_vitesse_de_jeu(self):
+        """Marche acceleree (x4 : 4 fois plus de pas du moteur par seconde) ou tres grande hauteur (tour) : l'ecart de la camera au jeu est borne par CAM_Y_MAX, le heros ne sort jamais de l'ecran."""
+        borne = None
+        for vy in (0.113, 0.45, 1.0):
+            ys, j = self.montee(1 / 60, vy=vy, pas=30)
+            exc = max(abs(y - ys[0]) for y in ys); borne = exc if borne is None else borne
+            self.assertLess(exc, 0.45, 'vy=%s' % vy)                                   # (CAM_Y_MAX = 3 unites ~ 0,29 de NDC)
+            self.assertLess(abs(ys[-1] - ys[0]), 2e-3)
+
+    def test_escalier_coupure_du_jeu_sans_glissement(self):
+        """Le jeu coupe (teleportation, changement de carte : `cam_saut`) ou prend la camera (scene) : la hauteur est celle du jeu aussitot, sans glissement."""
+        HORLOGE[0] = 0.0; j = faux_jeu(); e = faux_etat((0.0, 0.0, 0.78), (0.0, 0.047, 0.78))
+        for _ in range(30): HORLOGE[0] += 1 / 60; F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        e = faux_etat((0.0, 6.0, 0.78), (0.0, 6.047, 0.78)); j.cam_saut = True; HORLOGE[0] += 1 / 60
+        M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        ref, _ = F.Jeu._camera_ville(faux_jeu(), e, ASPECT_16_9)
+        self.assertLess(float(np.abs(M - ref).max()), 1e-9, 'coupure : camera identique a celle d\'un jeu qui arrive sur cette hauteur')
+        ys, j = self.montee(1 / 60, jeu=True)
+        self.assertLess(max(ys) - min(ys), 1e-9, 'camera du jeu : le heros reste au meme point de l\'image (le moteur suit sa hauteur)')
+        self.assertIsNone(j.cam_ref_y)
 
     def test_toujours_centree_sur_le_heros(self):
         """Plus d'option : la camera est centree sur le heros meme quand la cible du jeu est ailleurs (bord de la carte), et les anciennes bornes 16/9 (`bornes_x`) ne s'appliquent plus."""

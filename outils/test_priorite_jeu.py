@@ -97,7 +97,7 @@ class ZoomDeCamera(unittest.TestCase):
     def tearDown(self): F.time = self.temps_avant
 
     def champ(self, zoom, libre):
-        j = types.SimpleNamespace(zoom=zoom, reg={}, cam_jeu=False, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, t_centre=None, fixe_test=True,
+        j = types.SimpleNamespace(zoom=zoom, reg={}, cam_jeu=False, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, cam_ref_y=None, t_centre=None, fixe_test=True,
                                   bornes_x=None, lacet=0.0, angle_cam=0.0, cam_bloquee=False, carte_nom='x', n_boucle=0, _cadre_vue=None)
         j._rot_camera = lambda e: np.eye(3)
         cib = np.array([0.0, 0.0, 0.0])
