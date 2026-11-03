@@ -1372,6 +1372,24 @@ class Jeu(pyglet.window.Window):
         if not self.lissage: self._filtrer(self.cb_tex[cle]['t'], False)
         return self.cb_tex[cle]
 
+    def _agrandir_logo_titre(self, loc, pos, Rb):
+        """Ecran-titre : logo (modele 8901 : « DRAGON QUEST », « IV », sous-titre) et eclat anime (8900) agrandis de AP.LOGO_ECHELLE autour d'un meme point (avant_partie.agrandir_logo), sans decalage de profondeur.
+        ECART VOULU avec l'APK (Sylfried, 03/11/2026, #108). Le facteur est reduit si le logo agrandi depasserait la largeur de la fenetre (fenetre tres etroite) ; DQ_LOGO_ECHELLE=1 : le logo d'origine."""
+        try: voulu = float(os.environ.get('DQ_LOGO_ECHELLE', AP.LOGO_ECHELLE))
+        except ValueError: voulu = AP.LOGO_ECHELLE
+        if voulu == 1.0: return loc
+        larg = 0.0; M = self._M_ville
+        if M is not None:
+            try:
+                xs = []
+                for sx in (-1.0, 1.0):
+                    q = np.array(pos, float) + Rb @ np.array([sx * AP.LOGO_DEMI_LARGEUR, 0.0, 0.0]); c = M @ np.append(q, 1.0); xs.append(c[0] / c[3])
+                larg = abs(xs[1] - xs[0]) / 2.0                              # largeur du logo de l'APK, en fraction de la largeur de la fenetre (NDC : -1 a 1)
+            except Exception: larg = 0.0
+        try: y0 = float(os.environ.get('DQ_LOGO_Y', AP.LOGO_Y_FIXE))
+        except ValueError: y0 = AP.LOGO_Y_FIXE
+        return AP.agrandir_logo(loc, AP.facteur_logo(larg, voulu), y0)
+
     def _maillages_combat(self, e, R=None, ville=False):
         """Liste (texture, vertex_list, ...) des maillages de monstres de l'image courante, dans l'ordre de dessin d'Unity :
         shaders DssaMonster* = fusion alpha, pas d'ecriture de profondeur, pas de masquage des faces -> parties dessinees dans l'ordre des paquets ;
@@ -1392,7 +1410,9 @@ class Jeu(pyglet.window.Window):
             V = np.array(mm['v'], np.float32); ix = np.array(mm['idx'], np.int64)
             if self.cb_ordre and len(ix) % 6 == 0: ix = ix.reshape(-1, 6)[::-1].ravel()          # (essai) quadrilateres en ordre inverse
             P = V[ix]
-            xyz = (P[:, 2:5] @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
+            loc = P[:, 2:5]
+            if ville and mid in AP.LOGO_MODELES and self.carte_nom == CARTE_TITRE: loc = self._agrandir_logo_titre(loc, mm['pos'], Rb)          # ecran-titre : logo et sous-titre deux fois plus grands (ecart voulu, issue #108)
+            xyz = (loc @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
             cq = np.array(mm.get('col') or [255], np.float32) / 255.0   # un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
             alpha = cq[np.minimum(ix // 4, len(cq) - 1)]

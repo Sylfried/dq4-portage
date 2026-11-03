@@ -884,3 +884,18 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 - Le changement de sortie **réel** (casque, haut-parleurs, TV) : jamais essayé ; la musique en cours doit reprendre sur la nouvelle sortie, les bruitages suivants aussi ; la sortie enregistrée doit revenir au lancement suivant.
 - Le retour à « Automatique » après avoir choisi une sortie (supposé : `set_device` avec `id = None`).
 - Débrancher la sortie choisie pendant le jeu : non géré (le pilote de pyglet réagit comme il le fait d'habitude) ; seul le lancement suivant retombe sur la sortie par défaut.
+
+## Avance #115 : écran titre, logo et sous-titre deux fois plus grands (#108, 03/11/2026)
+
+### Demande (D-209, 19 h 38)
+« Peux-tu doubler la taille du logo et du sous-titre de l'écran titre ? » : **écart voulu avec l'APK** (règle habituelle : rendu le plus similaire possible).
+
+### Fait
+- **Établi** : le logo est dessiné par le moteur (maillages billboard de la carte `ev01`, paquets 21 / 22) : modèle **8901** = « DRAGON QUEST », « IV », TM et sous-titre (« L'épopée des Élus »), modèle **8900** = l'éclat animé sur le logo (agrandi avec lui).
+- `avant_partie.py` : `LOGO_ECHELLE = 2.0`, `facteur_logo` (réduit le facteur si le logo agrandi dépasserait 96 % de la largeur de la fenêtre, jamais sous x1) et `agrandir_logo` (x et y agrandis autour du point fixe y = 0,70 du panneau ; profondeur des couches inchangée). `Jeu._agrandir_logo_titre` / `_maillages_combat` (`fenetre.py`) l'appliquent **seulement sur la carte du titre**.
+- Variables d'essai : `DQ_LOGO_ECHELLE` (1 = le logo de l'APK) et `DQ_LOGO_Y`.
+- **Mesuré sur captures** (Mesa, sans écran) à 16:9 (1280x720), 16:10 (1280x800), 4:3 (1024x768) et 21:9 (2560x1080) : largeur du lettrage = 2,00 x l'APK (± 3 %), logo dans la fenêtre et centré, bas du « IV » au moins 2 % de la hauteur au-dessus de « Touchez l'écran », même placement à tous les formats. Test : `outils/test_titre_logo.py` (12 tests, dont le rendu réel, ~2 min via `moteur_slot.sh` avec `DQ_APK`, `DQ_SAVES`, `DQ_UICACHE`).
+
+### Supposé / non vérifié
+- Supposé : « boutons » = « Touchez l'écran » (le menu de départ cache le logo) ; le dragon n'est pas recouvert dans la pose échantillonnée, l'île du château frôle le « V » sans le recouvrir.
+- Non vérifié : le rendu sous Windows, les autres poses du dragon sur toute l'animation. **À confirmer par Sylfried.**
