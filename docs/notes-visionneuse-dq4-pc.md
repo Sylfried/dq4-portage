@@ -918,3 +918,22 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 
 ### Non vérifié
 - Le rendu de la boîte et du fondu sous Windows ; le texte exact affiché (lu dans le moteur, pas vu à l'écran sur Windows). **À confirmer par Sylfried.**
+
+## Avance #117 : la caméra suit la butte du village du prologue (#110, 03/11/2026)
+
+### Demande (D-211, 19 h 38)
+« Dans le prologue, il y a une petite butte au milieu du village, et en marchant dessus la caméra doit pouvoir un peu se surélever, là elle reste sur le même plan donc il y a encore des ajustements à faire sur la caméra. »
+
+### Cause (établi)
+- Le moteur d'origine suit la hauteur du héros à chaque pas (`TownCamera::execute` : `setTarget(joueur)` puis `calcPursue`, décalage rigide ; `SceneCamera.Update` ne lisse rien en Y). Le lissage de hauteur ajouté en #47 (pour les escaliers) retardait aussi la caméra sur les **petits** reliefs : sur la butte de `mlout1` (+0,5 u en ~8 pas), le héros montait puis redescendait à l'écran de **18 à 29 px** (à 720 p) au lieu de rester au centre.
+
+### Fait
+- `fenetre.py` : fonction `hauteur_camera` et constante `CAM_Y_RELIEF = 0,6` : **bande morte** autour de la hauteur de repos. Tant que le jeu reste à moins de 0,6 u de cette hauteur (butte, rampe douce, bosse), la caméra le suit **exactement**, comme sur mobile. Au-delà (escaliers, étages) le lissage de #47 (`CAM_Y_TAU`, `CAM_Y_MAX`) joue comme avant. La hauteur de repos est une contraction de la cible : continue, jamais plus brusque qu'avant, à la montée comme à la descente. Coupure du jeu ou caméra prise par le jeu : inchangé (hauteur du jeu aussitôt).
+- **Mesuré** (rejeu de la trace du moteur réel dans `Jeu._camera_ville`) : butte de `mlout1` : héros à **0 px** de l'écart au centre (comme le mobile) contre 18 à 29 px avant. Escalier de `chf2` : retard maximal **0,95 u** (1,21 u avant, soit environ 22 % de moins), `teout5` inchangé (borne 3 u).
+- Test : `outils/test_camera_ville.py` (14 tests : butte suivie exactement à toute cadence, escalier toujours lissé au-delà, invariants de la fonction, coupure).
+
+### Écart à connaître
+- Les escaliers de #47 sont un peu **moins** retardés qu'avant (la bande morte de 0,6 u est suivie exactement) ; le ressenti de l'escalier est à confirmer.
+
+### Non vérifié
+- Le ressenti sous Windows (butte du prologue, un escalier de ville, une tour). **À confirmer par Sylfried.**
