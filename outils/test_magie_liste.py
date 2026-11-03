@@ -14,9 +14,12 @@ visible et cliquable : un toucher y envoyait au moteur un sort inexistant (<ERR 
 
 Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seule, le moteur ecrit dans un dossier temporaire ; groupe de l'emplacement 1 : Ragnar sans PM et Doc, 30 PM, qui sait « Premiers secours ») :
   5. liste de Doc : une seule rangee, « Premiers secours », code de rangee 2, rangees 1 a 3 cachees ;
-  6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : les messages de soin mais AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) ;
+  6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) et, hors combat, « Mais rien ne se passe. » a la place du message de succes
+     des soins (crochet Moteur._crochets_magie ; ATTENDU CHANGE VOLONTAIREMENT : avant, le moteur affichait « Les blessures de Ragnar guerissent ! » sans depenser de PM) ;
   7. usages sans effet decides par le moteur : Rappel sur un vivant, Antipoison sans poison : « Mais rien ne se passe. », aucun PM depense ; PM insuffisants : « Pas assez de PM ! » ;
-  8. Rappel sur un mort : « revient a la vie », PM depenses ; Antipoison sur un empoisonne : « n'est plus empoisonne »."""
+  8. Rappel sur un mort : « revient a la vie », PM depenses ; Antipoison sur un empoisonne : « n'est plus empoisonne » ;
+  9. regle « sort qui coute des PM et n'en depense aucun » : soins a PV pleins (Premiers secours, Soins partiels, Soins complets), soin de groupe (Multisoin : un seul message, pas de bruitage de soin en attente) ;
+     non-regressions : sort a effet (PM depenses, message du jeu), Multisoin avec un blesse (messages de soin gardes), messages d'echec propres au jeu (Evac' hors donjon), sorts a 0 PM (Mappille, Sifflet)."""
 import os, struct, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
@@ -184,6 +187,7 @@ def _stat(mo, i):
 class MoteurReel(unittest.TestCase):
     RAGNAR, DOC = 3, 12                                                   # emplacements de PlayerStatus dans originalPlayer_ (groupe de l'emplacement 1)
     PREMIERS_SECOURS, RAPPEL, ANTIPOISON = 196, 200, 202                   # identifiants d'action des sorts du terrain
+    MULTISOIN, EVAC, PASSAGE_SUR, MAPPILLE, SIFFLET = 199, 204, 206, 209, 216          # (Multisoin : 10 PM, sans cible ; Evac' : 1 PM ; Passage sur : 2 PM ; Mappille et Sifflet : 0 PM)
     BTN_MENU, BTN_PAROLE = 0x800, 0x100
 
     def avance(self, mo, n, decl=0):
@@ -215,6 +219,17 @@ class MoteurReel(unittest.TestCase):
         self.ouvrir_liste(mo)
         mo.envoyer_menu(8, 1, 0, 0x10); self.avance(mo, 20)               # le sort de la rangee 0
         mo.envoyer_menu(6, 1, cible, 0x10); self.avance(mo, 3)            # la cible
+        return self.messages(mo)
+
+    def lancer_groupe(self, mo):
+        """Sort de groupe ou sans cible : la fiche du sort (port 8, bouton « Lancer » = rangee 2), pas de choix de cible."""
+        self.ouvrir_liste(mo)
+        mo.envoyer_menu(8, 1, 0, 0x10); self.avance(mo, 20)
+        self.assertEqual(mo.ui.f[8]['cases'].get((2, 0)), 'Lancer')
+        mo.envoyer_menu(8, 1, 2, 0x10); self.avance(mo, 3)
+        return self.messages(mo)
+
+    def messages(self, mo):
         textes = []
         for k in range(500):
             self.avance(mo, 1)
@@ -240,7 +255,7 @@ class MoteurReel(unittest.TestCase):
         mo = self.pret(pv={self.RAGNAR: 47}); textes = self.lancer(mo)
         self.assertEqual(_stat(mo, self.DOC)[2], 30, 'le moteur ne depense pas de PM quand le soin n\'a servi a rien')
         self.assertEqual(_stat(mo, self.RAGNAR)[0], 47)
-        self.assertTrue(any('lance le sort' in t for t in textes), textes)
+        self.assertEqual(textes, ['Doc lance le sort Premiers secours !', 'Mais rien ne se passe.'])          # le message du jeu (comme Rappel sur un vivant), pas « Les blessures de Ragnar guérissent ! »
 
     def test_pm_insuffisants(self):
         mo = self.pret(pv={self.RAGNAR: 20}, pm=1); textes = self.lancer(mo)
@@ -250,6 +265,39 @@ class MoteurReel(unittest.TestCase):
     def test_rappel_sur_un_vivant(self):
         mo = self.pret(sort=self.RAPPEL, pv={self.RAGNAR: 47}); textes = self.lancer(mo)
         self.assertEqual(textes[-1], 'Mais rien ne se passe.'); self.assertEqual(_stat(mo, self.DOC)[2], 30)
+
+    def sort_sur(self, sort, pv, groupe=False, **kw):
+        mo = self.pret(sort=sort, pv=pv, **kw); pm0 = _stat(mo, self.DOC)[2]
+        textes = self.lancer_groupe(mo) if groupe else self.lancer(mo)
+        return mo, textes, pm0, _stat(mo, self.DOC)[2]
+
+    def test_soins_a_pv_pleins_toutes_puissances(self):
+        for sort, nom in ((self.PREMIERS_SECOURS + 1, 'Soins partiels'), (self.PREMIERS_SECOURS + 2, 'Soins complets')):
+            mo, textes, pm0, pm1 = self.sort_sur(sort, {self.RAGNAR: 47})
+            self.assertEqual(textes, ['Doc lance le sort %s !' % nom, 'Mais rien ne se passe.']); self.assertEqual((pm0, pm1), (30, 30), nom)
+
+    def test_soin_de_groupe_en_pleine_forme(self):
+        mo, textes, pm0, pm1 = self.sort_sur(self.MULTISOIN, {self.RAGNAR: 47, self.DOC: 35}, groupe=True)
+        self.assertEqual(textes, ['Doc lance le sort Multisoin !', 'Mais rien ne se passe.'], 'une seule fois, pas une fois par personnage'); self.assertEqual((pm0, pm1), (30, 30))
+        self.assertEqual(mo.core.mem(mo.L + 0x257f84, 1)[0], 0, 'plus de bruitage de soin en attente (le moteur en joue un par cible restante)')
+
+    def test_soin_de_groupe_avec_un_blesse_garde_ses_messages_et_ses_pm(self):
+        mo, textes, pm0, pm1 = self.sort_sur(self.MULTISOIN, {self.RAGNAR: 20, self.DOC: 35}, groupe=True)
+        self.assertEqual(textes, ['Doc lance le sort Multisoin !', 'Les blessures de Ragnar guérissent !', 'Les blessures de Doc guérissent !']); self.assertEqual((pm0, pm1), (30, 20))
+        self.assertGreater(_stat(mo, self.RAGNAR)[0], 20)
+
+    def test_sort_avec_effet_sans_message_de_resultat_depense_ses_pm(self):
+        mo, textes, pm0, pm1 = self.sort_sur(self.PASSAGE_SUR, {self.RAGNAR: 47}, groupe=True)
+        self.assertEqual(textes, ['Doc lance le sort Passage sûr !']); self.assertEqual((pm0, pm1), (30, 28))
+
+    def test_message_d_echec_propre_au_jeu_garde(self):
+        mo, textes, pm0, pm1 = self.sort_sur(self.EVAC, {self.RAGNAR: 47}, groupe=True)                       # Evac' a Strattbourg : le jeu a son propre message (« Mais il ne se passe rien. »)
+        self.assertEqual(textes, ["Doc lance le sort Évac' !", 'Mais il ne se passe rien.']); self.assertEqual((pm0, pm1), (30, 30))
+
+    def test_sorts_a_zero_pm_non_concernes(self):
+        for sort, dernier in ((self.MAPPILLE, "Mais il n'a pas une bonne visibilité."), (self.SIFFLET, 'Mais rien ne se passe.')):
+            mo, textes, pm0, pm1 = self.sort_sur(sort, {self.RAGNAR: 47}, groupe=True)
+            self.assertEqual(textes[-1], dernier, textes); self.assertEqual((pm0, pm1), (30, 30)); self.assertEqual(len(textes), 2, textes)
 
     def test_antipoison_sans_poison(self):
         mo = self.pret(sort=self.ANTIPOISON); textes = self.lancer(mo)
