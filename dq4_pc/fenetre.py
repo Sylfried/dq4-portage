@@ -162,6 +162,19 @@ ACT_FRONTS = ('menu', 'discussion', 'carte', 'L', 'R')       # actions dont on d
 BTN_PAROLE, BTN_MENU, BTN_DISCUSSION, BTN_CARTE = 0x100, 0x800, 0x400, 0x1000     # arg2 de GameUpdate : parler / examiner (exactement 0x100), menu de commandes, discussion de groupe, carte
 
 
+EMPLACEMENTS_GROUPE = 10      # carte du monde : emplacements 0 a 9 = membres du groupe (heros en 0) ; 10 a 12 = vehicules (bateau, ballon...)
+
+
+def rang_profondeur_champ(sprites):
+    """Carte du monde : rang de superposition de chaque sprite place (le plus grand rang est devant ; il pose la hauteur 0,04 + rang x 0,0005 du sprite a plat).
+    Le jeu (FieldPartyDraw::draw, libdq4core 0x1ec5a8) trie les membres du groupe par profondeur decroissante (tri par selection ; a profondeur egale, l'emplacement le plus bas garde la tete) puis leur donne
+    SpriteCharacter::setDepth 10, 9, 8... dans cet ordre : a profondeur egale, le heros (emplacement 0) est devant son equipier. Ordre ici : hauteur z du moteur (3e valeur de la position), puis le plus au sud
+    (un equipier au sud du heros est devant lui), puis, a position egale (atterrissage d'une aile de chimere ou de Zoom : le groupe est empile sur un seul point, issue #135), l'emplacement le plus BAS devant
+    pour le groupe ; les vehicules (emplacements >= 10) gardent le plus recent devant."""
+    vus = [(float(s['pos'][2]) if len(s['pos']) > 2 else 0.0, float(s['pos'][1]), -sl if sl < EMPLACEMENTS_GROUPE else sl, sl) for sl, s in sprites.items() if s['pos'] is not None]
+    return {sl: i for i, (_, _, _, sl) in enumerate(sorted(vus))}
+
+
 def rot_unity(ex, ey, ez):
     """Matrice 3x3 d'une rotation Unity (angles d'Euler en degres, ordre z puis x puis y, espace gauche) : colonne = axe local dans le monde."""
     cx, sx, cy, sy, cz, sz = (math.cos(math.radians(ex)), math.sin(math.radians(ex)), math.cos(math.radians(ey)), math.sin(math.radians(ey)), math.cos(math.radians(ez)), math.sin(math.radians(ez)))
@@ -3298,9 +3311,7 @@ class Jeu(pyglet.window.Window):
         phi = self._lacet_eff() if cam3d is not None else 0.0
         corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None          # correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
         rang = {}
-        if champ:       # carte du monde : sprites a plat, tous a la meme hauteur ; le jeu les superpose par la hauteur z que le moteur envoie (3e valeur de la position), puis le plus au sud passe devant (un equipier au sud du heros est devant lui), puis l'emplacement le plus recent
-            vus = [(float(s['pos'][2]) if len(s['pos']) > 2 else 0.0, float(s['pos'][1]), sl) for sl, s in e.sprites.items() if s['pos'] is not None]
-            rang = {sl: i for i, (_, _, sl) in enumerate(sorted(vus))}
+        if champ: rang = rang_profondeur_champ(e.sprites)      # carte du monde : sprites a plat, tous a la meme hauteur, superposes selon rang_profondeur_champ
         for slot, s in sorted(e.sprites.items()):
             if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
