@@ -16,6 +16,7 @@ PARTIE_COMBAT = 0xd
 PARTIE_CHAMP = 0xe                         # FieldPart : carte du monde
 PARTIE_CASINO = 0xf                        # Global::startCasino : machine a sous (carte ev05) et poker (carte ev04), fenetres des types 44-48
 PARTIE_BESTIAIRE = 0x10                    # Global::startBook : livre des monstres (fenetre de type 28) ; garde la carte de la ville
+CARTE_TITRE = 'ev01'                       # carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros)
 PARTIES_MINIJEU = (PARTIE_CASINO, PARTIE_BESTIAIRE)        # parties « plein ecran » du moteur qui dessinent leurs elements par maillages dynamiques (paquets 21 / 22) avec leur propre camera
 MSGDBG = bool(os.environ.get('DQ_MSGDBG'))     # (test) journal des etats du message du moteur
 FBXLOG = bool(os.environ.get('DQ_FBXLOG'))     # (test) journal des paquets 32 (dragon du titre : position, rotation, couleur, sequence)
@@ -472,6 +473,7 @@ class Moteur:
         c.uc.hook_add(unicorn.UC_HOOK_CODE, _sv, None, hv, hv)
         self.fielddata = 0; self._grille = None; self._grille_img = -999
         self.retour_titre_etat = None            # retour au titre : None, 'ouvrir' (a lancer au prochain pas) ou 'dialogue' (la boite Oui / Non du jeu attend la reponse) ; voir demander_retour_titre
+        self.retour_titre_fait = False           # « Revenir a l'ecran titre » lance (killbank + startTitle) et le titre n'est pas encore la : pas de sauvegarde automatique a la fermeture pendant le fondu (voir sauvegarde_auto_possible)
         self.demande_pause = False               # le joueur a choisi « Paramètres » dans le menu Divers : la visionneuse ouvre son menu Pause (voir _detourner_parametres)
         self._detourner_parametres()
         def _fd(uc, a, sz, u): self.fielddata = uc.reg_read(c.XREG[0]) & 0xffffffffffff          # FieldData::drawBlock(this) : l'objet qui porte la carte du monde
@@ -663,6 +665,7 @@ class Moteur:
         self.remettre_vitesses()
         self.patcher_parametres()
         self.retour_titre_etat = None            # un etat charge pendant la boite du retour au titre : la boite n'existe plus (memoire du moteur remplacee)
+        self.retour_titre_fait = False
 
     def _elargir_symboles(self):
         """FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
@@ -721,12 +724,28 @@ class Moteur:
         """Retour a l'ecran-titre : la fin du bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
         (sauvegarde automatique, killbank), ferme la boite, verrouille le joueur, puis Global::startTitle() (fondu au noir de 30 images lance par UnitySetFade(0x101e), chapitre 0, la partie suivante est le titre). A
         appeler PENDANT un pas (voir _retour_titre_apres) : le paquet du fondu doit etre lu avec ceux du pas, sinon le fondu est perdu (le tampon est remis a zero au pas suivant) et l'ecran passe au noir d'un coup."""
-        c = self.core
+        c = self.core; self.retour_titre_fait = True
         c.call(self.E('_ZN7profile8SaveLoad8killbankEib'), 4, 0, label='killbank')
         self._fermer_boite_titre()
         c.call(self.E('_ZN3cmn11GameManager12getSingletonEv'), label='getSingleton')
         c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 1, label='setLock')
         c.call(self.E('_ZN6Global10startTitleEv'), self._global(), label='startTitle')
+
+    def sauvegarde_auto_possible(self):
+        """Une sauvegarde automatique a la fermeture de l'application a-t-elle un sens ? Seulement en pleine partie : en ville, donjon ou sur la carte du monde (PARTIE_VILLE, PARTIE_CHAMP), hors ecran-titre, et
+        pas pendant un retour au titre (la banque 4 vient d'etre effacee par « Revenir à l'écran titre » et doit le rester ; le drapeau tombe quand la carte du titre est arrivee : voir step). Ni au menu de depart,
+        ni aux logos, ni en combat (le jeu d'origine n'enregistre pas un combat en cours), ni au casino ou dans le livre des monstres."""
+        e = self.etat
+        return e.partie in (PARTIE_VILLE, PARTIE_CHAMP) and e.carte not in (None, CARTE_TITRE) and not self.retour_titre_fait and self.retour_titre_etat is None
+
+    def sauvegarde_auto(self):
+        """Sauvegarde automatique du jeu (« Sauvegarde automatique » du menu de depart : banque 4, data5.dat, SAVETYPE 3), faite par le moteur lui-meme : AutoSave(true) de libdq4core (0x164aa8) = savebank(4, 3), sans les
+        conditions de AutoSave(false) (qui refuse villes et donjons tant que le script n'a pas leve l'indicateur « abandon de sauvegarde permis » : StageStatus::isAbortSaveTown / isAbortSaveDungeon). Aucun appel du moteur
+        ne la lance de lui-meme : c'est le Unity d'origine qui l'appelle (supposé : a la mise en veille de l'application) ; la visionneuse l'appelle a la fermeture de la fenetre (Jeu.on_close).
+        -> 1 ecrite, 0 pas de partie en cours (rien n'est touche : l'ancienne sauvegarde automatique reste), -1 le moteur a refuse."""
+        if not self.sauvegarde_auto_possible(): return 0
+        r = self.core.call(self.E('_Z8AutoSaveb'), 1, label='AutoSave')
+        return 1 if r is not None and (r & 0xffffffff) == 1 else -1
 
     def demander_retour_titre(self):
         """Menu Pause > « Revenir à l'écran titre » : ouvre la boite du jeu (son texte, Oui / Non) au prochain pas, comme le bouton des Parametres d'origine. -> faux si une demande est deja en cours.
@@ -885,6 +904,7 @@ class Moteur:
         self.etat.tick_fondu(); self.etat.tick_transition()
         prec = self.etat.partie
         self.etat.partie = struct.unpack('<H', c.mem(self._global() + 0xee, 2))[0]
+        if self.retour_titre_fait and self.etat.carte == CARTE_TITRE: self.retour_titre_fait = False          # (le titre est arrive : la partie suivante recommence a zero pour la sauvegarde automatique)
         if prec == PARTIE_COMBAT and self.etat.partie != PARTIE_COMBAT: self.etat.fen_retour = FENETRE_RETOUR_COMBAT      # fin du combat : le fondu d'entree qui suit sur la carte est celui du retour (duree du jeu)
         if self.etat.partie == PARTIE_COMBAT and prec != PARTIE_COMBAT and self.etat.attente_charge is None and self.etat.cartes_chargees <= avant:
             self.etat.attente_charge = {'base': avant, 'n': 0}      # combat sans effet d'ecran (scenario...) : la scene d'avant ne doit pas apparaitre avant le chargement de celle du combat
