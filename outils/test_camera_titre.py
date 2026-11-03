@@ -83,6 +83,17 @@ class TestCameraTitre(unittest.TestCase):
                 xg, xd = T.ndc(M, np.array([-a, 0.0, 0.0]))[0], T.ndc(M, np.array([a, 0.0, 0.0]))[0]
                 self.assertAlmostEqual(xg + xd, 0.0, places=9, msg='%s a=%s' % (nom, a))
 
+    def test_titre_sans_reste_d_une_partie_precedente(self):
+        """Retour au titre apres une partie jouee : camera tournee (lacet, angle), zoom de distance, reste de centrage, heros ailleurs : rien de tout cela ne decale ni ne tourne la camera du titre (le cadrage est celui du jeu)."""
+        for nom, asp in self.ASPECTS[1:6]:
+            ref = self.vue_bornee('ev01', {}, asp, False, bornes=None)
+            for option in (True, False):
+                j = T.faux_jeu(option=option, bornes_x=self.BORNES, jeu=False); j.carte_nom = 'ev01'; j.lacet = 40.0; j.angle_cam = -12.0; j.zoom = 2.5
+                j.cam_dec = [3.0, -2.0]; j.cam_res = [1.0, 1.0]; j.cam_centre = True; j.cam_saut = False; j.cam_poids = 0.2
+                e = T.faux_etat(CIB, CIB, 10.0); e.cam_pos = POS; e.cam_bas = 3.019360065460205; e.cam_far = 150.0; e.sprites = {0: {'pos': (20.0, 0.0, 15.0)}}
+                M = F.Jeu._camera_ville(j, e, asp)[0]
+                self.assertLess(float(np.abs(M - ref).max()), 1e-12, '%s option=%s' % (nom, option))
+
     def test_une_carte_ordinaire_garde_ses_bornes(self):
         """Controle du test : sur une autre carte, les memes bornes et l'option sur Non deplacent bien la camera en large (la correction ne vaut que pour le titre)."""
         for nom, asp in self.ASPECTS[3:6]:

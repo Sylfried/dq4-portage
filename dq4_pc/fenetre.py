@@ -1184,6 +1184,7 @@ class Jeu(pyglet.window.Window):
         k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
         self.cam_res = [r * k for r in self.cam_res]
         self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
+        if titre: self.cam_res = [0.0, 0.0]; self.cam_dec = [0.0, 0.0]          # ecran-titre : aucun reste de centrage d'une partie precedente (retour au titre) ne glisse la camera
         a = 1.0 if saut else 1.0 - k                                      # (poids des bornes 16/9 ci-dessous : meme constante de temps, aussitot apres une coupure)
         # part SANS les bornes 16/9 de la visionneuse : 1 = aucune borne, 0 = bornes completes. Option « camera centree » ; ET camera menee par le jeu (cam_jeu : travelling, cible = un personnage, retour) :
         # Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), le cadre du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi (progressivement, sans a-coup)
@@ -1199,7 +1200,7 @@ class Jeu(pyglet.window.Window):
                 lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
                 cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
                 d = (cx - cib[0]) * (1.0 - self.cam_poids); pos[0] += d; cib[0] += d
-        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
+        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini or titre else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera (et ecran-titre, meme apres une partie jouee camera tournee) : vue d'origine
         if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
             pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
