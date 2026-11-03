@@ -236,7 +236,7 @@ class Jeu(pyglet.window.Window):
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
         self.effet_tex = None; self.effet_sim = None; self.effet_vl = None; self.effet_ref = None; self.effet_tex_prete = False      # effet de debut de combat : capture de l'ecran, simulation, sommets
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
-        self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
+        self.fonds = TC.Fonds(self.donnees, log=lambda *a: print(*a, flush=True)); self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
         self._demarrer_moteur(args)
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
@@ -3187,7 +3187,8 @@ class Jeu(pyglet.window.Window):
         if not champ and e.carte and e.carte != self.carte_nom:
             self._charger_carte(e.carte); self.t_boucle = None              # chargement synchrone (plusieurs dixiemes de seconde) : le temps passe n'est pas rattrape par le moteur (le fondu d'entree garde sa duree, au lieu de sauter 3 pas en une image)
         fond = e.fond
-        if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
+        if e.partie == MO.PARTIE_COMBAT and not any(fond) and not os.environ.get('DQ_FOND_ESTIME'): fond = self.fonds.couleur(self.carte_src) or self.fond_decor      # fond du combat = bg_color du decor charge (FETC, BackColor.SetColor de cmd_fld_load) ; estimation en attendant la liste / DQ_FOND_ESTIME=1 : (test) l'ancienne estimation
+        elif e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
         self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
