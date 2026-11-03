@@ -15,6 +15,7 @@ if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.op
 import numpy as np
 import reglages as RG
 import pause as PA
+import sortie_audio as SA
 
 K = pyglet.window.key
 GAUCHE = 1
@@ -31,6 +32,7 @@ class FauxJeu:
         self.reg = RG.Reglages(None); self.plein = plein; self.ecrans = ecrans; self.res = (1280, 720); self.appels = []; self.etiq = {}
         self.width, self.height = 1280, 720; self.args = types.SimpleNamespace(cache=CACHE); self.souris = None
         self.post = types.SimpleNamespace(max_msaa=None); self.son = types.SimpleNamespace(actif=True, ecoute=False, ecouter=lambda b: None, tick=lambda: None)
+        self.sorties = SA.Sorties(types.SimpleNamespace(set_device=lambda d: self.appels.append(('sortie', d.id))), types.SimpleNamespace(get_output_devices=lambda: [types.SimpleNamespace(id='a', name='Haut-parleurs'), types.SimpleNamespace(id='b', name='Casque')]))
 
     est_plein = property(lambda self: self.plein)
     def regler_plein_ecran(self, v): self.plein = bool(v); self.appels.append(('plein', bool(v)))
@@ -44,6 +46,13 @@ class FauxJeu:
     def regler_ecran_plein(self, v): self.appels.append(('ecran', v))
     def regler_mode(self, v): self.appels.append(('mode', v))
     def regler_distance(self, v): self.appels.append(('distance', v))
+    def valeurs_sortie(self): return self.sorties.valeurs(self.reg['sortie_audio'])
+    def valeur_sortie(self): return self.sorties.valeur(self.reg['sortie_audio'])
+    def nom_sortie(self, v): return self.sorties.nom(v, self.reg['sortie_audio'])
+    def sortie_modifiable(self): return self.sorties.modifiable(self.reg['sortie_audio'])
+    def regler_sortie(self, v):
+        ok, choix = self.sorties.appliquer(v)
+        if ok: self.reg['sortie_audio'] = choix
     def regler_son(self, oui): self.appels.append(('son', oui))
     def appliquer_mixage(self): self.appels.append('mixage')
     def apercu_son(self, cat): self.appels.append(('apercu', cat))

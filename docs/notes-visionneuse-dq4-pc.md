@@ -899,3 +899,22 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 ### Supposé / non vérifié
 - Supposé : « boutons » = « Touchez l'écran » (le menu de départ cache le logo) ; le dragon n'est pas recouvert dans la pose échantillonnée, l'île du château frôle le « V » sans le recouvrir.
 - Non vérifié : le rendu sous Windows, les autres poses du dragon sur toute l'animation. **À confirmer par Sylfried.**
+
+## Avance #116 : « Revenir à l'écran titre » comme dans le jeu d'origine (#109, 03/11/2026)
+
+### Demande (D-210, 19 h 38)
+« Pour le bouton pour revenir à l'écran titre actuel, reprend exactement le même fonctionnement que sa version de base, ça ouvrait un dialogue avec le texte associé et ça demandait si oui ou non on le voulait vraiment et ensuite il y avait un effet de transition, là c'est trop brut. »
+
+### Fait
+- Avant : la ligne ouvrait une page « En êtes-vous sûr ? » dessinée par la visionneuse, puis le retour au titre était brut. Maintenant la ligne **ferme le menu et fait ouvrir au moteur la boîte du jeu** (texte d'origine `0xCBA2F`, choix Oui / Non, curseur d'origine sur « Oui »), puis :
+  - **Oui** : `killbank(4, false)`, déverrouillage, `Global::startTitle` avec le **fondu de 30 images** du jeu ;
+  - **Non** : la boîte se ferme et le joueur est déverrouillé.
+- **Établi** (lu dans le moteur, appels faits par le code d'origine du bouton des Paramètres) : `TownMenu_MESSAGE::openMessageForMENU`, `addMessage(0xCBA2F)`, `setYesNo`, `setYesNoSuperCancel(false)` ; le résultat est lu à `gTownMenu_MESSAGE + 0x10` (1 = Oui, 2 = Non, remis à 0 à l'ouverture) ; fermeture par `MenuBase::isOpen` / `close` ; verrouillage par `PlayerManager::setLock`. La boîte est une grille de 1 x 2.
+- `moteur.py` : `demander_retour_titre`, `_retour_titre_avant` / `_retour_titre_apres` (autour de `GameUpdate` dans `step`), `retour_titre` (fermeture de la boîte dans le même pas). Page `titre` de `pause.py` supprimée ; ligne grisée quand la boîte n'est pas disponible (`Jeu.retour_titre_possible`).
+- Test : `outils/test_retour_titre.py` (21 tests, dont le moteur réel via `moteur_slot.sh`). Correctifs de deux tests cassés par les PR précédentes : `test_lignes_inactives.py` (faux jeu sans la ligne de sortie audio de la PR #114) et son contrôle « aucun mot `triche` » (le README parlait encore d'« option de triche » depuis le renommage en « Modifications », #47 : reformulé).
+
+### Écart avec le comportement précédent (à décider par Sylfried)
+- **Établi** : la boîte d'origine est prévue **en ville et sur la carte du monde** ; en **combat, casino et bestiaire** elle ne reçoit aucune touche. La ligne est donc **grisée** dans ces cas (avant : le retour brut marchait en combat). Autre possibilité : une boîte dessinée par la visionneuse avec le même texte et le même fondu, mais ce ne serait plus « le même fonctionnement que l'APK ».
+
+### Non vérifié
+- Le rendu de la boîte et du fondu sous Windows ; le texte exact affiché (lu dans le moteur, pas vu à l'écran sur Windows). **À confirmer par Sylfried.**
