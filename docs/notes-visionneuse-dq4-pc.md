@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112, #121 à #123 et #126 à #131, jalons 1 à 5 ; 50 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-222). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131 et #134 à #141, jalons 1 à 5 ; 58 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-224). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -991,6 +991,8 @@ Après avoir essayé #112 sous Windows (« Mon écran externe avec baffes intég
 
 ## Avance #124 : sauvegarde automatique du jeu à la fermeture de l'application (#122, 03/11/2026)
 
+> **Remplacée par l'avance #142 (plus bas) : tout ce qui suit sur une écriture à la fermeture est retiré** (le jeu d'origine n'en fait pas), et la ligne « aucune fonction du moteur n'appelle `AutoSave` » est fausse : le moteur l'appelle lui-même, à deux endroits.
+
 ### Demande (D-218 et D-219, 22 h 34)
 « Les sauvegardes auto ne fonctionnent pas, normalement je dois avoir une sauvegarde in game en fermant l'application […] (et effectivement je ne dois pas en avoir en quittant via le retour à l'écran titre, je parle bien de quand je ferme l'application). Il faut que ça marche qu'on clique sur la croix ou bien qu'on fasse Alt+F4 ou qu'on ferme depuis le gestionnaire des tâches etc (et c'est bien un système de sauvegardes in-game, je ne te demande pas de créer un système de sauvegarde à part pour ça). »
 
@@ -1062,3 +1064,25 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows** : à confirmer par Sylfried (tenir la course en sortant d'un combat : elle agit dès que le héros bouge).
 - Avec la course tenue, le fondu de retour (en images du moteur) passe plus vite en temps réel, comme le fondu d'arrivée sur une carte depuis #107 : c'est la conséquence voulue d'une horloge plus rapide dès que le joueur est libre.
+
+## Avance #142 : la sauvegarde automatique est celle du jeu (#128, 03/11/2026)
+
+### Demande (D-220, 23 h 08)
+« La sauvegarde auto n'a pas le même comportement que le jeu, ça ne doit pas me remettre au pixel près où j'étais, mais je crois que c'est à l'endroit d'où je viens : sur mobile en quittant le jeu dans une grotte la sauvegarde auto m'a ramené sur la map globale pile au niveau de l'entrée de la grotte, et dans un village à l'entrée du village, toujours sur la map globale, donc regarde dans le code source comment c'est fait. »
+
+### Établi
+- **`AutoSave` n'a que deux appelants dans `libdq4core.so`**, par le même raccourci (stub PLT 0x226290) : `TownPart::initialize` (appel en 0x19f988, à l'arrivée dans une ville ou un donjon) et `FieldPart::initialize` (0x19fa70, à l'arrivée sur la carte du monde). Les deux appellent `AutoSave(false)` : le moteur n'écrit alors que si les conditions de `StageStatus` (`isAbortSaveTown`, `isAbortSaveDungeon`, indicateur d'abandon de sauvegarde permis) sont réunies. La note de l'avance #124 (« aucune fonction du moteur n'appelle `AutoSave` ») était fausse : la recherche n'avait porté que sur les appels directs au symbole.
+- Le code C# du cycle de vie de l'application (`OnApplicationPause`, `OnApplicationQuit`) n'appelle que `Sound$$SystemPause` et `Sound$$SystemQuit` : **le jeu d'origine n'écrit rien à la fermeture**.
+- Mesuré sur le vrai moteur (échantillon de sauvegardes de la session, banque 4 = `data5.dat`, 15 360 octets) : charger le journal 1 (ville `mak1f1`) n'écrit pas `data5.dat` ; charger la sauvegarde 4 (carte du monde) l'écrit, sans aucun appel de la visionneuse ; `Global::startTown('dab1')` (donjon) depuis la carte du monde la réécrit ; `Global::startField()` aussi.
+- Ce que fait le jeu en pratique : la sauvegarde automatique est celle de la **dernière arrivée** sur la carte du monde (ou dans un donjon selon ses conditions), donc « l'endroit d'où l'on vient », pas la position exacte quand on ferme : c'est ce qu'a vu Sylfried sur mobile.
+
+### Fait
+- Retiré de `moteur.py` : `Moteur.sauvegarde_auto`, `Moteur.sauvegarde_auto_possible`, `retour_titre_fait`. Retiré de `fenetre.py` : `Jeu._sauvegarde_fermeture`, les gestionnaires de la console de Windows, des signaux et du message `WM_ENDSESSION`, la demande de fermeture venue d'un autre fil dans `_boucle`, `DQ_SAUVEGARDE_FERMETURE`.
+- Gardé : `Jeu.quitter` passe par `on_close` (réglages, historique, son) ; « Revenir à l'écran titre » efface toujours la banque 4 (`killbank(4, 0)`, D-184) ; rien ne la remet (le moteur ne l'écrit pas au titre).
+- Conséquence assumée : sans les gestionnaires de la console, Ctrl + C et la fermeture de la console de Windows arrêtent le jeu sans passer par `on_close` (réglages et historique de la séance non enregistrés), comme avant #124. La croix, Alt + F4 et le menu Quitter les enregistrent.
+- Tests : `outils/test_sauvegarde_auto.py` (12 tests ; remplace `test_sauvegarde_fermeture.py`) : plus rien de forcé dans `Moteur` et `Jeu` ; `on_close` ne touche pas au moteur ; **sur le vrai moteur** : l'arrivée en ville n'écrit pas la banque 4, l'arrivée sur la carte du monde l'écrit seul, fermer la fenêtre ne modifie aucun fichier de sauvegarde, « Revenir à l'écran titre » l'efface et rien ne la remet.
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (fermer dans une grotte, puis « Sauvegarde automatique » au menu de départ).
+- **Où le menu de départ replace le joueur** après une sauvegarde automatique prise dans un donjon (carte du monde à l'entrée, comme sur mobile, ou dans le donjon). Le chargement brut de la banque écrite à l'entrée du donjon (`loadbank(4)`) reprend dans le donjon (`dab1`) ; le chemin du menu de départ du jeu n'a pas été rejoué. Dans les deux cas c'est le code du moteur, que la visionneuse ne modifie pas.
+- Ce que le jeu fait exactement des conditions `StageStatus` (quand `isAbortSaveDungeon` est vrai) : mesuré seulement sur `dab1` dans l'échantillon.

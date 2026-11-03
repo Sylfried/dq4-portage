@@ -235,7 +235,6 @@ class Jeu(pyglet.window.Window):
         self.avalees = set(); self.alt_cand = False; self.alt_tap = False; self.bureau = None; self._en_bascule = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; taille du bureau ; bascule fenetre / plein ecran en cours
         self._pret = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
         self._logo_touche = False; self._ferme = False      # logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
-        self._auto_faite = False; self._arret_externe = threading.Event(); self._arret_fini = threading.Event(); self._arret_motif = None          # sauvegarde automatique a la fermeture (voir _sauvegarde_fermeture) ; fermeture demandee depuis un autre fil (console, signal)
         self.carte_ext = []; self.ciel_ext = None; self._M_ville = None; self._aspect_ville = 16 / 9; self.saisie_nom = SN.SaisieNom(self); self.port_saisie = 15; self.licence = None; self.sauv = None; self.statut_depart = None; self.dernier_peripherique = 'clavier'; self.titre = None; self.titre_n = 0; self.ap_fich = {}      # ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
         self.reg = reg or RG.Reglages(None)
         self.pause = PA.Pause(self); self.historique = HI.Historique(getattr(args, 'historique', None))          # historique : dialogues et combats de la session, favoris dans un fichier a cote de la visionneuse (voir historique.py)
@@ -306,7 +305,6 @@ class Jeu(pyglet.window.Window):
         self.fixe_test = bool(args.shot) and not os.environ.get('DQ_TEMPS_REEL')         # (test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
         pyglet.clock.schedule(self._boucle)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._pret = True
-        self._installer_arret_externe()
         SV.noter('constructeur termine')
 
     # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, a la resolution du bureau : l'affichage du moniteur ne change jamais)
@@ -684,58 +682,8 @@ class Jeu(pyglet.window.Window):
             print('Preparation du cache : processus a part impossible (%r), dans le jeu.' % (ex,), flush=True)
             threading.Thread(target=self.donnees.preparer, args=(self.prepa_arret,), daemon=True, name='preparation-cache').start()
 
-    def _sauvegarde_fermeture(self, motif='fermeture de la fenêtre'):
-        """Fermeture de l'application, par n'importe quel chemin (croix, Alt + F4, « Quitter » du menu Echap, « Fermer la fenetre » de la barre des taches, fin de tache de Windows, fermeture de la console, Ctrl + C, fin de session) :
-        le jeu ecrit sa sauvegarde automatique (« Sauvegarde automatique » du menu de depart : banque 4, data5.dat ; Moteur.sauvegarde_auto), une seule fois, seulement en pleine partie. Dit dans la console. Ne leve jamais d'erreur :
-        la fermeture continue. Captures de test (--shot) : rien n'est ecrit (DQ_SAUVEGARDE_FERMETURE=1 pour l'essayer)."""
-        if self._auto_faite: return
-        self._auto_faite = True
-        if self.args.shot and not os.environ.get('DQ_SAUVEGARDE_FERMETURE'): return
-        try: r = self.moteur.sauvegarde_auto()
-        except Exception as ex: print('Sauvegarde automatique impossible (%r)' % (ex,), flush=True); return
-        print({1: 'Sauvegarde automatique écrite (%s).', 0: 'Pas de sauvegarde automatique (%s) : aucune partie en cours.', -1: 'Sauvegarde automatique refusée par le moteur (%s).'}.get(r, '%s') % motif, flush=True)
-
-    def _installer_arret_externe(self):
-        """Fermetures qui ne passent pas par la croix de la fenetre, et que le jeu peut encore voir :
-        - Windows : fermeture de la fenetre de console, Ctrl + C, Ctrl + Pause, fermeture de session et arret (SetConsoleCtrlHandler) ; le gestionnaire est appele dans un autre fil : il ne fait que demander la fermeture a la boucle
-          principale (le moteur n'est jamais utilise que par elle) et attend sa fin, au plus 4,5 s (apres 5 s Windows arrete le processus) ;
-        - ailleurs (essais) : signaux SIGTERM et SIGHUP.
-        La fin de session des fenetres est le message WM_ENDSESSION (voir _event_endsession). Un processus arrete de force (TerminateProcess : « Fin de tache » de l'onglet Details, taskkill /F, coupure de courant) ne laisse
-        aucune chance d'ecrire quoi que ce soit : aucun programme ne peut le voir venir."""
-        try:
-            if sys.platform == 'win32':
-                import ctypes
-                from ctypes import wintypes
-                noms = {0: 'Ctrl + C', 1: 'Ctrl + Pause', 2: 'fermeture de la console', 5: 'fermeture de session', 6: 'arrêt de Windows'}
-                Routine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
-
-                self._gestionnaire_console = Routine(lambda ctrl: self._arret_console(noms.get(ctrl)))          # (la reference doit vivre autant que la fenetre)
-                ctypes.windll.kernel32.SetConsoleCtrlHandler(self._gestionnaire_console, True)
-            else:
-                import signal
-                for nom in ('SIGTERM', 'SIGHUP'):
-                    sig = getattr(signal, nom, None)
-                    if sig is not None: signal.signal(sig, lambda n, f, _nom=nom: (setattr(self, '_arret_motif', _nom), self._arret_externe.set()))
-        except Exception as ex: print('Fermeture de la console non surveillée (%r)' % (ex,), flush=True)
-
-    def _arret_console(self, motif, delai=4.5):
-        """Gestionnaire de la console de Windows (autre fil) : `motif` None = evenement ignore (ce que Windows fait par defaut : False). Sinon la fermeture est demandee a la boucle principale et on attend sa fin, au plus `delai`
-        secondes (Windows arrete le processus 5 s apres une fermeture de console). -> True (evenement traite). Rien a faire (False) tant que la fenetre n'est pas prete (logos, chargement) ou si la fermeture est deja faite."""
-        if motif is None or not self._pret or self._auto_faite: return False
-        self._arret_motif = motif; self._arret_externe.set(); self._arret_fini.wait(delai)
-        return True
-
-    def _arret_externe_traiter(self):
-        """Dans la boucle principale : une fermeture demandee par un autre fil (voir _installer_arret_externe) : meme fermeture que la croix, puis le fil qui attend est libere."""
-        self._arret_externe.clear()
-        try: self.on_close()
-        except Exception as ex: print('Fermeture : %r' % (ex,), flush=True)
-        finally: self._arret_fini.set()
-        pyglet.app.exit()
-
     def on_close(self):
         if not self._pret: self._ferme = True; return           # fermeture pendant les logos : le constructeur s'arrete
-        self._sauvegarde_fermeture(self._arret_motif or 'fermeture de la fenêtre')
         self.reg.enregistrer(); self.historique.enregistrer(True); self.son.fermer()
         p = getattr(self, 'prepa_proc', None)
         if p is not None:
@@ -1080,15 +1028,6 @@ class Jeu(pyglet.window.Window):
             @pyglet.window._PlatformEventHandler(0x0106)          # WM_SYSCHAR : le caractere de Alt + Entree. Sans ce gestionnaire, Windows (DefWindowProc) fait entendre sa « tonalite d'erreur » a chaque Alt + Entree. Les autres Alt + touche restent a Windows.
             def _event_syschar(self, msg, wParam, lParam): return 0 if wParam == 13 else None
         except Exception: pass
-        try:
-            @pyglet.window._PlatformEventHandler(0x0016)          # WM_ENDSESSION : la session Windows se termine (arret, redemarrage, deconnexion) ; le processus est arrete juste apres : le jeu ecrit sa sauvegarde automatique maintenant
-            def _event_endsession(self, msg, wParam, lParam):
-                if wParam:
-                    self._arret_motif = 'fin de session Windows'
-                    try: self.on_close()
-                    except Exception as ex: print('Fermeture : %r' % (ex,), flush=True)
-                return 0
-        except Exception: pass
 
     def _journal_fenetre(self, quand):
         """Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule."""
@@ -1152,7 +1091,6 @@ class Jeu(pyglet.window.Window):
 
     def quitter(self):
         """Menu Echap > Quitter > Oui (et « Quitter » du menu de depart) : la meme fermeture que la croix de la fenetre (sauvegarde automatique, reglages, historique, son)."""
-        self._arret_motif = self._arret_motif or 'menu Quitter'
         self.on_close(); pyglet.app.exit()
 
     def retour_titre_possible(self):
@@ -2815,7 +2753,6 @@ class Jeu(pyglet.window.Window):
     def _boucle(self, dt):
         """Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours."""
         self.n_boucle += 1
-        if self._arret_externe.is_set(): self._arret_externe_traiter(); return          # fermeture demandee depuis un autre fil (console, signal)
         if self.args.touches_test or self.args.shots_boucle: self._touches_test()
         if self.args.options_test: self._options_test()
         if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
