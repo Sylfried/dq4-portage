@@ -725,12 +725,87 @@ class TestVue(unittest.TestCase):
     def test_rechargement_a_chaque_ouverture(self):
         v = vue(n=2); v.J.historique.ajouter('Nouveau.', None, 10 ** 6); v.entrer()
         self.assertEqual((len(v.elements), v.sel, v.pos), (3, 2, 0.0)); v.entrer(UH.O_COMBATS); self.assertEqual(v.onglet, UH.O_COMBATS); v.entrer(99); self.assertEqual(v.onglet, UH.O_DIALOGUES)
-        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre (pas enregistre sur disque)
+        v.etoile(0); v.basculer_filtre(); v.entrer(); self.assertTrue(v.favoris_seuls); self.assertEqual(len(v.elements), 1)                         # « Favoris seulement » reste coche quand on rouvre la fenetre
 
     def test_heure_et_onglets_suivants(self):
         self.assertEqual(UH.heure_jeu(60 * (3600 + 5 * 60 + 12)), '1:05:12'); self.assertEqual(UH.heure_jeu(-5), '0:00:00')
         self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS)), (UH.O_COMBATS, None))
         self.assertEqual((UH.onglet_suivant(1), UH.onglet_suivant(0, -1)), (0, 1))
+
+
+class TestPersistance(unittest.TestCase):
+    """Point 2 : les favoris (historique_favoris.json) ET l'etat de la case « Favoris seulement » (reglage historique_favoris_seuls dans reglages.json) survivent a la fermeture et a un nouveau lancement. Fichiers temporaires seulement."""
+    def setUp(self):
+        self.d = tempfile.mkdtemp(prefix='persist_'); self.addCleanup(shutil.rmtree, self.d, True)
+        self.fav = os.path.join(self.d, 'historique_favoris.json'); self.rg = os.path.join(self.d, 'reglages.json')
+
+    def session(self):
+        """Une « session » du jeu : Historique (fichier des favoris), Reglages (reglages.json) et la fenetre d'historique, comme fenetre.py les cree."""
+        P = types.SimpleNamespace(mode_souris=False, pos_souris=None, retour=lambda: None, fermer=lambda: None, _repeter=lambda *a: None)
+        P.J = types.SimpleNamespace(historique=nouveau(self.fav), reg=RG.Reglages(self.rg), height=720)
+        v = UH.VueHistorique(P); v.entrer(); v.hv0 = 500.0; poser(v); return v
+
+    @staticmethod
+    def fermer(v):
+        """Fermeture de la visionneuse (Fenetre.on_close) : reglages et favoris ecrits."""
+        v.J.reg.enregistrer(); v.J.historique.enregistrer(True)
+
+    def test_cle_et_valeur_par_defaut(self):
+        self.assertIs(RG.DEFAUT['historique_favoris_seuls'], False); self.assertIn('historique_favoris_seuls', RG.BOOLEENS_SON_TEXTE)           # (decochee par defaut ; une valeur invalide y revient)
+        self.assertIs(RG.Reglages(None)['historique_favoris_seuls'], False)
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc', 'pause.py'), encoding='utf-8').read()
+        self.assertNotIn('historique_favoris_seuls', src)                                                         # pas de ligne dans le menu Pause : la case est dans la fenetre elle-meme
+
+    def test_etat_enregistre_a_chaque_changement(self):
+        v = self.session(); self.assertFalse(v.favoris_seuls); self.assertFalse(os.path.exists(self.rg))
+        v.touche(pyglet.window.key.F)                                                                              # coche : ecrit tout de suite, sans attendre la fermeture
+        with open(self.rg, encoding='utf-8') as f: self.assertIs(json.load(f)['historique_favoris_seuls'], True)
+        v.basculer_filtre()
+        with open(self.rg, encoding='utf-8') as f: self.assertIs(json.load(f)['historique_favoris_seuls'], False)
+
+    def test_aller_retour_des_reglages(self):
+        for etat in (True, False):
+            r = RG.Reglages(self.rg); r['vignette'] = 0.8; r['historique_favoris_seuls'] = etat; r.enregistrer()
+            r2 = RG.Reglages(self.rg); self.assertIs(r2['historique_favoris_seuls'], etat); self.assertEqual(r2['vignette'], 0.8)             # (les autres reglages ne bougent pas)
+
+    def test_valeurs_invalides_ou_absentes(self):
+        for brut in ('"oui"', '1', '0', 'null', '[true]', '{"a": 1}'):
+            with open(self.rg, 'w', encoding='utf-8') as f: f.write('{"historique_favoris_seuls": %s, "vignette": 0.5}' % brut)
+            r = RG.Reglages(self.rg); self.assertIs(r['historique_favoris_seuls'], False, brut); self.assertEqual(r['vignette'], 0.5)
+        with open(self.rg, 'w', encoding='utf-8') as f: f.write('{"vignette": 0.5}')                              # fichier d'avant cette cle : decoche
+        self.assertIs(RG.Reglages(self.rg)['historique_favoris_seuls'], False)
+        with open(self.rg, 'w', encoding='utf-8') as f: f.write('pas du json')                                  # illisible : valeurs par defaut, sans erreur
+        self.assertIs(RG.Reglages(self.rg)['historique_favoris_seuls'], False)
+
+    def test_deux_sessions_favoris_et_case(self):
+        """Session 1 : un dialogue et un combat en favori, case cochee, fermeture. Session 2 (nouveaux objets, memes fichiers) : la case est cochee a l'ouverture de la fenetre et les favoris sont dans la liste, avec leur etoile."""
+        v = self.session(); h = v.J.historique
+        h.ajouter('Un dialogue.', 'Alena', 100); h.ajouter('Un autre.', None, 900); h.ajouter_combat(combat(t=50)); v.entrer()
+        v.etoile(0); v.changer_onglet(UH.O_COMBATS); v.etoile(0); v.changer_onglet(UH.O_DIALOGUES); v.touche(pyglet.window.key.F); self.assertTrue(v.favoris_seuls)
+        self.fermer(v)
+        v2 = self.session()                                                                                       # nouveau lancement
+        self.assertTrue(v2.favoris_seuls); self.assertEqual([(e.nom, e.texte, e.fav is not None) for e in v2.elements], [('Alena', 'Un dialogue.', True)])
+        v2.changer_onglet(UH.O_COMBATS); self.assertEqual([(e.type, e.issue, e.fav is not None) for e in v2.elements], [('c', 'victoire', True)])
+        v2.touche(pyglet.window.key.F); self.assertEqual(len(v2.elements), 0)                                       # decochee : la session est vide (le reste de l'historique n'est pas conserve)
+        self.fermer(v2)
+        v3 = self.session(); self.assertFalse(v3.favoris_seuls)                                                   # ... et la case decochee est conservee aussi
+        v3.touche(pyglet.window.key.F); self.assertEqual(len(v3.elements), 1)                                       # les favoris, eux, sont toujours la
+
+    def test_favoris_survivent_sans_fermeture_propre(self):
+        """Les favoris sont ecrits au moment de l'etoile : une fermeture brutale (sans on_close) ne les perd pas."""
+        v = self.session(); v.J.historique.ajouter('Garde-moi.', 'Roi', 10); v.entrer(); v.etoile(0)
+        h2 = nouveau(self.fav); self.assertEqual([(e.nom, e.texte) for e in h2.liste('dialogues', True)], [('Roi', 'Garde-moi.')])
+
+    def test_erreur_d_ecriture_n_empeche_pas_de_cocher(self):
+        v = self.session()
+        def casse(): raise OSError('disque plein')
+        v.J.reg.enregistrer = casse
+        self.assertTrue(v.basculer_filtre()); self.assertTrue(v.favoris_seuls)
+        v.J.reg = None; self.assertFalse(v.basculer_filtre())                                                       # (pas de reglages du tout : la case marche quand meme)
+        v.entrer(); self.assertFalse(v.favoris_seuls)
+
+    def test_la_fenetre_relit_l_etat_a_l_ouverture(self):
+        v = self.session(); v.J.reg['historique_favoris_seuls'] = True; v.entrer(); self.assertTrue(v.favoris_seuls)
 
 
 class TestPause(unittest.TestCase):

@@ -1,5 +1,6 @@
 """Fenetre « Historique » (page 'historique' du menu Pause, voir pause.py) : deux onglets, Dialogues (hors combat) et Combats ; le plus recent en bas. Une case a cocher « Favoris seulement » (a droite des onglets) ne garde dans
-la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet, et quand on rouvre la fenetre pendant la session : elle n'est pas enregistree).
+la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet et quand on rouvre la fenetre) et son etat est enregistre dans les reglages (cle `historique_favoris_seuls`, ecrite a chaque changement) :
+elle est retrouvee telle quelle d'une session a l'autre, comme les favoris eux-memes (fichier historique_favoris.json, voir historique.py).
 
 LA LISTE EST UNE SEULE COLONNE CONTINUE : les plus anciennes entrees en haut, les plus recentes en bas, et la vue s'ouvre tout en bas (derniere entree visible). Le defilement est continu, au pixel : aucune page, aucun cran, aucune
 mise en page qui depend de la position (les boites sont posees une fois pour toutes, la position ne fait que les deplacer) ; une entree qui depasse du bord de la liste est simplement coupee par un cadre de decoupe (glScissor), comme du
@@ -156,7 +157,7 @@ class VueHistorique:
         self.centrer = None                                             # element a ramener au milieu de la vue des que la liste est mesuree (aller)
         self.zones = []; self.zones_etoile = []; self.zones_onglet = []; self.barre = None; self.glisse_barre = None
         self.zone_ret = None
-        self.favoris_seuls = False; self.zone_filtre = None             # case « Favoris seulement » : cochee ? ; sa zone a l'ecran (clic)
+        self.favoris_seuls = self._lire_filtre(); self.zone_filtre = None  # case « Favoris seulement » : cochee ? (reglage enregistre) ; sa zone a l'ecran (clic)
         self.drag = None                                               # glissement dans la liste : [y de depart, decalage de depart, deplace ?]
         self._spr = {}; self._lignes = {}; self._mise = None; self._s_prec = None
         self._boite = None; self._boite_ml = None; self._fens = {}              # boite de dialogue standard (Boite) et les deux fenetres de message du jeu qui servent a dessiner son cadre (avec / sans onglet)
@@ -166,6 +167,7 @@ class VueHistorique:
         """A l'ouverture de la page : recharge la liste (le moteur est arrete, elle ne change plus), tout en bas sur l'element le plus recent."""
         self.onglet = onglet if 0 <= onglet < len(ONGLETS) else O_DIALOGUES
         self.glisse_barre = None; self.drag = None; self._lignes.clear()
+        self.favoris_seuls = self._lire_filtre()
         self.recharger()
 
     def recharger(self, garder=False):
@@ -180,10 +182,20 @@ class VueHistorique:
         i %= len(ONGLETS)
         if i != self.onglet: self.onglet = i; self.recharger()
 
+    # ---- case « Favoris seulement » : son etat est un reglage (historique_favoris_seuls), garde d'une session a l'autre
+    def _lire_filtre(self):
+        try: return self.J.reg['historique_favoris_seuls'] is True
+        except Exception: return False
+
+    def _ecrire_filtre(self, on):
+        """Enregistre l'etat de la case dans les reglages (reglages.json, tout de suite : une fermeture brutale ne le perd pas). Une erreur n'empeche jamais de cocher ou de decocher."""
+        try: reg = self.J.reg; reg['historique_favoris_seuls'] = bool(on); reg.enregistrer()
+        except Exception: pass
+
     def basculer_filtre(self):
-        """Coche ou decoche « Favoris seulement » (valable pour les deux onglets). L'element choisi, s'il est dans la nouvelle liste, reste choisi (et la vue se recentre sur lui) ; sinon on se place sur le plus recent."""
+        """Coche ou decoche « Favoris seulement » (valable pour les deux onglets, enregistre dans les reglages). L'element choisi, s'il est dans la nouvelle liste, reste choisi (et la vue se recentre sur lui) ; sinon on se place sur le plus recent."""
         cur = self.courant(); cle = cur.cle() if cur is not None else None
-        self.favoris_seuls = not self.favoris_seuls; self.recharger()
+        self.favoris_seuls = not self.favoris_seuls; self._ecrire_filtre(self.favoris_seuls); self.recharger()
         if cle is not None:
             for i in range(len(self.elements) - 1, -1, -1):
                 if self.elements[i].cle() == cle: self.aller(i); break
