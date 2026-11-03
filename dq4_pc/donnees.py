@@ -28,13 +28,15 @@ def euler_mat(rx, ry, rz):
 
 
 def decors_de_secours(nom):
-    """Decors voisins d'un decor de combat absent des donnees. Le moteur choisit la lettre finale selon l'heure du monde (`StageStatus::getBtlMapName` : _d jour, _e soir, _n nuit et debut / fin de
-    nuit) ; `param_map_battle.dat` liste les decors de chaque lieu, mais `btlcc1` n'a que _d et _e : sans `_n` rien ne s'afficherait. Dans l'ordre : la variante la plus proche en luminosite, l'autre,
-    puis le nom sans lettre. Un nom qui ne finit pas par _d, _e ou _n : aucune."""
-    m = re.match(r'^(.*)_([den])$', nom or '')
+    """Decors voisins d'un decor de combat absent des donnees. Le moteur choisit la lettre finale selon l'heure du monde (`StageStatus::getBtlMapName` : _d jour, _e soir, _n nuit ET aube : la zone 1 -- 3264 a 127 --
+    reprend `_n`, il n'existe aucun decor d'aube) ; `param_map_battle.dat` liste les decors de chaque lieu, mais `btlcc1` n'a que _d et _e : sans `_n` rien ne s'afficherait. Monde sombre sans zone horaire :
+    la table du moteur demande `_dk` (btl_pl_dk, btl_se_dk, btl_sd_dk, btl_mt_dk, btl_po_dk, btl_wd_dk), mais le paquet de donnees n'a que pl, po, wd (et tc1) en `_dk` : se, sd, mt prennent la nuit
+    (supposition : la table les demande, aucune ressource ne les porte). Dans l'ordre : la variante la plus proche en luminosite, les autres, puis le nom sans lettre. Un nom qui ne finit pas par
+    _d, _e, _n ou _dk : aucune."""
+    m = re.match(r'^(.*)_(dk|d|e|n)$', nom or '')
     if not m: return []
     base, c = m.groups()
-    ordre = {'n': 'ed', 'e': 'dn', 'd': 'en'}[c]
+    ordre = {'n': ['e', 'd'], 'e': ['d', 'n'], 'd': ['e', 'n'], 'dk': ['n', 'd', 'e']}[c]
     return ['%s_%s' % (base, x) for x in ordre] + [base]
 
 

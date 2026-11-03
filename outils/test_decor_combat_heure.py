@@ -26,7 +26,8 @@ class Secours(unittest.TestCase):
         self.assertEqual(DO.decors_de_secours('btlcc1_n'), ['btlcc1_e', 'btlcc1_d', 'btlcc1'])         # btlcc1 n'a que _d et _e dans les donnees
         self.assertEqual(DO.decors_de_secours('btl_pl_e'), ['btl_pl_d', 'btl_pl_n', 'btl_pl'])
         self.assertEqual(DO.decors_de_secours('btl_pl_d'), ['btl_pl_e', 'btl_pl_n', 'btl_pl'])
-        for nom in ('btl_pl_dk', 'btlcb2', 'ev01', '', None): self.assertEqual(DO.decors_de_secours(nom), [], nom)
+        self.assertEqual(DO.decors_de_secours('btl_se_dk'), ['btl_se_n', 'btl_se_d', 'btl_se_e', 'btl_se'])      # monde sombre : le moteur demande btl_se_dk, absent des donnees (seuls pl, po, wd et tc1 l'ont)
+        for nom in ('btlcb2', 'ev01', '', None): self.assertEqual(DO.decors_de_secours(nom), [], nom)
 
 
 class FondFETC(unittest.TestCase):
