@@ -32,7 +32,6 @@ import ciel_titre as CT
 import vitesse_combat as VC
 import teinte_carte as TC
 import ecrans as EK          # choix du moniteur du plein ecran (logique pure : ecrans.py)
-import sortie_audio as SA     # choix du peripherique de sortie audio (logique pure : sortie_audio.py, #112)
 import suivi_charge as SV
 import pose_couchee as PC
 
@@ -276,8 +275,6 @@ class Jeu(pyglet.window.Window):
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
         self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
-        self.sorties = SA.Sorties()
-        if not args.sans_son: self.sorties.appliquer_enregistree(self.reg['sortie_audio'])          # (#112 : la sortie audio choisie au dernier lancement, si elle est branchee ; sinon la sortie par defaut de Windows)
         self.son.precharger(SE_COURANTS); self.son.precharger_musiques()
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
@@ -1034,21 +1031,6 @@ class Jeu(pyglet.window.Window):
         if bool(oui) != self.son.actif:
             self.son.basculer()
             if self.son.actif and self.moteur.etat.musique is not None: self.son.jouer_bgm(self.moteur.etat.musique)
-
-    # ---- sortie audio (menu Echap > Son, premiere ligne) : voir sortie_audio.py (#112)
-    def valeurs_sortie(self): return self.sorties.valeurs(self.reg['sortie_audio'])
-    def valeur_sortie(self): return self.sorties.valeur(self.reg['sortie_audio'])
-    def nom_sortie(self, v): return self.sorties.nom(v, self.reg['sortie_audio'])
-    def sortie_modifiable(self): return self.sorties.modifiable(self.reg['sortie_audio'])
-
-    def regler_sortie(self, v):
-        """Page Son, « Périphérique de sortie » : Automatique ou une sortie detectee ; le moteur audio change de sortie aussitot (la musique reprend) et un bruitage d'essai est joue sur la nouvelle sortie."""
-        ok, choix = self.sorties.appliquer(v)
-        if not ok: return
-        self.reg['sortie_audio'] = choix
-        try:
-            if self.son.actif and self.son.mix.gain('effets') > 0.0: self.son.jouer_se(SE_APERCU)
-        except Exception: pass
 
     def regler_vol_musique(self, v): self.son.regler_volumes(v, None)
     def regler_vol_bruitages(self, v): self.son.regler_volumes(None, v)

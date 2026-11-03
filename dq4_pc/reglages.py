@@ -2,7 +2,6 @@
 import json, os
 import pyglet
 import ecrans as EC
-import sortie_audio as SA
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
@@ -46,7 +45,6 @@ DEFAUT = {
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
     'ecran_plein': None,          # moniteur du plein ecran : None = automatique (l'ecran ou se trouve la fenetre) ; sinon l'ecran choisi, enregistre avec son indice, sa position, ses dimensions et son nom (voir ecrans.py) pour le retrouver au lancement suivant ; un ecran qui n'est plus branche : l'ecran de la fenetre sert
-    'sortie_audio': None,         # peripherique de sortie audio (#112) : None = Automatique (la sortie par defaut de Windows) ; sinon {id, nom} de la sortie choisie (sortie_audio.py)
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
     'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
     'camera_inverser_gd': False,  # camera deplacee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
@@ -253,7 +251,6 @@ class Reglages:
                 bp = self.v['bouton_vitesse_pos']; self.v['bouton_vitesse_pos'] = [float(x) for x in bp] if isinstance(bp, list) and len(bp) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in bp) else []
                 if isinstance(self.v['boutons_pos'], dict): self.v['boutons_pos'] = {n: x for n, x in self.v['boutons_pos'].items() if n != 'combat'}      # (la position du bouton de vitesse n'est plus ici)
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
-                self.v['sortie_audio'] = SA.choix_valide(self.v['sortie_audio'])          # (None ou {id, nom} ; le reste -> Automatique)
                 self.v['ecran_plein'] = EC.valide(self.v['ecran_plein'])          # (moniteur du plein ecran : une description propre ou None = automatique)
                 self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre'])          # (2 = ancien plein ecran exclusif -> 1)
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']

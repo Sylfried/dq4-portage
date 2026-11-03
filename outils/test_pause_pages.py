@@ -11,11 +11,9 @@ import pyglet
 pyglet.options['shadow_window'] = False                     # (pas d'affichage necessaire : on ne dessine rien)
 import reglages as RG
 import pause as PA
-import sortie_audio as SA
 
 K = pyglet.window.key
 LIBELLES_SON = ['Général', 'Musique', 'Jingles et fanfares', 'Bruitages', 'Interface']
-LIBELLE_SORTIE = 'Périphérique de sortie'                      # (#112 : premiere ligne de la page Son)
 CLES_SON = {'Musique': ('musique_active', 'volume_musique'), 'Jingles et fanfares': ('jingles_actifs', 'volume_jingles'), 'Bruitages': ('bruitages_actifs', 'volume_bruitages'),
             'Interface': ('interface_active', 'volume_interface'), 'Général': ('son', 'volume_general')}
 
@@ -31,14 +29,6 @@ class FauxJeu:
         self.reg = RG.Reglages(os.path.join(tempfile.mkdtemp(prefix='pause_test_'), 'reglages.json'))
         self.son = FauxSon(); self.args = types.SimpleNamespace(cache='/inexistant'); self.width, self.height = 1280, 720; self.souris = None
         self.appels = []; self.fondu = None
-        self.sorties = SA.Sorties(types.SimpleNamespace(set_device=lambda d: self.appels.append(('sortie', d.id))), types.SimpleNamespace(get_output_devices=lambda: [types.SimpleNamespace(id='a', name='Haut-parleurs'), types.SimpleNamespace(id='b', name='Casque')]))
-    def valeurs_sortie(self): return self.sorties.valeurs(self.reg['sortie_audio'])
-    def valeur_sortie(self): return self.sorties.valeur(self.reg['sortie_audio'])
-    def nom_sortie(self, v): return self.sorties.nom(v, self.reg['sortie_audio'])
-    def sortie_modifiable(self): return self.sorties.modifiable(self.reg['sortie_audio'])
-    def regler_sortie(self, v):
-        ok, choix = self.sorties.appliquer(v)
-        if ok: self.reg['sortie_audio'] = choix
     def regler_son(self, oui): self.son.actif = bool(oui)
     def appliquer_mixage(self): self.appels.append('mixage')
     def apercu_son(self, cat): self.appels.append(('apercu', cat))
@@ -86,23 +76,10 @@ class Racine(unittest.TestCase):
 class PageSon(unittest.TestCase):
     def test_une_ligne_par_son(self):
         _, p = menu('son'); e = p._entrees()
-        self.assertEqual([x['l'] for x in e], [LIBELLE_SORTIE] + LIBELLES_SON, 'le peripherique de sortie est tout en haut')
+        self.assertEqual([x['l'] for x in e], LIBELLES_SON)
         self.assertNotIn('sep', [x['t'] for x in e], 'plus de sections')
-        for x in e[1:]:                                                                # chaque ligne : une barre de volume (curseur), un bouton muet, un bouton « par defaut »
+        for x in e:                                                                    # chaque ligne : une barre de volume (curseur), un bouton muet, un bouton « par defaut »
             self.assertEqual(x['t'], 'curs'); self.assertTrue(all(k in x for k in ('fixe', 'actif', 'ok', 'defaut', 'est_defaut')), x['l'])
-
-    def test_peripherique_de_sortie(self):
-        """#112 : premiere ligne de la page Son : Automatique, puis les sorties detectees ; choisir change la sortie et l'enregistre ; Automatique par defaut (bouton rond)."""
-        J, p = menu('son'); x = par_libelle(p, LIBELLE_SORTIE)
-        self.assertEqual(x['t'], 'choix'); self.assertEqual(x['vals'], [SA.AUTO, 'a', 'b']); self.assertEqual(x['v'](), 'Automatique'); self.assertTrue(x['est_defaut']()); self.assertFalse(p._inactif(x))
-        x['plus'](); self.assertEqual(J.reg['sortie_audio'], {'id': 'a', 'nom': 'Haut-parleurs'}); self.assertEqual(J.appels[-1], ('sortie', 'a'))
-        x = par_libelle(p, LIBELLE_SORTIE); self.assertEqual(x['v'](), 'Haut-parleurs'); self.assertFalse(x['est_defaut']())
-        x['plus'](); self.assertEqual(J.reg['sortie_audio']['id'], 'b'); self.assertEqual(par_libelle(p, LIBELLE_SORTIE)['v'](), 'Casque')
-        par_libelle(p, LIBELLE_SORTIE)['defaut'](); self.assertIsNone(J.reg['sortie_audio']); self.assertEqual(J.appels[-1], ('sortie', None))
-
-    def test_peripherique_de_sortie_inactif_sans_sortie(self):
-        J, p = menu('son'); J.sorties = SA.Sorties()                                  # (pilote sans set_device : la ligne est grisee)
-        x = par_libelle(p, LIBELLE_SORTIE); self.assertTrue(p._inactif(x)); self.assertEqual(x['vals'], [SA.AUTO])
 
     def test_muet_coupe_et_remet_le_bon_interrupteur(self):
         J, p = menu('son')
@@ -131,8 +108,7 @@ class PageSon(unittest.TestCase):
 
     def test_clavier(self):
         J, p = menu('son')
-        self.assertEqual(p.sel.get('son', 0), 0)                                       # Peripherique de sortie (#112)
-        p.touche(K.DOWN); p.touche(K.DOWN); self.assertEqual(p.sel['son'], 2)          # Musique (apres Général)
+        p.touche(K.DOWN); self.assertEqual(p.sel['son'], 1)                            # Musique
         p.touche(K.LEFT); self.assertAlmostEqual(J.reg['volume_musique'], 0.95, 2)
         p.touche(K.LEFT); p.touche(K.RIGHT); self.assertAlmostEqual(J.reg['volume_musique'], 0.95, 2)
         p.touche(K.RETURN); self.assertFalse(J.reg['musique_active'])                  # Entree : muet
@@ -142,7 +118,7 @@ class PageSon(unittest.TestCase):
         p.touche(K.DELETE); self.assertAlmostEqual(J.reg['volume_musique'], 1.0, 3)    # Suppr : par defaut
         p.touche(K.LEFT); p.touche(K.LEFT); p.touche(K.RETURN); p.touche(K.HOME)       # Debut : aussi
         self.assertAlmostEqual(J.reg['volume_musique'], 1.0, 3); self.assertTrue(J.reg['musique_active'])
-        p.touche(K.UP); p.touche(K.UP); p.touche(K.UP); self.assertEqual(p.sel['son'], 5)              # bouclage : en haut de la liste on arrive en bas
+        p.touche(K.UP); p.touche(K.UP); self.assertEqual(p.sel['son'], 4)              # bouclage : en haut de la liste on arrive en bas
         p.touche(K.DOWN); self.assertEqual(p.sel['son'], 0)
 
     def test_clic_valeur_permet_de_taper(self):
