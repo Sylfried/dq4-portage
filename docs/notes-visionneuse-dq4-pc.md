@@ -815,7 +815,7 @@ Pièces `MAP_DIFF` du plan du monde ; bandeau « Prologue » (cadre doré à fon
 1. **Étendue de la suppression des vitesses** (#101) : **tranché à 17 h 01 (D-201)** : seul le réglage « Vitesse de transition » disparaît ; la marche et la touche Maj restent.
 2. **Sort de déplacement (306)** : **tranché à 17 h 03 (D-202)** : durée d'origine ; Sylfried le teste, peut-être accélérable avec Maj.
 3. **Format de distribution** (#87) : scripts + `.bat`, `.exe` launcher, ou `.exe` qui embarque Unicorn (GPL v2) : « on verra ».
-4. **Audio réel et `reglages.json`** (#99) : **expliqué à 17 h 03 (D-202)** : jamais vus sur son PC (essais sans haut-parleurs, fichiers de réglages fabriqués) ; rien à décider.
+4. **Audio réel et `reglages.json`** (#99) : **expliqué à 17 h 03 (D-202)** : jamais vus sur son PC (essais sans haut-parleurs, fichiers de réglages fabriqués) ; rien à décider. **Réglé à 17 h 07 (D-203)** : l'audio fonctionne ; pas de souci pour `reglages.json`.
 
 ### Non vérifié (#102)
 Rien n'a été exécuté côté outil. Les bruitages 305, 309, 312, 330 et 306 sont lus dans le code du moteur, jamais rejoués. L'idée qu'un `.exe` launcher n'ait pas les obligations d'une redistribution d'Unicorn est une **supposition** (pas un avis juridique). La citation de la documentation GitHub sur les dépôts sans licence a été lue le 03/11/2026.
@@ -831,3 +831,14 @@ Rien n'a été exécuté côté outil. Les bruitages 305, 309, 312, 330 et 306 s
 
 ### Non vérifié (#103)
 Rien n'a été exécuté côté outil. La lecture « l'accélérateur de la phrase du 15 h 50 était la vitesse de transition » est une **supposition**. Les bruitages 305, 309, 312, 330 et 306 restent lus dans le code, jamais rejoués.
+
+## Avance #104 : audio validé (03/11/2026 à 17 h 07, docs seulement)
+
+### Fait
+- **Validé par Sylfried sur Windows** (D-203) : « l'audio fonctionne ». Les mentions « audio réel (Windows, haut-parleurs) non vérifié » des sections plus haut sont donc **périmées** pour le rendu général ; restent supposées les catégories de son 302 / 303 (G-121).
+- **`reglages.json`** : « pas de souci pour le fichier, je peux toujours voir quand une valeur par défaut a été changée par le bouton de la flèche » : pas de test de conversion de plus ; la conversion de #101 (retrait de `vitesse_fondu`) reste à coder avec ses tests habituels.
+- #99 : point « son et `reglages.json` » coché ; il reste la position de la fenêtre « Interface », `g_pad_pos`, `--ui-simple` et le « sort en trop » à vérifier.
+- Aucun fichier de `dq4_pc/` ni de `outils/` modifié.
+
+### Non vérifié (#104)
+Rien n'a été exécuté côté outil. « L'audio fonctionne » est le constat de Sylfried, sans détail (volumes, boucles, jingles).
