@@ -38,6 +38,17 @@ VIDES_FAVORIS = {'dialogues': 'Aucun dialogue en favori : décoche « Favoris se
                  'combats': 'Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.'}
 
 
+def couper_mots(texte, largeur, larg_max):
+    """Coupe `texte` en lignes aux espaces pour qu'aucune ne depasse `larg_max` (largeur(t) = largeur d'une ligne t, dans l'unite de larg_max). Un mot seul plus large que la limite reste seul sur sa ligne (il ne peut pas etre coupe). -> liste de lignes, jamais vide."""
+    lignes = []; cur = ''
+    for mot in texte.split():
+        cand = mot if not cur else cur + ' ' + mot
+        if cur and largeur(cand) > larg_max: lignes.append(cur); cur = mot
+        else: cur = cand
+    lignes.append(cur)
+    return lignes
+
+
 PAS_MOLETTE = 2.0                    # lignes de texte (Boite.PAS : 28 unites) par cran de molette : un pas fin et constant, jamais une entree entiere
 MARGE_LISTE = 6.0                    # (en k) vide au-dessus de la premiere boite et sous la derniere de la liste (le contenu n'est jamais colle au bord de la fenetre de decoupe)
 TOLERANCE_PX = 0.5                   # pixels : en dessous, un message est « entierement visible » (arrondis du dessin)
@@ -560,7 +571,9 @@ class VueHistorique:
         if not n:
             self.hc = self.hv = 0.0; self.pos = 0.0; self._mise = None
             msg = (VIDES_FAVORIS if self.favoris_seuls else VIDES)[ONGLETS[self.onglet][1]]
-            lm = self._larg(bm, msg, su, taille); self._ligne(bm, msg, x0 + max(20 * k, (pw - lm) / 2), (ly0 + ly1) / 2, su, GRIS, taille)
+            vl = couper_mots(msg, lambda t: self._larg(bm, t, su, taille), pw - 40 * k)                 # le message tient dans la fenetre : coupe en plusieurs lignes, centrees (il debordait du cadre quand il etait long)
+            pas_v = (bm.interligne * su) if bm else 28 * k; y_v = (ly0 + ly1) / 2 + (len(vl) - 1) * pas_v / 2
+            for j, l in enumerate(vl): self._ligne(bm, l, x0 + (pw - self._larg(bm, l, su, taille)) / 2, y_v - j * pas_v, su, GRIS, taille)
         else:
             mouse = P.mode_souris; hv = ly1 - ly0
             boites = self._mesurer(bm, B, s, k, taille_b, hv)

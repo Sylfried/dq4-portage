@@ -97,6 +97,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 | #144 | carte du monde : à l'atterrissage (aile de chimère, Téléportation) le héros est devant ses équipiers, comme dans FieldPartyDraw::draw du jeu (#135, D-223) |
 | 03/11 | #147 | fenêtre Interface : un clic simple sur la barre de titre replie ou déplie après le délai du double clic, un double clic ne change plus l'état (#145, D-225) |
 | 03/11 | #148 | historique des dialogues : le « ; » des noms d'objets du patch (marque de coupure) n'est plus affiché (#139, D-224) |
+| 03/11 | #149 | historique : le message « aucun favori » de la liste vide est coupé en lignes et tient dans le cadre (#140, D-224) |
 
 ## Et maintenant
 Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131, #134 à #141 et #145 à #146, jalons 1 à 5 ; 60 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.
