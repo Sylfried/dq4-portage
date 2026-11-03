@@ -107,6 +107,7 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
+CARTE_TITRE = 'ev01'         # carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros dont le jeu fixe seul la camera ; voir _camera_ville)
 FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
@@ -582,9 +583,9 @@ class Jeu(pyglet.window.Window):
             vl.draw(gl.GL_TRIANGLES)
 
     def _zoom_possible(self):
-        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre."""
+        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre (ni sa scene, avant « Touchez l'ecran » : le cadrage du titre est celui du jeu)."""
         mo = self.moteur
-        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
 
     def _camera_pilotable(self):
         """La camera se tourne a la main (fleches, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde), sauf lieu ou le jeu interdit de la tourner (cam_bloquee). Memes conditions que _maj_camera."""
@@ -1159,15 +1160,16 @@ class Jeu(pyglet.window.Window):
         et on montre plus de decor sur les cotes : la bande centrale de la fenetre est exactement l'image du telephone."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
         libre = camera_libre(e); mini = getattr(e, 'partie', None) in MO.PARTIES_MINIJEU       # mini = casino / bestiaire : le cadrage est celui du jeu (ni zoom, ni centrage, ni bornes 16/9, ni rotation du joueur)
+        titre = self.carte_nom == CARTE_TITRE          # ecran-titre : le jeu fixe seul la camera (x = 0, cible a l'origine) et aucun heros ne marche ; ni centrage sur un heros, ni bornes 16/9 de la carte : sinon, avec « Centrer la camera » = Non, la camera glissait de +4,5 u vers le milieu des bornes (le logo et le decor partaient a gauche, de 15 % de la largeur a 16/9)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
         if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
-        th_v /= PJ.facteur_effectif(self.zoom, libre or mini)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
+        th_v /= PJ.facteur_effectif(self.zoom, libre or mini or titre)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
         # La camera est TOUJOURS centree sur le heros (plus d'option : c'est aussi le fonctionnement du jeu, TownCamera::execute fait setTarget(joueur) a chaque pas tant que son verrou est a 0), sauf quand le jeu la prend :
         # TownCamera verrouillee et menee ailleurs (scene, evenement, chute, sort de retour ; cam_jeu), camera libre d'une scene (paquet 11, bit 7) ou mini-jeu. La camera du jeu s'applique alors telle quelle (aucune borne).
-        centre = not libre and not mini and not self.cam_jeu               # centrage actif
+        centre = not libre and not mini and not self.cam_jeu and not titre               # centrage actif (jamais sur l'ecran-titre : le jeu y fixe seul la camera)
         dec = (0.0, 0.0)
         if centre:                                                        # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart (garde-fou : position du heros perimee)
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
@@ -1183,6 +1185,7 @@ class Jeu(pyglet.window.Window):
         k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
         self.cam_res = [r * k for r in self.cam_res]
         self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
+        if titre: self.cam_res = [0.0, 0.0]; self.cam_dec = [0.0, 0.0]          # ecran-titre : aucun reste de centrage d'une partie precedente (retour au titre) ne glisse la camera
         # Hauteur (#47, escaliers) : tant que le joueur a la camera, sa hauteur ne suit plus le heros a chaque pas (le jeu la recalcule sur le heros : TownCamera::execute, setTarget(joueur), aucun lissage en Y ; la montee
         # ressentie venait de la). Hauteur de reference = celle de la cible du jeu, rejointe lentement (CAM_Y_TAU), a 3 unites pres au plus (CAM_Y_MAX) ; coupure du jeu (changement de carte, plan, teleportation) ou
         # camera prise par le jeu : la reference est celle du jeu aussitot (aucun glissement). Au repos (etage plat) l'ecart est nul : le heros est au centre, comme avant.
@@ -1197,7 +1200,7 @@ class Jeu(pyglet.window.Window):
         # du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi.
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
-        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
+        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini or titre else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
         if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
             pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
