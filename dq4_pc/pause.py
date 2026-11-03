@@ -467,7 +467,7 @@ class Pause:
         tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la section Défilement du texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
-                dict(t='sep', l='Caméra'),
+                dict(t='sep', l='Caméra au clavier'),
                 *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance   Ctrl + clic molette : remet les deux   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
                 dict(t='sep', l='Caméra à la souris'),
                 inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
