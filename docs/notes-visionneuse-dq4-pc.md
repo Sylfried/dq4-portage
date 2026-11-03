@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105 et #107 à #112, jalons 1 à 5 ; 48 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-213). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, #101, #105 et #107 à #112, jalons 1 à 5 ; 45 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c, 5d et 5e, D-149 à D-213). **Décidé, pas encore codé (D-197 et D-201, #101)** : le réglage « Vitesse de transition » va être retiré ; seules les transitions de porte et de carte seront raccourcies, à x4 fixe, reconnues à leur bruitage (la vitesse de marche, la caméra et l'accélérateur Maj ne changent pas) ; les passages de ces notes qui décrivent « Vitesse de transition » décrivent donc l'état actuel, pas la cible. État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -958,3 +958,16 @@ Voir D-206 à D-213 (`docs/audit/decisions.md` § 5e) : antialiasing et deux mon
 
 ### Non vérifié
 - Le rendu sous Windows (le tampon d'image de la capture est en 5-6-5 bits : les anneaux concentriques vus sur la capture viennent de là, supposé).
+
+## Avance #119 : logo de l'écran titre 1,5 fois plus grand au lieu de 2 (#108, 03/11/2026)
+
+### Demande (D-215, 21 h 05)
+« Finalement je veux le logo agrandit en 1,5x au lieu de 2x. » Il remplace sa demande de 19 h 38 (D-209, « doubler »). Écart voulu avec l'APK (le logo de l'APK = 1).
+
+### Fait
+- `avant_partie.py` : `LOGO_ECHELLE = 1.5` (le reste de l'agrandissement d'#115 est inchangé : point fixe y = 0,70, réduction si le logo dépasserait 96 % de la largeur, jamais sous x1). Variable d'essai `DQ_LOGO_ECHELLE` (1 = APK) toujours valable.
+- `test_titre_logo.py` (12 tests) : constante 1,5 ; rapport de largeur 1,5 à ±0,05 à 16:9, 16:10, 4:3 et 21:9 ; test de réduction refait avec des largeurs de fenêtre où la réduction joue encore (0,7 à 0,9).
+- **Mesuré** (rendu réel, Mesa sans écran, image 770) : les 12 tests passent, dont le rendu à 1280x720, 1280x800, 1024x768 et 2560x1080 ; capture 16:9 regardée : logo centré, « IV » au-dessus de la zone de « Touchez l'écran », dragon et île du château non recouverts.
+
+### Non vérifié
+- Le rendu sous Windows. **À confirmer par Sylfried.**

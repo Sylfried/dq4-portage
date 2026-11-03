@@ -1,11 +1,11 @@
-"""Test du logo et du sous-titre de l'ecran-titre agrandis deux fois (issue #108 ; ECART VOULU avec l'APK : demande de Sylfried du 03/11/2026).
+"""Test du logo et du sous-titre de l'ecran-titre agrandis 1,5 fois (issue #108 ; d'abord 2 fois, ramene a 1,5 le 03/11/2026 a 21 h 05 ; ECART VOULU avec l'APK : demande de Sylfried du 03/11/2026).
 
-Partie 1 (sans moteur) : les fonctions pures de `avant_partie` (`agrandir_logo`, `facteur_logo`) : x et y doublent autour d'un point fixe, la profondeur ne change pas, le facteur est reduit
+Partie 1 (sans moteur) : les fonctions pures de `avant_partie` (`agrandir_logo`, `facteur_logo`) : x et y sont multiplies autour d'un point fixe, la profondeur ne change pas, le facteur est reduit
 dans une fenetre trop etroite (le logo ne deborde jamais) et ne descend jamais sous 1.
 
 Partie 2 (rendu reel, Mesa sans ecran) : la visionneuse est lancee avec le moteur d'origine a 16:9, 16:10, 4:3 et 21:9, a l'image 770 (logo, sous-titre, « Touchez l'ecran » au maximum de son clignotement),
 et une fois avec DQ_LOGO_ECHELLE=1 (le logo de l'APK, a 16:9) pour comparer. On mesure sur les captures :
-  1. la largeur du lettrage « DRAGON QUEST » (pixels rouge-violet) vaut deux fois celle de l'APK (a 3 % pres), a tous les formats (en hauteurs de fenetre) ;
+  1. la largeur du lettrage « DRAGON QUEST » (pixels rouge-violet) vaut 1,5 fois celle de l'APK (a 3 % pres), a tous les formats (en hauteurs de fenetre) ;
   2. le logo reste dans la fenetre (aucun pixel du lettrage sur les 1 % de bord) ;
   3. le bas du « IV » reste au-dessus du haut de « Touchez l'ecran » (zone calculee comme `Jeu._ui_repere` : 228 unites sous le centre, hauteur 41,48, echelle H / 800 x UI_ZOOM) d'au moins 2 % de la hauteur ;
   4. le haut du logo reste dans la fenetre (a plus de 5 % du bord haut) ;
@@ -45,19 +45,19 @@ class Fonctions(unittest.TestCase):
         r = AP.agrandir_logo(np.array([[0.0, 0.7, 0.0]], np.float32), 2.0, 0.7)
         self.assertAlmostEqual(float(r[0, 1]), 0.7, places=5); self.assertAlmostEqual(float(r[0, 0]), 0.0, places=5)
 
-    def test_facteur_deux_quand_la_fenetre_est_assez_large(self):
-        for larg in (0.1, 0.25, 0.40): self.assertEqual(AP.facteur_logo(larg), 2.0)
+    def test_facteur_voulu_quand_la_fenetre_est_assez_large(self):
+        for larg in (0.1, 0.25, 0.40, 0.60): self.assertEqual(AP.facteur_logo(larg), 1.5)
 
     def test_facteur_reduit_dans_une_fenetre_etroite(self):
-        for larg in (0.5, 0.6, 0.9):
-            f = AP.facteur_logo(larg); self.assertLess(f, 2.0 + 1e-9); self.assertLessEqual(f * larg, AP.LOGO_MARGE_LARGEUR + 1e-9)             # le logo agrandi tient dans 96 % de la largeur
+        for larg in (0.7, 0.8, 0.9):
+            f = AP.facteur_logo(larg); self.assertLess(f, 1.5); self.assertGreaterEqual(f, 1.0); self.assertLessEqual(f * larg, AP.LOGO_MARGE_LARGEUR + 1e-9)             # le logo agrandi tient dans 96 % de la largeur
         self.assertEqual(AP.facteur_logo(1.2), 1.0)                                  # jamais plus petit que l'APK, meme si le logo d'origine deborde deja
 
     def test_facteur_sans_mesure(self):
-        self.assertEqual(AP.facteur_logo(0.0), 2.0)
+        self.assertEqual(AP.facteur_logo(0.0), 1.5)
 
     def test_constantes(self):
-        self.assertEqual(AP.LOGO_ECHELLE, 2.0); self.assertEqual(set(AP.LOGO_MODELES), {8900, 8901})              # 8901 : logo + sous-titre ; 8900 : eclat anime
+        self.assertEqual(AP.LOGO_ECHELLE, 1.5); self.assertEqual(set(AP.LOGO_MODELES), {8900, 8901})              # 8901 : logo + sous-titre ; 8900 : eclat anime
 
 
 def mesures(chemin):
@@ -99,10 +99,10 @@ class RenduTitre(unittest.TestCase):
         self.assertIsNotNone(self.origine, 'lettrage introuvable sur la capture de l\'APK')
         for f in FORMATS: self.assertIsNotNone(self.res[f], 'lettrage introuvable a %dx%d' % f)
 
-    def test_deux_fois_plus_large_a_tous_les_formats(self):
+    def test_une_fois_et_demie_plus_large_a_tous_les_formats(self):
         for f in FORMATS:
             r = self.res[f]['larg_h'] / self.origine['larg_h']
-            self.assertAlmostEqual(r, 2.0, delta=0.06, msg='rapport de largeur %.3f a %dx%d' % ((r,) + f))
+            self.assertAlmostEqual(r, 1.5, delta=0.05, msg='rapport de largeur %.3f a %dx%d' % ((r,) + f))
 
     def test_le_logo_reste_dans_la_fenetre(self):
         for f in FORMATS:
