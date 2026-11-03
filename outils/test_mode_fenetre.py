@@ -169,7 +169,7 @@ class Raccourcis(unittest.TestCase):
 
 class FauxEcran:
     """Un moniteur de pyglet (x, y, width, height, name, is_primary)."""
-    def __init__(self, x, y, w, h, nom='', principal=False): self.x, self.y, self.width, self.height, self.name, self.is_primary = x, y, w, h, nom, principal
+    def __init__(self, x, y, w, h, nom='', principal=False, perime=False): self.x, self.y, self.width, self.height, self.name, self.is_primary, self.perime = x, y, w, h, nom, principal, perime          # perime : sa poignee Windows n'est plus valable (apres un branchement d'ecran)
     def get_monitor_name(self): return self.name
 
 
@@ -178,12 +178,12 @@ class FausseFenetre:
     le bureau) ; `ecran` : celui de la fenetre pour pyglet (`screen`, defaut le premier)."""
     def __init__(self, FE, plein=False, taille=(1280, 720), bureau=(1920, 1080), echec=None, ecrans=None, ecran=0):
         self.journal = []; self.fullscreen = plein; self._visible = True
-        self._ecrans = ecrans or [FauxEcran(0, 0, bureau[0], bureau[1], principal=True)]; self.screen = self._ecrans[ecran]
+        self._ecrans = ecrans or [FauxEcran(0, 0, bureau[0], bureau[1], principal=True)]; self._screen = self._ecrans[ecran]
         self.display = types.SimpleNamespace(get_screens=lambda: list(self._ecrans)); self.width, self.height = ((self.screen.width, self.screen.height) if plein else taille)
         self.bureau = bureau; self.echec = echec; self._windowed_location = None if plein else (100, 80); self._windowed_size = taille
         self.taille_fenetre = taille; self.mode_fen = 1 if plein else 0; self._pret = True; self._en_bascule = False; self.reg = RG.Reglages(None)
         self.toasts = []; self.post = types.SimpleNamespace(cle=('cle', 1))
-        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein', '_noter_echec_bascule'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
+        for nom in ('regler_plein_ecran', '_poser_plein_ecran', '_mettre_plein', 'basculer_plein_ecran', '_image_de_bascule', '_lire_ecrans', '_indice_ecran_fenetre', '_ecran_pour_plein', '_deja_sur', '_noter_zone_plein', '_noter_echec_bascule', '_rafraichir_ecran'): setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
         self._echec_simule = FE.Jeu._echec_simule; self.bureau_ = bureau
         self._verifier_taille_reelle = lambda: self.journal.append('verifier')
         self.toast = lambda t, d=3.0: self.toasts.append(t)
@@ -191,6 +191,9 @@ class FausseFenetre:
 
     @property
     def est_plein(self): return self.mode_fen == 1
+
+    @property
+    def screen(self): return self._screen          # (pyglet : BaseWindow.screen renvoie _screen)
 
     def _piege(self, nom):
         self.journal.append(nom)
@@ -207,9 +210,10 @@ class FausseFenetre:
         if not self.fullscreen: self._windowed_size = (self.width, self.height); self._windowed_location = self._windowed_location or (100, 80)
         self.fullscreen = bool(fullscreen)
         if fullscreen:
-            if screen is not None: self.screen = screen
+            if screen is not None: self._screen = screen
             self.width, self.height = self.screen.width, self.screen.height
         else: self.width, self.height = (taille if taille else self._windowed_size); self._windowed_location = self._windowed_location or None
+        if self._screen.perime: raise OSError(9, 'Descripteur non valide', None, -2147024890)          # (Win32Window._create : Screen.get_dpi -> GetDpiForMonitor sur une poignee qui n'est plus valable ; l'etat a deja change, comme dans pyglet)
 
     def set_location(self, x, y): self._piege('set_location(%d,%d)' % (x, y)); self._windowed_location = (x, y)
 
@@ -309,6 +313,53 @@ class Bascule(unittest.TestCase):
             self.assertFalse(f.fullscreen, appel); self.assertTrue(f._visible, appel); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (0, 0), appel)
             self.assertEqual(len(f.toasts), 1, appel)
             f.regler_plein_ecran(True); self.assertTrue(f.fullscreen, appel)                                 # (l'essai suivant fonctionne)
+
+    # ---- #126 : un ecran branche pendant que la fenetre existe rend la poignee du moniteur de pyglet invalide
+    def fen_perimee(self, plein=True, **k):
+        """Une fenetre dont le moniteur gardé par pyglet (`_screen`) est perime (meme position et memes dimensions que le moniteur 1 de la liste neuve) : un second ecran vient d'etre branche."""
+        principal = FauxEcran(0, 0, 1920, 1200, principal=True); externe = FauxEcran(-331, -1440, 2560, 1440)
+        f = self.fen(plein=plein, ecrans=[principal, externe], **k); f._screen = FauxEcran(0, 0, 1920, 1200, principal=True, perime=True)
+        return f, principal, externe
+
+    def test_le_faux_moniteur_perime_reproduit_l_erreur_de_windows(self):
+        f, _, _ = self.fen_perimee()
+        with self.assertRaises(OSError) as c: f.set_fullscreen(False, width=1280, height=720)
+        self.assertEqual(c.exception.errno, 9)
+
+    def test_plein_ecran_puis_ecran_externe_branche_retour_en_fenetre(self):
+        """Le cas de Sylfried (03/11/2026, 23 h 08) : plein ecran, ecran externe branche, passage en fenetre : marche."""
+        f, principal, _ = self.fen_perimee()
+        self.assertFalse(f.regler_plein_ecran(False))
+        self.assertFalse(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (0, 0)); self.assertEqual(f.toasts, [])
+        self.assertIs(f._screen, principal)                                                                  # le moniteur gardé est celui de la liste neuve
+        self.assertFalse(os.path.exists(self.journal_erreurs))                                               # aucune erreur notee
+        self.assertEqual([e for e in f.journal if e.startswith('set_fullscreen')], ['set_fullscreen(False,1280x720)'])
+
+    def test_fenetre_puis_ecran_externe_branche_plein_ecran(self):
+        """Meme defaut dans l'autre sens : fenetre, ecran branche, plein ecran sur le moniteur de pyglet (set_fullscreen(True) sans moniteur, comme avant)."""
+        f, principal, _ = self.fen_perimee(plein=False)
+        self.assertTrue(f.regler_plein_ecran(True)); self.assertTrue(f.fullscreen); self.assertEqual(f.toasts, []); self.assertIs(f._screen, principal)
+        self.assertFalse(os.path.exists(self.journal_erreurs))
+
+    def test_le_retour_a_l_etat_de_depart_utilise_aussi_le_moniteur_neuf(self):
+        """Si le passage en fenetre echoue pour une autre raison, le retour au plein ecran ne reutilise pas la poignee perimee."""
+        f, principal, _ = self.fen_perimee(echec='set_fullscreen(False,1280x720)')
+        self.assertTrue(f.regler_plein_ecran(False)); self.assertTrue(f.fullscreen); self.assertEqual(f.toasts, ['Fenêtre impossible'])
+        self.assertIs(f._screen, principal)
+        self.assertNotIn('Retour à l\'état de départ impossible', open(self.journal_erreurs, encoding='utf-8').read())
+
+    def test_moniteur_debranche_la_fenetre_prend_celui_ou_elle_se_trouve_ou_le_principal(self):
+        """L'ancien moniteur n'existe plus (aucun de meme position) : le moniteur gardé devient celui ou se trouve la fenetre, a defaut le principal."""
+        principal = FauxEcran(0, 0, 1920, 1080, principal=True)
+        f = self.fen(plein=True, ecrans=[principal]); f._screen = FauxEcran(-1920, 0, 1920, 1080, perime=True)
+        self.assertFalse(f.regler_plein_ecran(False)); self.assertEqual(f.toasts, []); self.assertIs(f._screen, principal)
+
+    def test_rafraichir_ne_leve_jamais_d_erreur(self):
+        f = self.fen(plein=True); ancien = f._screen
+        f.display = types.SimpleNamespace(get_screens=lambda: (_ for _ in ()).throw(RuntimeError('moniteurs illisibles')))
+        self.assertFalse(f._rafraichir_ecran()); self.assertIs(f._screen, ancien)
+        f.display = types.SimpleNamespace(get_screens=lambda: []); self.assertFalse(f._rafraichir_ecran()); self.assertIs(f._screen, ancien)
+        f._screen = None; self.assertFalse(f._rafraichir_ecran())
 
     def test_pas_de_bascule_pendant_une_bascule(self):
         f = self.fen(); f._en_bascule = True; self.assertFalse(f.regler_plein_ecran(True)); self.assertEqual(f.journal, [])
