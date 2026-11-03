@@ -116,7 +116,7 @@ Source : `/tmp/specs/brief_commun42.md` (qui recopie les 17 points). Ce lot a é
 | D-36 | 01/11 23:33 | [C] [V] | « Le texte noir du prologue lui finalement c'est bon » | question du texte « Et c'est ainsi que commence notre histoire… » **close, rien changé** | clos |
 | D-37 | 01/11 23:33 | [C] [V] | « Pour tout le reste c'est bon » puis « Enfin tout le reste de tes rapports, pas de ce que je t'ai envoyé moi » | validation du lot #41 tel que rapporté par Claude ; ne valide **pas** ses propres demandes en cours (qu'il retestait) | clos. Lecture (supposée) : il valide les rapports, pas l'état fonctionnel |
 | D-38 | 02/11 01:44 | [C] [V] | « Le bouton par défaut du son c'est bon » | décision [K] « défaut = volume ET son remis » **validée** | clos |
-| D-39 | 02/11 01:44 | [C] [V] | « Ok pour la vitesse de transition » | défaut **x2** pour la vitesse des transitions validé | clos |
+| D-39 | 02/11 01:44 | [C] [V] | « Ok pour la vitesse de transition » | défaut **x2** pour la vitesse des transitions validé (remplacé le 03/11 07 h 33 par **x1**, #48) | clos |
 | D-40 | 02/11 01:44 | [C] | « Je test tout le reste et te fais part de mes nouveaux commentaires » | tout le reste du lot #42 (dont « Moyen = 2, Lent = 3 », « Masqué/Masquée ») n'est **pas** encore validé | ouvert |
 
 ## 5. Message de lundi 02/11, 02:12 à 02:14 (lot en cours, PR #43)
@@ -229,7 +229,7 @@ Chaque PR introduit la phrase par « Retour d'essai : ». C'est Claude qui la re
 | D-88 | 01/11 (PR #42) | « Moyen » = valeur d'origine 2, « Lent » = 3 ; mapping `defilement_combat` 0/2/3/4 | **à valider** (liste de Claude) |
 | D-89 | 01/11 (PR #42) | libellés « Masqué » (boutons) / « Masquée » (croix, fenêtres) | **à valider** (liste de Claude), voir D-29 |
 | D-90 | 01/11 (PR #42) | défaut du bouton Son = volume ET son remis | **validé** (D-38) |
-| D-91 | 01/11 (PR #42) | vitesse de transition x2 par défaut | **validé** (D-39) |
+| D-91 | 01/11 (PR #42) | vitesse de transition x2 par défaut | **validé** (D-39) ; **remplacé en #48 : x1 par défaut** (demande de Sylfried, 03/11 07 h 33) |
 | D-92 | 01/11 (PR #41) | plaque « Sauvegarde automatique » cachée quand vide | **annulé** (D-32) |
 | D-93 | 30/10 (PR #2) | suppression de la silhouette du personnage caché par le décor (« absente du jeu d'origine ») | non validé ; l'issue dq4-pc #6 (toits transparents) reste ouverte |
 | D-94 | 01/11 (PR #39) | clavier du nom de saisie = disposition du portage (l'originale n'a pas été retrouvée) | non validé, limite connue |
