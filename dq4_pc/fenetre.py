@@ -107,6 +107,7 @@ CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas d
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
+CARTE_TITRE = 'ev01'         # carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros dont le jeu fixe seul la camera ; voir _camera_ville)
 FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
@@ -128,6 +129,8 @@ CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # an
 CAM_CENTRE_MAX = 60.0                                                        # camera centree sur le heros : garde-fou, ecart maximal (unites) entre la cible du jeu et le heros pour corriger (position du heros perimee) ; le vrai critere est le verrou TownCamera (cam_jeu)
 CAM_SAUT_VILLE = 1.5                                                         # unites de ville par pas du moteur : au-dela, la cible de la camera a saute (coupure, changement de carte) : pas d'interpolation, et la correction du centrage suit aussitot
 CAM_MENE_DIST = 1.0                                                      # camera verrouillee sans cible (mode 0) : le jeu la mene ailleurs que sur le joueur quand sa cible est a plus de 1 unite du heros
+CAM_Y_TAU = 1.0                                                             # escaliers, rampes, ponts (#47) : la camera ne suit plus la hauteur du heros a chaque pas ; sa hauteur de reference rejoint celle de la cible du jeu en exp(-t / CAM_Y_TAU) (secondes reelles ; 0 = comme le jeu)
+CAM_Y_MAX = 3.0                                                             # ... sans jamais s'ecarter de plus de 3 unites de la hauteur du jeu (etages hauts, tours : le heros reste a moins de ~15 % de la hauteur de l'ecran du centre)
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
@@ -219,7 +222,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_ref_y = None; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
@@ -233,7 +236,7 @@ class Jeu(pyglet.window.Window):
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
         self.effet_tex = None; self.effet_sim = None; self.effet_vl = None; self.effet_ref = None; self.effet_tex_prete = False      # effet de debut de combat : capture de l'ecran, simulation, sommets
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
-        self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
+        self.fonds = TC.Fonds(self.donnees, log=lambda *a: print(*a, flush=True)); self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
         self._demarrer_moteur(args)
         self._attente('Chargement de la sauvegarde...')
         self.donnees.apk = self.moteur.apk_donnees
@@ -580,9 +583,9 @@ class Jeu(pyglet.window.Window):
             vl.draw(gl.GL_TRIANGLES)
 
     def _zoom_possible(self):
-        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre."""
+        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre (ni sa scene, avant « Touchez l'ecran » : le cadrage du titre est celui du jeu)."""
         mo = self.moteur
-        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
 
     def _camera_pilotable(self):
         """La camera se tourne a la main (fleches, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde), sauf lieu ou le jeu interdit de la tourner (cam_bloquee). Memes conditions que _maj_camera."""
@@ -943,11 +946,11 @@ class Jeu(pyglet.window.Window):
     def valeur_ecran(self): return EK.valeur_choisie(self.reg['ecran_plein'], self._lire_ecrans()[1])
     def nom_ecran(self, v): return EK.nom_valeur(v, self.reg['ecran_plein'], self._lire_ecrans()[1])
 
-    def note_ecran(self):
-        """Note rouge de la ligne « Écran du plein écran » : le moniteur enregistre n'est plus branche, ou il n'y en a qu'un."""
+    def ecran_modifiable(self):
+        """La ligne « Écran du plein écran » a-t-elle un choix a offrir ? Oui avec plusieurs moniteurs detectes, ou quand le moniteur enregistre n'est plus branche (on peut le remplacer) ; avec un seul moniteur (ou aucun de lisible)
+        la ligne est inactive (grisee, ni choisie ni survolee ni cliquee : voir Pause._inactif). Relue a chaque image (la liste des moniteurs est gardee 1,5 s)."""
         desc = self._lire_ecrans()[1]
-        if EK.valeur_choisie(self.reg['ecran_plein'], desc) == EK.ABSENT: return "Écran absent : l'écran de la fenêtre sert"
-        return 'Un seul écran détecté' if len(desc) <= 1 else ''
+        return len(desc) > 1 or EK.valeur_choisie(self.reg['ecran_plein'], desc) == EK.ABSENT
 
     def regler_ecran_plein(self, v):
         """Page Affichage, « Écran du plein écran » : `v` = EK.AUTO (l'ecran ou se trouve la fenetre), l'indice d'un moniteur detecte, ou EK.ABSENT (l'ecran enregistre qui n'est plus la : rien ne change). Le choix est enregistre
@@ -1021,7 +1024,7 @@ class Jeu(pyglet.window.Window):
     def appliquer_texte(self): self.moteur.vitesse_texte = float(self.reg['vitesse_texte'])
 
     def appliquer_jeu(self):
-        """Page « Triches » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
+        """Page « Modifications » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur)."""
         self.moteur.soin_niveau = bool(self.reg['soin_niveau'])
 
     def appliquer_defilement(self):
@@ -1157,16 +1160,16 @@ class Jeu(pyglet.window.Window):
         et on montre plus de decor sur les cotes : la bande centrale de la fenetre est exactement l'image du telephone."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
         libre = camera_libre(e); mini = getattr(e, 'partie', None) in MO.PARTIES_MINIJEU       # mini = casino / bestiaire : le cadrage est celui du jeu (ni zoom, ni centrage, ni bornes 16/9, ni rotation du joueur)
+        titre = self.carte_nom == CARTE_TITRE          # ecran-titre : le jeu fixe seul la camera (x = 0, cible a l'origine) et aucun heros ne marche ; ni centrage sur un heros, ni bornes 16/9 de la carte : sinon, avec « Centrer la camera » = Non, la camera glissait de +4,5 u vers le milieu des bornes (le logo et le decor partaient a gauche, de 15 % de la largeur a 16/9)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
         if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
-        th_v /= PJ.facteur_effectif(self.zoom, libre or mini)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
-        # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
-        # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
-        option = bool(self.reg['camera_centree'])
-        centre = option and not libre and not self.cam_jeu               # centrage actif
+        th_v /= PJ.facteur_effectif(self.zoom, libre or mini or titre)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
+        # La camera est TOUJOURS centree sur le heros (plus d'option : c'est aussi le fonctionnement du jeu, TownCamera::execute fait setTarget(joueur) a chaque pas tant que son verrou est a 0), sauf quand le jeu la prend :
+        # TownCamera verrouillee et menee ailleurs (scene, evenement, chute, sort de retour ; cam_jeu), camera libre d'une scene (paquet 11, bit 7) ou mini-jeu. La camera du jeu s'applique alors telle quelle (aucune borne).
+        centre = not libre and not mini and not self.cam_jeu and not titre               # centrage actif (jamais sur l'ecran-titre : le jeu y fixe seul la camera)
         dec = (0.0, 0.0)
         if centre:                                                        # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart (garde-fou : position du heros perimee)
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
@@ -1182,22 +1185,22 @@ class Jeu(pyglet.window.Window):
         k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
         self.cam_res = [r * k for r in self.cam_res]
         self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
-        a = 1.0 if saut else 1.0 - k                                      # (poids des bornes 16/9 ci-dessous : meme constante de temps, aussitot apres une coupure)
-        # part SANS les bornes 16/9 de la visionneuse : 1 = aucune borne, 0 = bornes completes. Option « camera centree » ; ET camera menee par le jeu (cam_jeu : travelling, cible = un personnage, retour) :
-        # Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), le cadre du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi (progressivement, sans a-coup)
-        poids_cible = 1.0 if option or self.cam_jeu else 0.0
-        self.cam_poids += (poids_cible - self.cam_poids) * a
+        if titre: self.cam_res = [0.0, 0.0]; self.cam_dec = [0.0, 0.0]          # ecran-titre : aucun reste de centrage d'une partie precedente (retour au titre) ne glisse la camera
+        # Hauteur (#47, escaliers) : tant que le joueur a la camera, sa hauteur ne suit plus le heros a chaque pas (le jeu la recalcule sur le heros : TownCamera::execute, setTarget(joueur), aucun lissage en Y ; la montee
+        # ressentie venait de la). Hauteur de reference = celle de la cible du jeu, rejointe lentement (CAM_Y_TAU), a 3 unites pres au plus (CAM_Y_MAX) ; coupure du jeu (changement de carte, plan, teleportation) ou
+        # camera prise par le jeu : la reference est celle du jeu aussitot (aucun glissement). Au repos (etage plat) l'ecart est nul : le heros est au centre, comme avant.
+        dy = 0.0
+        if centre and CAM_Y_TAU > 0:
+            if self.cam_ref_y is None or saut: self.cam_ref_y = float(cib[1])
+            else: self.cam_ref_y += (float(cib[1]) - self.cam_ref_y) * (1.0 - math.exp(-dt / CAM_Y_TAU))
+            self.cam_ref_y = min(float(cib[1]) + CAM_Y_MAX, max(float(cib[1]) - CAM_Y_MAX, self.cam_ref_y)); dy = self.cam_ref_y - float(cib[1])
+        else: self.cam_ref_y = None
+        if abs(dy) > 1e-6: pos[1] += dy; cib[1] += dy
+        # Aucune borne de la visionneuse (cadrage 16/9 retire avec l'option) : Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), la camera va jusqu'au bord de la carte et le cadre
+        # du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi.
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
-        if self.bornes_x is not None and self.cam_poids < 0.999 and not mini:
-            # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ (progressivement quand l'option cesse de valoir, pas de saut)
-            fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
-            if abs(fv[2]) > 0.95:
-                W = np.linalg.norm(cib - pos) * th_v * aspect * 0.85
-                lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
-                cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
-                d = (cx - cib[0]) * (1.0 - self.cam_poids); pos[0] += d; cib[0] += d
-        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
+        lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini or titre else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
         if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
             pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
@@ -1235,25 +1238,28 @@ class Jeu(pyglet.window.Window):
     ancre_combat = None                                                # rattachement du bouton de vitesse de combat (voir _ancrer_vitesse_combat et hud_mobile.Boutons.ancre)
 
     def _ancrer_vitesse_combat(self, liste, msg, dz, s, cx, repere, tf_msg):
-        """Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Parmi les fenetres visibles,
-        on prend celle dont le cadre descend le plus bas ; la plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
-        -> self.ancre_combat = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre) ; inchange tant qu'aucune boite n'est visible (la plaque reste la ou elle etait)."""
+        """Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Seules comptent la fenetre de message
+        et les fenetres de commandes (RG.FENETRES_COMMANDES_COMBAT) : parmi elles, celle dont le cadre descend le plus bas ; les autres (bandeau de l'equipe en haut, noms des monstres au milieu) n'ont rien a voir avec le bas de
+        l'ecran (#47 : le bouton sautait sous elles pendant une image entre deux boites). La plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
+        Aucune boite visible (entre deux boites) : l'ancre reste ou elle etait ; toute premiere image du combat (aucune ancre encore) : la boite des messages a sa place d'avance (le bouton n'apparait jamais a la position
+        par defaut de la grille, a gauche de l'ecran). -> self.ancre_combat = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre)."""
         if self.moteur.etat.partie != MO.PARTIE_COMBAT: self.ancre_combat = None; return
-        cands = []; dims = None
-        if msg and self.ui_msg is not None:
+        cands = []
+        def boite_message(dzm, tf):
             c = self.ui_msg.N.get('cadre')
-            if c and c['vtx']:
-                tf = tf_msg or (cx, repere('msg')[0] + dz * s, s)
-                cands.append((tf[1] + min(c['pos'][2] + v[1] for v in c['vtx']) * tf[2], tf[0] + min(c['pos'][0] + v[0] for v in c['vtx']) * tf[2], None))
+            if c and c['vtx']: cands.append((tf[1] + (min(c['pos'][2] + v[1] for v in c['vtx']) + dzm) * tf[2], tf[0] + min(c['pos'][0] + v[0] for v in c['vtx']) * tf[2], None))      # (tf : repere sans le decalage dzm du message)
+        if msg and self.ui_msg is not None: boite_message(dz, tf_msg or (cx, repere('msg')[0], s))
         for _, p in liste:
             fe = self.ui_g.f[p]
-            if p in self.ui_suit or self._cachee(fe.typ): continue
+            if p in self.ui_suit or self._cachee(fe.typ) or self._nom_de_type(fe.typ) not in RG.FENETRES_COMMANDES_COMBAT: continue
             rs = fe.rects(); tf = self.ui_tf.get(p)
             if not rs or tf is None: continue
             cad = max(rs, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))                          # le cadre de la fenetre : le plus grand rectangle
             fuir = [r for r in rs if r is not cad and r[3] <= cad[1] + 2.0 and r[2] >= cad[2] - 12.0]          # plaque accrochee sous le cadre, a son bord droit
             d = (min((r[2] - r[0]) * tf[2] for r in fuir), min((r[3] - r[1]) * tf[2] for r in fuir)) if fuir else None
             cands.append((tf[1] + cad[1] * tf[2], tf[0] + cad[0] * tf[2], d))
+        if not cands and self.ancre_combat is None and self.ui_msg is not None:
+            ov = self.reg['interface_fenetres'].get('msg'); boite_message(CB_MSG_BAS - self.ui_msg.bas(), self._ui_perso('bas', s, ov) if ov else (cx, repere('msg')[0], s))
         if not cands: return
         bas, gauche, d = min(cands, key=lambda c: c[0])
         d = d or (self.ancre_combat and self.ancre_combat.get('w') and (self.ancre_combat['w'], self.ancre_combat['h'])) or None
@@ -1731,7 +1737,8 @@ class Jeu(pyglet.window.Window):
     def _dessiner_effet(self, ef):
         """Effet de debut de combat : fond noir, morceaux de la capture qui tombent (voir effet_combat.py)."""
         sim = self.effet_sim
-        while sim.images < ef['n'] and not sim.fini: sim.etape()
+        cible = math.ceil(ef['n'] * MO.EFFET_COMBAT_IMAGES / ef.get('duree', MO.EFFET_COMBAT_IMAGES))          # cascade raccourcie par « Vitesse de transition » : la simulation avance de plusieurs images du jeu par image du moteur
+        while sim.images < cible and not sim.fini: sim.etape()
         gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
         gl.glViewport(0, 0, *self.get_framebuffer_size())
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -2033,7 +2040,7 @@ class Jeu(pyglet.window.Window):
         dz = (MSG_BAS - fe.bas()) if cle == 'msg' else 0.0
         k, gr, modes = self._ui_echelle([(e[0] + dz, e[1] + dz)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'
-        v = self.reg['interface_fenetres'].get(cle) or RG.FENETRE_DEFAUT
+        v = self.reg['interface_fenetres'].get(cle) or RG.fenetre_defaut(cle)
         cx, cy, s2 = self._ui_perso(mode, s, v)
         fe.sel = None; fe.sel_nd = None; fe.appui_nd = None
         self.ui_rendu.dessiner([fe], cx, cy + dz * s2, s2, (self.width, self.height))
@@ -2687,8 +2694,9 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
-        if e.transition_combat(): return 1.0          # cascade d'entree en combat, ecran noir, fondus d'entree / de sortie du combat et de retour a la carte : EXACTEMENT la duree du jeu d'origine, aucun reglage (vitesse de combat, de marche, accelerateur, transitions) n'y change rien
-        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if e.effet is not None: return 1.0          # cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Moteur._debut_effet_combat) ; ni vitesse de combat, ni de marche, ni accelerateur
+        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat, des la fin de la cascade (ecran noir, fondu d'arrivee, message « X apparait ») jusqu'au fondu de fin compris : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if e.transition_combat(): return 1.0          # retour a la carte apres un combat (fondu d'arrivee sur la carte, images entre deux fondus) : horloge du jeu, comme tout fondu de la carte
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
@@ -2719,16 +2727,16 @@ class Jeu(pyglet.window.Window):
         t = time.perf_counter()
         muet = self._attend_joueur() and t - self._t_pas_reel < PAS_MOTEUR * VC.TOLERANCE
         if not muet: self._t_pas_reel = t
-        e = self.moteur.etat; avant = e.transition_combat()
+        e = self.moteur.etat; avant = e.effet is not None
         self._pas(muet)
-        return avant or not e.transition_combat()          # une transition de combat (fondu de sortie du combat) commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
+        return avant or e.effet is None          # la cascade d'entree commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
 
     def _pas_terrain(self):
         """Un pas du moteur hors combat accelere (marche, accelerateur). Renvoie False quand la transition d'un combat vient de commencer pendant ce pas (effet d'ecran de debut rendu par une rencontre) : VC.avancer s'arrete la
         et le reste de l'image reprend a l'horloge du jeu ; sans cela, les pas restants du rattrapage d'une marche acceleree raccourciraient le debut de la cascade."""
-        e = self.moteur.etat; avant = e.transition_combat()
+        e = self.moteur.etat; avant = e.effet is not None
         self._pas()
-        return avant or not e.transition_combat()
+        return avant or e.effet is None
 
     def changer_vitesse_combat(self, source='touche'):
         """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
@@ -3062,7 +3070,7 @@ class Jeu(pyglet.window.Window):
         """(debogage, DQ_CAMV=n) etat de la camera du jeu toutes les n images."""
         e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
         r = lambda v: None if v is None else tuple(round(float(x), 1) for x in v)
-        print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s poids=%.2f' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec), self.cam_poids), flush=True)
+        print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec)), flush=True)
         if os.environ.get('DQ_CAMV_SPR'):                                  # (debogage) + tous les sprites et les bulles d'icone
             print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icones', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icones.items()}, flush=True)
 
@@ -3179,7 +3187,8 @@ class Jeu(pyglet.window.Window):
         if not champ and e.carte and e.carte != self.carte_nom:
             self._charger_carte(e.carte); self.t_boucle = None              # chargement synchrone (plusieurs dixiemes de seconde) : le temps passe n'est pas rattrape par le moteur (le fondu d'entree garde sa duree, au lieu de sauter 3 pas en une image)
         fond = e.fond
-        if e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
+        if e.partie == MO.PARTIE_COMBAT and not any(fond) and not os.environ.get('DQ_FOND_ESTIME'): fond = self.fonds.couleur(self.carte_src) or self.fond_decor      # fond du combat = bg_color du decor charge (FETC, BackColor.SetColor de cmd_fld_load) ; estimation en attendant la liste / DQ_FOND_ESTIME=1 : (test) l'ancienne estimation
+        elif e.partie == MO.PARTIE_COMBAT and self.fond_decor and not any(fond): fond = self.fond_decor
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
         self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None

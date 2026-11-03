@@ -1,14 +1,24 @@
 """Fenetre « Historique » (page 'historique' du menu Pause, voir pause.py) : deux onglets, Dialogues (hors combat) et Combats ; le plus recent en bas. Une case a cocher « Favoris seulement » (a droite des onglets) ne garde dans
-la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet, et quand on rouvre la fenetre pendant la session : elle n'est pas enregistree).
+la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet et quand on rouvre la fenetre) et son etat est enregistre dans les reglages (cle `historique_favoris_seuls`, ecrite a chaque changement) :
+elle est retrouvee telle quelle d'une session a l'autre, comme les favoris eux-memes (fichier historique_favoris.json, voir historique.py).
+
+LA LISTE EST UNE SEULE COLONNE CONTINUE : les plus anciennes entrees en haut, les plus recentes en bas, et la vue s'ouvre tout en bas (derniere entree visible). Le defilement est continu, au pixel : aucune page, aucun cran, aucune
+mise en page qui depend de la position (les boites sont posees une fois pour toutes, la position ne fait que les deplacer) ; une entree qui depasse du bord de la liste est simplement coupee par un cadre de decoupe (glScissor), comme du
+texte qui defile. Liste plus courte que la fenetre : collee en bas, comme un fil de messages (le plus recent reste toujours au meme endroit, en bas). Fonctions pures : `disposer` (empilement), `element_au_repere`.
 
 Chaque element est dessine dans une BOITE DE DIALOGUE STANDARD, toujours de la meme taille (la fenetre de message du terrain, 3 lignes : cadre 452 x 126 unites d'interface, tire de la mise en page d'origine ; meme
 echelle que dans le jeu ; classe `Boite`), avec le cadre et l'onglet du nom du jeu (frameData 192 et 191, dessines par ui_menu.FenetreMessage), la police d'origine SE-GARRIR et les lignes posees comme dans le jeu :
 un dialogue avec le nom du locuteur dans l'onglet SEULEMENT si le jeu l'affichait quand il a ete dit ; un combat avec son issue, ses ennemis, l'or et l'experience. Un texte qui depasse les 3 lignes (combat a
-beaucoup d'ennemis) continue dans une boite suivante (page 2/2...) : le cadre ne grandit jamais. Une etoile en haut a droite de chaque element le met en favori (il est alors garde dans un fichier jusqu'a ce qu'on
-retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
+beaucoup d'ennemis) continue dans une boite suivante (« 2/2 » : simple etiquette, le defilement ne s'y arrete pas) : le cadre ne grandit jamais. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
+dans un fichier jusqu'a ce qu'on retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
 Le moteur est arrete tant que la fenetre est ouverte (Pause.ouvrir -> pause_jeu) : le message affiche reste tel quel et aucune touche n'arrive au jeu.
-Clavier : haut / bas (un element), page precedente / suivante (une page), debut / fin, gauche / droite (onglet), Entree, Menu ou Action (etoile de l'element choisi), F ou Carte (case « Favoris seulement »), la touche de
-l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette, barre de defilement, glisser dans la liste, clic sur un onglet, sur la case ou sur une etoile."""
+Clavier : haut / bas (une ligne de texte de la boite, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
+(etoile de l'element actif), F ou Carte (case « Favoris seulement »), la touche de l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette (2 lignes par cran), barre de defilement (fleches : une ligne,
+piste : une page, curseur : glisser), glisser dans la liste (le contenu suit le pointeur), clic sur un onglet, sur la case ou sur une etoile.
+ELEMENT ACTIF (fleche doree au clavier, cible de la touche Entree) : celui qui est en face d'un repere a l'ecran (toujours dans la fenetre de la liste : l'element actif est toujours visible) ; le repere est au milieu de la fenetre,
+sauf aux extremites ou il rejoint le bas (tout en bas : le dernier element) ou le haut (tout en haut : le premier). Quand toute la liste tient dans la fenetre, la vue ne peut pas bouger : haut / bas deplacent alors le repere
+(donc l'element actif) le long de la liste."""
+import bisect
 import pyglet
 from pyglet import gl
 import historique as HI
@@ -26,6 +36,34 @@ TEXTE_ECH = 1.09                     # un pixel de la police d'origine (SE-GARRI
 VIDES = {'dialogues': 'Aucun dialogue pour l\'instant.', 'combats': 'Aucun combat pour l\'instant.'}
 VIDES_FAVORIS = {'dialogues': 'Aucun dialogue en favori : décoche « Favoris seulement », choisis un dialogue et appuie sur Entrée (ou clique son étoile) pour le garder.',
                  'combats': 'Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.'}
+
+
+PAS_MOLETTE = 2.0                    # lignes de texte (Boite.PAS : 28 unites) par cran de molette : un pas fin et constant, jamais une entree entiere
+MARGE_LISTE = 6.0                    # (en k) vide au-dessus de la premiere boite et sous la derniere de la liste (le contenu n'est jamais colle au bord de la fenetre de decoupe)
+REPERE_BAS, REPERE_HAUT = 0.12, 0.88          # hauteur du repere de l'element actif dans la fenetre de la liste (fraction depuis le bas) tout en bas / tout en haut de la liste ; au milieu (0,5) entre les deux
+ECART_ELEMENTS, ECART_PAGES = 12.0, 4.0      # (en k) vide entre deux elements, entre deux boites d'un meme element
+
+
+def disposer(entrees, haut_cadre, haut_onglet, ecart, ecart_page, marge):
+    """Empile toute la liste dans UNE colonne, du plus ancien (en haut) au plus recent (en bas). `entrees` : un couple par element, (nombre de boites, onglet du nom sur la premiere ?). Distances en pixels, comptees depuis
+    le haut du contenu (vers le bas) : -> (boites, debuts, fins, hauteur).
+    boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre) ; `haut` = bord superieur de la boite, onglet du nom compris (le cadre commence `haut_onglet` plus bas) ;
+    debuts[i], fins[i] : haut de la premiere boite et bas de la derniere de l'element i ; hauteur : hauteur du contenu, marges haute et basse comprises (0 si la liste est vide).
+    Ne depend d'aucune position de defilement : la position ne fait que deplacer le tout."""
+    boites = []; debuts = []; fins = []; y = marge
+    for i, (nb, avec_nom) in enumerate(entrees):
+        debuts.append(y)
+        for p in range(max(1, nb)):
+            hn = haut_onglet if (p == 0 and avec_nom) else 0.0
+            boites.append((i, p, max(1, nb), y, hn, haut_cadre)); y += hn + haut_cadre
+            if p < max(1, nb) - 1: y += ecart_page
+        fins.append(y); y += ecart
+    return boites, debuts, fins, ((y - ecart + marge) if entrees else 0.0)
+
+
+def element_au_repere(debuts, c):
+    """Element « en face » du repere place a la distance c du haut du contenu : le dernier dont la premiere boite commence au-dessus de c (le premier si c est au-dessus de tout ; 0 si la liste est vide)."""
+    return max(0, bisect.bisect_right(debuts, c) - 1) if debuts else 0
 
 
 def heure_jeu(t):
@@ -113,37 +151,51 @@ class VueHistorique:
     def __init__(self, pause):
         self.P = pause; self.J = pause.J
         self.onglet = O_DIALOGUES; self.elements = []
-        self.fin = 0; self.sel = 0; self.vis = 1                      # dernier element visible (en bas), element choisi au clavier, nombre d'elements visibles a la derniere image
+        self.pos = 0.0                                                  # position de defilement, en pixels : 0 = tout en bas (le plus recent visible), plus grand = plus ancien (voir decal et repere)
+        self.sel = 0; self.sel_manuel = False                           # element actif (fleche doree, touche Entree) ; vrai quand il vient d'un clic (sinon il suit le repere du defilement)
+        self.hc = self.hv = 0.0; self.pas = Boite.PAS                  # hauteur du contenu, de la fenetre de la liste (pixels) et d'une ligne de texte (pixels), mesures a la derniere image ; avant la premiere image : rien a defiler
+        self.centrer = None                                             # element a ramener au milieu de la vue des que la liste est mesuree (aller)
         self.zones = []; self.zones_etoile = []; self.zones_onglet = []; self.barre = None; self.glisse_barre = None
         self.zone_ret = None
-        self.favoris_seuls = False; self.zone_filtre = None             # case « Favoris seulement » : cochee ? ; sa zone a l'ecran (clic)
-        self.drag = None                                               # glissement dans la liste : [y de depart, fin de depart, deplace ?]
-        self._spr = {}; self._lignes = {}
+        self.favoris_seuls = self._lire_filtre(); self.zone_filtre = None  # case « Favoris seulement » : cochee ? (reglage enregistre) ; sa zone a l'ecran (clic)
+        self.drag = None                                               # glissement dans la liste : [y de depart, decalage de depart, deplace ?]
+        self._spr = {}; self._lignes = {}; self._mise = None; self._s_prec = None
         self._boite = None; self._boite_ml = None; self._fens = {}              # boite de dialogue standard (Boite) et les deux fenetres de message du jeu qui servent a dessiner son cadre (avec / sans onglet)
 
     # ---- donnees
     def entrer(self, onglet=O_DIALOGUES):
-        """A l'ouverture de la page : recharge la liste (le moteur est arrete, elle ne change plus), en bas sur l'element le plus recent."""
+        """A l'ouverture de la page : recharge la liste (le moteur est arrete, elle ne change plus), tout en bas sur l'element le plus recent."""
         self.onglet = onglet if 0 <= onglet < len(ONGLETS) else O_DIALOGUES
         self.glisse_barre = None; self.drag = None; self._lignes.clear()
+        self.favoris_seuls = self._lire_filtre()
         self.recharger()
 
     def recharger(self, garder=False):
         h = getattr(self.J, 'historique', None)
         self.elements = h.liste(ONGLETS[self.onglet][1], self.favoris_seuls) if h is not None else []
-        n = len(self.elements)
-        if garder: self.fin = max(0, min(n - 1, self.fin)); self.sel = max(0, min(n - 1, self.sel))
-        else: self.fin = self.sel = max(0, n - 1)
+        n = len(self.elements); self._mise = None; self.centrer = None
+        if garder: self.sel = max(0, min(n - 1, self.sel))
+        else: self.pos = 0.0; self.sel = max(0, n - 1); self.sel_manuel = False
         self.zones = []; self.zones_etoile = []
 
     def changer_onglet(self, i):
         i %= len(ONGLETS)
         if i != self.onglet: self.onglet = i; self.recharger()
 
+    # ---- case « Favoris seulement » : son etat est un reglage (historique_favoris_seuls), garde d'une session a l'autre
+    def _lire_filtre(self):
+        try: return self.J.reg['historique_favoris_seuls'] is True
+        except Exception: return False
+
+    def _ecrire_filtre(self, on):
+        """Enregistre l'etat de la case dans les reglages (reglages.json, tout de suite : une fermeture brutale ne le perd pas). Une erreur n'empeche jamais de cocher ou de decocher."""
+        try: reg = self.J.reg; reg['historique_favoris_seuls'] = bool(on); reg.enregistrer()
+        except Exception: pass
+
     def basculer_filtre(self):
-        """Coche ou decoche « Favoris seulement » (valable pour les deux onglets). L'element choisi, s'il est dans la nouvelle liste, reste choisi ; sinon on se place sur le plus recent."""
+        """Coche ou decoche « Favoris seulement » (valable pour les deux onglets, enregistre dans les reglages). L'element choisi, s'il est dans la nouvelle liste, reste choisi (et la vue se recentre sur lui) ; sinon on se place sur le plus recent."""
         cur = self.courant(); cle = cur.cle() if cur is not None else None
-        self.favoris_seuls = not self.favoris_seuls; self.recharger()
+        self.favoris_seuls = not self.favoris_seuls; self._ecrire_filtre(self.favoris_seuls); self.recharger()
         if cle is not None:
             for i in range(len(self.elements) - 1, -1, -1):
                 if self.elements[i].cle() == cle: self.aller(i); break
@@ -153,7 +205,7 @@ class VueHistorique:
         return self.elements[self.sel] if 0 <= self.sel < len(self.elements) else None
 
     def etoile(self, i=None):
-        """Met en favori (ou retire des favoris) l'element i (le choisi par defaut) ; -> True si c'est maintenant un favori. Avec « Favoris seulement », l'element retire disparait de la liste."""
+        """Met en favori (ou retire des favoris) l'element i (l'element actif par defaut) ; -> True si c'est maintenant un favori. Avec « Favoris seulement », l'element retire disparait de la liste (la vue reste ou elle est)."""
         h = getattr(self.J, 'historique', None)
         if h is None: return False
         e = self.courant() if i is None else (self.elements[i] if 0 <= i < len(self.elements) else None)
@@ -162,28 +214,58 @@ class VueHistorique:
         if self.favoris_seuls: self.recharger(garder=True)
         return r
 
-    # ---- defilement
-    def _borner(self):
-        n = len(self.elements)
-        self.fin = max(min(n - 1, self.vis - 1), min(n - 1, self.fin)) if n else 0
-        self.sel = max(0, min(n - 1, self.sel)) if n else 0
+    # ---- defilement continu (aucune page, aucun cran : la position est un nombre de pixels)
+    def plage(self):
+        """Distance (pixels) dont la vue peut monter depuis le bas : 0 quand toute la liste tient dans la fenetre."""
+        return max(0.0, self.hc - self.hv)
+
+    def decal(self):
+        """Decalage reel de la vue (pixels) : la position bornee a la plage de defilement."""
+        return min(max(self.pos, 0.0), self.plage())
+
+    def pmax(self):
+        """Course de la position : la plage de defilement, ou, si la liste est a peine plus haute que la fenetre (ou tient dedans : la vue ne peut pas bouger), une course virtuelle (la moitie de la hauteur de la liste) qui permet de
+        parcourir tous les elements au clavier : la vue reste en place et c'est le repere (l'element actif) qui continue."""
+        return max(self.plage(), self.hc / 2.0)
+
+    def hauteur_repere(self):
+        """Hauteur du repere dans la fenetre de la liste, en fraction de sa hauteur depuis le bas : REPERE_BAS quand la position est 0 (il designe le dernier element), il monte jusqu'au milieu (0,5) sur une hauteur de fenetre de
+        defilement, y reste, puis rejoint REPERE_HAUT sur la derniere hauteur de fenetre (il designe le premier element en haut de la liste). Monotone en la position : le repere ne revient jamais en arriere."""
+        pm = self.pmax(); pos = min(max(self.pos, 0.0), pm); r = min(self.hv, pm / 2.0)
+        if r <= 0: return REPERE_BAS
+        return REPERE_BAS + (REPERE_HAUT - REPERE_BAS) / 2.0 * (min(1.0, pos / r) + max(0.0, (pos - (pm - r)) / r))
+
+    def repere(self):
+        """Distance (pixels, depuis le haut du contenu) du repere qui designe l'element actif : le point du contenu qui est, a l'ecran, a la hauteur `hauteur_repere` de la fenetre de la liste (donc toujours DANS la fenetre :
+        l'element actif est toujours visible)."""
+        return self.hc - self.decal() - self.hv * self.hauteur_repere()
+
+    def page_px(self): return max(self.pas, self.hv - 2 * self.pas)
+
+    def _fleche(self, px):
+        """Clavier : un pas de `px` pixels vers les anciens (positif) ou les recents (negatif), sans jamais s'arreter sur une entree. Borne par la course (pmax)."""
+        self.pos = min(self.pmax(), max(0.0, self.pos + px)); self.sel_manuel = False
+
+    def bouger(self, d):
+        """Haut / bas : d lignes de texte vers le bas (negatif : vers les anciens). Repete par Pause.maj tant que la touche est maintenue."""
+        self._fleche(-d * self.pas)
+
+    def page(self, d):
+        """Page precedente (d negatif) / suivante : la hauteur de la fenetre moins deux lignes."""
+        self._fleche(-d * self.page_px())
+
+    def vers_haut(self): self.pos = self.pmax(); self.sel_manuel = False
+    def vers_bas(self): self.pos = 0.0; self.sel_manuel = False
+
+    def defiler(self, px):
+        """Souris (molette, barre, glissement) : la vue monte de `px` pixels vers les anciens (positif) ou descend vers les recents (negatif), bornee a la plage de defilement."""
+        self.pos = min(self.plage(), max(0.0, self.decal() + px)); self.sel_manuel = False
 
     def aller(self, i):
-        """Choisit l'element i et amene la vue dessus."""
+        """Choisit l'element i ; la vue se recentre sur lui des que la liste est mesuree (dessin suivant)."""
         n = len(self.elements)
         if not n: return
-        self.sel = max(0, min(n - 1, i))
-        if self.sel > self.fin: self.fin = self.sel
-        elif self.sel < self.fin - self.vis + 1: self.fin = self.sel + self.vis - 1
-        self._borner()
-
-    def bouger(self, d): self.aller(self.sel + d)
-
-    def decaler(self, d):
-        """Fait defiler la vue de d elements (negatif : vers les plus anciens) ; la selection au clavier reste dans la vue."""
-        self.fin += d; self._borner()
-        if self.sel > self.fin: self.sel = self.fin
-        elif self.sel < self.fin - self.vis + 1: self.sel = max(0, self.fin - self.vis + 1)
+        self.sel = max(0, min(n - 1, i)); self.sel_manuel = True; self.centrer = self.sel
 
     # ---- entrees
     def touche(self, symbol, modifiers=0):
@@ -197,10 +279,10 @@ class VueHistorique:
             return True
         if symbol == K.UP or act == 'haut': self.bouger(-1); P._repeter(symbol, 'v', -1)
         elif symbol == K.DOWN or act == 'bas': self.bouger(1); P._repeter(symbol, 'v', 1)
-        elif symbol == K.PAGEUP or act == 'L': self.bouger(-max(1, self.vis - 1))
-        elif symbol == K.PAGEDOWN or act == 'R': self.bouger(max(1, self.vis - 1))
-        elif symbol == K.HOME: self.aller(0)
-        elif symbol == K.END: self.aller(len(self.elements) - 1)
+        elif symbol == K.PAGEUP or act == 'L': self.page(-1)
+        elif symbol == K.PAGEDOWN or act == 'R': self.page(1)
+        elif symbol == K.HOME: self.vers_haut()
+        elif symbol == K.END: self.vers_bas()
         elif symbol == K.LEFT or act == 'gauche': self.changer_onglet(self.onglet - 1)
         elif symbol == K.RIGHT or act == 'droite': self.changer_onglet(self.onglet + 1)
         elif symbol == K.F or act == 'carte': self.basculer_filtre()                          # (F, ou la touche Carte : « Favoris seulement »)
@@ -208,8 +290,9 @@ class VueHistorique:
         return True
 
     def molette(self, sy):
+        """Un cran de molette = PAS_MOLETTE lignes de texte, vers les anciens quand on remonte la molette (un pas fin et constant ; proportionnel au mouvement pour les pavés tactiles)."""
         self.P.mode_souris = True
-        self.decaler(-2 if sy > 0 else 2)
+        self.defiler(max(-5.0, min(5.0, float(sy))) * PAS_MOLETTE * self.pas)
 
     def survol(self, x, y):
         P = self.P; p = P.pos_souris; P.pos_souris = (x, y)
@@ -229,17 +312,17 @@ class VueHistorique:
         if self._dans(self.zone_filtre, x, y): self.basculer_filtre(); return
         b = self.barre
         if b and b['x0'] <= x <= b['x1'] and b['y0'] <= y <= b['y1']:
-            if y > b['ptop']: self.decaler(-1)
-            elif y < b['pbot']: self.decaler(1)
+            if y > b['ptop']: self.defiler(self.pas)                                 # fleche du haut : une ligne vers les anciens
+            elif y < b['pbot']: self.defiler(-self.pas)
             elif b['pouce'][0] <= y <= b['pouce'][1]: self.glisse_barre = b['pouce'][1] - y
-            elif y > b['pouce'][1]: self.decaler(-(self.vis - 1))
-            else: self.decaler(self.vis - 1)
+            elif y > b['pouce'][1]: self.defiler(self.page_px())                       # piste au-dessus du curseur : une page vers les anciens
+            else: self.defiler(-self.page_px())
             return
         for z in self.zones_etoile:
-            if self._dans(z, x, y): self.sel = z[4]; self.etoile(z[4]); return
+            if self._dans(z, x, y): self.sel = z[4]; self.sel_manuel = True; self.etoile(z[4]); return
         for (x0, y0, x1, y1, i) in self.zones:
-            if x0 <= x <= x1 and y0 <= y <= y1: self.sel = i; break
-        self.drag = [y, self.fin, False]
+            if x0 <= x <= x1 and y0 <= y <= y1: self.sel = i; self.sel_manuel = True; break
+        self.drag = [y, self.decal(), False]
 
     def relache(self, x, y, bouton):
         self.glisse_barre = None; self.drag = None
@@ -250,16 +333,14 @@ class VueHistorique:
             if not b: self.glisse_barre = None; return
             libre = b['ptop'] - b['pbot'] - b['th']
             if libre > 0:
-                deb = round(max(0.0, min(1.0, (b['ptop'] - (y + self.glisse_barre)) / libre)) * (b['n'] - b['vis']))
-                self.decaler(deb + self.vis - 1 - self.fin)
+                depuis_le_haut = max(0.0, min(1.0, (b['ptop'] - (y + self.glisse_barre)) / libre)) * (b['n'] - b['vis'])      # le curseur de la barre donne la distance depuis le haut du contenu
+                self.pos = min(self.plage(), max(0.0, self.plage() - depuis_le_haut)); self.sel_manuel = False
             return
         d = self.drag
         if d is None: return
         if not d[2] and abs(y - d[0]) < TOLERANCE_GLISSE: return
         d[2] = True
-        pas = max(20.0, self.J.height / 14.0)                                        # un element tous les ~50 px glisses : le contenu suit le doigt a peu pres
-        cible = d[1] + int((y - d[0]) / pas)               # (le doigt descend : la liste descend, on remonte vers les plus anciens)
-        self.decaler(cible - self.fin)
+        self.pos = min(self.plage(), max(0.0, d[1] + (d[0] - y)))                    # le contenu suit le pointeur, pixel par pixel (le pointeur descend : la liste descend, on remonte vers les plus anciens)
 
     # ---- dessin
     def _bm(self):
@@ -371,19 +452,45 @@ class VueHistorique:
         if choisi:
             v = pyglet.shapes.Rectangle(bx + 7 * s, by + 7 * s, (B.LARG - 14) * s, (B.HAUT - 14) * s, color=(255, 255, 255)); v.opacity = 38; v.draw()
 
-    def _blocs(self, bm, B, s, taille, ly0, ly1, ecart, ecart_page):
-        """Boites visibles, de bas en haut : (element, page, nombre de pages, y du bas, hauteur du cadre, hauteur de l'onglet, rangees de texte). Toutes les boites ont la MEME hauteur de cadre (celle de la boite de
-        dialogue du jeu), que le texte tienne sur 1, 2 ou 3 rangees ; seul l'onglet du nom (premiere page d'un dialogue avec nom) s'y ajoute au-dessus. Met a jour `vis` (elements dont la premiere page est visible)."""
-        blocs = []; y = ly0; i = min(self.fin, len(self.elements) - 1); plein = False
-        while i >= 0 and not plein:                                               # de bas en haut : les pages d'un element de la derniere a la premiere ; chacune est une boite de la meme taille
-            e = self.elements[i]; pages = self._pages_de(bm, e, B, s, taille); avec_nom = e.type == HI.TYPE_DIALOGUE and bool(e.nom)
-            for p in range(len(pages) - 1, -1, -1):
-                hn = B.ONGLET_H * s if (p == 0 and avec_nom) else 0.0; hb = B.HAUT * s
-                if blocs and y + hb + hn > ly1: plein = True; break
-                blocs.append((i, p, len(pages), y, hb, hn, pages[p])); y += hb + hn + (ecart if p == 0 else ecart_page)
-            i -= 1
-        self.vis = max(1, len({b[0] for b in blocs if b[1] == 0})); self._borner()
-        return blocs
+    def _mesurer(self, bm, B, s, k, taille, hv):
+        """Pose TOUTE la liste dans une colonne (disposer : toutes les boites ont la MEME hauteur de cadre, celle de la boite de dialogue du jeu, que le texte tienne sur 1, 2 ou 3 rangees ; seul l'onglet du nom, sur la premiere boite d'un
+        dialogue avec nom, s'y ajoute au-dessus), pour l'echelle s et une fenetre de liste de hauteur hv (pixels). La mise en page ne depend jamais de la position de defilement. Met a jour la geometrie du defilement (hauteur du contenu,
+        de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et determine l'element actif (celui qui est en face du repere, sauf
+        s'il vient d'un clic). -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu."""
+        els = self.elements; n = len(els)
+        cle = (id(els), n, int(s * 100), int(k * 100), bm is not None)
+        if self._mise is None or self._mise[0] != cle:
+            pages = [self._pages_de(bm, e, B, s, taille) for e in els]
+            ent = [(len(pg), e.type == HI.TYPE_DIALOGUE and bool(e.nom)) for pg, e in zip(pages, els)]
+            boites, debuts, fins, hc = disposer(ent, B.HAUT * s, B.ONGLET_H * s, ECART_ELEMENTS * k, ECART_PAGES * k, MARGE_LISTE * k)
+            self._mise = (cle, [(i, p, nb, h, hn, hb, pages[i][p]) for (i, p, nb, h, hn, hb) in boites], debuts, fins, hc)
+        boites, debuts, fins, hc = self._mise[1:]
+        self._geometrie(debuts, fins, hc, hv, B.PAS * s, s)
+        return boites
+
+    def _geometrie(self, debuts, fins, hc, hv, pas, s):
+        """Partie pure de _mesurer (testee sans police ni GL) : la liste fait `hc` pixels de haut (debuts / fins : haut de la premiere boite et bas de la derniere de chaque element), la fenetre de la liste `hv`, une ligne de texte `pas`,
+        a l'echelle s. Garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et determine l'element actif (celui qui est en face du repere, sauf s'il vient d'un clic)."""
+        n = len(debuts)
+        if self._s_prec and abs(s - self._s_prec) > 1e-6: self.pos *= s / self._s_prec                 # fenetre redimensionnee : la vue reste au meme endroit de la liste
+        self._s_prec = s; self.hc, self.hv, self.pas = hc, float(hv), pas
+        if self.centrer is not None:
+            i, self.centrer = self.centrer, None
+            if 0 <= i < n: self.pos = min(self.plage(), max(0.0, hc - (debuts[i] + fins[i]) / 2.0 - self.hv / 2.0)); self.sel = i
+        self.pos = min(self.pmax(), max(0.0, self.pos))
+        if n and not self.sel_manuel: self.sel = element_au_repere(debuts, self.repere())
+        self.sel = max(0, min(n - 1, self.sel)) if n else 0
+
+    def _decouper(self, x, y, w, h):
+        """Cadre de decoupe (glScissor) sur le rectangle (x, y, w, h) de la fenetre (pixels de la fenetre : mis a l'echelle du tampon d'image sur un ecran a forte densite) : ce qui deborde de la liste est coupe, comme un texte qui defile.
+        -> True si le cadre est actif (a fermer par glDisable(GL_SCISSOR_TEST)) ; False si on n'a pas pu l'installer (les boites coupees ne sont alors pas dessinees)."""
+        try:
+            W, H = self.J.width, self.J.height; fb = self.J.get_framebuffer_size() if hasattr(self.J, 'get_framebuffer_size') else (W, H)
+            rx, ry = fb[0] / float(max(1, W)), fb[1] / float(max(1, H))
+            gl.glEnable(gl.GL_SCISSOR_TEST); gl.glScissor(int(max(0, x * rx)), int(max(0, y * ry)), int(max(1, round(w * rx))), int(max(1, round(h * ry))))
+            return True
+        except Exception:
+            return False
 
     def dessiner(self):
         J = self.J; P = self.P; W, H = J.width, J.height; k = max(0.75, H / 900.0)
@@ -415,7 +522,7 @@ class VueHistorique:
         # aide (une ou deux lignes, selon la largeur de la fenetre)
         ks = (J.reg['touches'].get('historique') or [None])[0] if hasattr(J.reg, '__getitem__') else None
         kn = RG.nom_touche(ks) if ks else None
-        aide = ['Haut / Bas : parcourir', 'Gauche / Droite : onglet', 'Entrée : favori ★', 'F : favoris seulement'] + (['%s : suite' % kn] if kn else []) + ['Échap : fermer']
+        aide = ['Haut / Bas / Molette : défiler', 'Gauche / Droite : onglet', 'Entrée : favori ★', 'F : favoris seulement'] + (['%s : suite' % kn] if kn else []) + ['Échap : fermer']
         la_max = pw - 24 * k; mes_aide = lambda t: self._larg(bm, t, su * 0.72, taille * 0.72)
         lignes_aide = []; cur = ''
         for a in aide:
@@ -425,35 +532,46 @@ class VueHistorique:
         lignes_aide.append(cur)
         pas_aide = (bm.interligne * su * 0.72) if bm else 17 * k
         # zone de la liste : la boite (taille du jeu) a gauche, la colonne de l'etoile a sa droite, la barre de defilement au bord
-        ecart, ecart_page = 12 * k, 4 * k
         groupe = B.LARG * s + 44 * k; lx0 = x0 + (pw - groupe) / 2; lx1 = lx0 + groupe; ly1 = ty - 14 * k; ly0 = y0 + 40 * k + (len(lignes_aide) - 1) * pas_aide
         self.zones = []; self.zones_etoile = []; self.barre = None
         n = len(self.elements)
         if not n:
+            self.hc = self.hv = 0.0; self.pos = 0.0; self._mise = None
             msg = (VIDES_FAVORIS if self.favoris_seuls else VIDES)[ONGLETS[self.onglet][1]]
             lm = self._larg(bm, msg, su, taille); self._ligne(bm, msg, x0 + max(20 * k, (pw - lm) / 2), (ly0 + ly1) / 2, su, GRIS, taille)
         else:
-            mouse = P.mode_souris; blocs = self._blocs(bm, B, s, taille_b, ly0, ly1, ecart, ecart_page)
-            haut_de = {}
-            for b in blocs: haut_de[b[0]] = min(haut_de.get(b[0], b[1]), b[1])                    # page la plus haute montree de chaque element (la main du curseur n'y est dessinee qu'une fois)
-            for (i, p, np_, yb, hb, hn, rangees) in blocs:
-                e = self.elements[i]; nom = e.nom if (e.type == HI.TYPE_DIALOGUE and p == 0 and e.nom) else None
-                zone = (lx0, yb, lx1, yb + hb + hn); self.zones.append(zone + (i,))
-                choisi = (P._pointeur_dans(zone) and self.glisse_barre is None) if mouse else i == self.sel
-                self._boite_dessin(B, lx0, yb, s, k, nom, choisi, bm, taille_b)                       # cadre du jeu (+ onglet et nom)
-                if choisi and not mouse and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))
-                rang = 0
-                if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite
-                    base = yb + hb - B.base(0) * s; self._ligne(bm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
-                    ht = heure_jeu(e.t); self._ligne(bm, ht, lx0 + (B.LARG - 14) * s - self._larg(bm, ht, sc * 0.8, taille_b * 0.8), base, sc * 0.8, AIDE, taille_b * 0.8); rang = 1
-                for l in rangees:
-                    self._ligne(bm, l, lx0 + B.TEXTE_X * s, yb + hb - B.base(rang) * s, sc, BLANC, taille_b); rang += 1
-                rs = 11 * k; ex = lx0 + B.LARG * s + 22 * k; ey = yb + hb - (B.BASE_1 - 7) * s     # etoile dans la colonne a droite de la boite, a la hauteur de la 1re ligne
-                z = (ex - rs * 1.3, ey - rs * 1.3, ex + rs * 1.3, ey + rs * 1.3); self.zones_etoile.append(z + (i,))
-                self._etoile(ex, ey, rs * (1.15 if (mouse and P._pointeur_dans(z)) else 1.0), e.fav is not None)
-                if np_ > 1:                                                          # page « 1/2 » sous l'etoile
-                    t = '%d/%d' % (p + 1, np_); self._ligne(bm, t, ex - self._larg(bm, t, su * 0.72, taille * 0.72) / 2, ey - rs * 1.3 - 6 * k - (asc * 0.72 if bm else 12 * k), su * 0.72, AIDE, taille * 0.72)
-            if n > self.vis: self.barre = P._barre_defilement(x0 + pw - 14 * k, ly1, ly0, n, self.vis, max(0, self.fin - self.vis + 1), k, self.glisse_barre is not None)
+            mouse = P.mode_souris; hv = ly1 - ly0
+            boites = self._mesurer(bm, B, s, k, taille_b, hv)
+            haut_ecran = ly0 + self.hc - round(self.decal())                      # ordonnee du haut du contenu (position entiere : le texte garde le meme dessin a chaque position) ; le contenu est colle en bas quand il est plus court que la fenetre
+            decoupe = self._decouper(x0, ly0, pw, hv)                              # tout ce qui deborde de la liste est coupe
+            glisse = self.drag is not None and self.drag[2]
+            try:
+                vues = []; haut_de = {}
+                for b in boites:                                                    # seules les boites qui touchent la fenetre de la liste sont dessinees (de la plus ancienne, en haut, a la plus recente)
+                    (i, p, np_, haut, hn, hb, rangees) = b; yb = haut_ecran - haut - hn - hb; yt = yb + hb + hn
+                    if yt <= ly0 or yb >= ly1 or (not decoupe and (yb < ly0 or yt > ly1)): continue
+                    vues.append((b, yb, yt)); haut_de[i] = min(haut_de.get(i, p), p)       # (page la plus haute montree de chaque element : la fleche dorée n'y est dessinee qu'une fois)
+                for ((i, p, np_, haut, hn, hb, rangees), yb, yt) in vues:
+                    e = self.elements[i]; nom = e.nom if (e.type == HI.TYPE_DIALOGUE and p == 0 and e.nom) else None
+                    zone = (lx0, max(yb, ly0), lx1, min(yt, ly1)); self.zones.append(zone + (i,))                      # (la zone d'une boite coupee ne depasse pas la fenetre de la liste : pas de clic sur les onglets ou l'aide)
+                    choisi = (P._pointeur_dans(zone) and self.glisse_barre is None and not glisse) if mouse else i == self.sel
+                    self._boite_dessin(B, lx0, yb, s, k, nom, choisi, bm, taille_b)                       # cadre du jeu (+ onglet et nom)
+                    if choisi and not mouse and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))
+                    rang = 0
+                    if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite
+                        base = yb + hb - B.base(0) * s; self._ligne(bm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
+                        ht = heure_jeu(e.t); self._ligne(bm, ht, lx0 + (B.LARG - 14) * s - self._larg(bm, ht, sc * 0.8, taille_b * 0.8), base, sc * 0.8, AIDE, taille_b * 0.8); rang = 1
+                    for l in rangees:
+                        self._ligne(bm, l, lx0 + B.TEXTE_X * s, yb + hb - B.base(rang) * s, sc, BLANC, taille_b); rang += 1
+                    rs = 11 * k; ex = lx0 + B.LARG * s + 22 * k; ey = yb + hb - (B.BASE_1 - 7) * s     # etoile dans la colonne a droite de la boite, a la hauteur de la 1re ligne
+                    z = (ex - rs * 1.3, max(ey - rs * 1.3, ly0), ex + rs * 1.3, min(ey + rs * 1.3, ly1))
+                    if z[1] < z[3]: self.zones_etoile.append(z + (i,))
+                    self._etoile(ex, ey, rs * (1.15 if (mouse and P._pointeur_dans(z)) else 1.0), e.fav is not None)
+                    if np_ > 1:                                                          # « 1/2 » sous l'etoile : la boite fait partie d'une suite (simple etiquette)
+                        t = '%d/%d' % (p + 1, np_); self._ligne(bm, t, ex - self._larg(bm, t, su * 0.72, taille * 0.72) / 2, ey - rs * 1.3 - 6 * k - (asc * 0.72 if bm else 12 * k), su * 0.72, AIDE, taille * 0.72)
+            finally:
+                if decoupe: gl.glDisable(gl.GL_SCISSOR_TEST)
+            if self.hc > self.hv + 0.5: self.barre = P._barre_defilement(x0 + pw - 14 * k, ly1, ly0, self.hc, self.hv, self.plage() - self.decal(), k, self.glisse_barre is not None)      # curseur proportionnel, position continue (distance depuis le haut du contenu)
         for j, l in enumerate(lignes_aide):                                          # aide et bouton retour
             la = self._larg(bm, l, su * 0.72, taille * 0.72); self._ligne(bm, l, x0 + (pw - la) / 2, y0 + 14 * k + (len(lignes_aide) - 1 - j) * pas_aide, su * 0.72, AIDE, taille * 0.72)
         bx = x0 + pw - bw - 8 * k; by = y0 - 8 * k - bh; self.zone_ret = (bx, by, bx + bw, by + bh)

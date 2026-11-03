@@ -7,9 +7,9 @@ git push -q -u origin "$br" 2>&1 | tail -2
 n=$(gh api "repos/Sylfried/dq4-portage/pulls?state=all&per_page=100" --jq 'length')
 num=$((n+1))
 python3 - "$1" "$2" "$br" "$num" <<'PY'
-import json,sys
+import json,os,sys
 t,corps,br,num=sys.argv[1:5]
-body=open(corps,encoding='utf-8').read().rstrip()+"\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nhttps://claude.ai/code/session_014GF7TUJhoy5Df7FLvSTYtw\n"
+body=open(corps,encoding='utf-8').read().rstrip()+"\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nhttps://claude.ai/code/"+os.environ.get("DQ_SESSION","session_014GF7TWaZ7HKpoCu5KRp2TJ")+"\n"
 json.dump({"title":"Avance #%s : %s"%(num,t),"head":br,"base":"main","body":body},open('/tmp/pr.json','w'))
 PY
 res=$(gh api repos/Sylfried/dq4-portage/pulls --input /tmp/pr.json --jq '.number')

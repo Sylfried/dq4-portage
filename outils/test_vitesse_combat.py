@@ -242,11 +242,12 @@ class IndependanceAccelerateur(unittest.TestCase):
             self.assertEqual(self.faux(partie, 1.0, 4.0, 2.0, accel_tenue=True).facteur(), 8.0)
             self.assertEqual(self.faux(partie, 3.0, 2.0, 1.5, accel_tenue=True, direction=False).facteur(), 1.0)  # (arret : vitesse normale)
 
-    def test_effet_de_debut_et_ecran_noir_gardent_l_horloge_du_jeu(self):
-        """#45 : la cascade d'entree en combat et l'ecran noir qui suit durent le temps du jeu d'origine : horloge x1 quelle que soit la vitesse de combat, de marche ou l'accelerateur (voir outils/test_transition_combat.py)."""
+    def test_cascade_a_l_horloge_du_jeu_puis_vitesse_de_combat_des_l_ecran_noir(self):
+        """#47 : la cascade d'entree en combat est a l'horloge du jeu (x1 quelle que soit la vitesse de combat, de marche ou l'accelerateur ; sa duree suit « Vitesse de transition » : voir outils/test_transition_combat.py) ;
+        des qu'elle est finie, l'ecran noir qui attend la scene (puis le fondu d'arrivee et le message « X apparait ») va a la vitesse de combat."""
         for v in (0.0, 1.0, 2.0, 3.0):
             self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, effet={'n': 3}).facteur(), 1.0)             # effet qui brise l'ecran
-            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), 1.0)      # ecran noir avant la scene du combat
+            self.assertEqual(self.faux(MO.PARTIE_CHAMP, v, 4.0, 2.0, True, attente={'base': 0, 'n': 3}).facteur(), max(1.0, v))      # ecran noir avant la scene du combat
 
     def test_attentes_de_saisie_gardent_la_vitesse_choisie(self):
         """Les monstres suivent la vitesse de combat meme pendant les menus : l'horloge reste celle du reglage ; seule la lecture des touches est a cadence normale (pas muets : test suivant)."""

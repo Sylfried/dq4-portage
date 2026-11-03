@@ -13,11 +13,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import reglages as RG
 
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
-HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'camera_centree', 'suivi_camera_v', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
+HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
                   'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera)
+HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb', 'interface_v'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera) ; version des tailles par defaut des fenetres (#47)
+HORS_INTERFACE |= {'historique_favoris_seuls'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
 AUTRES = {'boutons': False, 'croix': False, 'croix_taille': 1.7, 'boutons_taille': 1.4, 'boutons_pos': {'carte': [10, 5], 'menu': [3, 2.5], 'discussion': [0, 9], 'croix': [20, 9]},
@@ -31,7 +32,7 @@ def reglages_modifies():
     """Reglages de test : toutes les cles d'interface et quelques autres a des valeurs non par defaut."""
     r = RG.Reglages(None)
     for k, x in AUTRES.items(): r[k] = copy.deepcopy(x)
-    r['vignette'] = 0.8; r['msaa'] = 8; r['volume_musique'] = 0.2; r['distance_camera'] = 150; r['touches']['carte'] = ['K', None]; r['camera_centree'] = False
+    r['vignette'] = 0.8; r['msaa'] = 8; r['volume_musique'] = 0.2; r['distance_camera'] = 150; r['touches']['carte'] = ['K', None]
     return r
 
 
@@ -105,9 +106,9 @@ class RemiseAZero(unittest.TestCase):
     def test_pas_de_partage_avec_defaut(self):
         r = RG.Reglages(None); r.remettre_interfaces()
         r['interface_fenetres']['X'] = [2.0, 0.0, 0.0]; r['interface_masquees'].append('X'); r['boutons_pos']['carte'] = [1, 1]
-        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({}, [], {}))       # DEFAUT n'est jamais modifie par une remise a zero
+        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({n: [RG.LARGEUR_COMMANDES, 0.0, 0.0] for n in RG.FENETRES_COMMANDES_COMBAT}, [], {}))       # DEFAUT n'est jamais modifie par une remise a zero (#47 : seules les fenetres de commandes du combat ont une taille par defaut)
         r2 = RG.Reglages(None); r2.remettre_interface('X'); r2.remettre_interface(RG.CIBLE_ECRAN)
-        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({}, [], {}))
+        self.assertEqual((RG.DEFAUT['interface_fenetres'], RG.DEFAUT['interface_masquees'], RG.DEFAUT['boutons_pos']), ({n: [RG.LARGEUR_COMMANDES, 0.0, 0.0] for n in RG.FENETRES_COMMANDES_COMBAT}, [], {}))
 
     def test_enregistrement(self):
         f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'reglages.json')
@@ -169,25 +170,26 @@ class RemiseAZero(unittest.TestCase):
         self.assertIsNone(P.pan_pos)
 
 
-class SuiviCameraParDefaut(unittest.TestCase):
-    """« Centrer la camera sur le joueur » : activee par defaut ; un fichier enregistre AVANT la cle de version (camera_centree = False) repasse une seule fois a True, ensuite le choix du joueur fait foi."""
+class CameraToujoursCentree(unittest.TestCase):
+    """« Centrer la camera sur le joueur » n'existe plus (#47) : la camera est toujours centree sur le heros, sauf quand le jeu la prend. Un reglages.json qui contient encore `camera_centree` ou `suivi_camera_v`
+    se charge sans erreur, ces cles sont ignorees et ne sont pas reecrites a l'enregistrement."""
     def charger(self, d):
-        with tempfile.TemporaryDirectory() as t:
-            c = os.path.join(t, 'reglages.json')
-            with open(c, 'w', encoding='utf-8') as f: json.dump(d, f)
-            return RG.Reglages(c)
+        c = os.path.join(tempfile.mkdtemp(prefix='rg_cam_'), 'reglages.json')
+        with open(c, 'w', encoding='utf-8') as f: json.dump(d, f)
+        return RG.Reglages(c), c
 
-    def test_defaut(self):
-        self.assertIs(RG.DEFAUT['camera_centree'], True)
-        self.assertIs(RG.Reglages(None)['camera_centree'], True)
+    def test_plus_de_cle(self):
+        for k in ('camera_centree', 'suivi_camera_v'):
+            self.assertNotIn(k, RG.DEFAUT); self.assertIn(k, RG.CLES_OBSOLETES); self.assertNotIn(k, RG.Reglages(None).v)
 
-    def test_ancien_fichier_desactive_repasse_a_oui_une_fois(self):
-        r = self.charger({'camera_centree': False})
-        self.assertIs(r['camera_centree'], True); self.assertEqual(r['suivi_camera_v'], RG.DEFAUT['suivi_camera_v'])
-
-    def test_choix_ulterieur_conserve(self):
-        r = self.charger({'camera_centree': False, 'suivi_camera_v': RG.DEFAUT['suivi_camera_v']})
-        self.assertIs(r['camera_centree'], False)
+    def test_ancien_fichier_charge_sans_erreur(self):
+        for d in ({'camera_centree': False}, {'camera_centree': True, 'suivi_camera_v': 1}, {'camera_centree': False, 'suivi_camera_v': 1, 'distance_camera': 150, 'msaa': 8}):
+            r, c = self.charger(d)
+            for k in ('camera_centree', 'suivi_camera_v'): self.assertNotIn(k, r.v)
+            self.assertEqual(r['distance_camera'], d.get('distance_camera', RG.DEFAUT['distance_camera'])); self.assertEqual(r['msaa'], d.get('msaa', RG.DEFAUT['msaa']))        # (les autres reglages du fichier sont gardes)
+            r.enregistrer()
+            with open(c, encoding='utf-8') as f: brut = json.load(f)
+            for k in ('camera_centree', 'suivi_camera_v'): self.assertNotIn(k, brut, 'la cle disparait du fichier a la prochaine sauvegarde')
 
 
 class MigrationBoutonVitesse(unittest.TestCase):

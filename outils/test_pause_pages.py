@@ -1,4 +1,4 @@
-"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »), Triches (ex-« Jeu »).
+"""Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »), Modifications (ex-« Jeu »).
 
     python3 outils/test_pause_pages.py
 
@@ -68,8 +68,8 @@ class Racine(unittest.TestCase):
     def test_entrees(self):
         _, p = menu('racine'); libs = [e['l'] for e in p._entrees()]
         for ancien in ('Vitesse de défilement du texte', 'Texte et défilement'): self.assertNotIn(ancien, libs)             # plus de page du texte : ses deux options sont dans Commandes
-        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Commandes', 'Triches', "Revenir à l'écran titre"])
-        self.assertNotIn('Jeu', libs); self.assertEqual(libs.index('Triches'), libs.index('Commandes') + 1)                # « Triches » (ex-« Jeu ») : juste sous « Commandes »
+        self.assertEqual(libs, ['Reprendre', 'Historique', 'États', 'Affichage', 'Son', 'Commandes', 'Modifications', "Revenir à l'écran titre"])
+        self.assertNotIn('Jeu', libs); self.assertEqual(libs.index('Modifications'), libs.index('Commandes') + 1)                # « Modifications » (ex-« Jeu ») : juste sous « Commandes »
         self.assertFalse(hasattr(p, '_e_texte'))
 
 
@@ -145,7 +145,7 @@ class SectionDefilement(unittest.TestCase):
         k = ls.index(('sep', 'Vitesses')); self.assertLess(k, i)
         self.assertEqual([t for t, _ in ls[k + 1:i]].count('sep'), 0, 'aucune section entre « Vitesses » et « Défilement du texte » : elle est juste dessous')
         self.assertEqual(ls[i - 1], ('touche', 'Changer la vitesse en combat'))                                                                          # (derniere ligne des vitesses)
-        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra', 'Caméra à la souris', 'Molette', 'Ctrl + molette', 'Clic molette + déplacement', 'Clic molette', 'Ctrl + clic molette', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])
+        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra au clavier', 'Caméra à la souris', 'Molette', 'Ctrl + molette', 'Clic molette + déplacement', 'Clic molette', 'Ctrl + clic molette', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])
 
     def test_plus_de_page_texte(self):
         _, p = menu('racine'); self.assertNotIn('texte', [e['l'] for e in p._entrees()])
@@ -183,23 +183,23 @@ class SectionDefilement(unittest.TestCase):
         for ancien in ('Défilement automatique', 'Vitesse de défilement', 'Messages en combat', 'Rétablir le réglage du jeu'): self.assertNotIn(ancien, ls)
 
 
-class PageTriches(unittest.TestCase):
+class PageModifications(unittest.TestCase):
     LIB = 'PV et PM restaurés au niveau supérieur'
 
     def test_option_desactivee_par_defaut_avec_retablissement(self):
-        """Page « Triches » (ex-« Jeu ») : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non."""
-        J, p = menu('triches'); x = par_libelle(p, self.LIB)
+        """Page « Modifications » (ex-« Jeu ») : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non."""
+        J, p = menu('modifications'); x = par_libelle(p, self.LIB)
         self.assertEqual(x['vals'], [True, False]); self.assertFalse(J.reg['soin_niveau']); self.assertTrue(x['est_defaut']())
         x['set'](True); self.assertTrue(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertFalse(x['est_defaut']())
         x['defaut'](); self.assertFalse(J.reg['soin_niveau']); self.assertEqual(J.appels[-1], 'jeu'); self.assertTrue(x['est_defaut']())
         self.assertTrue(x.get('aide'))
 
     def test_une_ligne_et_entree_de_la_racine(self):
-        J, p = menu('triches'); self.assertEqual([e['l'] for e in p._entrees()], [self.LIB])
-        p.pile = ['racine']; e = next(e for e in p._entrees() if e['l'] == 'Triches'); e['ok'](); self.assertEqual(p.ecran, 'triches')
+        J, p = menu('modifications'); self.assertEqual([e['l'] for e in p._entrees()], [self.LIB])
+        p.pile = ['racine']; e = next(e for e in p._entrees() if e['l'] == 'Modifications'); e['ok'](); self.assertEqual(p.ecran, 'modifications')
         self.assertFalse(hasattr(p, '_e_jeu')); self.assertNotIn('Jeu', [e['l'] for e in p._entrees()])
         with open(PA.__file__, encoding='utf-8') as f: src = f.read()
-        self.assertIn("titres['triches'] = 'Triches'", src); self.assertNotIn("_aller('jeu')", src)                                          # titre de la page : « Triches »
+        self.assertIn("titres['modifications'] = 'Modifications'", src); self.assertNotIn("_aller('jeu')", src)                                          # titre de la page : « Modifications »
 
     def test_reglage_enregistre(self):
         J = FauxJeu(); J.reg['soin_niveau'] = True; J.reg.enregistrer()

@@ -32,6 +32,8 @@ FENETRE_ENTREE_COMBAT = 12                  # images apres le chargement de la s
 FENETRE_RETOUR_COMBAT = 12                  # images apres la sortie de la partie combat pendant lesquelles un fondu lance par le moteur est le fondu de retour a la carte
 GARDE_TRANSITION = 8                        # images ou la transition de combat reste « en cours » apres la fin de l'un de ses fondus (le moteur change de scene 1 a 3 images plus tard, puis lance le fondu suivant)
 LIB_APK = 'lib/arm64-v8a/libdq4core.so'
+DECOMPTE_SORTIE = 0x258254                  # octet de la bibliotheque lu par Global::NativeExec : decompte (en images) du bruitage de sortie ; startTown, startField, ChangeGamePart, startFirstTown et startDebugTown l'arment a 15 quand le jeu quitte une ville ou la carte du monde,
+                                            # NativeExec le decremente a chaque image et, a 0, appelle TownSystem::playTownExitSE / FieldSystem::playFieldExitSE (bruitage 305 : seulement si l'ancienne scene vit encore, son octet 0 = 1) ; voir Moteur._decompte_sortie
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
 HAUT, BAS, GAUCHE, DROITE, A, B = 0x1, 0x2, 0x4, 0x8, 0x10, 0x20
@@ -47,6 +49,10 @@ HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) +
 TBZ_W20_0 = 0x36000094
 COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
 STR_W8_X0 = 0xb9000008
+MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
+MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
+MAGIE_NB_CIBLES, MAGIE_FIN_BOUCLE = 0x257f84, 0x2e0       # gTownMenuItemUseManager + 0xaa : nombre de cibles dont le moteur affiche le resultat (et dont il joue le bruitage de soin, une fois chacune) ; useMagicNoTarget + 0x2e0 : sortie de cette boucle
+MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
 
@@ -103,6 +109,7 @@ class Etat:
         self.sons = []; self.musique = None       # paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
         self.effet = None                         # effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Moteur._effet_combat)
         self.chargement = None                    # chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir maj_chargement)
+        self.rapport_fondu = (-99, 1.0)             # dernier fondu au noir lance par le moteur : (image du moteur, duree jouee / duree d'origine) ; 1.0 = duree du jeu (voir Moteur._decompte_sortie)
         self.fen_entree = 0; self.fen_retour = 0; self.garde_trans = 0      # transition de combat (voir transition_combat) : images restantes de la fenetre « arrivee en combat », de la fenetre « retour a la carte », de la garde entre deux fondus
         self.attente_charge = None                # {'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
         self.monde = None                         # carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
@@ -115,14 +122,14 @@ class Etat:
 
     def __setstate__(self, d):                  # etats enregistres avant les deux plans de fondu
         self.__dict__.update(d); self.__dict__.setdefault('fondu_fond', self._plan_fondu()); self.__dict__.setdefault('fbx', {}); self.__dict__.setdefault('image', 0); self.__dict__.setdefault('teinte', (1.0, 1.0, 1.0)); self.__dict__.setdefault('chargement', None); self.__dict__.setdefault('dort_haut', 0.0)
-        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0)
+        self.__dict__.setdefault('fen_entree', 0); self.__dict__.setdefault('fen_retour', 0); self.__dict__.setdefault('garde_trans', 0); self.__dict__.setdefault('rapport_fondu', (-99, 1.0))
 
     def fondu_en_cours(self): return self.fondu['n'] >= 1 or self.fondu_fond['n'] >= 1      # Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
 
     def transition_combat(self):
         """Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
-        entre deux de ces fondus) ? Elle doit durer EXACTEMENT ce que dure le jeu d'origine : la visionneuse n'y applique ni « Vitesse de combat », ni la vitesse de marche, ni le multiplicateur de l'accelerateur
-        (l'horloge reste celle du jeu, 30 images par seconde : Jeu._facteur_vitesse) ni « Vitesse de transition » (les fondus gardent leur duree : Etat._fondu)."""
+        entre deux de ces fondus) ? Depuis #47 sa duree en images suit « Vitesse de transition » (Etat._fondu, Moteur._debut_effet_combat) comme tout fondu ; son horloge reste celle du jeu pour la cascade et pour le retour a la
+        carte (ni vitesse de marche ni accelerateur : Jeu._facteur_vitesse), alors que « Vitesse de combat » agit des la fin de la cascade (ecran noir, fondu d'arrivee, messages) jusqu'au fondu de fin compris."""
         return (self.effet is not None or self.attente_charge is not None or self.garde_trans > 0
                 or (self.fondu['n'] >= 1 and bool(self.fondu.get('combat'))) or (self.fondu_fond['n'] >= 1 and bool(self.fondu_fond.get('combat'))))
 
@@ -269,8 +276,10 @@ class Etat:
         entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat."""
         script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
-        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : il garde la duree du jeu d'origine, voir transition_combat
-        if not v & (0x800 | 0x2000) and not fd['combat']: d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script, ni pour ceux d'un combat)
+        fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : marque pour transition_combat (sa duree suit « Vitesse de transition » comme tout fondu au noir, #47)
+        d0 = d
+        if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
+        self.rapport_fondu = (self.image, (d / d0) if d0 > 1 and v & 0x1000 else 1.0)      # fondu au noir raccourci : le decompte du bruitage de sortie du moteur suit (Moteur._decompte_sortie)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -444,7 +453,7 @@ class Moteur:
         self.etat = Etat()
         self.msgs_ui = []                        # messages moteur -> interface (menus), derniere image
         self.ui = Interface()                    # fenetres de menu memorisees
-        self.images = 0
+        self.images = 0; self._decompte = 0; self._decompte_arme = -99; self._decompte_fait = True      # decompte du bruitage de sortie (voir _decompte_sortie)
         # animations d'objets de la carte (portes...) : le moteur attend qu'Unity les termine (bit0 de l'octet +0x14 de l'entree)
         self.anims = []                          # [(image d'echeance, index d'objet)]
         self.duree_anim = None                   # (objet, numero) -> images avant la fin de l'animation commune (donnee par la fenetre, d'apres les donnees de la carte) ; None = DUREE_ANIM
@@ -470,6 +479,7 @@ class Moteur:
         self._crochets_fondu()
         self._crochets_niveau()
         self._crochets_rencontres()
+        self._crochets_magie()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
@@ -540,6 +550,46 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
+
+    def _crochets_magie(self):
+        """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
+        de succes (la table des actions donne le meme texte au succes et a l'echec : « Les blessures de X guerissent ! » a PV pleins). Le menu Magie lance le sort par `UseAction::execUse` a deux endroits (choix d'une
+        cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
+        Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
+        table des messages) ou aucun, la liste devient le message du jeu « Mais rien ne se passe. » (une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
+        c = self.core; self._magie = None; self._magie_muet = False
+        try:
+            cs, nt = c.export('_ZN25TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT16useMagicNoTargetEv')
+            msg, exc = c.export('_ZN6status17BaseActionMessage12actionParam_E'), c.export('_ZN6status10excelParamE')
+            u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]; u64 = lambda a: struct.unpack('<Q', c.mem(a, 8))[0]
+            def est_execuse(a):                                                            # `bl` vers le stub de UseAction::execUse ?
+                w = u32(a); return w & 0xfc000000 == 0x94000000 and a + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) == c.LIB_BASE + MAGIE_EXECUSE_STUB
+            sites = [(cs + MAGIE_CHARSELECT_BL, False), (nt + MAGIE_SANS_CIBLE_BL, True)] if cs and nt and msg and exc else []
+            if not sites or not all(est_execuse(a) for a, _ in sites) or u32(u64(msg) + 0x48 * 201 + 0x14) != MSG_RIEN_NE_SE_PASSE:
+                print('sorts sans effet : menu Magie inattendu, le message de succes est garde', flush=True); return
+            def _avant(uc, ad, sz, u):
+                p = uc.reg_read(c.XREG[0]) & 0xffffffffffff; lanceur = u64(p); action = u32(p + MAGIE_ACTION)
+                cout = c.mem(u64(exc + 0x70) + 0x48 * action + 0x3a, 1)[0]                  # UseAction::getUseMp
+                self._magie = (p, lanceur, struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0], cout, action) if lanceur and cout else None
+            def poser(groupe):
+                def _apres(uc, ad, sz, u):
+                    m, self._magie = self._magie, None
+                    if not m: return
+                    p, lanceur, pm, cout, action = m
+                    if struct.unpack('<H', c.mem(lanceur + MAGIE_PM, 2))[0] < pm: return        # PM depenses : le sort a eu un effet
+                    e = u64(msg) + 0x48 * action; r = u32(p + MAGIE_RESULTAT)
+                    if r and r not in (u32(e + 4), u32(e + 0xc)): return                    # le jeu a deja son message d'echec
+                    c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_RIEN_NE_SE_PASSE, 0))
+                    if groupe: c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x01'); self._magie_muet = True      # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
+                return _apres
+            for (a, groupe) in sites:
+                c.uc.hook_add(unicorn.UC_HOOK_CODE, _avant, None, a, a); c.uc.hook_add(unicorn.UC_HOOK_CODE, poser(groupe), None, a + 4, a + 4)
+            def _fin(uc, ad, sz, u):                                                       # sortie de la boucle des cibles : plus de bruitage de soin en attente (menuUpdate en joue un par cible restante) si rien ne s'est passe
+                if self._magie_muet: self._magie_muet = False; c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x00')
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _fin, None, nt + MAGIE_FIN_BOUCLE, nt + MAGIE_FIN_BOUCLE)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('sorts sans effet : crochet non installe :', ex, flush=True)
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
@@ -719,7 +769,7 @@ class Moteur:
     def _debut_effet_combat(self, avant):
         """Paquet 34 (valeur 4) : l'ecran se brise en morceaux (EFFET_COMBAT_IMAGES images) pendant que le moteur attend ; ensuite l'ecran reste noir jusqu'au chargement de la scene du combat."""
         if self.etat.effet is not None: return
-        self.etat.effet = {'n': 0}; self._drapeau_effet(True)
+        self.etat.effet = {'n': 0, 'duree': PJ.duree_fondu(EFFET_COMBAT_IMAGES, Etat.vitesse_fondu)}; self._drapeau_effet(True)      # la cascade suit « Vitesse de transition » comme les fondus : 57 images a x1, 57 / facteur ensuite (la simulation avance de 57 images au total, voir Jeu._dessiner_effet)
         if self.etat.attente_charge is None: self.etat.attente_charge = {'base': avant, 'n': 0}
 
     def _effet_combat(self):
@@ -727,7 +777,7 @@ class Moteur:
         ef = self.etat.effet
         if ef is not None:
             ef['n'] += 1
-            if ef['n'] >= EFFET_COMBAT_IMAGES: self._drapeau_effet(False); self.etat.effet = None
+            if ef['n'] >= ef.get('duree', EFFET_COMBAT_IMAGES): self._drapeau_effet(False); self.etat.effet = None
         ac = self.etat.attente_charge
         if ac is not None:
             ac['n'] += 1
@@ -773,6 +823,7 @@ class Moteur:
         avant = self.etat.cartes_chargees
         self.etat.image = self.images
         self.etat.appliquer(pq, self._nom_carte)
+        self._decompte_sortie()
         for t, a, f in pq:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
         ac = self.etat.attente_charge
@@ -788,6 +839,23 @@ class Moteur:
         else: self._lire_monde()
         self.images += 1
         return pq
+
+    def _decompte_sortie(self):
+        """Bruitage de transition de carte (porte, sortie, entree de village, escalier, carte du monde <-> ville) : cause de sa perte avec les fondus raccourcis (« Vitesse de transition » x3 et plus, marginal a x2).
+        Quand le jeu quitte une ville ou la carte du monde, il lance un fondu au noir de 30 images ET arme un decompte de 15 images (DECOMPTE_SORTIE) ; a 0, NativeExec appelle playTownExitSE / playFieldExitSE, qui ne jouent le
+        bruitage 305 que si l'ancienne scene vit encore. Dans le jeu d'origine, le chargement de la carte suivante n'arrive qu'a la fin du fondu (30 images) : le bruitage est demande a mi-fondu. Le fondu raccourci de la
+        visionneuse (Etat._fondu) amene le chargement avant les 15 images : l'ancienne scene est detruite, le moteur ne demande plus rien (aucun paquet 35). On remet donc le decompte a la meme proportion que le fondu
+        (duree jouee / duree d'origine) : le bruitage reste demande a mi-fondu, la duree du fondu et celle du bruitage ne changent pas. Sans fondu raccourci (rapport 1), rien n'est touche."""
+        c = self.core; b = c.mem(self.L + DECOMPTE_SORTIE, 1)[0]
+        if b > self._decompte: self._decompte_arme = self.images; self._decompte_fait = False       # armé pendant ce pas (le moteur l'a deja decremente une fois)
+        self._decompte = b
+        if self._decompte_fait or b == 0 or b > 15: return
+        im, r = self.etat.rapport_fondu
+        if self.images - self._decompte_arme > 2: self._decompte_fait = True; return
+        if im < self._decompte_arme - 2 or im > self.images: return           # le fondu de cette sortie n'est pas (encore) arrive
+        self._decompte_fait = True
+        if r < 1.0:
+            nb = max(1, int(round(b * r))); c.mem_w(self.L + DECOMPTE_SORTIE, bytes([nb])); self._decompte = nb
 
     def _journal_message(self):
         """(test, DQ_MSGDBG=1) une ligne a chaque changement d'etat du message : image du moteur, etat, lettres ecrites / lettres de la ligne, vitesse du type de fenetre."""

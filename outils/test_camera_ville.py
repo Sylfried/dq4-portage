@@ -2,8 +2,9 @@
 
   1. la matrice du portage = le pipeline d'Unity re-ecrit a part (SceneCamera.Update : LookAt, tangage - lookDownAdjust, avance de distanceAdjust, Perspective(fov x 4/3, 1/aspect) dont on echange
      [0] et [5], s_yOffset) a l'ecran portrait d'origine (0,5625) ;
-  2. camera centree sur le joueur : le heros reste au centre de l'image quand le jeu borne SA cible (bord de la carte), a toute vitesse du jeu (x1 a x4) et toute cadence d'affichage, et apres l'arret ;
-  3. camera menee par le jeu (travelling, cible = un personnage) : la visionneuse n'ajoute AUCUNE borne (cadrage 16/9, centrage) : le rendu est exactement ce que le moteur commande ;
+  2. camera TOUJOURS centree sur le joueur (plus d'option, #47) : le heros reste au centre de l'image meme quand la cible du jeu est ailleurs (bord de la carte), a toute vitesse du jeu (x1 a x4) et toute cadence
+     d'affichage, et apres l'arret ; aucune borne de la visionneuse ;
+  3. camera prise par le jeu (travelling, cible = un personnage, camera libre d'une scene, mini-jeu) : la visionneuse n'ajoute RIEN (ni centrage, ni borne) : le rendu ne depend plus du heros ;
   4. `Jeu._camera_menee` : verrou de la TownCamera du moteur qui mene la camera ailleurs que sur le joueur, ou qui la tient sur le joueur.
 
     python3 outils/test_camera_ville.py        (Linux sans ecran : pyglet en mode « headless »)
@@ -21,17 +22,17 @@ ASPECT_16_9 = 16.0 / 9.0
 HORLOGE = [0.0]
 
 
-def faux_jeu(option=True, bornes_x=None, jeu=False):
-    j = types.SimpleNamespace(zoom=1.0, reg={'camera_centree': option}, cam_jeu=jeu, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, cam_poids=1.0, t_centre=None, fixe_test=False,
+def faux_jeu(bornes_x=None, jeu=False):
+    j = types.SimpleNamespace(zoom=1.0, reg={}, cam_jeu=jeu, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, cam_ref_y=None, t_centre=None, fixe_test=False,
                               bornes_x=bornes_x, lacet=0.0, angle_cam=0.0, cam_bloquee=False, carte_nom='x', n_boucle=0, _cadre_vue=None)
     j._rot_camera = lambda e: None
     return j
 
 
-def faux_etat(cib, hero, fov=None, yoff=None):
+def faux_etat(cib, hero, fov=None, yoff=None, partie=None, libre=False):
     cib = np.array(cib, float)
-    return types.SimpleNamespace(cam_pos=cib + np.array([0.0, 28.94, -27.0]), cam_cible=cib, cam_fov=fov, cam_near=None, cam_far=None, cam_yoff=yoff, cam_bas=None, cam_libre=False, cam_rot=None,
-                                 sprites={0: {'pos': tuple(hero)}})
+    return types.SimpleNamespace(cam_pos=cib + np.array([0.0, 28.94, -27.0]), cam_cible=cib, cam_fov=fov, cam_near=None, cam_far=None, cam_yoff=yoff, cam_bas=None, cam_libre=libre, cam_rot=None,
+                                 sprites={0: {'pos': tuple(hero)}}, partie=partie)
 
 
 def ndc(M, p):
@@ -75,13 +76,13 @@ class TestCameraVille(unittest.TestCase):
             pts = [cib + np.array([dx, dy, dz]) for dx in (-5, 0, 5) for dy in (0, 1.5) for dz in (-6, 0, 6)]
             ref = unity_ndc(pos, cib, fov, F.VILLE_NEAR, F.VILLE_FAR, yoff, F.ASPECT_PORTRAIT, pts)
             e = faux_etat(cib, cib, fov, yoff); e.cam_pos = pos; e.sprites = {}          # sans heros : champ horizontal fixe de l'original (avec lui, zoom commun de la visionneuse)
-            M, _ = F.Jeu._camera_ville(faux_jeu(option=False), e, F.ASPECT_PORTRAIT)
+            M, _ = F.Jeu._camera_ville(faux_jeu(), e, F.ASPECT_PORTRAIT)
             pire = max(pire, float(np.abs(np.array([ndc(M, p) for p in pts]) - ref).max()))
         self.assertLess(pire, 1e-9)
 
     def course(self, dt, f, bord=5.0, arret=8.0):
         """Un heros court (30 pas du moteur par seconde x f) vers une zone ou le jeu borne sa cible a `bord`, puis s'arrete : ecart maximal du heros au centre de l'image (NDC x)."""
-        HORLOGE[0] = 0.0; j = faux_jeu(option=True); x = 0.0; t = 0.0; pire = 0.0
+        HORLOGE[0] = 0.0; j = faux_jeu(); x = 0.0; t = 0.0; pire = 0.0
         while t < 4.0:
             HORLOGE[0] += dt; t += dt; x = min(arret, x + 0.2128 * 30.0 * f * dt)
             e = faux_etat((min(x, bord), 0.0, 0.0), (x, 0.0, 0.0))
@@ -92,38 +93,91 @@ class TestCameraVille(unittest.TestCase):
         for dt in (1 / 30, 1 / 60, 1 / 144):
             for f in (1.0, 1.5, 2.0, 3.0, 4.0): self.assertLess(self.course(dt, f), 1e-6, 'dt=1/%d x%s' % (round(1 / dt), f))
 
-    def test_pente_sans_glissement_vertical(self):
-        """Escaliers, rampes, ponts, echelles (retour #45 : « effet de descente ou de montee de la camera ») : le jeu d'origine suit la hauteur du heros a l'identique (TownCamera::execute : setTarget(joueur) a chaque pas,
-        position = cible + (0 ; 28,89 ; -27), aucun amortissement en Y ; mesure sur la rampe de `ckf4` : cible Y = heros Y - 0,047 et camera Y = heros Y + 28,89 au pas pres) et la visionneuse n'ajoute AUCUN lissage en Y :
-        le heros reste au meme point de l'image (NDC y) pendant la montee, a l'arret, a toute cadence (images interpolees entre deux pas) et quel que soit le regime de la camera (option de centrage ou non)."""
-        for option in (True, False):
+    def montee(self, dt, vy=0.113, pas=30, repos=8.0, jeu=False, tau=None):
+        """Le heros monte `pas` pas du moteur de `vy` (rampe a 45 degres a la marche), s'arrete, puis `repos` secondes : NDC y du heros a chaque image (la cible du jeu suit le heros a 0,047 pres, comme le moteur)."""
+        if tau is not None: F.CAM_Y_TAU = tau
+        HORLOGE[0] = 0.0; j = faux_jeu(jeu=jeu); ys = []; y_prec = None; ys_hero = []
+        for k in range(pas + int(repos * 30)):
+            hy = 0.047 + min(k, pas) * vy; a = 0.0
+            while a < 1.0 - 1e-9:
+                a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
+                HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
+                M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1]); ys_hero.append(h)
+            y_prec = hy
+        return ys, j
+
+    def test_escalier_hauteur_lissee(self):
+        """Escaliers, rampes, ponts (retour #45 + reponse de Sylfried, #47) : le moteur d'origine suit la hauteur du heros a chaque pas (TownCamera::execute : setTarget(joueur), aucun amortissement en Y ; mesure sur
+        la rampe de `ckf4` : cible Y = heros Y - 0,047) et c'est ce qui donnait « l'effet de montee ». La visionneuse garde maintenant une hauteur de reference qui rejoint lentement celle du jeu (CAM_Y_TAU) : pendant la
+        montee le heros s'eleve a l'ecran au lieu de rester fixe, bien moins que la montee, jamais hors champ ; a l'arret la camera le recentre exactement, a toute cadence d'affichage."""
+        tau = F.CAM_Y_TAU
+        try:
             for dt in (1 / 30, 1 / 60, 1 / 144):
-                HORLOGE[0] = 0.0; j = faux_jeu(option=option); ys = []; y_prec = None
-                for pas in range(60):
-                    hy = 0.047 + (min(pas, 30) * 0.113 if pas < 45 else 3.39 - (pas - 44) * 0.16)             # monte de 0,113 par pas (45 degres a la marche), s'arrete, puis redescend plus vite (course)
-                    a = 0.0
-                    while a < 1.0 - 1e-9:
-                        a = min(1.0, a + dt * 30.0); h = hy if y_prec is None else y_prec + (hy - y_prec) * a
-                        HORLOGE[0] += dt; e = faux_etat((0.0, h - 0.047, 0.78), (0.0, h, 0.78))
-                        M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); ys.append(ndc(M, (0.0, h, 0.78))[1])
-                    y_prec = hy
-                self.assertLess(max(ys) - min(ys), 1e-9, 'option=%s dt=1/%d' % (option, round(1 / dt)))
+                ys, j = self.montee(dt)
+                exc = max(abs(y - ys[0]) for y in ys)
+                self.assertGreater(exc, 0.02, 'la camera ignore une partie de la montee (dt=1/%d)' % round(1 / dt))
+                self.assertLess(exc, 0.3, 'le heros reste bien dans l\'ecran (dt=1/%d)' % round(1 / dt))
+                self.assertLess(abs(ys[-1] - ys[0]), 2e-3, 'recentre a l\'arret (dt=1/%d)' % round(1 / dt))
+            ref_, _ = self.montee(1 / 60, tau=0.0)                              # CAM_Y_TAU = 0 : exactement la camera du jeu (le heros reste au meme point de l'image)
+            self.assertLess(max(ref_) - min(ref_), 1e-9)
+        finally: F.CAM_Y_TAU = tau
 
-    def test_camera_menee_sans_bornes(self):
-        """Le moteur mene la camera loin de la carte (la grenouille sort par l'est) : le rendu est celui du moteur, avec ou sans l'option de centrage, bornes de la visionneuse ou non."""
-        for option in (True, False):
-            HORLOGE[0] = 0.0; j = faux_jeu(option=option, bornes_x=(-3.0, 3.0), jeu=True)
-            e = faux_etat((6.07, 0.0, 11.3), (0.93, 0.0, 10.56))
+    def test_escalier_a_toute_vitesse_de_jeu(self):
+        """Marche acceleree (x4 : 4 fois plus de pas du moteur par seconde) ou tres grande hauteur (tour) : l'ecart de la camera au jeu est borne par CAM_Y_MAX, le heros ne sort jamais de l'ecran."""
+        borne = None
+        for vy in (0.113, 0.45, 1.0):
+            ys, j = self.montee(1 / 60, vy=vy, pas=30)
+            exc = max(abs(y - ys[0]) for y in ys); borne = exc if borne is None else borne
+            self.assertLess(exc, 0.45, 'vy=%s' % vy)                                   # (CAM_Y_MAX = 3 unites ~ 0,29 de NDC)
+            self.assertLess(abs(ys[-1] - ys[0]), 2e-3)
+
+    def test_escalier_coupure_du_jeu_sans_glissement(self):
+        """Le jeu coupe (teleportation, changement de carte : `cam_saut`) ou prend la camera (scene) : la hauteur est celle du jeu aussitot, sans glissement."""
+        HORLOGE[0] = 0.0; j = faux_jeu(); e = faux_etat((0.0, 0.0, 0.78), (0.0, 0.047, 0.78))
+        for _ in range(30): HORLOGE[0] += 1 / 60; F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        e = faux_etat((0.0, 6.0, 0.78), (0.0, 6.047, 0.78)); j.cam_saut = True; HORLOGE[0] += 1 / 60
+        M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        ref, _ = F.Jeu._camera_ville(faux_jeu(), e, ASPECT_16_9)
+        self.assertLess(float(np.abs(M - ref).max()), 1e-9, 'coupure : camera identique a celle d\'un jeu qui arrive sur cette hauteur')
+        ys, j = self.montee(1 / 60, jeu=True)
+        self.assertLess(max(ys) - min(ys), 1e-9, 'camera du jeu : le heros reste au meme point de l\'image (le moteur suit sa hauteur)')
+        self.assertIsNone(j.cam_ref_y)
+
+    def test_toujours_centree_sur_le_heros(self):
+        """Plus d'option : la camera est centree sur le heros meme quand la cible du jeu est ailleurs (bord de la carte), et les anciennes bornes 16/9 (`bornes_x`) ne s'appliquent plus."""
+        for bornes in (None, (-3.0, 3.0)):
+            HORLOGE[0] = 0.0; j = faux_jeu(bornes_x=bornes)
+            e = faux_etat((3.0, 0.0, 11.3), (6.07, 0.0, 11.3))               # le jeu a borne sa cible a x = 3 ; le heros est en x = 6,07
             for _ in range(60): HORLOGE[0] += 1 / 60; M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
-            ref, _ = F.Jeu._camera_ville(faux_jeu(option=False, bornes_x=None, jeu=True), e, ASPECT_16_9)
-            self.assertLess(float(np.abs(M - ref).max()), 1e-9, 'option=%s' % option)
+            self.assertLess(abs(ndc(M, (6.07, 0.0, 11.3))[0]), 1e-6, 'bornes=%s' % (bornes,))
 
-    def test_bornes_16_9_hors_scene(self):
-        """Hors scene, option de centrage desactivee : la camera est ramenee dans la carte (cadrage 16/9) ; en scene, non (ci-dessus)."""
-        HORLOGE[0] = 0.0; j = faux_jeu(option=False, bornes_x=(-3.0, 3.0), jeu=False)
-        e = faux_etat((6.07, 0.0, 11.3), (6.07, 0.0, 11.3))
-        for _ in range(60): HORLOGE[0] += 1 / 60; M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
-        self.assertGreater(abs(ndc(M, (6.07, 0.0, 11.3))[0]), 0.3)
+    def regime(self, **kw):
+        """Matrice de la camera pour deux positions du heros (la cible du jeu est la meme) : si les deux matrices different, la visionneuse a recentre la camera sur le heros."""
+        out = []
+        for hx in (0.0, 2.0):
+            HORLOGE[0] = 0.0; j = faux_jeu(jeu=kw.get('jeu', False)); e = faux_etat((5.0, 0.0, 4.0), (hx, 0.0, 4.0), partie=kw.get('partie'), libre=kw.get('libre', False))
+            if kw.get('libre'): e.cam_rot = (40.0, 0.0, 0.0)
+            j._rot_camera = lambda e: np.eye(3)
+            for _ in range(60): HORLOGE[0] += 1 / 60; M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
+            out.append(M)
+        return float(np.abs(out[0] - out[1]).max())
+
+    def test_camera_prise_par_le_jeu(self):
+        """Le jeu la mene (TownCamera verrouillee et menee ailleurs : travelling, cible = un personnage, retour) : le rendu est exactement ce que le moteur commande, indifferent au heros ; sans cela, centree sur le heros."""
+        self.assertGreater(self.regime(jeu=False), 1e-3, 'le joueur a la camera : elle suit le heros')
+        self.assertLess(self.regime(jeu=True), 1e-9, 'scene : camera du jeu telle quelle')
+        self.assertLess(self.regime(libre=True), 1e-9, 'camera libre d\'une scene (paquet 11, bit 7) : cadrage du jeu')
+        self.assertLess(self.regime(partie=F.MO.PARTIE_CASINO), 1e-9, 'mini-jeu : cadrage du jeu')
+
+    def test_retour_de_scene_sans_saut(self):
+        """Fin d'une scene (le jeu rend la camera) : la camera ne saute pas, elle rejoint le heros en douceur (aucun saut d'une image a l'autre) ; au declenchement d'une scene, meme chose en sens inverse."""
+        HORLOGE[0] = 0.0; j = faux_jeu(jeu=True); e = faux_etat((5.0, 0.0, 4.0), (0.0, 0.0, 4.0))
+        for _ in range(30): HORLOGE[0] += 1 / 60; M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9)
+        x0 = ndc(M, (0.0, 0.0, 4.0))[0]; self.assertGreater(abs(x0), 0.1)
+        j.cam_jeu = False; xs = [x0]
+        for _ in range(90): HORLOGE[0] += 1 / 60; M, _ = F.Jeu._camera_ville(j, e, ASPECT_16_9); xs.append(ndc(M, (0.0, 0.0, 4.0))[0])
+        self.assertLess(max(abs(b - a) for a, b in zip(xs, xs[1:])), abs(x0) * 0.5, 'pas de saut')
+        self.assertLess(abs(xs[-1]), 1e-3, 'le heros est revenu au centre')
 
     def test_camera_menee_predicat(self):
         def mo(cj, hero, cib):

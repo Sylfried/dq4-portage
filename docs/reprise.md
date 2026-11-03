@@ -6,7 +6,8 @@
 - Portage PC natif 16:9 de **Dragon Quest IV** (APK Android déjà patchés en français). Le moteur d'origine `libdq4core.so` tourne **tel quel** sous Unicorn ; la couche Unity (C#) est refaite en Python dans une visionneuse pyglet (`dq4_pc/*.py`).
 - Dépôt : `Sylfried/dq4-portage` (**public**, donc aucune donnée perso, aucun contenu Square Enix, aucune capture du jeu, aucun dump). Les issues de l'ancien suivi sont dans `Sylfried/dq4-pc` (27 ouvertes) ; `dq4-portage` n'en a aucune (suivi par PR).
 - Utilisateur : Sylfried, francophone, « vibecoder » : il teste sur son **PC Windows**, veut des outils clé en main, des réponses **courtes et honnêtes** (toujours « établi / supposé / non vérifié »). Souvent il délègue : décider, le dire.
-- État au moment de l'écriture : `main` = **71fcd53** (« Avance #45 »), puis cette PR de reprise (#46). 39 fichiers de tests verts. **Rien n'est validé sous Windows ni sur un vrai GPU** (tout a tourné sous Mesa / llvmpipe).
+- État au moment de l'écriture : `main` = PR #47 (« Avance #47 : retours de 22 h 29 »), après la PR de reprise (#46) et « Avance #45 ». 45 fichiers de tests verts avec les sauvegardes d'origine du mobile (ceux qui exigent le cache complet des cartes, `test_objets_carte` et quelques cas de `test_contours_decor`, `test_decalques_sol`, `test_decor_combat_heure`, `test_chargement`, ne tournent pas sans lui). **Rien n'est validé sous Windows ni sur un vrai GPU** (tout a tourné sous Mesa / llvmpipe).
+- **Lot en pause** : le lot des « oublis du rapport d'audit » (`docs/audit/rapport_reste_a_faire.md`) a été mis de côté pour traiter les retours de 22 h 29 d'abord. La branche `agent47-docs` (docs d'audit à jour, essai d'intégration continue `.github/workflows/ci.yml` non testé) est poussée et **non fusionnée** ; restent à faire : clavier / son / icônes, paquets 6 et 30, effets d'écran 3 / 5 / 6. Plusieurs fichiers d'audit citent encore l'option « Centrer la caméra sur le joueur » (D-47, D-102, G-211, `specs/camera_bip.md` §2.4) et G-073 (roulis, sans objet) : à mettre à jour avec ce lot (voir « Avance #47 »).
 
 ## 2. Règles permanentes (de Sylfried)
 1. **Le jeu d'origine fait foi** : tout ce que la visionneuse remplace doit coller au mobile, sauf demande contraire. Le moteur ne se modifie pas (seulement des crochets ciblés).
@@ -21,8 +22,8 @@
 | Quoi | Où |
 |---|---|
 | README (usage, touches, nouveautés) | `README.md` |
-| État de la visionneuse, par avance (#25 → #45), « reste à faire », « Non vérifié » | `docs/notes-visionneuse-dq4-pc.md` (section **« Avance #45 »** à la fin ; en tête de section : « À trancher par Sylfried ») |
-| Faits techniques moteur / protocole / chronologies | `docs/notes-technique-portage-dq4.md` (**« Avance #45 : faits techniques »**) |
+| État de la visionneuse, par avance (#25 → #47), « reste à faire », « Non vérifié » | `docs/notes-visionneuse-dq4-pc.md` (section **« Avance #47 »** à la fin ; en tête de section : « À trancher par Sylfried ») |
+| Faits techniques moteur / protocole / chronologies | `docs/notes-technique-portage-dq4.md` (**« Avance #47 : faits techniques »**) |
 | Manière de travailler (branches, issues) | `docs/workflow.md` (périmé : dit « pas de push direct sur main + issues » ; l'usage réel est le **suivi par PR**, à corriger, cf. décision 2 du rapport) |
 | Rapport « Ce qu'il reste après l'audit » (18 décisions, 15 oublis, 11 bugs, 20 non vérifiés) | `docs/audit/rapport_reste_a_faire.md` (copie du Claude Doc https://claude.ai/artifact/5q6Cs8Br27SGqahx1AkvD4) |
 | Audit détaillé : registre des décisions D-xx, lacunes G-xxx, couverture fonctionnelle, issues GitHub | `docs/audit/{decisions,lacunes_connues,couverture,github_issues}.md` |
