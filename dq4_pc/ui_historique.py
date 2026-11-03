@@ -6,10 +6,12 @@ LA LISTE EST UNE SEULE COLONNE CONTINUE : les plus anciennes entrees en haut, le
 mise en page qui depend de la position (les boites sont posees une fois pour toutes, la position ne fait que les deplacer) ; une entree qui depasse du bord de la liste est simplement coupee par un cadre de decoupe (glScissor), comme du
 texte qui defile. Liste plus courte que la fenetre : collee en bas, comme un fil de messages (le plus recent reste toujours au meme endroit, en bas). Fonctions pures : `disposer` (empilement), `element_au_repere`.
 
-Chaque element est dessine dans une BOITE DE DIALOGUE STANDARD, toujours de la meme taille (la fenetre de message du terrain, 3 lignes : cadre 452 x 126 unites d'interface, tire de la mise en page d'origine ; meme
-echelle que dans le jeu ; classe `Boite`), avec le cadre et l'onglet du nom du jeu (frameData 192 et 191, dessines par ui_menu.FenetreMessage), la police d'origine SE-GARRIR et les lignes posees comme dans le jeu :
-un dialogue avec le nom du locuteur dans l'onglet SEULEMENT si le jeu l'affichait quand il a ete dit ; un combat avec son issue, ses ennemis, l'or et l'experience. Un texte qui depasse les 3 lignes (combat a
-beaucoup d'ennemis) continue dans une boite suivante (« 2/2 » : simple etiquette, le defilement ne s'y arrete pas) : le cadre ne grandit jamais. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
+Chaque element est dessine dans une BOITE DE DIALOGUE du jeu (la fenetre de message du terrain, 3 lignes : cadre 452 x 126 unites d'interface, tire de la mise en page d'origine ; meme echelle que dans le jeu ; classe
+`Boite`), avec le cadre et l'onglet du nom du jeu (frameData 192 et 191, dessines par ui_menu.FenetreMessage), la police d'origine SE-GARRIR et les lignes posees comme dans le jeu : un dialogue avec le nom du locuteur
+dans l'onglet SEULEMENT si le jeu l'affichait quand il a ete dit ; un combat avec son issue, chaque espece d'ennemis (qui est vaincu, enfui, disparu ou reste), l'or et l'experience gagnes et les objets obtenus.
+Un dialogue tient dans une boite de 3 lignes (la suite est dans une boite suivante, « 2/2 » : simple etiquette, le defilement ne s'y arrete pas). Un COMBAT GRANDIT EN HAUTEUR pour tout contenir (#141) : la boite a autant
+de lignes que le combat en demande, au moins 3 ; le cadre du jeu est etire (c'est un cadre a neuf morceaux : seul le milieu s'allonge, les coins gardent leur taille) ; au-dela de MAX_LIGNES_COMBAT lignes, le reste
+continue dans une boite suivante. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
 dans un fichier jusqu'a ce qu'on retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
 Le moteur est arrete tant que la fenetre est ouverte (Pause.ouvrir -> pause_jeu) : le message affiche reste tel quel et aucune touche n'arrive au jeu.
 Clavier : haut / bas (message precedent / suivant, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
@@ -53,20 +55,23 @@ PAS_MOLETTE = 2.0                    # lignes de texte (Boite.PAS : 28 unites) p
 MARGE_LISTE = 6.0                    # (en k) vide au-dessus de la premiere boite et sous la derniere de la liste (le contenu n'est jamais colle au bord de la fenetre de decoupe)
 TOLERANCE_PX = 0.5                   # pixels : en dessous, un message est « entierement visible » (arrondis du dessin)
 ECART_ELEMENTS, ECART_PAGES = 12.0, 4.0      # (en k) vide entre deux elements, entre deux boites d'un meme element
+MAX_LIGNES_COMBAT = 12               # lignes de texte (entete comprise) qu'une boite de combat peut contenir avant de continuer dans une boite suivante (la boite fait alors 126 + 9 x 28 = 378 unites de haut)
 
 
 def disposer(entrees, haut_cadre, haut_onglet, ecart, ecart_page, marge):
-    """Empile toute la liste dans UNE colonne, du plus ancien (en haut) au plus recent (en bas). `entrees` : un couple par element, (nombre de boites, onglet du nom sur la premiere ?). Distances en pixels, comptees depuis
+    """Empile toute la liste dans UNE colonne, du plus ancien (en haut) au plus recent (en bas). `entrees` : un tuple par element, (nombre de boites, onglet du nom sur la premiere ?) ou (nombre de boites, onglet ?,
+    [hauteur du cadre de chaque boite]) quand les boites n'ont pas toutes la meme hauteur (un combat grandit avec son texte) ; `haut_cadre` est la hauteur des autres. Distances en pixels, comptees depuis
     le haut du contenu (vers le bas) : -> (boites, debuts, fins, hauteur).
     boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre) ; `haut` = bord superieur de la boite, onglet du nom compris (le cadre commence `haut_onglet` plus bas) ;
     debuts[i], fins[i] : haut de la premiere boite et bas de la derniere de l'element i ; hauteur : hauteur du contenu, marges haute et basse comprises (0 si la liste est vide).
     Ne depend d'aucune position de defilement : la position ne fait que deplacer le tout."""
     boites = []; debuts = []; fins = []; y = marge
-    for i, (nb, avec_nom) in enumerate(entrees):
+    for i, ent in enumerate(entrees):
+        nb, avec_nom = ent[0], ent[1]; hauts = ent[2] if len(ent) > 2 else ()
         debuts.append(y)
         for p in range(max(1, nb)):
-            hn = haut_onglet if (p == 0 and avec_nom) else 0.0
-            boites.append((i, p, max(1, nb), y, hn, haut_cadre)); y += hn + haut_cadre
+            hn = haut_onglet if (p == 0 and avec_nom) else 0.0; hc = hauts[p] if p < len(hauts) else haut_cadre
+            boites.append((i, p, max(1, nb), y, hn, hc)); y += hn + hc
             if p < max(1, nb) - 1: y += ecart_page
         fins.append(y); y += ecart
     return boites, debuts, fins, ((y - ecart + marge) if entrees else 0.0)
@@ -147,12 +152,29 @@ class Boite:
         return max(0.3, min(H / 800.0 * ECHELLE_BOITE, (W - 40 * k - self.MARGES * k) / self.LARG))
 
     def base(self, rang):
-        """Distance de la ligne de base de la ligne `rang` (0, 1, 2) au haut du cadre, unites."""
+        """Distance de la ligne de base de la ligne `rang` (0, 1, 2...) au haut du cadre, unites."""
         return self.BASE_1 + rang * self.PAS
+
+    def haut_pour(self, lignes):
+        """Hauteur du cadre (unites) pour `lignes` lignes de texte : celle de la boite du jeu jusqu'a 3 lignes, puis une ligne (PAS) de plus par ligne."""
+        return self.HAUT + max(0, int(lignes) - self.LIGNES) * self.PAS
 
     def largeur_texte(self):
         """Largeur utile d'une ligne de texte (unites) : du bord gauche du texte a la marge droite du canevas (le canevas est large de LARG - 18)."""
         return self.LARG - self.TEXTE_X - 12.0
+
+
+def etirer_cadre(vtx, extra):
+    """Sommets d'un cadre a neuf morceaux (frameData 192 : coins de 12 unites, milieu qui s'etire) allonges de `extra` unites vers le haut : tout sommet de la moitie haute monte, les coins du haut gardent leur taille, le
+    milieu s'allonge (ses UV ne changent pas : le motif du milieu est etire, comme le fait le jeu quand il agrandit un cadre). -> nouvelle liste (la mise en page d'origine n'est jamais modifiee)."""
+    if not vtx: return []
+    zs = [v[1] for v in vtx]; mi = (min(zs) + max(zs)) / 2.0
+    return [[v[0], v[1] + (extra if v[1] > mi else 0.0)] + list(v[2:]) for v in vtx]
+
+
+def lignes_de_boite(page, premiere, combat):
+    """Nombre de lignes de texte d'une boite : les rangees de la page, plus l'entete (issue et heure) sur la premiere boite d'un combat ; trois au moins (la boite du jeu)."""
+    return max(Boite.LIGNES, len(page) + (1 if (combat and premiere) else 0))
 
 
 def paginer(rangees, avec_entete, lignes=3):
@@ -164,18 +186,11 @@ def paginer(rangees, avec_entete, lignes=3):
 
 
 def rangees_de(e, mesure, largeur):
-    """Rangees de texte d'un element, coupees a `largeur` (mesure(chaine) -> largeur dans la meme unite) : le texte d'un dialogue (ses retours a la ligne gardes) ; pour un combat les especes d'ennemis cote a cote
-    (separees par une virgule, une espece n'est jamais coupee si elle tient seule) puis l'or et l'experience d'une victoire sur leur propre rangee (l'issue et l'heure sont dans l'entete)."""
+    """Rangees de texte d'un element, coupees a `largeur` (mesure(chaine) -> largeur dans la meme unite) : le texte d'un dialogue (ses retours a la ligne gardes) ; pour un combat une rangee par espece d'ennemis (avec le
+    sort de chacun), puis l'or et l'experience, puis les objets (HI.lignes_combat) ; une ligne trop large pour la boite continue sur la rangee suivante. L'issue et l'heure sont dans l'entete."""
     if e.type != HI.TYPE_COMBAT: return HI.envelopper(e.texte, largeur, mesure)
-    brut = HI.lignes_combat(e); gain = brut[-1] if e.issue == 'victoire' else None
-    especes = brut[:-1] if gain else brut; out = []; cur = ''
-    for sp in especes:
-        cand = sp if not cur else cur + ', ' + sp
-        if cur and mesure(cand + ',') > largeur: out.append(cur + ','); cur = sp
-        else: cur = cand
-        if mesure(cur) > largeur: out.extend(HI.envelopper(cur, largeur, mesure)); cur = ''
-    if cur: out.append(cur)
-    if gain: out.append(gain)
+    out = []
+    for l in HI.lignes_combat(e): out.extend(HI.envelopper(l, largeur, mesure))
     return out
 
 
@@ -412,7 +427,8 @@ class VueHistorique:
             if len(self._lignes) > 4000: self._lignes.clear()
             if bm: mes = lambda t: bm.largeur(t) * B.texte_ech
             else: mes = lambda t: self.P._et(t, taille).content_width * 0.9 / s
-            r = self._lignes[cle] = paginer(rangees_de(e, mes, B.largeur_texte()), e.type == HI.TYPE_COMBAT, B.LIGNES)
+            combat = e.type == HI.TYPE_COMBAT
+            r = self._lignes[cle] = paginer(rangees_de(e, mes, B.largeur_texte()), combat, MAX_LIGNES_COMBAT if combat else B.LIGNES)
         return r
 
     def _etoile(self, cx, cy, rayon, pleine):
@@ -452,10 +468,11 @@ class VueHistorique:
         if r is not None and r.plaque(x, y, w, h, (J.width, J.height), choisi, coin=14 * k): return
         HM.plaque(x, y, w, h, k, choisi, None)
 
-    def _fenetre_boite(self, avec):
+    def _fenetre_boite(self, avec, extra=0):
         """Fenetre de message du jeu (ui_menu.FenetreMessage) qui dessine le cadre d'une boite : avec l'onglet du nom (frameData 191) ou sans (192), sans le canevas ni le curseur de fin de page ; None si la mise en page
-        d'origine n'est pas chargee (la boite est alors dessinee avec un cadre simple)."""
-        f = self._fens.get(avec)
+        d'origine n'est pas chargee (la boite est alors dessinee avec un cadre simple). `extra` : lignes de texte en plus des 3 de la boite du jeu (un combat) : le cadre (sans onglet) est allonge d'autant (etirer_cadre)."""
+        cle = (avec, int(extra) if not avec else 0)
+        f = self._fens.get(cle)
         if f is None:
             f = False
             r = getattr(self.J, 'ui_rendu', None); ml = getattr(r, 'ml', None)
@@ -464,37 +481,38 @@ class VueHistorique:
                     g = UM.FenetreMessage(ml); g.regler(0, 0, False, 'x' if avec else '')
                     if g.avec_nom == avec:
                         g.N['canevas']['act'] = False; g.N['curseur']['act'] = False; f = g
+                        if cle[1] > 0: g.N['cadre']['vtx'] = etirer_cadre(g.N['cadre']['vtx'], cle[1] * Boite.PAS)
                 except Exception: f = False
-            self._fens[avec] = f
+            self._fens[cle] = f
         return f or None
 
-    def _boite_dessin(self, B, bx, by, s, k, nom, bm, taille):
+    def _boite_dessin(self, B, bx, by, s, k, nom, bm, taille, extra=0):
         """Cadre de la boite dont le coin bas gauche est (bx, by), a l'echelle s : le cadre du jeu (et l'onglet du nom avec son texte, comme le jeu les pose), sinon un cadre simple. Toujours le meme : le message choisi n'est ni
         grise ni eclairci (il porte seulement la petite fleche, voir dessiner)."""
-        J = self.J; r = getattr(J, 'ui_rendu', None); f = self._fenetre_boite(bool(nom)) if r is not None else None
+        J = self.J; r = getattr(J, 'ui_rendu', None); f = self._fenetre_boite(bool(nom), extra) if r is not None else None
         fait = False
         if f is not None:
             try:
                 if nom: f.N['qui']['text']['text'] = nom
                 r.dessiner([f], bx - (B.win[0] + B.x0) * s, by - (B.win[2] + B.z0) * s, s, (J.width, J.height)); fait = True
-            except Exception: self._fens[bool(nom)] = False
+            except Exception: self._fens[(bool(nom), int(extra) if not nom else 0)] = False
         if not fait:                                                      # (repli : cadre noir translucide du menu et, pour un nom, un petit cadre collé en haut a gauche)
-            HM.cadre(bx + 4 * s, by + 4 * s, (B.LARG - 8) * s, (B.HAUT - 8) * s, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)
+            HM.cadre(bx + 4 * s, by + 4 * s, (B.LARG - 8) * s, (B.HAUT + extra * B.PAS - 8) * s, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)
             if nom:
-                HM.cadre(bx + 4 * s, by + (B.HAUT - 6) * s, (B.ONGLET_L - 8) * s, (B.ONGLET_H + 2) * s, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)
+                HM.cadre(bx + 4 * s, by + (B.HAUT + extra * B.PAS - 6) * s, (B.ONGLET_L - 8) * s, (B.ONGLET_H + 2) * s, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)
                 sc = s * B.texte_ech if bm else 1.0; lw = self._larg(bm, nom, sc, taille)
-                self._ligne(bm, nom, bx + (B.NOM_X - 0.0) * s - lw / 2, by + (B.HAUT + 7) * s, sc, BLANC, taille)
+                self._ligne(bm, nom, bx + (B.NOM_X - 0.0) * s - lw / 2, by + (B.HAUT + extra * B.PAS + 7) * s, sc, BLANC, taille)
 
     def _mesurer(self, bm, B, s, k, taille, hv):
-        """Pose TOUTE la liste dans une colonne (disposer : toutes les boites ont la MEME hauteur de cadre, celle de la boite de dialogue du jeu, que le texte tienne sur 1, 2 ou 3 rangees ; seul l'onglet du nom, sur la premiere boite d'un
-        dialogue avec nom, s'y ajoute au-dessus), pour l'echelle s et une fenetre de liste de hauteur hv (pixels). La mise en page ne depend jamais de la position de defilement. Met a jour la geometrie du defilement (hauteur du contenu,
+        """Pose TOUTE la liste dans une colonne (disposer : un dialogue a la hauteur de la boite de dialogue du jeu, que le texte tienne sur 1, 2 ou 3 rangees, et l'onglet du nom, sur la premiere boite d'un
+        dialogue avec nom, s'y ajoute au-dessus ; un combat a autant de lignes que son texte en demande, trois au moins : lignes_de_boite), pour l'echelle s et une fenetre de liste de hauteur hv (pixels). La mise en page ne depend jamais de la position de defilement. Met a jour la geometrie du defilement (hauteur du contenu,
         de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et garde les bords des elements (debuts, fins) pour la navigation
         au clavier. -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu."""
         els = self.elements; n = len(els)
         cle = (id(els), n, int(s * 100), int(k * 100), bm is not None)
         if self._mise is None or self._mise[0] != cle:
             pages = [self._pages_de(bm, e, B, s, taille) for e in els]
-            ent = [(len(pg), e.type == HI.TYPE_DIALOGUE and bool(e.nom)) for pg, e in zip(pages, els)]
+            ent = [(len(pg), e.type == HI.TYPE_DIALOGUE and bool(e.nom), [B.haut_pour(lignes_de_boite(page, j == 0, e.type == HI.TYPE_COMBAT)) * s for j, page in enumerate(pg)]) for pg, e in zip(pages, els)]
             boites, debuts, fins, hc = disposer(ent, B.HAUT * s, B.ONGLET_H * s, ECART_ELEMENTS * k, ECART_PAGES * k, MARGE_LISTE * k)
             self._mise = (cle, [(i, p, nb, h, hn, hb, pages[i][p]) for (i, p, nb, h, hn, hb) in boites], debuts, fins, hc)
         boites, debuts, fins, hc = self._mise[1:]
@@ -590,7 +608,8 @@ class VueHistorique:
                 for ((i, p, np_, haut, hn, hb, rangees), yb, yt) in vues:
                     e = self.elements[i]; nom = e.nom if (e.type == HI.TYPE_DIALOGUE and p == 0 and e.nom) else None
                     zone = (lx0, max(yb, ly0), lx1, min(yt, ly1)); self.zones.append(zone + (i,))                      # (la zone d'une boite coupee ne depasse pas la fenetre de la liste : pas de clic sur les onglets ou l'aide)
-                    self._boite_dessin(B, lx0, yb, s, k, nom, bm, taille_b)                               # cadre du jeu (+ onglet et nom) : aucun grisé au survol ni au choix
+                    extra = max(0, lignes_de_boite(rangees, p == 0, e.type == HI.TYPE_COMBAT) - B.LIGNES)                # lignes en plus de la boite du jeu (un combat)
+                    self._boite_dessin(B, lx0, yb, s, k, nom, bm, taille_b, extra)                      # cadre du jeu (+ onglet et nom) : aucun grisé au survol ni au choix
                     if i == self.sel and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))      # le message choisi (clavier ou souris) : la petite fleche, et rien d'autre
                     rang = 0
                     if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite

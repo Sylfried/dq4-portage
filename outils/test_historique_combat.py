@@ -51,14 +51,14 @@ class SuiviPur(unittest.TestCase):
 
     def test_ordre_d_apparition_et_regroupement(self):
         s = HC.Suivi(); s.nommer({3: 'Londuleux', 20: 'Rat volant'}); s.voir([(0, 20), (1, 3), (2, 20)]); s.mort(1, 3); s.mort(0, 20)
-        self.assertEqual(s.ennemis(), [{'nom': 'Rat volant', 'total': 2, 'vaincus': 1}, {'nom': 'Londuleux', 'total': 1, 'vaincus': 1}])
+        self.assertEqual(s.ennemis(), [{'nom': 'Rat volant', 'total': 2, 'vaincus': 1, 'fuis': 0, 'disparus': 0}, {'nom': 'Londuleux', 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}])
 
     def test_emplacement_libere_puis_reoccupe_est_un_renfort(self):
         s = HC.Suivi(); s.nommer({0: 'Gluant', 9: 'Roi des gluants'}); s.voir([(0, 0), (1, 0)]); s.mort(0, 0)
         s.voir([(0, 0), (1, 0)])                                                                                      # le monstre vaincu reste dans son emplacement jusqu'au nettoyage
         s.voir([(1, 0)])                                                                                              # nettoye
         s.voir([(0, 9), (1, 0)])                                                                                      # un renfort arrive dans l'emplacement libre
-        self.assertEqual(s.ennemis(), [{'nom': 'Gluant', 'total': 2, 'vaincus': 1}, {'nom': 'Roi des gluants', 'total': 1, 'vaincus': 0}])
+        self.assertEqual(s.ennemis(), [{'nom': 'Gluant', 'total': 2, 'vaincus': 1, 'fuis': 0, 'disparus': 0}, {'nom': 'Roi des gluants', 'total': 1, 'vaincus': 0, 'fuis': 0, 'disparus': 0}])
 
     def test_changement_de_numero_dans_un_emplacement(self):
         s = HC.Suivi(); s.voir([(0, 0)]); s.voir([(0, 5)])                                                            # transformation / remplacement entre deux releves : nouveau monstre
@@ -66,16 +66,16 @@ class SuiviPur(unittest.TestCase):
 
     def test_mort_d_un_monstre_jamais_vu(self):
         s = HC.Suivi(); s.mort(4, 7)
-        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 1}]); self.assertEqual(s.morts, 1)
+        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}]); self.assertEqual(s.morts, 1)
 
     def test_plusieurs_morts_a_la_meme_image(self):
         s = HC.Suivi(); s.voir([(0, 0), (1, 0), (2, 0)]); s.mort(0, 0); s.mort(1, 0); s.mort(2, 0)
-        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 3, 'vaincus': 3}]); self.assertEqual(s.issue(), 'victoire')
+        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 3, 'vaincus': 3, 'fuis': 0, 'disparus': 0}]); self.assertEqual(s.issue(), 'victoire')
 
     def test_noms_inconnus_numeros_distincts(self):
         s = HC.Suivi(); s.voir([(0, 1), (1, 2)])
         self.assertEqual([e['nom'] for e in s.ennemis()], [HC.NOM_INCONNU, HC.NOM_INCONNU])                          # deux especes sans nom : deux entrees, jamais fondues
-        s.nommer({1: 'A', 2: 'A'}); self.assertEqual(s.ennemis(), [{'nom': 'A', 'total': 2, 'vaincus': 0}])           # meme nom = meme espece pour le joueur
+        s.nommer({1: 'A', 2: 'A'}); self.assertEqual(s.ennemis(), [{'nom': 'A', 'total': 2, 'vaincus': 0, 'fuis': 0, 'disparus': 0}])           # meme nom = meme espece pour le joueur
 
     def test_un_nom_deja_connu_n_est_pas_change(self):
         s = HC.Suivi(); s.nommer({1: 'Gluant'}); s.nommer({1: 'Autre'}); self.assertEqual(s.noms[1], 'Gluant')
@@ -105,10 +105,37 @@ class SuiviPur(unittest.TestCase):
     def test_forme_du_dict(self):
         s = HC.Suivi(); s.nommer({0: 'Gluant'}); s.voir([(0, 0)]); s.mort(0, 0); s.compteurs(2, 3)
         d = HC.fabriquer_combat(s, 12345)
-        self.assertEqual(d, {'t': 12345, 'ennemis': [{'nom': 'Gluant', 'total': 1, 'vaincus': 1}], 'or': 3, 'xp': 2, 'issue': 'victoire'})
-        self.assertEqual(sorted(d), ['ennemis', 'issue', 'or', 't', 'xp']); self.assertIn(d['issue'], HC.ISSUES)
-        for e in d['ennemis']: self.assertEqual(sorted(e), ['nom', 'total', 'vaincus'])
+        self.assertEqual(d, {'t': 12345, 'ennemis': [{'nom': 'Gluant', 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}], 'or': 3, 'xp': 2, 'issue': 'victoire', 'objets': []})
+        self.assertEqual(sorted(d), ['ennemis', 'issue', 'objets', 'or', 't', 'xp']); self.assertIn(d['issue'], HC.ISSUES)
+        for e in d['ennemis']: self.assertEqual(sorted(e), ['disparus', 'fuis', 'nom', 'total', 'vaincus'])
         self.assertTrue(all(type(v) is int for v in (d['t'], d['or'], d['xp'])))
+
+    def test_monstres_enfuis_et_disparus(self):
+        """#141 : chaque monstre a UN sort (vaincu, enfui ou disparu) ; ce qui n'a aucun sort est encore la a la fin."""
+        s = HC.Suivi(); s.nommer({0: 'Gluant', 5: 'Golem'}); s.voir([(0, 0), (1, 0), (2, 0), (3, 5)]); s.mort(0, 0); s.enfui(1, 0); s.disparu(2, 0)
+        self.assertEqual(s.ennemis(), [{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 1}, {'nom': 'Golem', 'total': 1, 'vaincus': 0, 'fuis': 0, 'disparus': 0}])
+        self.assertEqual(s.morts, 1)                                                                                  # (seuls les morts comptent comme « morts » : ni une fuite ni une disparition)
+
+    def test_un_monstre_enfui_n_est_pas_une_victoire(self):
+        s = HC.Suivi(); s.voir([(0, 0), (1, 0)]); s.mort(0, 0); s.enfui(1, 0)
+        self.assertEqual(s.issue(), 'victoire')                                                                       # (plus aucun monstre : tous vaincus ou partis, au moins un vaincu)
+        s = HC.Suivi(); s.voir([(0, 0), (1, 0)]); s.mort(0, 0)
+        self.assertEqual(s.issue(), 'fuite')                                                                          # un monstre reste : le groupe est parti
+        s.victoire = True; self.assertEqual(s.issue(), 'victoire')                                                    # (la routine de victoire du jeu a le dernier mot)
+
+    def test_sort_d_un_monstre_jamais_vu_ou_deja_decide(self):
+        s = HC.Suivi(); s.enfui(4, 7); s.disparu(5, 7)
+        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 2, 'vaincus': 0, 'fuis': 1, 'disparus': 1}])
+        s = HC.Suivi(); s.voir([(0, 3)]); s.enfui(0, 3); s.enfui(0, 3)                                               # meme emplacement, sort deja note : un autre monstre
+        self.assertEqual(s.ennemis(), [{'nom': HC.NOM_INCONNU, 'total': 2, 'vaincus': 0, 'fuis': 2, 'disparus': 0}])
+
+    def test_objets_gagnes(self):
+        s = HC.Suivi(); s.nommer({0: 'Gluant'}); s.voir([(0, 0)]); s.mort(0, 0); s.compteurs(2, 3)
+        s.objet(12, 'herbe médicinale'); s.objet(40, 'pierre de vie')
+        d = HC.fabriquer_combat(s, 1)
+        self.assertEqual(d['objets'], [{'nom': 'herbe médicinale'}, {'nom': 'pierre de vie'}])
+        s2 = HC.Suivi(); s2.voir([(0, 0), (1, 0)]); s2.mort(0, 0); s2.objet(12, 'x')
+        self.assertEqual(HC.fabriquer_combat(s2, 1)['objets'], [])                                                    # pas de victoire : pas d'objets rapportes
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- colle sur un faux moteur
@@ -116,7 +143,12 @@ LIB = 0x10000000
 A_PARTY, A_MONSTER, A_GAME, A_RESULT = 0x1000, 0x2000, 0x1f000, 0x1e000
 NOMS_FONCTIONS = {'_ZN6status15BasePartyStatus12getBattleExpEv': 0x30000, '_ZN6status15BasePartyStatus13getBattleGoldEv': 0x30010, '_ZN6status13MonsterStatus8isEnableEv': 0x30020,
                   '_ZN6status11PartyStatus11startBattleEv': 0x30100, '_ZN19BattleActorManager216execMonsterDeathEi': 0x30110, '_ZN23BattleExecDefeatMonster10initializeEv': 0x30120,
-                  '_ZN16BattleExecEscape5setupEv': 0x30130, '_ZN6Global9endBattleEb': 0x30140}
+                  '_ZN16BattleExecEscape5setupEv': 0x30130, '_ZN6Global9endBattleEb': 0x30140,
+                  HC.SYM_CONTROLE_MORTS: 0x30200, HC.SYM_OBJET_GAGNE: 0x30300, HC.SYM_NOM_OBJET: 0x30400}
+A_TACHE = 0x31000                                                                                                    # la tache BattleExecVictory32 : le numero de l'objet a +0xc
+INTERNES = {evt: (NOMS_FONCTIONS[nom] + off, mot) for evt, nom, off, mot in HC.CROCHETS_INTERNES}                  # evenement -> (adresse du crochet, instruction attendue)
+NOMS_OBJETS = {12: 'herbe ;médicinale', 40: 'pierre de vie', 7: '<ERR 0x04000000.7>'}                                # ce que TextAPI::extractText repond
+NOMS_MONSTRES = {0: 'gluant', 3: 'londuleux', 34: 'armure ;errante', 74: 'scara$somniaque', 5: 'chauve-sourat'}
 
 
 def ldr_w(decalage, rt=0): return 0xb9400000 | ((decalage // 4) << 10) | rt                                        # ldr wRt, [x0, #decalage]
@@ -131,9 +163,10 @@ class FauxUC:
 
 class FauxCore:
     XREG = list(range(100, 131))
-    def __init__(self, mauvaise_version=False):
-        self.ram = bytearray(0x40000); self.uc = FauxUC(); self.lectures = 0
+    def __init__(self, mauvaise_version=False, mot_interne_faux=None):
+        self.ram = bytearray(0x40000); self.uc = FauxUC(); self.lectures = 0; self.appels = []
         for nom, a in NOMS_FONCTIONS.items(): self.ram[a:a + 4] = struct.pack('<I', 0xd65f03c0)
+        for evt, (a, mot) in INTERNES.items(): self.ram[a:a + 4] = struct.pack('<I', mot ^ 1 if evt == mot_interne_faux else mot)
         off = {'_ZN6status15BasePartyStatus12getBattleExpEv': HC.OFF_XP, '_ZN6status15BasePartyStatus13getBattleGoldEv': HC.OFF_OR, '_ZN6status13MonsterStatus8isEnableEv': HC.OFF_NUMERO}
         for nom, o in off.items(): self.ram[NOMS_FONCTIONS[nom]:NOMS_FONCTIONS[nom] + 4] = struct.pack('<I', ldr_w(o + (4 if mauvaise_version else 0)))
         self.symboles = dict(NOMS_FONCTIONS); self.symboles.update({'_ZN6status7g_PartyE': A_PARTY, '_ZN6status9g_MonsterE': A_MONSTER, '_ZN6status6g_GameE': A_GAME, '_ZN6status14g_BattleResultE': A_RESULT})
@@ -146,6 +179,25 @@ class FauxCore:
     def declencher(self, nom, *args):
         for i, v in enumerate(args): self.uc.regs[self.XREG[i + 1]] = v
         for cb in self.uc.crochets[DECLENCHEURS[nom]]: cb(self.uc, 0, 4, None)
+    def declencher_interne(self, evt, **regs):
+        """Crochet au milieu d'une fonction du moteur : regs = {'x20': valeur, 'x0': valeur}."""
+        for r, v in regs.items(): self.uc.regs[self.XREG[int(r[1:])]] = v
+        for cb in self.uc.crochets[INTERNES[evt][0]]: cb(self.uc, 0, 4, None)
+    def enfui(self, i): self.declencher_interne('monstre_enfui', x20=i)
+    def disparu(self, i): self.declencher_interne('monstre_disparu', x20=i)
+    def objet(self, numero, rangement=0):
+        """rangement : ce que giveItem a renvoye (indice du membre, ou -1 : dans le sac)."""
+        self.ecrire(A_TACHE + HC.OFF_OBJET_TACHE, '<I', numero); self.declencher_interne('objet', x20=A_TACHE, x0=rangement & 0xffffffff)
+    # -- l'appel d'une fonction du moteur (HC.CapteurCombat._nom_objet : TextAPI::extractText)
+    def malloc(self, n): return 0x3f000
+    def mem_w(self, a, b): self.ram[a:a + len(b)] = b
+    def read_cstr(self, a, limit=1 << 20):
+        fin = self.ram.index(0, a); return bytes(self.ram[a:fin])
+    def call(self, f, *args, label=''):
+        self.appels.append((f, args)); buf, arg = args; num = arg & 0xffffff; assert f == NOMS_FONCTIONS[HC.SYM_NOM_OBJET]
+        if arg & 0xf000000 == HC.GENRE_MONSTRE: nom = NOMS_MONSTRES.get(num, '<ERR 0x06000000.%d>' % num)
+        else: assert arg & 0xf000000 == HC.GENRE_OBJET; nom = NOMS_OBJETS.get(num, '<ERR 0x04000000.%d>' % num)
+        self.mem_w(buf, nom.encode('utf-8') + b'\0'); return buf
 
 
 DECLENCHEURS = {'debut': 0x30100, 'mort': 0x30110, 'victoire': 0x30120, 'fuite': 0x30130, 'fin': 0x30140}
@@ -160,8 +212,8 @@ class FauxUI:
 
 
 class FauxMoteur:
-    def __init__(self, mauvaise_version=False):
-        self.core = FauxCore(mauvaise_version); self.etat = FauxEtat(); self.images = 100; self.ui = FauxUI()
+    def __init__(self, mauvaise_version=False, mot_interne_faux=None):
+        self.core = FauxCore(mauvaise_version, mot_interne_faux); self.etat = FauxEtat(); self.images = 100; self.ui = FauxUI()
     def pas(self, capteur, n=1):
         sorties = []
         for _ in range(n): self.images += 1; sorties.extend(capteur.maj(self))
@@ -188,7 +240,66 @@ class Colle(unittest.TestCase):
 
     def test_crochets_installes(self):
         self.assertTrue(self.c.actif)
-        self.assertEqual(sorted(self.m.core.uc.crochets), sorted(NOMS_FONCTIONS[n] for _e, n in HC.CROCHETS))
+        self.assertEqual(sorted(self.m.core.uc.crochets), sorted([NOMS_FONCTIONS[n] for _e, n in HC.CROCHETS] + [a for a, _m in INTERNES.values()]))
+
+    def test_crochet_interne_inattendu_seul_cet_evenement_est_perdu(self):
+        """Une instruction differente a l'endroit du crochet (autre moteur) : pas de crochet au hasard ; le reste de la capture fonctionne."""
+        m = FauxMoteur(mot_interne_faux='monstre_enfui'); c = HC.CapteurCombat(m)
+        self.assertTrue(c.actif); self.assertNotIn(INTERNES['monstre_enfui'][0], m.core.uc.crochets); self.assertIn(INTERNES['monstre_disparu'][0], m.core.uc.crochets)
+        self.assertEqual(len(combat_simple(m, c)), 1)
+
+    def scenario_complet(self, objets=((12, 0), (40, -1)), enfui=1, disparu=2, victoire=True):
+        """3 Gluants et 1 Golem : le 1er Gluant meurt, un autre s'enfuit, le dernier disparait, le Golem meurt ; puis victoire (or 13, experience 6), les objets, la fin."""
+        m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut')
+        for e, (num, grp) in enumerate(((0, 0), (0, 0), (0, 0), (5, 1))): m.core.poser(e, num, grp)
+        sorties = m.pas(c, 3); m.plaques(['Gluant\n\n\t×3', 'Golem']); sorties += m.pas(c, 3)
+        m.core.declencher('mort', 0); sorties += m.pas(c, 1)
+        if enfui is not None: m.core.enfui(enfui)
+        if disparu is not None: m.core.disparu(disparu)
+        sorties += m.pas(c, 1); m.core.declencher('mort', 3); m.core.ecrire(A_PARTY + HC.OFF_XP, '<2I', 6, 13); sorties += m.pas(c, 2)
+        if victoire: m.core.declencher('victoire')
+        for numero, rangement in objets: m.core.objet(numero, rangement)
+        sorties += m.pas(c, 2); m.core.ecrire(A_PARTY + HC.OFF_XP, '<2I', 0, 0); m.core.ecrire(A_GAME + 4, '<I', 7777)
+        m.core.declencher('fin', 0); return sorties + m.pas(c, 1)
+
+    def test_monstres_enfuis_disparus_et_objets(self):
+        """#141 : qui est mort, enfui ou disparu (par espece), l'or et l'experience, les objets (le nom est demande au moteur, le « ; » est retire ; qu'ils aillent a un membre ou dans le sac)."""
+        sorties = self.scenario_complet(); self.assertEqual(len(sorties), 1); d = sorties[0]
+        self.assertEqual(d['ennemis'], [{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 1}, {'nom': 'Golem', 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}])
+        self.assertEqual((d['issue'], d['or'], d['xp'], d['t']), ('victoire', 13, 6, 7777))
+        self.assertEqual(d['objets'], [{'nom': 'herbe médicinale'}, {'nom': 'pierre de vie'}])
+
+    def test_nom_d_objet_demande_une_seule_fois_et_nom_de_secours(self):
+        self.scenario_complet(objets=((12, 0), (12, 1), (7, -1), (99, 0)))
+        self.assertEqual(len(self.m.core.appels), 3)                                                                   # 12, 7 et 99 : un appel par objet different (le nom est garde)
+
+    def test_objets_et_noms_de_secours_dans_le_dict(self):
+        d = self.scenario_complet(objets=((7, 0), (99, -1)))[0]
+        self.assertEqual([o['nom'] for o in d['objets']], ['Objet n°7', 'Objet n°99'])                                 # (« <ERR ... > » n'est jamais montre)
+
+    def test_victoire_sans_objet(self):
+        d = self.scenario_complet(objets=(), victoire=True)[0]; self.assertEqual(d['objets'], [])
+
+    def test_nom_demande_au_moteur_sans_plaque(self):
+        """Attaque surprise (pas de plaque) : le nom vient du moteur par le numero du monstre, avec une majuscule ; sans reponse du moteur : « Monstre »."""
+        m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut')
+        for e, num in enumerate((3, 34, 74, 99, 3)): m.core.poser(e, num, e)
+        m.pas(c, 4)
+        for e in range(5): m.core.declencher('mort', e)
+        m.core.declencher('victoire'); m.core.declencher('fin', 0); d, = m.pas(c, 1)
+        self.assertEqual([(e['nom'], e['total']) for e in d['ennemis']], [('Londuleux', 2), ('Armure errante', 1), ('Scara-somniaque', 1), (HC.NOM_INCONNU, 1)])
+        self.assertEqual(len(m.core.appels), 4)                                                                       # (un appel par numero de monstre different)
+
+    def test_les_plaques_l_emportent_sur_le_nom_du_moteur(self):
+        m, c = self.m, self.c; combat_simple(m, c); self.assertEqual(m.core.appels, [])                              # les deux noms viennent des plaques : le moteur n'est pas interroge
+
+    def test_groupe_en_fuite_les_monstres_restants_sont_comptes(self):
+        """Le groupe s'enfuit : le monstre qui s'etait enfui est note, ceux qui restent n'ont aucun sort."""
+        m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 3, 0); m.core.poser(1, 3, 0); m.core.poser(2, 3, 0)
+        m.pas(c, 3); m.plaques(['Golem\n\n\t×3']); m.pas(c, 3); m.core.enfui(0); m.pas(c, 1); m.core.declencher('fuite'); m.core.declencher('fin', 0)
+        d, = m.pas(c, 1)
+        self.assertEqual((d['issue'], d['objets'], d['or'], d['xp']), ('fuite', [], 0, 0))
+        self.assertEqual(d['ennemis'], [{'nom': 'Golem', 'total': 3, 'vaincus': 0, 'fuis': 1, 'disparus': 0}])
 
     def test_pour_un_seul_capteur_par_moteur(self):
         """CapteurCombat.pour(mo) : l'unique ligne d'integration ; les crochets ne sont installes qu'une fois."""
@@ -216,7 +327,7 @@ class Colle(unittest.TestCase):
 
     def test_victoire_complete(self):
         sorties = combat_simple(self.m, self.c)
-        self.assertEqual(sorties, [{'t': 5555, 'ennemis': [{'nom': 'Rat volant', 'total': 1, 'vaincus': 1}, {'nom': 'Londuleux', 'total': 1, 'vaincus': 1}], 'or': 13, 'xp': 6, 'issue': 'victoire'}])
+        self.assertEqual(sorties, [{'t': 5555, 'ennemis': [{'nom': 'Rat volant', 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}, {'nom': 'Londuleux', 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}], 'or': 13, 'xp': 6, 'issue': 'victoire', 'objets': []}])
         self.assertIsNone(self.c.suivi)
 
     def test_deux_combats_d_affilee(self):
@@ -242,7 +353,7 @@ class Colle(unittest.TestCase):
     def test_pas_de_plaque_nom_generique(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.pas(c, 3); m.core.declencher('mort', 0)
         m.core.declencher('victoire'); m.core.declencher('fin', 0); d, = m.pas(c)
-        self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 1}])
+        self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 1, 'fuis': 0, 'disparus': 0}])
 
     def test_plaques_apres_une_mort_ignorees(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.core.poser(1, 3, 1); m.pas(c, 3); m.core.declencher('mort', 0); m.pas(c)
@@ -251,7 +362,7 @@ class Colle(unittest.TestCase):
     def test_defaite(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.pas(c, 3); m.core.ecrire(A_PARTY + HC.OFF_XP, '<2I', 3, 7); m.pas(c)
         m.core.declencher('fin', 1); d, = m.pas(c)
-        self.assertEqual((d['issue'], d['or'], d['xp']), ('defaite', 0, 0)); self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 0}])
+        self.assertEqual((d['issue'], d['or'], d['xp']), ('defaite', 0, 0)); self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 1, 'vaincus': 0, 'fuis': 0, 'disparus': 0}])
 
     def test_defaite_signalee_par_le_drapeau_du_resultat(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.pas(c, 3)
@@ -261,7 +372,7 @@ class Colle(unittest.TestCase):
     def test_fuite(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.core.poser(1, 20, 0); m.pas(c, 3)
         m.core.declencher('mort', 0); m.core.ecrire(A_PARTY + HC.OFF_XP, '<2I', 3, 7); m.pas(c, 2); m.core.declencher('fuite'); m.pas(c); m.core.declencher('fuite'); m.core.declencher('fin', 0); d, = m.pas(c)
-        self.assertEqual((d['issue'], d['or'], d['xp']), ('fuite', 0, 0)); self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 2, 'vaincus': 1}])
+        self.assertEqual((d['issue'], d['or'], d['xp']), ('fuite', 0, 0)); self.assertEqual(d['ennemis'], [{'nom': HC.NOM_INCONNU, 'total': 2, 'vaincus': 1, 'fuis': 0, 'disparus': 0}])
 
     def test_renfort_en_cours_de_combat(self):
         m, c = self.m, self.c; m.etat.partie = HC.PARTIE_COMBAT; m.core.declencher('debut'); m.core.poser(0, 20, 0); m.pas(c, 3); m.core.poser(1, 20, 0); m.pas(c, 2)
@@ -401,7 +512,8 @@ class MoteurReel(unittest.TestCase):
         self.assertEqual(self.or_groupe() - or0, combat['or'], 'or du groupe (avant / apres)')
         apres = self.xp_membres(); gains = {i: apres[i] - xp0[i] for i in apres if xp0[i] != 0xffffffff}
         self.assertTrue(gains and all(g == combat['xp'] for g in gains.values()), 'experience de chaque membre %r' % (gains,))
-        for e in combat['ennemis']: self.assertEqual(e['vaincus'], e['total'])
+        for e in combat['ennemis']: self.assertEqual(e['vaincus'] + e['fuis'] + e['disparus'], e['total'])           # (un monstre peut s'enfuir : « Le gluant s'enfuit ! » -- compte comme tel, comme le message du jeu)
+        self.assertEqual(sum(e['fuis'] for e in combat['ennemis']), sum(1 for m in self.msgs if "s'enfuit" in m), 'fuites des monstres : le message du jeu et le dict')
         texte = ' | '.join(self.msgs).lower()
         for e in combat['ennemis']: self.assertIn(e['nom'].lower(), texte, 'le nom doit etre celui que le jeu ecrit')
 
@@ -410,7 +522,7 @@ class MoteurReel(unittest.TestCase):
         or0, xp0 = self.or_groupe(), self.xp_membres()
         self.lancer([(3, 2), (0, 1)]); self.jouer()
         self.assertEqual(len(self.combats), 1); c = self.combats[0]
-        self.assertEqual([(e['nom'], e['total'], e['vaincus']) for e in c['ennemis']], [('Londuleux', 2, 2), ('Gluant', 1, 1)])
+        self.assertEqual([(e['nom'], e['total']) for e in c['ennemis']], [('Londuleux', 2), ('Gluant', 1)])
         self.assertGreater(c['or'], 0); self.assertGreater(c['xp'], 0); self.verifier_victoire(c, or0, xp0)
         self.assertGreaterEqual(c['t'], 0)
 
@@ -418,7 +530,7 @@ class MoteurReel(unittest.TestCase):
         or0, xp0 = self.or_groupe(), self.xp_membres()
         self.lancer([(3, 2), (20, 1), (0, 3), (5, 1)]); self.jouer()
         c, = self.combats
-        self.assertEqual([(e['nom'], e['total'], e['vaincus']) for e in c['ennemis']], [('Londuleux', 2, 2), ('Rat volant', 1, 1), ('Gluant', 3, 3), ('Chauve-sourat', 1, 1)])
+        self.assertEqual([(e['nom'], e['total']) for e in c['ennemis']], [('Londuleux', 2), ('Rat volant', 1), ('Gluant', 3), ('Chauve-sourat', 1)])
         self.verifier_victoire(c, or0, xp0)
 
     def test_message_de_victoire_par_personnage(self):
@@ -535,6 +647,35 @@ class MoteurReel(unittest.TestCase):
         noms, apparitions = self.noms_apres_les_plaques([20, 3, 5, 0])
         self.assertEqual(noms, {20: 'Rat volant', 3: 'Londuleux', 5: 'Chauve-sourat', 0: 'Gluant'})
         self.assertEqual([m.lower() for m in apparitions], ['un rat volant apparaît !', 'un londuleux apparaît !', 'un chauve-sourat apparaît !', 'un gluant apparaît !'])
+
+    # -- #141 : monstres enfuis / disparus, objets gagnes
+    def forcer_sort(self, emplacement, sort):
+        """Fait partir un monstre comme le fait le jeu : etat « mort » (setDeath) et drapeau de fuite (bit 4 de HaveStatusInfo + 0x424) ou de disparition (bit 5) ; checkDeathMonster le compte alors a l'image suivante."""
+        c = self.c; hsi = c.export('_ZN6status9g_MonsterE') + HC.DEBUT_MONSTRES + emplacement * HC.PAS_MONSTRE + 0x10
+        c.call(c.export('_ZN6status14HaveStatusInfo13setEscapeFlagEb' if sort == 'fui' else '_ZN6status14HaveStatusInfo16setDisappearFlagEb'), hsi, 1, label='drapeau')
+        c.call(c.export('_ZN6status14HaveStatusInfo8setDeathEv'), hsi, label='setDeath')
+
+    def test_monstre_enfui_et_monstre_disparu(self):
+        """Un monstre enfui et un monstre disparu (forces dans la memoire du jeu) sont notes par espece ; les autres sont vaincus par le groupe ; l'issue est une victoire."""
+        etat = {'fait': False}
+        def cb(i):
+            if i == 30 and not etat['fait']: etat['fait'] = True; self.forcer_sort(1, 'fui'); self.forcer_sort(2, 'disparu')
+        self.lancer([(3, 4)]); self.jouer(apres=cb, maxi=9000)
+        self.assertTrue(etat['fait']); c, = self.combats
+        e, = c['ennemis']; self.assertEqual((e['nom'], e['total'], e['fuis'], e['disparus']), ('Londuleux', 4, 1, 1)); self.assertEqual(e['vaincus'], 2)
+        self.assertEqual(c['issue'], 'victoire'); self.assertGreater(c['xp'], 0)
+
+    def test_objet_gagne_a_la_fin_du_combat(self):
+        """Un objet donne par le jeu en fin de combat (« Le londuleux laisse tomber un coffre au trésor ! ... Il contient un arc de chasseur ! » ; le butin est ecrit dans le groupe de monstres comme le jeu le fait a la mort du monstre, BattleExecItem le donne) : son nom est celui du message du jeu."""
+        c = self.c; mp = c.export('_ZN6status9g_MonsterE'); etat = {'fait': False}
+        def cb(i):                                                                                     # (le jeu ecrit le butin du monstre quand il meurt : on pose le notre juste apres, avant la victoire)
+            if not etat['fait'] and any('vaincu' in m for m in self.msgs):
+                etat['fait'] = True; c.call(c.export('_ZN6status12MonsterParty11setDropItemEi'), mp, 12, label='drop'); c.call(c.export('_ZN6status12MonsterParty18setDropItemMonsterEi'), mp, 3, label='drop monstre')
+        self.lancer([(3, 1)]); self.jouer(apres=cb, maxi=9000)
+        self.assertTrue(etat['fait']); d, = self.combats; self.assertEqual(d['issue'], 'victoire')
+        self.assertEqual(len(d['objets']), 1, self.msgs); o = d['objets'][0]
+        self.assertTrue(o['nom'] and not o['nom'].startswith('Objet n'), o)
+        texte = ' | '.join(self.msgs).lower().replace(';', ''); self.assertIn(o['nom'].lower(), texte, 'le nom doit etre celui que le jeu ecrit')
 
     def test_cout_hors_combat(self):
         import time
