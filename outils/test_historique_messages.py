@@ -42,6 +42,16 @@ class TestTexte(unittest.TestCase):
         self.assertEqual(HI.nettoyer(None), '')
         self.assertEqual(len(HI.nettoyer('x' * 5000)), HI.MAX_TEXTE)
 
+    def test_point_virgule_du_patch_retire(self):
+        """#139 : le « ; » des noms d'objets du patch (marque de coupure, toujours apres une espace) ne s'affiche pas dans l'historique ; l'espace qui le precede reste."""
+        self.assertEqual(HI.nettoyer("Ragnar obtient l'herbe ;médicinale."), "Ragnar obtient l'herbe médicinale.")
+        self.assertEqual(HI.nettoyer('Un bâton de ;cyprès et une épée de ;cuivre !\n;Fin'), 'Un bâton de cyprès et une épée de cuivre !\nFin')
+        self.assertEqual(HI.nettoyer(';'), '')
+        h = HI.Historique(None); h.ajouter("Il trouve l'herbe ;médicinale.", 'Mar;chand', 10)
+        e = h.dialogues[-1]; self.assertEqual((e.nom, e.texte), ('Marchand', "Il trouve l'herbe médicinale."))
+        f = HI.Element.depuis_dict({'k': HI.TYPE_DIALOGUE, 'id': 1, 't': 5, 'nom': None, 'texte': "l'herbe ;médicinale"}, 1)
+        self.assertEqual(f.texte, "l'herbe médicinale")                                          # un favori enregistre avant la correction se relit sans « ; » (et reste reconnu)
+
     def test_envelopper(self):
         mes = len
         self.assertEqual(HI.envelopper('un deux trois quatre', 9, mes), ['un deux', 'trois', 'quatre'])

@@ -60,7 +60,7 @@ class Element:
             if d['k'] == TYPE_DIALOGUE:
                 nom, texte = d.get('nom'), d['texte']
                 if not isinstance(texte, str) or not texte.strip() or not (nom is None or isinstance(nom, str)): return None
-                return Element(n, TYPE_DIALOGUE, t, (nom.strip()[:60] or None) if nom else None, texte[:MAX_TEXTE], fav=ident)
+                return Element(n, TYPE_DIALOGUE, t, (sans_marques(nom).strip()[:60] or None) if nom else None, sans_marques(texte)[:MAX_TEXTE], fav=ident)
             if d['k'] == TYPE_COMBAT:
                 issue, ennemis = d['issue'], d['ennemis']
                 if issue not in ISSUES or not isinstance(ennemis, list): return None
@@ -79,11 +79,18 @@ class Element:
     def __repr__(self): return 'Element(%r)' % (self.vers_dict(),)
 
 
+def sans_marques(texte):
+    """Retire le « ; » du texte du patch : une marque de coupure placee juste apres une espace dans les noms d'objets (« bâton de ;cyprès », « l'herbe ;médicinale »), pas de la ponctuation (aucun « ; » de ponctuation
+    dans les textes du patch ; voir docs/notes-visionneuse-dq4-pc.md, avance #148). L'espace qui la precede reste : « l'herbe médicinale »."""
+    return texte.replace(';', '')
+
+
 def nettoyer(texte):
     """Texte tel que le jeu l'affiche : codes de couleur (@c0...) et caracteres de controle retires, espaces de fin retires, retours a la ligne gardes (jamais plus d'une ligne vide). Le « *: » du debut des paroles
-    d'un personnage sans nom est GARDE (c'est le texte du jeu)."""
+    d'un personnage sans nom est GARDE (c'est le texte du jeu). Le « ; » (marque de coupure des noms d'objets du patch) est retire (#139)."""
     t = (texte or '').replace('\r', '')
     t = re.sub(r'@c\d', '', t)
+    t = sans_marques(t)
     t = ''.join(ch for ch in t if ch == '\n' or (ch >= ' ' and not (0xe000 <= ord(ch) <= 0xf8ff) and ch != '\x7f'))
     t = '\n'.join(l.rstrip() for l in t.split('\n'))
     t = re.sub(r'\n{3,}', '\n\n', t).strip('\n ')
@@ -221,7 +228,7 @@ class Historique:
         """Ajoute un dialogue de la session (texte brut du moteur, nom affiche par le jeu ou None) ; -> l'Element, ou None (vide, doublon)."""
         texte = nettoyer(texte)
         if not texte: return None
-        nom = (str(nom).strip()[:60] or None) if nom else None
+        nom = (sans_marques(str(nom)).strip()[:60] or None) if nom else None
         e = Element(self._num(), TYPE_DIALOGUE, int(t), nom, texte)
         if self.dialogues:
             d = self.dialogues[-1]

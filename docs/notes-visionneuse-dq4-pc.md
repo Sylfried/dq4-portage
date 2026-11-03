@@ -492,7 +492,7 @@ Principe (décision de Sylfried) : un réglage du joueur est une **valeur par d�
 
 ### Historique des messages (`historique.py`, `ui_historique.py`) — remplacé en #44
 - La première version (messages avec « qui / où », fichier par partie, `libelles.py`) a été **abandonnée en #44** : voir la section « Avance #44 », sous-section « Historique ». Restent valables : le crochet `TextBuffer::cat` (lib + 0x157874), l'heure de jeu `status::g_Game + 4`, le tri des pages d'un message (page k + 1 notée après la lecture de la page k) et le point suivant.
-- **À signaler au projet de traduction** (fichier du patch FR, non modifié) : le texte « Ragnar obtient l'herbe ;médicinale. » contient un « ; » parasite présent dans le tampon du moteur lui-même.
+- **À signaler au projet de traduction** (fichier du patch FR, non modifié) : le texte « Ragnar obtient l'herbe ;médicinale. » contient un « ; » présent dans le tampon du moteur lui-même. **Précisé par l'avance #148** : c'est une marque de coupure des noms d'objets du patch, retirée de l'historique.
 
 ### Nom de Ragnar « trop bas » (captures s4 / s5) — repris et corrigé en #45 (voir « Avance #45 », alignement des textes)
 Impression fondée mais faible, **rien changé**. Mesure à 1280 x 720 : intérieur du bandeau y 30 à 48 (centre 39), majuscules y 35 à 46 (centre 40,5) : **1,5 px sous le centre** (≈ 2,3 px à 1080p), la queue du g touche le séparateur. Le nom (type 29) est un TextMesh d'ancre 1 (UpperCenter, z 385,5) ; PV / PM / Nv. sont ancrés en haut aussi (z 359) et s'alignent bien sur leurs jauges. Un recentrage global remontait le nom de 2 px mais faisait **descendre PV / PM / Nv. de ~1,5 px** (chiffres sur les jauges) : régression, annulé. **Supposé** : l'écart vient des données de l'interface d'origine (l'original aurait le nom aussi bas). Si Sylfried le veut quand même : décalage ciblé de ≈ 1,5 px des textes de la plaque type 29 (choix arbitraire, sans référence mobile). Comparaisons : `/tmp/c_opt_cmp_plaque.png` (non conservées dans le dépôt).
@@ -1133,3 +1133,20 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows** : à confirmer par Sylfried (le délai de 0,40 s peut être changé par `DQ_DOUBLE_CLIC`).
 - Le délai est celui de la visionneuse, pas le délai de double clic du système Windows.
+
+## Avance #148 : le « ; » des noms d'objets n'apparaît plus dans l'historique des dialogues (#139, 03/11/2026)
+
+### Demande (D-224, 23 h 37)
+« Supprime les ";" de l'affichage des dialogues dans l'historique, c'est un caractère spécial qui ne doit pas être lu […] enfin affiché. »
+
+### Établi (relevé dans les banques de textes du patch, `assets/msg/en/*.mpt` du paquet de données)
+- Le « ; » vient des **noms d'objets** du patch (« bâton de ;cyprès », « épée de ;cuivre », « herbe ;médicinale »…) : 407 des 408 occurrences relevées sont **juste après une espace et avant une lettre** (302 dans `b1000000.mpt`, 87 dans `b1002000.mpt`, quelques-unes dans `b1003000`, `b1004000`, `b1005000`). Aucun « ; » de ponctuation française (espace avant **et** après) n'a été trouvé dans ces textes. Le moteur remet le nom tel quel dans le message (« Ragnar obtient l'herbe ;médicinale. »), le « ; » est donc dans le tampon que le crochet de l'historique lit.
+- **Supposé** : c'est un point de coupure possible pour le nom dans une fenêtre étroite (comme le « $ » des noms dans le projet de traduction) ; ce que fait exactement le jeu de ce caractère à l'écran n'a pas été regardé ici.
+
+### Fait
+- `historique.sans_marques` retire tous les « ; » ; appelée par `nettoyer` (texte de chaque dialogue), pour le nom du locuteur, et à la relecture d'un favori déjà enregistré avec un « ; » (il reste reconnu : l'identité d'un favori est son contenu). L'espace qui précède reste : « l'herbe médicinale ».
+- Test : `outils/test_historique_messages.py` (100 tests, dont `test_point_virgule_du_patch_retire`).
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried (les dialogues avec un nom d'objet n'affichent plus de « ; »).
+- Les textes du patch ont été relevés dans le paquet de données ; je n'ai pas rejoué chaque dialogue du jeu.
