@@ -581,9 +581,9 @@ class Jeu(pyglet.window.Window):
             vl.draw(gl.GL_TRIANGLES)
 
     def _zoom_possible(self):
-        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre."""
+        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre (ni sa scene, avant « Touchez l'ecran » : le cadrage du titre est celui du jeu)."""
         mo = self.moteur
-        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
 
     def _camera_pilotable(self):
         """La camera se tourne a la main (fleches, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde), sauf lieu ou le jeu interdit de la tourner (cam_bloquee). Memes conditions que _maj_camera."""
@@ -1164,7 +1164,7 @@ class Jeu(pyglet.window.Window):
         if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
-        th_v /= PJ.facteur_effectif(self.zoom, libre or mini)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
+        th_v /= PJ.facteur_effectif(self.zoom, libre or mini or titre)      # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) et ecran-titre : le cadrage est celui du jeu, sans zoom (a 200 % le ciel du titre laissait des bandes noires)
         # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
         # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
         option = bool(self.reg['camera_centree'])
