@@ -67,6 +67,15 @@ in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
 uniform sampler2D tex; uniform float lum; uniform float flou;
 void main() { vec3 c = texture(tex, v_uv, flou).rgb; fragColor = vec4(c * v_col.rgb * lum, v_col.a * lum); }'''
 EFFET_FLOU = 1.0              # Capture.SetBlur(vrai) pendant l'effet : la capture est adoucie (biais de mipmap)
+# Fond des villes (#111) : `BackColor` du jeu = un quadrilatere plein ecran (sommets (1, 1), (-1, 1), (-1, -1), (1, -1) ecrits TELS QUELS en espace de decoupe : shader « BackColor », `gl_Position = in_POSITION0`,
+# `SV_Target0 = vs_COLOR0`, file Background, ZTest Always, ZWrite Off, aucune fusion) dont les deux sommets du haut ont la couleur « haut » du paquet 8 et les deux du bas la couleur « bas » (BackColor.SetColor(haut, bas, 0),
+# RVA 0xCC43F8) : un degrade vertical lineaire sur toute la hauteur de l'image, derriere tout le reste.
+VERT_DEGRADE = '''#version 330 core
+in vec2 position; uniform vec3 haut; uniform vec3 bas; out vec3 v_col;
+void main() { gl_Position = vec4(position, 0.0, 1.0); v_col = mix(bas, haut, position.y * 0.5 + 0.5); }'''
+FRAG_DEGRADE = '''#version 330 core
+in vec3 v_col; out vec4 fragColor;
+void main() { fragColor = vec4(v_col, 1.0); }'''
 
 BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
@@ -166,6 +175,12 @@ def camera_libre(e):
     return bool(e.cam_libre or (getattr(e, 'partie', None) == MO.PARTIE_CASINO and e.cam_rot is not None))
 
 
+def degrade_fond(haut, bas):
+    """Le fond de la ville est-il un vrai degrade (paquet 8 : couleurs du haut et du bas de l'image, `Etat.fond_haut` / `fond_bas`) ? Faux sans paquet 8 (None) ou si les deux couleurs sont egales : l'effacement
+    de l'image, de cette couleur, suffit (aucune difference avec avant #111)."""
+    return haut is not None and bas is not None and max(abs(float(a) - float(b)) for a, b in zip(haut, bas)) > 1e-6
+
+
 def hauteur_camera(zone, ref, cible, dt):
     """Hauteur des villes : -> (zone, ref, dy), `dy` = decalage a ajouter a la camera et a sa cible (la camera du jeu est rigide sur la hauteur du heros : TownCamera::execute, SceneCamera.Update, aucun lissage en Y).
     `cible` = hauteur de la cible du jeu ; `zone` = hauteur de repos (operateur « jeu » : elle ne bouge que si la cible s'en ecarte de plus de CAM_Y_RELIEF, et la suit alors a CAM_Y_RELIEF pres) ; `ref` = hauteur de reference
@@ -249,6 +264,7 @@ class Jeu(pyglet.window.Window):
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
         self.prog = ShaderProgram(Shader(VERT, 'vertex'), Shader(FRAG, 'fragment'))
         self.prog_effet = ShaderProgram(Shader(VERT_EFFET, 'vertex'), Shader(FRAG_EFFET, 'fragment'))
+        self.prog_degrade = None; self.degrade_vl = None       # fond en degrade des villes (#111) : programme et quadrilatere plein ecran, crees au premier besoin
         self.effet_tex = None; self.effet_sim = None; self.effet_vl = None; self.effet_ref = None; self.effet_tex_prete = False      # effet de debut de combat : capture de l'ecran, simulation, sommets
         self.donnees = DO.Donnees(None, args.cache, log=lambda *a: print(*a, flush=True))
         self.fonds = TC.Fonds(self.donnees, log=lambda *a: print(*a, flush=True)); self.tz = TC.Cles(self.donnees, log=lambda *a: print(*a, flush=True)); self._teinte_gl = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `teinte`
@@ -1806,6 +1822,18 @@ class Jeu(pyglet.window.Window):
         vl.draw(gl.GL_TRIANGLES)
         self.prog_effet.stop()
 
+    def _tracer_degrade_fond(self, haut, bas):
+        """Fond des villes (#111) : degrade vertical de la couleur `haut` (haut de l'image) a la couleur `bas`, tel que le dessine le `BackColor` du jeu (voir VERT_DEGRADE), par-dessus l'effacement (la moyenne des deux) et
+        avant la scene ; la profondeur n'est ni lue ni ecrite. Rien a faire si les deux couleurs sont egales (l'effacement est deja cette couleur)."""
+        if self.prog_degrade is None:
+            self.prog_degrade = ShaderProgram(Shader(VERT_DEGRADE, 'vertex'), Shader(FRAG_DEGRADE, 'fragment'))
+            self.degrade_vl = self.prog_degrade.vertex_list(6, gl.GL_TRIANGLES, position=('f', [1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0]))
+        gl.glDisable(gl.GL_DEPTH_TEST); gl.glDisable(gl.GL_BLEND)
+        self.prog_degrade.use(); self.prog_degrade['haut'] = tuple(float(c) for c in haut); self.prog_degrade['bas'] = tuple(float(c) for c in bas)
+        self.degrade_vl.draw(gl.GL_TRIANGLES)
+        self.prog_degrade.stop()
+        gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+
     def _dessiner_vignette(self):
         """Assombrit les bords de l'image de jeu (reglage Vignettage), sous le fondu et l'interface : degrade radial elliptique (centre intact jusqu'a 45 % du rayon, bords en noir
         d'opacite = reglage). Texture 512 x 288 etiree sur la fenetre (filtre lineaire), creee une fois."""
@@ -3230,7 +3258,7 @@ class Jeu(pyglet.window.Window):
         e = self.moteur.etat
         if os.environ.get('DQ_CARTE_TEST'):                                  # (test) DQ_CARTE_TEST="nom;x,y,z;cx,cy,cz" : montre une carte de ville/grotte avec une camera fixe (animations de decor)
             nom_t, pc, cc = os.environ['DQ_CARTE_TEST'].split(';')
-            e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.cam_libre = False
+            e.partie = 0; e.carte = nom_t; e.champ = None; e.fond = (0.0, 0.0, 0.0); e.fond_haut = e.fond_bas = None; e.cam_libre = False
             if os.environ.get('DQ_CARTE_SANS_SPR'): e.sprites.clear()                          # (test) sans les personnages du moteur (le heros se superposerait aux objets etudies)
             e.cam_pos = tuple(float(v) for v in pc.split(',')); e.cam_cible = tuple(float(v) for v in cc.split(','))
             if os.environ.get('DQ_CARTE_DEPL'):                              # (test) DQ_CARTE_DEPL="dx,dy,dz" : la camera se deplace de ce vecteur a chaque image affichee (scintillement en mouvement)
@@ -3265,6 +3293,7 @@ class Jeu(pyglet.window.Window):
         gl.glEnable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glViewport(0, 0, *self.post.debut(fond))          # scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
+        if not champ and not bataille and degrade_fond(e.fond_haut, e.fond_bas): self._tracer_degrade_fond(e.fond_haut, e.fond_bas)       # ville : fond de BackColor en degrade (#111)
         aspect = self.width / max(1, self.height)
         if champ: M, dh, w, h = self._camera_champ(e, aspect); self._maj_champ(e)
         elif bataille:
