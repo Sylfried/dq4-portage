@@ -1190,3 +1190,25 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows** : à confirmer par Sylfried à l'oreille (Premiers secours sur un personnage aux PV pleins : un seul son ; sur un blessé : comme avant). Je n'ai mesuré que les appels du moteur, pas l'audio.
 - Les autres sorts hors combat qui échouent avec le propre message d'échec du jeu (Rappel sur un vivant, Antipoison sans poison, Sifflet) ne jouent que le bruitage de lancement d'après leurs appels, sans changement de ma part : non rejoués un par un ici.
+
+## Avance #151 : l'écran « Pause » devient « Paramètres » et ne met plus le jeu en pause (#136, 03/11/2026)
+
+### Demande (D-224, 23 h 32)
+« L'écran pause doit désormais s'appeler [ne plus s'appeler] "Pause" mais "Paramètres", et il ne doit plus mettre le jeu en pause. » (lecture retenue : titre « Paramètres » ; le jeu continue derrière lui. Le « ne… plus » manquait dans le message : à confirmer.)
+
+### Établi (vrai moteur, sauvegarde 5, carte du monde)
+- Avant : `Jeu._boucle` s'arrêtait dès que le menu était ouvert (`if self.pause.ouvert: … return`) et `pause_jeu(True)` mettait le son en pause.
+- Mesure après correctif (pas du moteur à l'image de boucle donnée) : menu fermé 71 → menu ouvert (Échap à l'image 400) 83 puis 87 sur la page Historique, **puis 87 sans changement** : le moteur tourne à ~30 pas par seconde sur la racine et les pages de réglages, et s'arrête sur l'Historique.
+
+### Fait
+- Le titre de la racine est « Paramètres » (`Pause.dessiner`). Les libellés internes, les noms de modules et les anciennes sections de ces notes gardent « Pause » (historique daté).
+- **Le jeu tourne derrière le menu, sans aucune entrée** : `Jeu.tick` envoie (0, 0) au moteur quand le menu est ouvert (les touches du menu, Z Q S D et flèches comprises, ne font pas marcher le héros ; un clic ne va pas au jeu) ; `_facteur_vitesse` rend 1,0 menu ouvert (pas de marche accélérée) ; le son continue (`pause_jeu` ne le coupe plus).
+- **Deux pages arrêtent le jeu** (`Pause.PAGES_FIGEES`) : l'**Historique** (lecture d'un combat qui avance tout seul en vitesse rapide) et la question **Quitter**. `Jeu._synchroniser_gel` coupe / rend le son et remet l'horloge à zéro (pas de rattrapage) quand on entre / sort de ces pages. Choix du portage, pas demandé tel quel : à confirmer.
+- README : « menu Paramètres (Échap) ».
+- Tests : `outils/test_parametres_sans_pause.py` (13 tests : titre, pages figées, arrêt et reprise du son, aucune entrée envoyée, pas de marche accélérée, boucle).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (menu Échap ouvert : le jeu continue derrière, le héros ne bouge pas quand on navigue au clavier).
+- **En combat**, le combat continue aussi derrière le menu (en vitesse rapide, les messages avancent seuls) : c'est la conséquence directe de « ne plus mettre le jeu en pause » ; à dire si tu veux garder le jeu arrêté en combat.
+- Le bouton « Reprendre » de la racine garde son nom (il ferme le menu) : peut-être « Fermer » ? Non demandé.
+- Je n'ai pas comparé avec le comportement de la fenêtre « Paramètres » d'origine du mobile (le jeu y est-il arrêté ?) : non vérifié.
