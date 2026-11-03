@@ -30,9 +30,9 @@
 - [ ] Effets de sorts (défense augmentée, flashs, effets d'écran 3 / 5 / 6, #68), Morph d'un monstre en combat, boss, boss final (caméra 132).
 - [ ] Retour au titre depuis un combat ou une boutique.
 - [ ] Décors d'aube et de coucher de soleil.
-- [ ] Caméra pendant les attaques (#92 ; exemple : l'Ornythox et son jet d'eau).
+- [ ] Caméra pendant les attaques (#92) : à comparer d'abord avec des ennemis du **chapitre 1** (l'archer vert ; l'Ornythox n'est plus un exemple sûr, Sylfried, 03/11 à 16 h 47) ; ensuite avec ceux du chapitre 2.
 
 ## 6. Menus
-- [ ] Statut (pages), liste des sorts de chaque personnage : une rangée fantôme a été supprimée en #45 (`outils/test_magie_liste.py`) ; **confirmer que c'est bien le « sort en trop » que Sylfried avait montré** (#99).
+- [ ] Statut (pages), liste des sorts de chaque personnage : une rangée fantôme a été supprimée en #45 (`outils/test_magie_liste.py`) ; Sylfried a confirmé (03/11, 16 h 47 : « Exactement ») que c'était bien le « sort en trop » ; **vérifier sur Windows qu'il a disparu** (#99).
 - [ ] Choix grisés, pages et curseurs gauche / droite des menus (G-094).
-- [ ] Coffres : le couvercle s'ouvre dans le bon sens (#99).
+- [x] Coffres : le couvercle s'ouvre dans le bon sens (Sylfried, 03/11 à 16 h 47 : « c'est bon dans le bon sens »).

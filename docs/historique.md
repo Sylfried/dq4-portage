@@ -19,7 +19,7 @@ Le projet a démarré le 29/10/2026 (avant la création de ce dépôt). Jusqu'au
 | 30/10 | Dépôt GitHub, règles de travail, issues de départ | #37 |
 | 30/10 nuit | Séparation du dépôt d'origine `dq4-pc` : portage natif (ici), essai Unity (`dq4-portage-unity`), patch français (inchangé) | — |
 
-## Les pull requests de `dq4-portage` (#1 à #100)
+## Les pull requests de `dq4-portage` (#1 à #102)
 Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'ils figurent sur GitHub, sans leur préfixe « Avance #N : ». Les « retours de HH h MM » sont les retours de test de Sylfried traités par la pull request. La PR #1 démarre la numérotation de ce dépôt : ses numéros ne sont pas ceux des issues de `dq4-pc`.
 
 | Fusion | PR | Titre |
@@ -76,6 +76,7 @@ Dates de fusion (squash vers `main`), heure de Paris (UTC + 1) ; titres tels qu'
 | 03/11 14h23 | #50 | décisions du 03/11, dq4-pc supprimé, docs à jour |
 | 03/11 14h33 | #89 | décisions du 14 h 25 : 38 issues pour le reste à faire, pr.sh à jour |
 | 03/11 | #100 | lecture du reste à faire (15 h 50) et ménage : décisions D-163 à D-190, 10 issues, tri des lacunes, licence d'Unicorn, plan de test du chapitre 2 |
+| 03/11 | #102 | réponses de 16 h 47 : décisions D-191 à D-200, vitesses hors combat (#101), #96 fermée, `.exe` launcher et licence, lacunes et documents à jour |
 
 ## Et maintenant
-Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99, jalons 1 à 5 ; 41 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.
+Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99 et #101, jalons 1 à 5 ; 41 ouvertes au 03/11/2026 : https://github.com/Sylfried/dq4-portage/issues). Le contexte est dans [`reprise.md`](reprise.md) (section 6), les décisions dans `docs/audit/decisions.md` et les points non vérifiés dans `docs/audit/rapport_reste_a_faire.md`. Les issues ouvertes de l'ancien dépôt `dq4-pc` (supprimé) n'ont pas été reprises telles quelles : leur état au 02/11/2026 est archivé dans `docs/audit/github_issues.md`.
