@@ -1,7 +1,7 @@
 """Test du centrage de l'ecran-titre sur le RENDU reel (retour de 22 h 29 : « pourquoi le logo et le decor ne sont plus centres ? »).
 
-La visionneuse est lancee (moteur d'origine, rendu Mesa sans ecran) avec « Centrer la camera sur le joueur » sur NON (le reglage qui decentrait le titre : les bornes 16/9 de la carte glissaient la camera de
-4,5 unites) a trois formats (16:9 de 1430 x 815, 4:3, 21:9), et on mesure sur la capture de l'image 700 (dragon au-dessus du logo, avant « Touchez l'ecran ») :
+La visionneuse est lancee (moteur d'origine, rendu Mesa sans ecran ; avant la correction, les bornes 16/9 de la carte glissaient la camera du titre de 4,5 unites quand l'option « Centrer la camera »
+sur le joueur etait sur Non, option supprimee depuis) a trois formats (16:9 de 1430 x 815, 4:3, 21:9), et on mesure sur la capture de l'image 700 (dragon au-dessus du logo, avant « Touchez l'ecran ») :
   1. le barycentre du logo (pixels rouge-violet du lettrage) est au milieu de la fenetre, a quelques pixels pres : decalage horizontal / hauteur de la fenetre < 0,03 (avant la correction : 0,29) ;
   2. ce decalage est le meme (a 0,004 pres) a tous les formats : le placement du logo est celui du jeu pour le cadre portrait central, quel que soit le format de la fenetre ;
   3. pas de bande noire dissymetrique : les 8 colonnes de chaque bord ne contiennent aucun pixel noir (le ciel remplit toute la fenetre) ;
@@ -43,7 +43,7 @@ class CentrageTitre(unittest.TestCase):
     def setUpClass(cls):
         apk = ARGS.apk if ARGS else os.environ['DQ_APK']; saves = ARGS.saves if ARGS else os.environ['DQ_SAVES']; cache = ARGS.cache if ARGS else os.environ['DQ_UICACHE']
         cls.tmp = tempfile.mkdtemp(prefix='titre_centrage_'); rg = os.path.join(cls.tmp, 'reglages.json')
-        json.dump({'camera_centree': False, 'suivi_camera_v': 1}, open(rg, 'w'))
+        json.dump({}, open(rg, 'w'))             # reglages par defaut (l'option « Centrer la camera » n'existe plus : la camera est toujours centree, le titre en est exempte)
         env = dict(os.environ, PYGLET_HEADLESS='1', PYGLET_AUDIO='silent'); cls.res = {}
         for (w, h) in FORMATS:
             shot = os.path.join(cls.tmp, 'titre_%dx%d.png' % (w, h))
