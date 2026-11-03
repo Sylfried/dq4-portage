@@ -13,8 +13,8 @@ Conventions :
 
 ## 1. Résumé
 
-1. **Caméra** : l'option « Centrer la caméra sur le joueur » de la visionneuse (`reg['camera_centree']`) ne vaut plus que lorsque le joueur
-   a la caméra. Le critère fiable est le **verrou de la `TownCamera` du moteur** (`+0x3e`), pas le drapeau « joueur verrouillé » (`Global.Flag` bit 0x4)
+1. **Caméra** (texte d'origine, branche `camera-bip` ; **mis à jour le 03/11/2026 : l'option a été supprimée en #47**, le centrage est toujours actif tant que le joueur a la caméra, voir §2.4) : l'option « Centrer la caméra sur le joueur » de la visionneuse (`reg['camera_centree']`) ne valait plus que lorsque le joueur
+   avait la caméra. Le critère fiable est le **verrou de la `TownCamera` du moteur** (`+0x3e`), pas le drapeau « joueur verrouillé » (`Global.Flag` bit 0x4)
    ni la distance cible/héros (ancien critère : 60 unités, inopérant dans le prologue où la cible n'est qu'à 23 unités du héros).
 2. **Bip** : le « bip » à l'ouverture d'un message est le **bruitage 300, commandé par le moteur** (paquet 35). C'est normal, c'est le même
    bruitage que celui du passage à la page suivante. Il est joué **une seule fois**, avec le bon fichier (`SE0300`) ; la visionneuse n'ajoute rien.
@@ -61,6 +61,8 @@ Relevée avec `DQ_CAMV=6` (affichage de l'état toutes les 6 images ; `_camv` da
 - Pendant les messages, les jarres/tonneaux/coups de bâton : `(0, 0, 0, 0)` (sonde : images 942 à 1739) : le verrou **reste à 0**, le centrage reste actif. **Établi.**
 
 ### 2.4 Ce que fait la visionneuse maintenant (`_camera_ville`, `tick`)
+
+> **État au 03/11/2026 (#47, #48)** : l'option `camera_centree` n'existe plus (clé abandonnée, `reglages.py:99-100`). Le centrage est actif dès que `not libre and not mini and not cam_jeu and not titre` (`fenetre.py:1171-1172`) ; le reste de cette section décrit le principe, qui est inchangé (verrou `TownCamera`, bornes 16/9, transition sans saut). Les puces qui parlent de « l'option » valent comme « le centrage ».
 
 - `self.cam_jeu` = verrou `TownCamera` lu à chaque pas moteur (`camera_ville()[2]`, déjà lu pour `cam_bloquee`).
 - Centrage actif seulement si `option and not cam_libre and not cam_jeu`. Hors centrage, le jeu applique sa caméra telle quelle, **avec les bornes
