@@ -219,7 +219,7 @@ class Jeu(pyglet.window.Window):
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_poids = 1.0; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
+        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
         self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
@@ -1163,10 +1163,9 @@ class Jeu(pyglet.window.Window):
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
             if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
         th_v /= PJ.facteur_effectif(self.zoom, libre or mini)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
-        # Option « Centrer la camera sur le joueur » : elle ne vaut que lorsque le joueur a la camera. Le jeu la pilote (TownCamera verrouillee : scene, evenement, chute, sort de retour ; cam_jeu)
-        # ou la camera est libre (paquet 11, bit 7) : la camera du jeu s'applique alors telle quelle, avec les bornes de la visionneuse (cadrage 16/9, comme option desactivee).
-        option = bool(self.reg['camera_centree'])
-        centre = option and not libre and not self.cam_jeu               # centrage actif
+        # La camera est TOUJOURS centree sur le heros (plus d'option : c'est aussi le fonctionnement du jeu, TownCamera::execute fait setTarget(joueur) a chaque pas tant que son verrou est a 0), sauf quand le jeu la prend :
+        # TownCamera verrouillee et menee ailleurs (scene, evenement, chute, sort de retour ; cam_jeu), camera libre d'une scene (paquet 11, bit 7) ou mini-jeu. La camera du jeu s'applique alors telle quelle (aucune borne).
+        centre = not libre and not mini and not self.cam_jeu               # centrage actif
         dec = (0.0, 0.0)
         if centre:                                                        # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart (garde-fou : position du heros perimee)
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
@@ -1182,21 +1181,10 @@ class Jeu(pyglet.window.Window):
         k = math.exp(-14.0 * dt)                                          # (temps reel : independant du nombre de pas du moteur par image affichee)
         self.cam_res = [r * k for r in self.cam_res]
         self.cam_dec = [d + r for d, r in zip(dec, self.cam_res)]
-        a = 1.0 if saut else 1.0 - k                                      # (poids des bornes 16/9 ci-dessous : meme constante de temps, aussitot apres une coupure)
-        # part SANS les bornes 16/9 de la visionneuse : 1 = aucune borne, 0 = bornes completes. Option « camera centree » ; ET camera menee par le jeu (cam_jeu : travelling, cible = un personnage, retour) :
-        # Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), le cadre du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi (progressivement, sans a-coup)
-        poids_cible = 1.0 if option or self.cam_jeu else 0.0
-        self.cam_poids += (poids_cible - self.cam_poids) * a
+        # Aucune borne de la visionneuse (cadrage 16/9 retire avec l'option) : Unity ne borne rien (SceneCamera.Update : ni Clamp ni Min / Max ; TownCamera::execute non plus), la camera va jusqu'au bord de la carte et le cadre
+        # du telephone suit l'evenement ou le PNJ jusqu'au bout, la visionneuse aussi.
         if abs(self.cam_dec[0]) > 1e-4 or abs(self.cam_dec[1]) > 1e-4:
             pos[0] += self.cam_dec[0]; cib[0] += self.cam_dec[0]; pos[2] += self.cam_dec[1]; cib[2] += self.cam_dec[1]
-        if self.bornes_x is not None and self.cam_poids < 0.999 and not mini:
-            # cadrage 16/9 : le moteur centre la camera pour un ecran portrait ; en large on garde le bord de la carte hors champ (progressivement quand l'option cesse de valoir, pas de saut)
-            fv = cib - pos; fv[1] = 0; fv /= np.linalg.norm(fv) or 1
-            if abs(fv[2]) > 0.95:
-                W = np.linalg.norm(cib - pos) * th_v * aspect * 0.85
-                lo, hi = self.bornes_x[0] + W, self.bornes_x[1] - W
-                cx = (self.bornes_x[0] + self.bornes_x[1]) / 2 if lo >= hi else min(max(cib[0], lo), hi)
-                d = (cx - cib[0]) * (1.0 - self.cam_poids); pos[0] += d; cib[0] += d
         lacet_a, angle_a = (0.0, 0.0) if self.cam_bloquee or mini else (self.lacet, self.angle_cam)             # lieu ou le jeu interdit de tourner la camera : vue d'origine
         if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
@@ -3062,7 +3050,7 @@ class Jeu(pyglet.window.Window):
         """(debogage, DQ_CAMV=n) etat de la camera du jeu toutes les n images."""
         e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
         r = lambda v: None if v is None else tuple(round(float(x), 1) for x in v)
-        print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s poids=%.2f' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec), self.cam_poids), flush=True)
+        print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s dec=%s' % (self.n, e.carte, e.partie, mo.camera_ville(), mo.camera_jeu(), mo.drapeaux(), mo.msg_visible, r(hp), r(e.cam_cible), r(e.cam_pos), e.cam_libre, r(self.cam_dec)), flush=True)
         if os.environ.get('DQ_CAMV_SPR'):                                  # (debogage) + tous les sprites et les bulles d'icone
             print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icones', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icones.items()}, flush=True)
 
