@@ -4,7 +4,8 @@ set -e
 cd /home/claude/dq4-portage
 br=$(git branch --show-current)
 git push -q -u origin "$br" 2>&1 | tail -2
-n=$(gh api "repos/Sylfried/dq4-portage/pulls?state=all&per_page=100" --jq 'length')
+# issues et PR partagent la meme numerotation : le numero de la PR est le plus grand numero existant + 1
+n=$(gh api "repos/Sylfried/dq4-portage/issues?state=all&per_page=1&sort=created&direction=desc" --jq '.[0].number')
 num=$((n+1))
 python3 - "$1" "$2" "$br" "$num" <<'PY'
 import json,os,sys

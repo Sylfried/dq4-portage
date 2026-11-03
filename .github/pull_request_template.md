@@ -1,5 +1,5 @@
 ## Ce que ça change
-<!-- 1 à 3 lignes. Titre de la PR : « Avance #N : titre » (voir docs/workflow.md). Pas de « Closes #n » : le suivi se fait par PR. -->
+<!-- 1 à 3 lignes. Titre de la PR : « Avance #N : titre » (voir docs/workflow.md). « Closes #n » pour chaque issue réglée par cette PR (voir docs/workflow.md). -->
 
 ## Retours / À trancher
 <!-- Retours de test traités ; questions qui attendent Sylfried (une phrase chacune, avec une recommandation) -->
