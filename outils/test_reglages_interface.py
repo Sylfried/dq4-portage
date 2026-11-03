@@ -17,7 +17,7 @@ HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'mode_fenetre', 'msaa', 'ec
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
                   'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_fondu', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'ecran_plein', 'camera_inverser_gd', 'camera_inverser_hb', 'interface_v'}          # moniteur du plein ecran, sens de la camera deplacee a la souris (#45, agent camera) ; version des tailles par defaut des fenetres (#47)
+HORS_INTERFACE |= {'camera_inverser_gd', 'camera_inverser_hb', 'interface_v'}          # sens de la camera deplacee a la souris (#45, agent camera) ; version des tailles par defaut des fenetres (#47)
 HORS_INTERFACE |= {'vitesse_fondu_v'}                                                    # version du defaut de « Vitesse de transition » (#48)
 HORS_INTERFACE |= {'historique_favoris_seuls'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
 
