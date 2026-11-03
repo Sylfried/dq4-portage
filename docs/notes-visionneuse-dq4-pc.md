@@ -740,3 +740,28 @@ Quatre retours, traités un par un (petit lot, sans sous-agents). Légende : **�
 
 ### Non vérifié (#48)
 Windows et vrai GPU ; le texte exact « Mais il ne se passe rien. » est celui du patch FR lu en jeu (moteur réel), pas comparé à un mobile ; `reglages.json` réel migré (`vitesse_fondu_v`) ; ressenti de l'historique.
+
+## Avance #49 et #50 : docs, CI et décisions du 03/11/2026 (docs seulement)
+
+Aucun changement de code dans `dq4_pc/` ni dans les tests. Relecture du rapport « ce qu'il reste » avec Sylfried (13 h 45 à 14 h 19, il ne pouvait pas tester). Ce qu'il a dit sert à **structurer le projet et le reste à faire** ; rien n'est lancé.
+
+### Fait
+- **#49** : README, `docs/workflow.md`, notes techniques (section « Écritures et crochets en mémoire du moteur » : 27 crochets vérifiés à l'exécution, 18 sites qui écrivent, S10 sorts du menu Magie, S11 décompte du bruitage de sortie), fiches d'audit périmées (caméra, curseur doré, roulis), CI `.github/workflows/ci.yml` (compilation + fichiers interdits ; **verte sur GitHub** pour la PR #49).
+- **#50** : le dépôt `dq4-pc` **n'existe plus** (Sylfried) : références corrigées partout (README, workflow, reprise, audit) ; l'état de ses issues au 02/11 est conservé dans `docs/audit/github_issues.md`. Décisions du 03/11 enregistrées (`docs/audit/decisions.md` § 5c, D-149 à D-160 ; `rapport_reste_a_faire.md`, « Réponses de Sylfried » et « Cap fixé » ; `lacunes_connues.md`). Document du Projet `depot-github-dq4-pc.md` remplacé par `depot-github-dq4-portage.md`.
+
+### Décisions de Sylfried (03/11)
+- **Toits** : laissés tels quels, « c'est le fonctionnement du mobile ». **Éditeur d'interface** : supprimer tout ce qui n'a aucun élément à modifier (les 18 entrées retirées suivent ce critère). **« Masqué / Masquée »** : validés. **`Menu_Echap_DQ4_PC.xlsx`** : plus d'actualité.
+- **Manette** : prévue pour la suite. **Licence d'Unicorn** : vérification acceptée (à faire).
+- **Tous les boutons de l'interface accessibles au clavier** (exigence). **Bruitage au clavier** : seulement dans les mêmes situations qu'au toucher (jamais ajouté de force ; par exemple un bip par caractère du nom *si* le toucher en joue un).
+- **Sauvegardes du chapitre 2** : il les fournira dès que possible.
+- **Tout tenir à jour** (CI, documents, `.md`) à chaque PR.
+
+### Reste à faire (structuré, rien de lancé)
+1. Validation Windows / vrai GPU. 2. Clavier complet : inventaire des boutons qui n'y sont pas (cas connu : « Sauvegarde rapide » de l'écran Divers, G-096), puis correction, avec la règle du bruitage (G-173). 3. Manette. 4. Chapitre 2 (jouer ses cartes, PNJ et menus dès les sauvegardes). 5. Licence d'Unicorn. 6. Paquets du moteur (6, 30, effets d'écran 3 / 5 / 6) et petits oublis.
+
+### À trancher par Sylfried (#50)
+1. **Issues dans `dq4-portage` ?** « On fait tout depuis dq4-portage, même sur GitHub » : veut-il des issues pour le reste à faire (jusqu'ici : suivi par PR seulement, aucune issue) ? Les modèles `.github/ISSUE_TEMPLATE` existent mais demandent des étiquettes `type:` absentes de ce dépôt.
+2. **Branches fusionnées** : supprimer les ~55 branches distantes déjà fusionnées (décision 2 de l'audit) ? Non fait sans son accord.
+
+### Non vérifié (#50)
+Tout ce qui a été vu l'a été sous Linux (Mesa) ; la CI n'a tourné qu'une fois (verte), sans essai d'un fichier interdit réel (le motif a été essayé en local).

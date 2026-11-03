@@ -1,5 +1,7 @@
 # Audit GitHub : issues et pull requests (agent « audit-github », lot PR #43)
 
+> **Archive (03/11/2026)** : le dépôt `dq4-pc` **n'existe plus** (supprimé par Sylfried) ; ce fichier est désormais **la seule trace** de ses 43 issues et 36 pull requests, telles qu'elles étaient le 02/11/2026. Rien n'y sera fermé ni mis à jour : les §3 et §5 (« à fermer », recommandations) sont **sans objet**. Les restes qui comptent sont suivis dans `docs/audit/rapport_reste_a_faire.md`. Le suivi se fait par pull request dans `dq4-portage`.
+
 Lecture seule. Rien n'a été écrit sur GitHub, dans le dépôt, dans le Projet claude.ai ni dans la mémoire.
 Lu le 02/11/2026, `main` de `/home/claude/dq4-portage` = commit 08f5785 (PR #42 fusionnée).
 

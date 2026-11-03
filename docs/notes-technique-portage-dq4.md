@@ -1,6 +1,6 @@
 # Portage PC de DQ4 (Android) : notes techniques (état au 29/10/2026, soir)
 
-> **Numéros « issue #N » dans ces notes (relu le 02/11/2026)** : ce sont les numéros de l'ancien dépôt `dq4-pc`, qui numérote ses issues et ses pull requests ensemble (issues #1 à #37, #40, #41, #44, #45, #56, #57 ; PR #38, #39, #42, #43, #46 à #55, #58 à #79). `dq4-portage` n'a aucune issue : ses numéros (#1 à #46) sont des PR « Avance #N ». Plusieurs mentions « issue #38, #39, #42, #54 » ci-dessous désignent en fait des PR fermées de `dq4-pc`. Les « issue #53 » et « issue #55 » ont été remplacées par la PR de `dq4-portage` qui traite le sujet.
+> **Numéros « issue #N » dans ces notes (relu le 02/11/2026)** : ce sont les numéros de l'ancien dépôt `dq4-pc` (**supprimé le 03/11/2026** ; l'état de ses issues au 02/11 est dans `docs/audit/github_issues.md`), qui numérotait ses issues et ses pull requests ensemble (issues #1 à #37, #40, #41, #44, #45, #56, #57 ; PR #38, #39, #42, #43, #46 à #55, #58 à #79). `dq4-portage` n'a aucune issue : ses numéros (#1 à #46) sont des PR « Avance #N ». Plusieurs mentions « issue #38, #39, #42, #54 » ci-dessous désignent en fait des PR fermées de `dq4-pc`. Les « issue #53 » et « issue #55 » ont été remplacées par la PR de `dq4-portage` qui traite le sujet.
 >
 > **Règle du moteur (reformulée le 02/11/2026)** : le fichier `libdq4core.so` n'est jamais modifié ; la visionneuse n'y pose en mémoire que les correctifs et crochets listés dans la section « Écritures et crochets en mémoire du moteur », à la fin de ce fichier.
 
