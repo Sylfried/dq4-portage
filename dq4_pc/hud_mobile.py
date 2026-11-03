@@ -176,6 +176,11 @@ class Boutons:
         from moteur import PARTIE_COMBAT
         return a if J.moteur.etat.partie == PARTIE_COMBAT else None
 
+    def _ancre_prete(self):
+        """Le bouton de vitesse n'est montre que s'il a une place : celle que le joueur lui a donnee, ou, avec les menus d'origine, son ancre sous la boite du bas (calculee par la fenetre avant le dessin : jamais la position par defaut de la grille, qui est a gauche de l'ecran)."""
+        J = self.J
+        return bool(J.reg['bouton_vitesse_pos']) or getattr(J, 'ui_msg', None) is None or getattr(J, 'ancre_combat', None) is not None
+
     def dims(self, nom):
         """(largeur, hauteur) en pixels : plaque d'origine d'un bouton (72 x 64, 63 x 56,8...) ou diametre de l'anneau de la croix."""
         if nom == CROIX: c = self.diametre_croix(); return c, c
@@ -220,7 +225,7 @@ class Boutons:
         J = self.J
         if J.pause.ouvert or J.moteur.etat.effet is not None: return ()
         from moteur import PARTIE_COMBAT
-        if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if J.reg['bouton_vitesse'] and combat_visible(J.moteur.etat) else ()        # (le bouton de vitesse a son propre reglage d'affichage)
+        if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if J.reg['bouton_vitesse'] and combat_visible(J.moteur.etat) and self._ancre_prete() else ()        # (le bouton de vitesse a son propre reglage d'affichage)
         if not J.reg['boutons']: return ()
         if J.carte_ouverte: return ()                                                  # carte ouverte : plus de bouton a l'ecran (le bouton « mode » et le retour sont ceux de la fenetre de la carte, type 22)
         f = J.moteur.drapeaux()

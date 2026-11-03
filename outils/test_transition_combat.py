@@ -1,11 +1,15 @@
-"""Transition d'un combat (retour de Sylfried, 14 h 08) : « l'animation de cascade avant une rencontre ne doit pas etre modifiee par aucun accelerateur quelconque, pareil pour le fondu a la fin du combat ».
+"""Transitions d'un combat (retours de 22 h 29, #47 ; avant : #45, retour de 14 h 08).
 
-La transition = effet d'ecran de debut (la « cascade » : 57 images), ecran noir qui attend la scene, fondu d'arrivee du combat, fondus de sortie du combat, fondu de retour a la carte.
-Elle doit durer EXACTEMENT ce que dure le jeu d'origine (30 images par seconde, durees des fondus telles que le moteur les demande) quels que soient :
-  « Vitesse de combat » (Manuel / Normal / Rapide / Tres rapide), vitesse de marche, « Multiplicateur de l'accelerateur » (touche tenue ou non), « Vitesse de transition » (x1 a x4).
+Sylfried : « L'accélération du combat doit être prise en compte dès la fin de l'animation de transition en cascade et dès l'apparition du message indiquant qu'un ennemi apparaît, et finalement je veux qu'elle dure
+jusqu'à la fin donc pendant le fondu au noir » ; « Les effets de transitions au début et à la fin d'un combat eux doivent en tous cas être affectés par l'accélération de transition des paramètres, comme tout effet de transition ».
+
+La transition = effet d'ecran de debut (la « cascade » : 57 images du jeu), ecran noir qui attend la scene, fondu d'arrivee du combat, fondus de sortie du combat, fondu de retour a la carte. Regles verifiees :
+  - DUREE (images du moteur) : la cascade et chaque fondu durent ce que demande le jeu divise par « Vitesse de transition » (x1 a x4), comme un fondu de changement de carte (priorite_jeu.duree_fondu) ;
+  - HORLOGE (temps reel) : la cascade est a l'horloge du jeu (30 images par seconde) quels que soient « Vitesse de combat », vitesse de marche et accelerateur ; des la fin de la cascade (ecran noir, fondu d'arrivee,
+    message « X apparait ») et jusqu'au fondu de fin de combat compris, « Vitesse de combat » (x1, x1, x2, x3) s'applique ; le retour a la carte est a l'horloge du jeu.
 
     python3 outils/test_transition_combat.py        (Linux sans ecran : pyglet en mode « headless »)
-    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 outils/test_transition_combat.py     (ajoute le rejeu d'un vrai combat du moteur)
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> outils/flux_session/moteur_slot.sh python3 -W ignore outils/test_transition_combat.py     (ajoute le rejeu d'un vrai combat du moteur)
 Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire."""
 import itertools, os, sys, tempfile, types, unittest
 
@@ -38,27 +42,45 @@ class Fondus(unittest.TestCase):
             e = etat(MO.PARTIE_CHAMP, vf); e.appliquer([(9, [ENTREE_30], [])], lambda: ''); self.assertEqual(e.fondu['n'], attendu, 'x%g' % vf); self.assertFalse(e.fondu['combat'])
             self.assertFalse(e.transition_combat())
 
-    def test_fondu_d_arrivee_du_combat_garde_ses_30_images(self):
+    def test_fondu_d_arrivee_du_combat_suit_la_vitesse_de_transition(self):
         for vf in (1.0, 2.0, 3.0, 4.0):
+            d = PJ.duree_fondu(30, vf)
             e = etat(MO.PARTIE_CHAMP, vf); e.appliquer([(0, [0x100], []), (9, [ENTREE_30], [])], lambda: 'btl_pl_d')           # chargement de la scene de combat (bit 8) puis fondu d'entree, meme image du moteur
-            self.assertEqual(e.fondu['n'], 30, 'x%g' % vf); self.assertTrue(e.fondu['combat']); self.assertTrue(e.transition_combat())
+            self.assertEqual(e.fondu['n'], d, 'x%g' % vf); self.assertTrue(e.fondu['combat']); self.assertTrue(e.transition_combat())
             e.chargement = None                                                                                                      # (la retenue du dessin apres un chargement retarde le DEBUT du fondu, pas sa duree : test_chargement)
-            for i in range(29): e.tick_fondu(); e.tick_transition(); self.assertTrue(e.transition_combat(), 'image %d' % i)
+            for i in range(d - 1): e.tick_fondu(); e.tick_transition(); self.assertTrue(e.transition_combat(), 'image %d' % i)
             e.tick_fondu(); self.assertEqual(e.fondu['n'], 0)
+        self.assertEqual([PJ.duree_fondu(30, v) for v in (1.0, 2.0, 3.0, 4.0)], [30, 15, 10, 8])
 
-    def test_fondu_de_fin_de_combat_et_retour_a_la_carte(self):
+    def test_fondu_de_fin_de_combat_et_retour_a_la_carte_suivent_la_vitesse_de_transition(self):
         for vf in (1.0, 2.0, 4.0):
+            d, d3 = PJ.duree_fondu(30, vf), PJ.duree_fondu(3, vf)
             e = etat(MO.PARTIE_COMBAT, vf); e.appliquer([(9, [FONDU_COMBAT], [])], lambda: '')
-            self.assertEqual(e.fondu['n'], 30, 'x%g' % vf); self.assertTrue(e.transition_combat())
-            for _ in range(30): e.tick_fondu(); e.tick_transition()
-            self.assertEqual(e.fondu['n'], 0); self.assertGreater(e.garde_trans, 0); self.assertTrue(e.transition_combat())       # le moteur change de scene 1 a 3 images plus tard : l'horloge ne change pas entre les deux
-            e.appliquer([(9, [0x4000 | 3], [])], lambda: ''); self.assertEqual(e.fondu_fond['n'], 3)                           # fondu du plan de fond (encore dans la partie combat) : duree du jeu
+            self.assertEqual(e.fondu['n'], d, 'x%g' % vf); self.assertTrue(e.transition_combat())
+            for _ in range(d): e.tick_fondu(); e.tick_transition()
+            self.assertEqual(e.fondu['n'], 0); self.assertGreater(e.garde_trans, 0); self.assertTrue(e.transition_combat())       # le moteur change de scene 1 a 3 images plus tard
+            e.appliquer([(9, [0x4000 | 3], [])], lambda: ''); self.assertEqual(e.fondu_fond['n'], d3 if d3 > 1 else 0)           # fondu du plan de fond (encore dans la partie combat) : meme regle
             e.tick_fondu(); e.tick_transition()
             e.partie = MO.PARTIE_CHAMP; e.fen_retour = MO.FENETRE_RETOUR_COMBAT                                                   # (Moteur.step : la partie quitte le combat)
-            e.appliquer([(9, [ENTREE_30], [])], lambda: ''); self.assertEqual(e.fondu['n'], 30, 'retour x%g' % vf); self.assertTrue(e.fondu['combat'])
-            for _ in range(30): self.assertTrue(e.transition_combat()); e.tick_fondu(); e.tick_transition()
+            e.appliquer([(9, [ENTREE_30], [])], lambda: ''); self.assertEqual(e.fondu['n'], d, 'retour x%g' % vf); self.assertTrue(e.fondu['combat'])
+            for _ in range(d): self.assertTrue(e.transition_combat()); e.tick_fondu(); e.tick_transition()
             for _ in range(MO.GARDE_TRANSITION + 2): e.tick_fondu(); e.tick_transition()
             self.assertFalse(e.transition_combat())                                                                               # la transition est finie : la marche reprend ses reglages
+
+    def test_cascade_suit_la_vitesse_de_transition(self):
+        """Moteur._debut_effet_combat / _effet_combat (sans moteur : le drapeau d'effet est simule) : 57 images a x1, 57 / facteur ensuite ; la simulation de la visionneuse atteint ses 57 images au dernier dessin."""
+        import math
+        for vf in (1.0, 2.0, 3.0, 4.0):
+            MO.Etat.vitesse_fondu = vf; e = MO.Etat(); mo = types.SimpleNamespace(etat=e, _drapeau_effet=lambda a: None)
+            MO.Moteur._debut_effet_combat(mo, 0); d = PJ.duree_fondu(MO.EFFET_COMBAT_IMAGES, vf); self.assertEqual(e.effet['duree'], d); n = 0; cibles = []
+            while e.effet is not None:
+                cibles.append(math.ceil(e.effet['n'] * MO.EFFET_COMBAT_IMAGES / e.effet['duree'])); MO.Moteur._effet_combat(mo); n += 1
+            self.assertEqual(n, d, 'x%g' % vf); self.assertEqual(cibles[0], 0); self.assertGreaterEqual(cibles[-1], MO.EFFET_COMBAT_IMAGES - math.ceil(MO.EFFET_COMBAT_IMAGES / d))      # (dernier dessin : la cascade est quasi finie)
+            self.assertTrue(all(b >= a for a, b in zip(cibles, cibles[1:])))
+        self.assertEqual([PJ.duree_fondu(MO.EFFET_COMBAT_IMAGES, v) for v in (1.0, 2.0, 4.0)], [57, 28, 14])
+        e = MO.Etat(); e.effet = {'n': 3}; mo = types.SimpleNamespace(etat=e, _drapeau_effet=lambda a: None)           # (etat enregistre avant la cle 'duree' : 57 images)
+        for _ in range(MO.EFFET_COMBAT_IMAGES - 4): MO.Moteur._effet_combat(mo)
+        self.assertIsNotNone(e.effet); MO.Moteur._effet_combat(mo); self.assertIsNone(e.effet)
 
     def test_la_fenetre_d_arrivee_s_ecoule(self):
         """Un fondu lance bien apres le chargement du combat (ou une carte ordinaire) reste soumis a « Vitesse de transition »."""
@@ -94,16 +116,29 @@ class Horloge(unittest.TestCase):
 
     REGLAGES = list(itertools.product((0.0, 1.0, 2.0, 3.0), (1.0, 2.0, 4.0), (1.0, 1.5, 2.0), (False, True)))
 
-    def test_cascade_ecran_noir_et_fondus_toujours_a_l_horloge_du_jeu(self):
+    def test_cascade_a_l_horloge_du_jeu(self):
         for vc, marche, accel, tenue in self.REGLAGES:
             e = etat(MO.PARTIE_CHAMP); e.effet = {'n': 5}
             self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'cascade %s' % ((vc, marche, accel, tenue),))
+
+    def test_des_la_fin_de_la_cascade_la_vitesse_de_combat_s_applique_jusqu_au_fondu_de_fin_compris(self):
+        for vc, marche, accel, tenue in self.REGLAGES:
+            attendu = max(1.0, vc); r = (vc, marche, accel, tenue)
             e = etat(MO.PARTIE_CHAMP); e.attente_charge = {'base': 0, 'n': 1}
-            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'ecran noir')
-            e = etat(MO.PARTIE_COMBAT); e.appliquer([(9, [FONDU_COMBAT], [])], lambda: '')
-            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'fondu de sortie')
+            self.assertEqual(self.jeu(e, *r).facteur(), attendu, 'ecran noir apres la cascade %s' % (r,))
+            e = etat(MO.PARTIE_COMBAT); e.fen_entree = 5; e.appliquer([(9, [ENTREE_30], [])], lambda: '')
+            self.assertEqual(self.jeu(e, *r).facteur(), attendu, 'fondu d\'arrivee et message « X apparait » %s' % (r,))
+            e = etat(MO.PARTIE_COMBAT); e.appliquer([(9, [FONDU_COMBAT], [])], lambda: ''); self.assertTrue(e.transition_combat())
+            self.assertEqual(self.jeu(e, *r).facteur(), attendu, 'fondu au noir de fin de combat %s' % (r,))
+            e.garde_trans = 5; e.fondu['n'] = 0
+            self.assertEqual(self.jeu(e, *r).facteur(), attendu, 'images entre deux fondus, encore dans la partie combat %s' % (r,))
+
+    def test_retour_a_la_carte_a_l_horloge_du_jeu(self):
+        for vc, marche, accel, tenue in self.REGLAGES:
             e = etat(MO.PARTIE_CHAMP); e.fen_retour = 5; e.appliquer([(9, [ENTREE_30], [])], lambda: '')
-            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'fondu de retour')
+            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'fondu de retour %s' % ((vc, marche, accel, tenue),))
+            e.fondu['n'] = 0; e.garde_trans = 4
+            self.assertEqual(self.jeu(e, vc, marche, accel, tenue).facteur(), 1.0, 'entre deux fondus sur la carte')
 
     def test_les_tours_du_combat_continuent_d_accelerer(self):
         for vc in (0.0, 1.0, 2.0, 3.0):
@@ -130,8 +165,8 @@ class Horloge(unittest.TestCase):
 
 @unittest.skipUnless(APK and SAVES and F is not None, 'moteur reel : DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes>')
 class MoteurReel(unittest.TestCase):
-    """Rejoue de vraies rencontres (carte du monde, rencontre forcee, attaque jusqu'a la victoire) avec « Vitesse de transition » x1, x2 et x4 : memes durees en images du moteur ; temps reel simule avec
-    la vraie fonction Jeu._facteur_vitesse pour toutes les combinaisons de reglages (rien ne change d'un reglage a l'autre)."""
+    """Rejoue de vraies rencontres (carte du monde, rencontre forcee, attaque jusqu'a la victoire) avec « Vitesse de transition » x1, x2 et x4 : durees en images du moteur ; temps reel simule avec la vraie fonction
+    Jeu._facteur_vitesse pour toutes les combinaisons de reglages (vitesse de combat x marche x accelerateur x touche tenue)."""
     @classmethod
     def setUpClass(cls):
         cls.reglages = Horloge.REGLAGES
@@ -149,7 +184,7 @@ class MoteurReel(unittest.TestCase):
             for i in range(120): mo.step(0, 0)
         c = mo.core
         c.call(mo.E('_ZN7Encount12forceEncountEv'), c.call(mo.E('_ZN7Encount12getSingletonEv'), label='enc'), label='force')
-        facteurs = []; images = []; paquets9 = []                                       # une entree par pas du moteur : (facteur pour chaque combinaison de reglages), transition ?, partie
+        pas = []; paquets9 = []                                                          # une entree par pas du moteur (etat APRES le pas) : image, partie, cascade, ecran noir, plan de devant (n, sortie ?), transition ?, facteurs par reglage
         att = 0; rel = None; fin = None; vu_combat = False
         for i in range(6000):
             p = d = 0
@@ -169,56 +204,64 @@ class MoteurReel(unittest.TestCase):
             if mo.etat.partie == MO.PARTIE_COMBAT: vu_combat = True
             e = mo.etat
             jeux = [Horloge.jeu(e, vc, marche, accel, tenue, menu=mo.menu_actif()) for vc, marche, accel, tenue in cls.reglages]
-            facteurs.append([j.facteur() for j in jeux]); images.append((mo.images, e.transition_combat(), e.partie, e.effet is not None, e.attente_charge is not None))
+            pas.append(dict(im=mo.images, partie=e.partie, effet=e.effet is not None, attente=e.attente_charge is not None, fn=e.fondu['n'], fsortie=e.fondu['fin'] >= 1.0, trans=e.transition_combat(),
+                            facteurs=[j.facteur() for j in jeux]))
             if vu_combat and prec == MO.PARTIE_COMBAT and e.partie != MO.PARTIE_COMBAT: fin = mo.images
             if fin and mo.images > fin + 90: break
         assert fin is not None, 'le combat ne s\'est pas termine'
         MO.Etat.vitesse_fondu = 1.0
-        return dict(facteurs=facteurs, images=images, paquets9=paquets9)
+        return dict(pas=pas, paquets9=paquets9)
 
     def tearDown(self): MO.Etat.vitesse_fondu = 1.0
 
     @staticmethod
-    def segments(par):
-        """Suites d'images consecutives de la transition : [(premiere image, nombre d'images, indice dans la liste)]."""
-        seg = []; deb = None
-        for k, (im, tr, *_r) in enumerate(par['images']):
-            if tr and deb is None: deb = k
-            if not tr and deb is not None: seg.append((par['images'][deb][0], k - deb, deb)); deb = None
-        if deb is not None: seg.append((par['images'][deb][0], len(par['images']) - deb, deb))
-        return seg
+    def suites(pas, cond):
+        """Suites d'images consecutives qui verifient `cond` : [(indice du premier pas, nombre de pas)]."""
+        out = []; deb = None
+        for k, x in enumerate(pas):
+            if cond(x) and deb is None: deb = k
+            if not cond(x) and deb is not None: out.append((deb, k - deb)); deb = None
+        if deb is not None: out.append((deb, len(pas) - deb))
+        return out
 
-    def test_deux_transitions_par_combat(self):
+    def test_la_cascade_dure_57_images_divisees_par_la_vitesse_de_transition(self):
         for vf, par in self.parcours.items():
-            seg = self.segments(par)
-            self.assertEqual(len(seg), 2, 'x%g : entree et sortie, soit 2 segments (%r)' % (vf, seg))
+            casc = self.suites(par['pas'], lambda x: x['effet']); self.assertEqual(len(casc), 1, 'x%g : une cascade par combat (%r)' % (vf, casc))
+            self.assertEqual(casc[0][1], PJ.duree_fondu(MO.EFFET_COMBAT_IMAGES, vf), 'Vitesse de transition x%g' % vf)
 
-    def test_memes_durees_en_images_du_moteur_pour_toutes_les_vitesses_de_transition(self):
-        ref = [n for _, n, _ in self.segments(self.parcours[1.0])]
-        for vf in (2.0, 4.0): self.assertEqual([n for _, n, _ in self.segments(self.parcours[vf])], ref, 'Vitesse de transition x%g' % vf)
-        entree, sortie = ref
-        self.assertGreaterEqual(entree, MO.EFFET_COMBAT_IMAGES + 30); self.assertLess(entree, MO.EFFET_COMBAT_IMAGES + 30 + 8)                # cascade 57 + ecran noir 1 a 3 + fondu d'arrivee 30
-        self.assertGreaterEqual(sortie, 60)                                                                                                   # fondu de sortie 30 + fondu de retour 30 (+ gardes)
-
-    def test_les_fondus_demandes_par_le_moteur_sont_ceux_du_combat(self):
-        """Les durees demandees (paquet 9) : 30 images pour l'arrivee, 30 pour la sortie, 30 pour le retour ; Etat les rejoue sans les raccourcir."""
-        durees = [d for _, d, sortie, fond in self.parcours[1.0]['paquets9']]
-        self.assertIn(30, durees); self.assertEqual(durees, [d for _, d, *_ in self.parcours[4.0]['paquets9']])
-
-    def test_temps_reel_independant_de_tous_les_reglages(self):
-        """Temps reel d'un segment = somme des 1 / (30 x facteur) de ses images ; le facteur vaut 1,0 partout : exactement images / 30 s, pour les 72 combinaisons de reglages et les 3 vitesses de transition."""
+    def test_les_fondus_de_fin_de_combat_et_de_retour_suivent_la_vitesse_de_transition(self):
+        """Fondu au noir de fin (dans la partie combat) : le moteur le demande en 30 images ; Etat le rejoue en 30 / facteur."""
         for vf, par in self.parcours.items():
-            for im0, n, k0 in self.segments(par):
-                attendu = n * PAS
-                for r, regl in enumerate(self.reglages):
-                    t = sum(PAS / par['facteurs'][k][r] for k in range(k0, k0 + n))
-                    self.assertAlmostEqual(t, attendu, 9, 'segment a l image %d, reglages %s, transition x%g' % (im0, regl, vf))
+            d = PJ.duree_fondu(30, vf); self.assertIn(30, [x[1] for x in par['paquets9']])
+            fins = self.suites(par['pas'], lambda x: x['partie'] == MO.PARTIE_COMBAT and x['fsortie'] and x['fn'] >= 1)
+            self.assertTrue(fins, 'x%g : fondu de fin non vu' % vf); self.assertEqual(max(n for _, n in fins), d - 1, 'fin de combat, x%g' % vf)          # (apres le pas qui le lance : d - 1 images restantes)
+            retour = self.suites(par['pas'], lambda x: x['partie'] != MO.PARTIE_COMBAT and not x['effet'] and not x['attente'] and x['fn'] >= 1 and not x['fsortie'] and x['trans'])
+            self.assertTrue(retour and max(n for _, n in retour) in (d - 1, d), 'retour a la carte, x%g : %r' % (vf, retour))
 
-    def test_hors_transition_la_vitesse_de_combat_s_applique_toujours(self):
-        par = self.parcours[2.0]
-        for k, (im, tr, partie, eff, att) in enumerate(par['images']):
-            if partie == MO.PARTIE_COMBAT and not tr:
-                for r, (vc, marche, accel, tenue) in enumerate(self.reglages): self.assertEqual(par['facteurs'][k][r], max(1.0, vc))
+    def test_l_acceleration_commence_a_la_fin_de_la_cascade_et_dure_jusqu_au_fondu_de_fin_compris(self):
+        for vf, par in self.parcours.items():
+            pas = par['pas']; casc = self.suites(pas, lambda x: x['effet'])[0]; fin_casc = casc[0] + casc[1]
+            for k in range(casc[0], fin_casc):
+                for r, regl in enumerate(self.reglages): self.assertEqual(pas[k]['facteurs'][r], 1.0, 'cascade, image %d, %s' % (k, regl))
+            fins = self.suites(pas, lambda x: x['partie'] == MO.PARTIE_COMBAT and x['fsortie'] and x['fn'] >= 1)
+            for k, x in enumerate(pas):
+                if k < fin_casc or not (x['partie'] == MO.PARTIE_COMBAT or x['attente']): continue
+                for r, (vc, *_r) in enumerate(self.reglages): self.assertEqual(x['facteurs'][r], max(1.0, vc), 'vf x%g image %d (partie %#x), vitesse de combat %g' % (vf, k, x['partie'], vc))
+            for deb, n in fins:                                                                  # le fondu au noir de fin : encore accelere
+                for k in range(deb, deb + n):
+                    for r, (vc, *_r) in enumerate(self.reglages): self.assertEqual(pas[k]['facteurs'][r], max(1.0, vc))
+            self.assertTrue(any(x['attente'] and not x['effet'] for x in pas[fin_casc:fin_casc + 8]) or pas[fin_casc]['partie'] == MO.PARTIE_COMBAT)      # (la premiere image apres la cascade est deja de l'ecran noir ou du combat)
+
+    def test_temps_reel(self):
+        """Temps reel = somme des 1 / (30 x facteur) : la cascade dure (57 / vitesse de transition) / 30 s quels que soient les reglages ; le fondu de fin de combat, lui, suit la vitesse de combat ; le retour a la carte reste a l'horloge du jeu."""
+        for vf, par in self.parcours.items():
+            pas = par['pas']; deb, n = self.suites(pas, lambda x: x['effet'])[0]
+            retour = self.suites(pas, lambda x: x['partie'] != MO.PARTIE_COMBAT and not x['effet'] and not x['attente'] and x['trans'])
+            fins = self.suites(pas, lambda x: x['partie'] == MO.PARTIE_COMBAT and x['fsortie'] and x['fn'] >= 1)
+            for r, (vc, marche, accel, tenue) in enumerate(self.reglages):
+                self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(deb, deb + n)), PJ.duree_fondu(MO.EFFET_COMBAT_IMAGES, vf) * PAS, 9, 'cascade %s x%g' % ((vc, marche, accel, tenue), vf))
+                for d0, m in fins: self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(d0, d0 + m)), m * PAS / max(1.0, vc), 9, 'fondu de fin %s x%g' % ((vc, marche, accel, tenue), vf))
+                for d0, m in retour: self.assertAlmostEqual(sum(PAS / pas[k]['facteurs'][r] for k in range(d0, d0 + m)), m * PAS, 9, 'retour a la carte %s x%g' % ((vc, marche, accel, tenue), vf))
 
 
 if __name__ == '__main__':
