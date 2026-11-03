@@ -49,6 +49,7 @@ COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [
 STR_W8_X0 = 0xb9000008
 MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
 MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
+MAGIE_NB_CIBLES, MAGIE_FIN_BOUCLE = 0x257f84, 0x2e0       # gTownMenuItemUseManager + 0xaa : nombre de cibles dont le moteur affiche le resultat (et dont il joue le bruitage de soin, une fois chacune) ; useMagicNoTarget + 0x2e0 : sortie de cette boucle
 MSG_RIEN_NE_SE_PASSE = 0xc3d6b             # identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...)
 DUREE_ANIM = 18                            # images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
 ORIGINE_APRES = 3                            # images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir Etat.appliquer, paquet 13)
@@ -551,9 +552,9 @@ class Moteur:
         cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
         Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
         table des messages) ou aucun, la liste devient le message du jeu « Mais rien ne se passe. » (une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas."""
-        c = self.core; self._magie = None
+        c = self.core; self._magie = None; self._magie_muet = False
         try:
-            cs, nt = c.export('_ZN19TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT14useMagicNoTargetEv')
+            cs, nt = c.export('_ZN25TownMenu_MAGIC_CHARSELECT10menuUpdateEv'), c.export('_ZN19TownMenu_MAGIC_ROOT16useMagicNoTargetEv')
             msg, exc = c.export('_ZN6status17BaseActionMessage12actionParam_E'), c.export('_ZN6status10excelParamE')
             u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]; u64 = lambda a: struct.unpack('<Q', c.mem(a, 8))[0]
             def est_execuse(a):                                                            # `bl` vers le stub de UseAction::execUse ?
@@ -574,10 +575,13 @@ class Moteur:
                     e = u64(msg) + 0x48 * action; r = u32(p + MAGIE_RESULTAT)
                     if r and r not in (u32(e + 4), u32(e + 0xc)): return                    # le jeu a deja son message d'echec
                     c.mem_w(p + MAGIE_RESULTAT, struct.pack('<II', MSG_RIEN_NE_SE_PASSE, 0))
-                    if groupe: c.mem_w(self.L + 0x257f84, b'\x01')                          # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
+                    if groupe: c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x01'); self._magie_muet = True      # un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
                 return _apres
             for (a, groupe) in sites:
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _avant, None, a, a); c.uc.hook_add(unicorn.UC_HOOK_CODE, poser(groupe), None, a + 4, a + 4)
+            def _fin(uc, ad, sz, u):                                                       # sortie de la boucle des cibles : plus de bruitage de soin en attente (menuUpdate en joue un par cible restante) si rien ne s'est passe
+                if self._magie_muet: self._magie_muet = False; c.mem_w(self.L + MAGIE_NB_CIBLES, b'\x00')
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _fin, None, nt + MAGIE_FIN_BOUCLE, nt + MAGIE_FIN_BOUCLE)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('sorts sans effet : crochet non installe :', ex, flush=True)
