@@ -83,7 +83,7 @@ Retours d'essai sur kpl-031, traités un par un ; les détails techniques (sourc
 - **Reste** (mis à jour en #17) : animations de matériaux (SRA, 26 cartes) et animations d'événements (FEAN / paquet 6), événements FEMV, effets d'écran 3 / 5 / 6 (voyage, lampe sombre, Riremito) non rejoués, écran de choix de sauvegarde (menu de chargement d'origine), clignotements d'écran à reconfirmer sur PC.
 
 ## Reste à faire
-Il n'y a plus de suivi par issues : `dq4-portage` n'en a aucune (l'ancienne liste « menus fidèles, sous-menus, magasins, paquets non décodés, carte du monde, combats, son, sauvegardes, HD des sprites… » renvoyait aux issues de l'ancien dépôt `dq4-pc`, écrite quand le suivi se faisait là). Le reste à faire est dans `docs/reprise.md` (§6, sujets ouverts), dans `docs/audit/rapport_reste_a_faire.md` (décisions, oublis, bugs connus, points non vérifiés) et, pour la dernière avance, dans les rubriques « À trancher par Sylfried » et « Non vérifié (#45) » plus bas.
+Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://github.com/Sylfried/dq4-portage/issues : #51 à #99, jalons 1 à 5 ; 41 ouvertes au 03/11/2026). Décisions de Sylfried : `docs/audit/decisions.md` (§ 5c et 5d, D-149 à D-190). État des lacunes : `docs/audit/lacunes_connues.md`. Points non vérifiés : `docs/audit/rapport_reste_a_faire.md` (« Lecture du 03/11 »). Contexte pour reprendre : `docs/reprise.md` §6. **Les rubriques « À trancher » et « Non vérifié » plus bas sont datées** : celles de #45 à #50 ont été tranchées ou reprises par la lecture du 03/11 (voir § 5d).
 
 ## Monstres de combat et mode F2 (30/10)
 - Les textures de monstres (`m<id>`, effets compris) suivent le mode de sprites F2 : original (pixels nets, filtre `net`) ou agrandi par l'algorithme HD choisi (`_texture_monstre`, calcul en tâche de fond, l'original sert en attendant ; cache disque `hd_<algo>_v<n>_m<id>.npy` ; plafond 4096 px de côté, moins de passes sinon ; mipmaps à 2 niveaux).
@@ -625,7 +625,7 @@ Windows et vrai GPU ; la cause de la perte des bruitages de transition ; l'anima
 - **Actions sans utilité** : traité en #47 (hors combat, un sort qui coûte des PM sans les faire baisser affiche « Mais il ne se passe rien. » ; voir Avance #47 et #48). Détail d'origine : `BaseAction::useMp` ne dépense que si l'action a eu un effet ; avant #47 la visionneuse affichait fidèlement le message de succès du moteur (« Les blessures de Ragnar guérissent ! »).
 - **Non traité / non vérifié** : tabulations des types 20, 31, 33, 34, 35, 39 (combat, même règle probable) ; interface du choix de destination de Téléportation ; sort de combat de l'emplacement 3 ; descriptions du menu Objets ; sons.
 
-### À trancher par Sylfried
+### À trancher par Sylfried (**tranché le 03/11 à 15 h 50 : `decisions.md` § 5d, D-163 à D-190**)
 - Section « Défilement du texte » : dans **Commandes sous « Vitesses »** (où se trouve la section Vitesses) ou dans **Affichage** comme demandé ?
 - Recentrage des textes : écart volontaire avec le mobile (retirable : commit `f756c63`, ou `DQ_TEXTE_ORIGINAL=1`) ; en faire une option du menu Pause ?
 - Liseré sombre des pierres au sol (« option A », mélange de couleur des bords alpha) : à appliquer aux décors de villes comme aux décors de combat ?
@@ -694,7 +694,7 @@ Lot traité avant celui des oublis du rapport d'audit (mis en pause : branche `a
 - **Coffre lâché par un ennemi : le jeu ne joue aucun bruitage d'ouverture.** Messages (« X laisse tomber un coffre au trésor ! », « Ragnar l'ouvre. », « Il contient Y ! », « Ragnar met Y dans le sac. ») = tâche `BattleExecItem` (quatre sous-tâches `BattleExecVictory30` / `31` / `31a` / `32`) : texte et `giveItem` seulement, aucun appel au gestionnaire de sons ; Unity n'a que trois sites d'appel direct à `Sound.PlaySE` (`InputName.Update`, `MenuPortItem.Update`, `TouchPad.internalUpdate`). Moteur réel, butin forcé : seuls paquets de son = le bip 300 au début de chacun des 4 messages. Test : `test_coffre_ennemi` (2). **Supposé** : Sylfried se souvient du bip 300, de la version DS ou du coffre de ville (`TownFurnitureObject::openObject`). **Non vérifié** : mobile ; chapitre 3 réel (butin forcé en chapitre 1). Rien n'a été ajouté (le jeu fait foi).
 - **Non vérifié (son)** : audio réel (Windows, haut-parleurs) ; escalier, téléportation, chute (même décompte, jamais rejoués) ; chemin `ChangeGamePart`.
 
-### À trancher par Sylfried (#47)
+### À trancher par Sylfried (#47) (**tranché le 03/11 à 15 h 50 : `decisions.md` § 5d, D-163 à D-190**)
 1. **Fondu de fin de combat** : accéléré aussi par la vitesse de combat (fait, lecture littérale) ou de durée réelle fixe ? (recommandation : laisser accéléré).
 2. **Bouton de vitesse** : le décalage restant de 22,5 px une fois par combat (entre « X apparaît » et le premier menu) te gêne-t-il ? (recommandation : l'accepter).
 3. ~~Vitesse de transition x2 par défaut~~ : tranché en #48, le défaut est **x1**.
@@ -733,7 +733,7 @@ Quatre retours, traités un par un (petit lot, sans sous-agents). Légende : **�
 - Tests : `test_historique_messages` (99 ; 8 tests réécrits ou nouveaux : message par message, défilement minimal, messages coupés en haut / en bas, toutes les longueurs de liste, molette puis clavier, aucun grisé). Captures du vrai dessin (harnais hors dépôt) : flèche seule, pas de grisé, message choisi collé au bord haut après sept ↑.
 - **Non vérifié** : ressenti du défilement instantané (pas d'animation) ; répétition de la touche maintenue avec le vrai `Pause.maj` (seulement l'appel, simulé) ; Windows / GPU.
 
-### À trancher par Sylfried (#48)
+### À trancher par Sylfried (#48) (**tranché le 03/11 à 15 h 50 : `decisions.md` § 5d, D-163 à D-190**)
 1. **x1 par défaut** : si tu avais choisi x2 toi-même, la migration l'a ramené à x1 une fois ; le remettre une fois suffit.
 2. **Défilement de l'historique au clavier** : instantané (le bord du message rejoint le bord de la fenêtre). Un défilement doux (quelques images) est possible si tu le préfères.
 3. **PgHaut / PgBas** dans l'historique : défilent d'une page et déplacent le choix sur le message entièrement visible le plus proche ; veux-tu plutôt qu'ils sautent de N messages ?
@@ -762,9 +762,34 @@ Aucun changement de code dans `dq4_pc/` ni dans les tests. Relecture du rapport 
 ### Suivi par issues (03/11/2026, PR #89)
 Sylfried (14 h 25) : « je veux bien des issues sur le reste à faire ». **38 issues créées dans `dq4-portage` (#51 à #88)**, en 5 jalons (1 Validation Windows #51-#58, 2 Clavier complet et manette #59-#61, 3 Chapitre 2 et services #62-#65, 4 Moteur et finitions #66-#85 dont 11 bugs, 5 Distribution et extensions #86-#88) ; nouvelles étiquettes `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `bloqué`. Pas d'issues rétroactives pour le travail déjà fait (choix de Claude : les 50 PR « Avance #N » et `docs/historique.md` font foi). Issues et PR partagent la même numérotation : `pr.sh` prend le plus grand numéro + 1, donc la PR suivante est #89 (la série « Avance #N » saute de #50 à #89). Détail : `docs/workflow.md`, `docs/audit/rapport_reste_a_faire.md` (« Suivi dans GitHub »).
 
-### À trancher par Sylfried (#50)
+### À trancher par Sylfried (#50) (**tranché le 03/11 à 15 h 50 : `decisions.md` § 5d, D-163 à D-190**)
 1. ~~**Issues dans `dq4-portage` ?**~~ **Réglé le 03/11 à 14 h 25** : oui, pour le reste à faire (voir ci-dessus).
 2. **Branches fusionnées** : supprimer les 56 branches distantes déjà fusionnées (décision 2 de l'audit) ? Il a demandé si cela change quelque chose : non (tout est dans `main`, les PR restent consultables) ; **non fait** sans un « oui » explicite.
 
 ### Non vérifié (#50)
 Tout ce qui a été vu l'a été sous Linux (Mesa) ; la CI n'a tourné qu'une fois (verte), sans essai d'un fichier interdit réel (le motif a été essayé en local).
+
+## Avance #100 : lecture du reste à faire et ménage (03/11/2026, docs seulement)
+
+Aucun changement de code dans `dq4_pc/` ni dans les tests (phase gestion de projet, D-189). Sylfried a lu la liste « tout ce qu'il reste à faire » (15 h 50) et répondu point par point. Légende : **Établi**, **Supposé**, **Non vérifié**.
+
+### Fait
+- **Branches** : les 57 branches fusionnées ont été supprimées **par Sylfried** (le proxy de la session refusait toute écriture sur les branches, 403) et la suppression automatique est activée (D-163). `main` est la seule branche.
+- **Issues** : 7 fermées (#51, #54, #55, #57, #78, #82, #86), 10 créées (#90 à #99), 11 réécrites ou complétées (#52, #53, #56, #58 à #62, #80, #83, #88) et commentaires sur #75 et #87 ; nouvelles étiquettes `à décider` et `priorité:basse`. Bilan : 48 issues, 41 ouvertes.
+- **Décisions** : D-163 à D-190 (`decisions.md` § 5d). L'exigence « tous les boutons au clavier » (D-155) est **suspendue** (D-165) : « à creuser », #59.
+- **Lacunes** : 86 des 161 lignes de `lacunes_connues.md` retriées (63 closes, 25 traitées, 71 ouvertes ensuite). La ligne G-039c (« pièces `MAP_DIFF` non reproduites ») était périmée : les pièces sont reproduites (`_plan_monde_fenetre`).
+- **Licence d'Unicorn** (#86) : à traiter comme GPL v2 (`docs/licences.md`) ; choix à faire avant le `.exe` (#87).
+- **Plan de test du chapitre 2** : `docs/audit/plan_tests_chapitre2.md` (D-168).
+- **Ménage** : briefs des lots déplacés dans `docs/archives/briefs/` ; modèles d'issue alignés sur le format des issues (Contexte, Critères, Références) et nouveau modèle « Test sur Windows » ; `historique.md` complété jusqu'à #100 ; `reprise.md` §6 réécrit ; pointeurs « Reste à faire » corrigés ; README à jour.
+
+### Validé par Sylfried sur Windows (établi par lui)
+Premier lancement du `.bat` ; sauvegardes (église, automatiques, hors églises, création et suppression de journal) ; plein écran (F11, Alt + Entrée) et autres ratios ; comparaison au mobile (tailles de texte, placements, croix, plume, dragon du titre) ; combat de boss du chapitre 1, groupes, Morph de la cinématique, game over, nouvelle partie sans relancer ; historique après combats ; teinte jour / nuit (carte et villes) ; fenêtre « Interface » glissée à la souris ; murs de `dbout` et vagues d'eau des grottes résolus ; ordre de tracé des monstres, fenêtres de combat, escaliers : « tout bon ».
+
+### À trancher par Sylfried (#100)
+1. **Licence** : (a) rester sur « scripts + `.bat` qui télécharge Unicorn », (b) publier le portage sous GPL v2 pour embarquer Unicorn dans un `.exe`, (c) un autre émulateur ; et choisir une licence pour le code du portage (`docs/licences.md`, #87).
+2. **Accélérateur et jingle** (#96) : lecture retenue (supposé) = pendant un jingle, la touche d'accélérateur est neutre, sauf pour une transition de carte à carte.
+3. **Espace et discussion de groupe** : « Espace ne fait plus les discussions de groupe » est lu comme « le cas limite n'arrive plus » ; si c'est la discussion de groupe qui ne s'ouvre plus du tout avec Espace, le dire.
+4. **Petits restes** (#99) : mode « menus simples » (garder, simplifier, retirer ?), bandeau « Prologue » (le cadre doré à fond bleu s'affiche-t-il ?), « sort en trop » (est-ce la rangée fantôme supprimée en #45 ?), coffres (sens d'ouverture).
+
+### Non vérifié (#100)
+Rien n'a été exécuté côté outil. Les affirmations sur le code de ce paragraphe (pièces `MAP_DIFF` reproduites, rangée fantôme de la liste des sorts supprimée en #45) sont lues dans le code et les notes, non revues à l'écran. Licence : textes publics lus (COPYING, métadonnées), pas d'avis juridique. Les lectures « à confirmer » ci-dessus sont des interprétations de phrases de Sylfried.

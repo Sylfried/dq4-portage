@@ -4,6 +4,10 @@
 ## Retours / À trancher
 <!-- Retours de test traités ; questions qui attendent Sylfried (une phrase chacune, avec une recommandation) -->
 
+## Suivi à jour
+- [ ] issues fermées (`Closes #n`) ou commentées, nouvelles issues ouvertes pour tout reste
+- [ ] décisions (`docs/audit/decisions.md`), lacunes, notes et `docs/reprise.md` à jour
+
 ## Testé sur le PC de test
 - [ ] `lancer_dq4.bat` démarre
 - [ ] marche, porte, changement de carte

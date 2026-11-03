@@ -3,10 +3,12 @@ name: Recherche (rétro-ingénierie)
 about: Décoder un paquet, une fonction, un format
 labels: "type:recherche"
 ---
-**Question**
+**Contexte** (la question)
 
-**Ce qu'on sait déjà**
+**Ce qu'on sait déjà** (établi / supposé / non vérifié)
 
-**Comment l'établir** (hook, trace, désassemblage…)
+**Critères de réussite**
+- [ ] Établir dans le moteur (hook, trace, désassemblage…), pas supposer
+- [ ] Consigner le résultat (où : `docs/…`)
 
-**Résultat attendu** (où le consigner : `docs/…`)
+**Références** (G-xxx, notes, issues liées)
