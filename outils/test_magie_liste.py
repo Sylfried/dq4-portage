@@ -19,7 +19,9 @@ Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seu
   7. usages sans effet decides par le moteur : Rappel sur un vivant, Antipoison sans poison : « Mais rien ne se passe. », aucun PM depense ; PM insuffisants : « Pas assez de PM ! » ;
   8. Rappel sur un mort : « revient a la vie », PM depenses ; Antipoison sur un empoisonne : « n'est plus empoisonne » ;
   9. regle « sort qui coute des PM et n'en depense aucun » : soins a PV pleins (Premiers secours, Soins partiels, Soins complets), soin de groupe (Multisoin : un seul message, pas de bruitage de soin en attente) ;
-     non-regressions : sort a effet (PM depenses, message du jeu), Multisoin avec un blesse (messages de soin gardes), messages d'echec propres au jeu (Evac' hors donjon), sorts a 0 PM (Mappille, Sifflet)."""
+     non-regressions : sort a effet (PM depenses, message du jeu), Multisoin avec un blesse (messages de soin gardes), messages d'echec propres au jeu (Evac' hors donjon), sorts a 0 PM (Mappille, Sifflet).
+ 10. bruitages (SoundManager::playSe, #137) : le bruitage de lancement (306, le meme pour tous les sorts) est joue dans tous les cas ; le bruitage de soin (501) n'est PAS joue quand le sort n'a eu aucun effet (Premiers secours, Soins partiels,
+     Soins complets sur PV pleins ; Multisoin en pleine forme) et reste joue quand le sort sert (deux fois pour un soin sur une cible, une fois par cible pour Multisoin) ; un soin utile apres un soin inutile joue de nouveau son bruitage."""
 import os, struct, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
@@ -238,6 +240,44 @@ class MoteurReel(unittest.TestCase):
             if mo.msg_visible and k % 30 == 29: self.avance(mo, 1, self.BTN_PAROLE)
             if not mo.msg_visible and k > 60: break
         return [t.replace('\xa0', ' ').replace(';', '').strip() for t in textes]
+
+    LANCEMENT, SOIN = 306, 501                                              # SoundManager::playSe : bruitage de lancement (tous les sorts) ; bruitage de soin
+
+    def sons(self, mo):
+        """Liste (remplie au fil de l'eau) des bruitages `SoundManager::playSe` joues par le moteur a partir de maintenant ; le bruitage 300 (validation d'une touche dans les messages) est ecarte."""
+        import unicorn
+        c = mo.core; liste = []; a = c.export('_ZN12SoundManager6playSeEi')
+        c.uc.hook_add(unicorn.UC_HOOK_CODE, lambda uc, ad, sz, u: liste.append(uc.reg_read(c.XREG[0]) & 0xffffffff), None, a, a); c.uc.ctl_flush_tb()
+        return liste
+
+    def bruitages(self, sort, pv, groupe=False):
+        mo = self.pret(sort=sort, pv=pv); sons = self.sons(mo)
+        textes = self.lancer_groupe(mo) if groupe else self.lancer(mo)
+        return textes, [x for x in sons if x != 300]
+
+    def test_bruitages_soin_sans_effet(self):
+        for sort in (self.PREMIERS_SECOURS, self.PREMIERS_SECOURS + 1, self.PREMIERS_SECOURS + 2):
+            textes, sons = self.bruitages(sort, {self.RAGNAR: 47})
+            self.assertEqual(textes[-1], 'Mais il ne se passe rien.'); self.assertEqual(sons, [self.LANCEMENT], 'sort %d : le lancement reste, le bruitage de soin est coupe' % sort)
+
+    def test_bruitages_soin_utile_gardes(self):
+        for sort in (self.PREMIERS_SECOURS, self.PREMIERS_SECOURS + 1, self.PREMIERS_SECOURS + 2):
+            textes, sons = self.bruitages(sort, {self.RAGNAR: 20})
+            self.assertIn('Les blessures de Ragnar guérissent !', textes); self.assertEqual(sons, [self.LANCEMENT, self.SOIN, self.SOIN], 'sort %d' % sort)
+
+    def test_bruitages_soin_de_groupe(self):
+        textes, sons = self.bruitages(self.MULTISOIN, {self.RAGNAR: 47, self.DOC: 35}, groupe=True)
+        self.assertEqual(textes[-1], 'Mais il ne se passe rien.'); self.assertEqual(sons, [self.LANCEMENT])
+        textes, sons = self.bruitages(self.MULTISOIN, {self.RAGNAR: 20, self.DOC: 35}, groupe=True)
+        self.assertEqual(sons, [self.LANCEMENT, self.SOIN, self.SOIN], 'un bruitage de soin par cible soignee')
+
+    def test_bruitage_de_soin_revient_apres_un_echec(self):
+        mo = self.pret(pv={self.RAGNAR: 47}); sons = self.sons(mo)
+        self.lancer(mo); self.assertEqual([x for x in sons if x != 300], [self.LANCEMENT])
+        c = mo.core; orig = c.export('_ZN6status9PartyData15originalPlayer_E'); c.mem_w(orig + 0x530 * self.RAGNAR + 0x58 + 0x22, struct.pack('<H', 20))
+        self.avance(mo, 60); del sons[:]
+        textes = self.lancer(mo)
+        self.assertIn('Les blessures de Ragnar guérissent !', textes); self.assertEqual([x for x in sons if x != 300], [self.LANCEMENT, self.SOIN, self.SOIN])
 
     def test_liste_de_doc(self):
         mo = self.pret(); self.ouvrir_liste(mo)

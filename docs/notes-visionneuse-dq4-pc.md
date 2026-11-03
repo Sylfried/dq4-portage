@@ -718,7 +718,7 @@ Quatre retours, traités un par un (petit lot, sans sous-agents). Légende : **�
 ### Sorts sans effet : « Mais il ne se passe rien. »
 - Demande : si un message officiel existe, l'utiliser plutôt que « Mais rien ne se passe. ». Il existe : « Mais il ne se passe rien. » est le message qu'Évac' hors donjon affiche déjà (id 0xc3d6d, texte du patch FR). `Moteur._crochets_magie` l'écrit désormais (`MSG_IL_NE_SE_PASSE_RIEN`) à la place de 0xc3d6b pour un sort qui coûte des PM sans les faire baisser (soins à PV pleins, Multisoin en pleine forme : un seul message).
 - **Inchangés** : les messages d'échec propres au jeu, qui disent encore « Mais rien ne se passe. » (Rappel sur un vivant, Antipoison sans poison, Sifflet) ; ce sont les textes du jeu, pas un ajout de la visionneuse. Évac' garde « Mais il ne se passe rien. ».
-- Établi : l'id lu en mémoire pendant le lancement d'Évac' (`UseActionParam + MAGIE_RESULTAT`) est 0xc3d6d ; le champ « échec » de la table des actions pour cette action (0xaae7e) n'est PAS le message affiché (essai à vide : « ERROR 700030 »). Test : `test_magie_liste` (29, avec les sauvegardes d'origine du mobile).
+- Établi : l'id lu en mémoire pendant le lancement d'Évac' (`UseActionParam + MAGIE_RESULTAT`) est 0xc3d6d ; le champ « échec » de la table des actions pour cette action (0xaae7e) n'est PAS le message affiché (essai à vide : « ERROR 700030 »). Test : `test_magie_liste` (29, avec les sauvegardes d'origine du mobile). **Bruitages : voir l'Avance #150** (le bruitage de soin est coupé quand le sort n'a aucun effet).
 
 ### Vitesse de transition : x1 par défaut
 - `reglages.DEFAUT['vitesse_fondu']` passe de 2,0 à **1,0** (la cascade d'entrée en combat dure de nouveau 1,9 s et les fondus 30 images, comme le jeu). Les crans x1 à x4 restent au choix.
@@ -1167,3 +1167,26 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Non vérifié
 - **Sous Windows** : à confirmer par Sylfried (fenêtre d'historique, case « Favoris seulement » cochée, aucun favori, onglets Dialogues puis Combats).
 - Fenêtre très étroite : testée seulement à 900 x 720 et 1280 x 720 (hors moteur).
+
+## Avance #150 : un sort de soin sans effet ne joue plus son bruitage de soin (#137, 03/11/2026)
+
+### Demande (D-224, 23 h 35)
+« Ça affiche bien qu'il ne se passe rien mais il y a encore les 2 bruitages qui sont joués, le premier qui est similaire à tous les sorts qui indique qu'un sort a été lancé, et le 2ème qui dépend du sort […] il faut donc garder le premier bruitage dans tous les cas mais pas le 2ème si le sort échoue mais le garder si le sort fait véritablement quelque chose. »
+
+### Établi (mesuré au moteur réel : crochet sur `SoundManager::playSe`, sauvegarde 1 du mobile, Doc lance ses sorts sur Ragnar)
+| cas | bruitages (id, adresse de retour dans `menuUpdate`) avant le correctif |
+|---|---|
+| Premiers secours, PV pleins | 306 (`menuUpdate` + 0x548), 501 (`menuUpdate` + 0x114) |
+| Premiers secours, Ragnar blessé | 306, 501 (+ 0xFC), 501 (+ 0x114) |
+| Multisoin, PV pleins | 306 (`useMagicNoTarget`) seulement |
+| Multisoin, un blessé | 306, 501, 501 |
+- **Le « premier bruitage »** est le **306**, joué par `TownMenu_MAGIC_CHARSELECT::menuUpdate` (et `useMagicNoTarget` pour un sort de groupe) au lancement, le même pour tous les sorts : gardé dans tous les cas.
+- **Le « 2ᵉ »** est le **501**, joué à l'étape du message de résultat par `menuUpdate` (+ 0xFC si le sort a servi, hors Antipoison ; + 0x114 pour les actions 196 à 198, **sans regarder si le soin a servi** : c'est la cause). Pour Premiers secours, Soins partiels et Soins complets à PV pleins, il restait donc un 501 alors que le message dit « Mais il ne se passe rien. ». Pour un sort de groupe sans effet, la règle de l'avance #47 (boucle des cibles vidée) coupe déjà ce bruitage : rien à changer.
+
+### Fait
+- `Moteur._crochets_magie` : quand la règle « sort sans effet » remplace le résultat d'un sort sur une cible, un crochet placé avant l'instruction `sub w8, w8, #0xc4` de `menuUpdate` (+ 0x100) met le numéro d'action à une valeur hors de 196 à 198 : la comparaison suivante saute l'appel du bruitage de soin. Le crochet ne sert qu'une fois (le drapeau est remis à zéro) et seulement si l'instruction attendue est bien là (sinon message dans la console, bruitage gardé).
+- Tests (moteur réel, `outils/test_magie_liste.py`, 33 tests dont 5 nouveaux) : les 3 soins à PV pleins ne jouent que le 306 ; les 3 soins utiles jouent 306, 501, 501 comme avant ; Multisoin en pleine forme : 306 seul, avec un blessé : 306, 501, 501 ; un soin utile après un soin inutile rejoue son bruitage.
+
+### Non vérifié
+- **Sous Windows** : à confirmer par Sylfried à l'oreille (Premiers secours sur un personnage aux PV pleins : un seul son ; sur un blessé : comme avant). Je n'ai mesuré que les appels du moteur, pas l'audio.
+- Les autres sorts hors combat qui échouent avec le propre message d'échec du jeu (Rappel sur un vivant, Antipoison sans poison, Sifflet) ne jouent que le bruitage de lancement d'après leurs appels, sans changement de ma part : non rejoués un par un ici.
