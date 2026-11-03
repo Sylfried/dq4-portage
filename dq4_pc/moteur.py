@@ -121,8 +121,8 @@ class Etat:
 
     def transition_combat(self):
         """Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
-        entre deux de ces fondus) ? Elle doit durer EXACTEMENT ce que dure le jeu d'origine : la visionneuse n'y applique ni « Vitesse de combat », ni la vitesse de marche, ni le multiplicateur de l'accelerateur
-        (l'horloge reste celle du jeu, 30 images par seconde : Jeu._facteur_vitesse) ni « Vitesse de transition » (les fondus gardent leur duree : Etat._fondu)."""
+        entre deux de ces fondus) ? Depuis #47 sa duree en images suit « Vitesse de transition » (Etat._fondu, Moteur._debut_effet_combat) comme tout fondu ; son horloge reste celle du jeu pour la cascade et pour le retour a la
+        carte (ni vitesse de marche ni accelerateur : Jeu._facteur_vitesse), alors que « Vitesse de combat » agit des la fin de la cascade (ecran noir, fondu d'arrivee, messages) jusqu'au fondu de fin compris."""
         return (self.effet is not None or self.attente_charge is not None or self.garde_trans > 0
                 or (self.fondu['n'] >= 1 and bool(self.fondu.get('combat'))) or (self.fondu_fond['n'] >= 1 and bool(self.fondu_fond.get('combat'))))
 
@@ -270,7 +270,7 @@ class Etat:
         script = bool(v & PJ.MARQUE_FONDU_SCRIPT)                                          # fondu lance par une commande de script du jeu (marque posee par Moteur._crochets_fondu) : sa duree est celle du script
         d = v & 0x7ff; fd = self.fondu_fond if v & 0x4000 else self.fondu; fd['noir'] = 0      # bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
         fd['combat'] = self.partie == PARTIE_COMBAT or self.fen_entree > 0 or self.fen_retour > 0        # fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : il garde la duree du jeu d'origine, voir transition_combat
-        if not v & (0x800 | 0x2000) and not fd['combat']: d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte...) plus court : reglage « vitesse des transitions » (pas pour un fondu de script, ni pour ceux d'un combat)
+        if not v & (0x800 | 0x2000): d = PJ.duree_fondu(d, Etat.vitesse_fondu, script)       # fondu au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
         if v & 0x1000:
             fd['col'] = tuple(f[:3]) if v & 0x800 and len(f) >= 3 else ((1.0, 1.0, 1.0) if v & 0x2000 else (0.0, 0.0, 0.0))
             fd['fin'] = 1.0
@@ -719,7 +719,7 @@ class Moteur:
     def _debut_effet_combat(self, avant):
         """Paquet 34 (valeur 4) : l'ecran se brise en morceaux (EFFET_COMBAT_IMAGES images) pendant que le moteur attend ; ensuite l'ecran reste noir jusqu'au chargement de la scene du combat."""
         if self.etat.effet is not None: return
-        self.etat.effet = {'n': 0}; self._drapeau_effet(True)
+        self.etat.effet = {'n': 0, 'duree': PJ.duree_fondu(EFFET_COMBAT_IMAGES, Etat.vitesse_fondu)}; self._drapeau_effet(True)      # la cascade suit « Vitesse de transition » comme les fondus : 57 images a x1, 57 / facteur ensuite (la simulation avance de 57 images au total, voir Jeu._dessiner_effet)
         if self.etat.attente_charge is None: self.etat.attente_charge = {'base': avant, 'n': 0}
 
     def _effet_combat(self):
@@ -727,7 +727,7 @@ class Moteur:
         ef = self.etat.effet
         if ef is not None:
             ef['n'] += 1
-            if ef['n'] >= EFFET_COMBAT_IMAGES: self._drapeau_effet(False); self.etat.effet = None
+            if ef['n'] >= ef.get('duree', EFFET_COMBAT_IMAGES): self._drapeau_effet(False); self.etat.effet = None
         ac = self.etat.attente_charge
         if ac is not None:
             ac['n'] += 1

@@ -477,7 +477,7 @@ class Pause:
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)   Rencontres aléatoires par seconde : (1 + x) / 2 fois plus (x2 : 1,5 fois, x4 : 2,5 fois)'),
                 vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
-                vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte) divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
+                vit('Vitesse de transition', 'vitesse_fondu', 'Durée des fondus au noir (changement de carte, début et fin de combat) et de la cascade qui ouvre un combat, divisée par ce facteur : x1 comme le jeu, x4 quatre fois plus vite', self.J.regler_fondu),
                 accel, vit_acc, tch_cb,
                 *self._defilement_texte(),
                 dict(t='sep', l='Actions du jeu'),

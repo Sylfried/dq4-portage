@@ -1734,7 +1734,8 @@ class Jeu(pyglet.window.Window):
     def _dessiner_effet(self, ef):
         """Effet de debut de combat : fond noir, morceaux de la capture qui tombent (voir effet_combat.py)."""
         sim = self.effet_sim
-        while sim.images < ef['n'] and not sim.fini: sim.etape()
+        cible = math.ceil(ef['n'] * MO.EFFET_COMBAT_IMAGES / ef.get('duree', MO.EFFET_COMBAT_IMAGES))          # cascade raccourcie par « Vitesse de transition » : la simulation avance de plusieurs images du jeu par image du moteur
+        while sim.images < cible and not sim.fini: sim.etape()
         gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
         gl.glViewport(0, 0, *self.get_framebuffer_size())
         gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
@@ -2690,8 +2691,9 @@ class Jeu(pyglet.window.Window):
         direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) ni fondu (flag 1) : quand le jeu a la main, son rythme prime sur le reglage. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
-        if e.transition_combat(): return 1.0          # cascade d'entree en combat, ecran noir, fondus d'entree / de sortie du combat et de retour a la carte : EXACTEMENT la duree du jeu d'origine, aucun reglage (vitesse de combat, de marche, accelerateur, transitions) n'y change rien
-        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if e.effet is not None: return 1.0          # cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Moteur._debut_effet_combat) ; ni vitesse de combat, ni de marche, ni accelerateur
+        if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat, des la fin de la cascade (ecran noir, fondu d'arrivee, message « X apparait ») jusqu'au fondu de fin compris : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+        if e.transition_combat(): return 1.0          # retour a la carte apres un combat (fondu d'arrivee sur la carte, images entre deux fondus) : horloge du jeu, comme tout fondu de la carte
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
         if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
@@ -2722,16 +2724,16 @@ class Jeu(pyglet.window.Window):
         t = time.perf_counter()
         muet = self._attend_joueur() and t - self._t_pas_reel < PAS_MOTEUR * VC.TOLERANCE
         if not muet: self._t_pas_reel = t
-        e = self.moteur.etat; avant = e.transition_combat()
+        e = self.moteur.etat; avant = e.effet is not None
         self._pas(muet)
-        return avant or not e.transition_combat()          # une transition de combat (fondu de sortie du combat) commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
+        return avant or e.effet is None          # la cascade d'entree commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _facteur_vitesse)
 
     def _pas_terrain(self):
         """Un pas du moteur hors combat accelere (marche, accelerateur). Renvoie False quand la transition d'un combat vient de commencer pendant ce pas (effet d'ecran de debut rendu par une rencontre) : VC.avancer s'arrete la
         et le reste de l'image reprend a l'horloge du jeu ; sans cela, les pas restants du rattrapage d'une marche acceleree raccourciraient le debut de la cascade."""
-        e = self.moteur.etat; avant = e.transition_combat()
+        e = self.moteur.etat; avant = e.effet is not None
         self._pas()
-        return avant or not e.transition_combat()
+        return avant or e.effet is None
 
     def changer_vitesse_combat(self, source='touche'):
         """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
