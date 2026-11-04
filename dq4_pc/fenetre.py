@@ -2909,9 +2909,6 @@ class Jeu(pyglet.window.Window):
         if self._tenue('accel') or self.hud.croix_course(): f *= float(R['vitesse_accel'])          # course : touche d'accelerateur tenue, ou croix a l'ecran tenue au bord de son anneau (hud_mobile.COURSE_SEUIL)
         return max(0.25, min(8.0, f))
 
-    MSG_HISTORIQUE_INDISPONIBLE = "Historique indisponible : le jeu a la main"
-    MSG_HISTORIQUE_FERME = "Historique fermé : le jeu a repris la main"
-
     def controle_joueur(self):
         """Le joueur a-t-il la main sur son personnage ? Oui seulement sur le terrain (ville, donjon, tour, carte du monde), quand le jeu n'a verrouille ni le joueur (evenement, scene, discussion avec un PNJ, fondu de sortie :
         Global.Flag 4, la meme condition que la marche acceleree, voir _facteur_vitesse), sans message, sans menu du jeu (commandes, boutique, Divers...), sans effet d'ecran ni chargement, et hors combat (partie
@@ -2927,9 +2924,8 @@ class Jeu(pyglet.window.Window):
         return self.titre is None and self.controle_joueur()
 
     def _touche_historique(self):
-        """Touche de l'historique : ouvre la page si le joueur a la main, sinon un message bref dit pourquoi rien ne s'ouvre (toujours acquittee : la touche ne sert qu'a cela)."""
+        """Touche de l'historique : ouvre la page si le joueur a la main, sinon rien (aucun message : le joueur n'a pas a en etre informe, #194 ; la touche est toujours acquittee, elle ne sert qu'a cela)."""
         if self.historique_possible(): self.pause.ouvrir('historique')
-        else: self.toast(self.MSG_HISTORIQUE_INDISPONIBLE)
 
     def _horloge_combat(self):
         """Le jeu est-il dans un combat, au sens de l'horloge du moteur ? Partie « combat » du moteur (0xd), mais aussi l'effet d'ecran qui le lance et l'ecran noir qui attend le chargement de sa scene (Etat.effet,

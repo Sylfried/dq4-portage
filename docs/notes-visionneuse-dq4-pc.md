@@ -1611,9 +1611,9 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 
 ### Fait
 - `Jeu.controle_joueur()` : vrai seulement en ville / donjon / tour / carte du monde, joueur non verrouillé, sans message, sans menu du jeu, sans effet d'écran ni chargement, hors combat (partie combat, cascade d'entrée, écran noir d'attente, entre deux fondus). Un fondu seul (arrivée sur une carte, retour de combat, joueur libre) n'y compte pas. `Jeu.historique_possible()` : en plus, jamais à l'écran titre.
-- Touche H (`Jeu._touche_historique`) : ouvre la page si possible, sinon le message « Historique indisponible : le jeu a la main ».
+- Touche H (`Jeu._touche_historique`) : ouvre la page si possible, sinon ne fait rien (le message « Historique indisponible : le jeu a la main » de #187 est retiré en #195).
 - Menu Paramètres : la ligne « Historique » est grisée (infobulle : « Disponible seulement quand vous avez la main sur votre personnage… ») quand ce n'est pas possible, relue à chaque image.
-- `Pause.maj` : page historique ouverte alors que le jeu reprend la main (il tourne derrière le menu depuis #179) : retour à la racine (ou menu fermé si la page venait de la touche H) et message « Historique fermé : le jeu a repris la main ».
+- `Pause.maj` : page historique ouverte alors que le jeu reprend la main (il tourne derrière le menu depuis #179) : retour à la racine (ou menu fermé si la page venait de la touche H) (le message « Historique fermé : le jeu a repris la main » de #187 est retiré en #195).
 - Tests : `outils/test_historique_acces.py` (19) : table de vérité de `controle_joueur`, écran titre, touche H (ouvre / message), ligne du menu active / grisée / relue, faux jeu minimal, fermeture automatique.
 
 ### À trancher / non vérifié
@@ -1674,3 +1674,17 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### Non établi / à trancher
 - Règle complète du saut d'écriture (valeur en `StageStatus + 0x28`, source du bit 17, conditions de `FieldPart`) : le tableau est un relevé, pas la règle. Sous Windows : non vu.
 - Écarts voulus de la visionneuse (inchangés) : plaque « Sauvegarde automatique » grisée au lieu de cachée (`DQ_AUTO_CACHEE=1` rétablit l'original) ; états instantanés `etat_NN.dqs` distincts de la suspension `data4`. À Sylfried de dire s'il les garde, et s'il veut une écriture à la fermeture (absente de l'original).
+
+## Avance #195 : historique sans message d'indisponibilité (#194, 04/11/2026)
+
+### Demande (D-236, 04/11 14 h 37)
+« Supprime le message indiquant qu'on ne peut pas ouvrir l'historique en combat, pas la peine d'en informer le joueur. Sinon tout est nickel ! »
+
+### Fait
+- `Jeu._touche_historique` : quand le joueur n'a pas la main, la touche H ne fait plus rien (plus de message « Historique indisponible : le jeu a la main ») ; elle reste acquittée.
+- `Pause.maj` : la page historique qui se referme parce que le jeu reprend la main le fait sans le message « Historique fermé : le jeu a repris la main ». Les constantes `MSG_HISTORIQUE_INDISPONIBLE` et `MSG_HISTORIQUE_FERME` sont supprimées. Les règles d'accès de #187 (`controle_joueur`, `historique_possible`) ne changent pas.
+- `outils/test_historique_acces.py` : les trois tests qui attendaient un message vérifient maintenant qu'il n'y en a aucun (19 tests passent).
+
+### À trancher / non vérifié
+- L'infobulle de la ligne « Historique » grisée du menu Paramètres (« Disponible seulement quand vous avez la main… ») est gardée : elle n'apparaît qu'au survol de la ligne. À retirer aussi si Sylfried le veut.
+- Sous Windows : non vu.
