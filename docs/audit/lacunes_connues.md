@@ -47,7 +47,7 @@ Les classements sont des hypothèses de lecture : seuls les messages de Sylfried
 | G-044 | **Allocateur « bump » de 256 Mo, jamais libéré** (`h_free` renvoie 0 ; `raise MemoryError('tas epuise')`) : arrêt possible sur longue session ; aucune mesure | `emu_core.py:292,370-371,~615` ; issue #11 | ouvert | [bug] latent | |
 | G-045 | Rythme **réel** des fondus d'Unity « 30 Hz » supposé (la cadence du moteur, elle, est établie : `Boot` fixe `fixedDeltaTime = 1/30`) | NV:345(f) ; NV:105 ; NT:209 | ouvert | [à vérifier] | |
 | G-046 | `SetFadePriority` non reproduit (appelé par `MenuMessage.SetCanvasMesh`) | NT:228 | ouvert | [à vérifier] | |
-| G-047 | `snd_vol.dat` (table de volumes), fondus entre musiques (`PlayBGM` côté Unity), bruitages 3D / positionnels non étudiés | NT:123 | ouvert | [à vérifier] | |
+| G-047 | `snd_vol.dat` (table de volumes), fondus entre musiques (`PlayBGM` côté Unity), bruitages 3D / positionnels non étudiés | NT:123 | `snd_vol.dat` **appliqué depuis #238** (audit SND-01) ; le reste a été étudié par l'audit son du 04/11/2026 (pas de fondu côté Unity, bruitages sans positionnement) | [à vérifier] | |
 | G-048 | `g_isAmazon` forcé à 1 : réseau / cloud / portail jamais gérés (cellule 8) | NT:200, NT:217 ; PR #39 | ouvert (volontaire) | [décision] de Claude | D-71 |
 | G-049 | Moteur modifié **en mémoire** (patch 0x16ef28 « Paramètres », constantes `drawSymbol` 1600 px, crochets de vitesse du texte, `g_isAmazon`) alors que la règle dit « le moteur d'origine ne se modifie pas » **03/11** : règle reformulée et crochets listés dans les notes techniques. | `moteur.py:16,382-407,457-474` ; PR #4, #41 | **clos (#49)** | [à vérifier] | D-12, C-6 |
 

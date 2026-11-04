@@ -168,7 +168,7 @@ class Son:
         self.bgm_propre = 1.0; self.bgm_cat = 'musique'; self.t_pause = None   # volume propre a la musique en cours et sa categorie ; heure du debut de la pause (menu Echap)
         self.suspendu = False; self.ecoute = False                         # menu Echap ouvert ; page Son du menu (les sons jouent pendant que le moteur est arrete)
         self.hors_focus = False                                            # la fenetre n'a plus le focus (Alt + Tab, minimisee) : tout est en pause, meme pendant l'ecoute de la page Son (#235)
-        self.verrou = threading.Lock(); self.zip = None; self.ogg = False
+        self.verrou = threading.Lock(); self.zip = None; self.ogg = False; self._table_vol = None           # (snd_vol.dat : lu a la premiere utilisation, voir vol_snd)
         try:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
             self.ogg = True
@@ -222,6 +222,21 @@ class Son:
         """Pendant la coupure les ordres du moteur sont perdus, sauf la musique de fond : la derniere demandee est relancee au retour du son (un arret la supprime ; un jingle a reprise est ignore)."""
         for t, v in evts:
             if t == 37: self.bgm_perdue = None if v >= BGM_ARRET else (v if v < BGM_RELANCE else self.bgm_perdue)
+
+    # ---- volume propre de chaque son (snd_vol.dat)
+    def vol_snd(self, ident):
+        """Facteur de `assets/sound/snd_vol.dat` pour un son : musique `BGM%02d` = indice du numero de fichier, bruitage `SE%04d` = indice de son numero (1171 flottants ; 1,0 pour presque tous). L'original joue en-tete x snd_vol x option (`SoundControl.Play`) : 49 musiques de 0,7 a 0,95 et le bruitage 409 (fanfare) a 0,6 (audit SND-01, #237). 1,0 si le fichier manque ou si l'indice est hors table."""
+        t = self._table_vol
+        if t is None:
+            with self.verrou:
+                t = self._table_vol
+                if t is None:
+                    try:
+                        if self.zip is None: self.zip = zipfile.ZipFile(self.apk)
+                        t = np.frombuffer(self.zip.read('assets/sound/snd_vol.dat'), '<f4').copy()
+                    except Exception: t = np.ones(0, np.float32)
+                    self._table_vol = t
+        return float(t[ident]) if 0 <= ident < len(t) and 0.0 < float(t[ident]) <= 1.0 else 1.0
 
     # ---- lecture des fichiers
     def _octets(self, nom):
@@ -354,10 +369,10 @@ class Son:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             boucle = r['boucle']                                                            # bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'] if boucle else 0, r['fin'] if boucle else 0)
-            cat = categorie_se(ident); g = self.mix.gain(cat, r['volume'], 'effets')
+            cat = categorie_se(ident); propre = r['volume'] * self.vol_snd(ident); g = self.mix.gain(cat, propre, 'effets')
             if g <= 0.0 and not boucle: return                                 # categorie coupee (ou volume a zero) : un bruitage court n'est pas joue ; un bruitage en boucle l'est a volume nul : il s'entend si on rouvre la categorie
             p = self.media.Player(); p.queue(src); p.volume = g; p.play()
-            self.se.append(_SE(ident, p, time.time() + (SE_BOUCLE_MAX if boucle else len(r['pcm']) / r['frequence'] + 0.5), cat, r['volume']))
+            self.se.append(_SE(ident, p, time.time() + (SE_BOUCLE_MAX if boucle else len(r['pcm']) / r['frequence'] + 0.5), cat, propre))
             if len(self.se) > 24:
                 try: self.se[0].p.delete()
                 except Exception: pass
@@ -402,8 +417,9 @@ class Son:
             if dec > 0: src.pos = min(int(dec * r['frequence']), max(0, len(r['pcm']) - 1))              # reprise au moment enregistre (etat charge)
             depart = src.pos / r['frequence']                                                                # (avant play : le lecteur lit tout de suite quelques secondes d'avance)
             cat = categorie_bgm(relance, r['boucle'], len(r['pcm']) / r['frequence'])
-            p = self.media.Player(); p.queue(src); p.volume = self.mix.gain(cat, r['volume']); p.play()          # (la musique tourne meme coupee ou a zero : rouvrir la categorie la fait entendre au bon endroit)
-            self.bgm = p; self.bgm_propre = r['volume']; self.bgm_cat = cat
+            propre = r['volume'] * self.vol_snd(ident)                                                          # (en-tete du fichier x snd_vol.dat : le volume de l'original, #237)
+            p = self.media.Player(); p.queue(src); p.volume = self.mix.gain(cat, propre); p.play()          # (la musique tourne meme coupee ou a zero : rouvrir la categorie la fait entendre au bon endroit)
+            self.bgm = p; self.bgm_propre = propre; self.bgm_cat = cat
             self.bgm_t0 = self.t_pause if self.t_pause is not None else time.time(); self.bgm_pos0 = depart
             if self.t_pause is not None: p.pause()
             self.bgm_fin = None if r['boucle'] else self.bgm_t0 + len(r['pcm']) / r['frequence'] - depart       # jingle sans boucle : heure de la reprise de la musique d'avant

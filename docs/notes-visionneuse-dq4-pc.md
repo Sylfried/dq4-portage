@@ -1979,3 +1979,17 @@ Sondage du 04/11/2026 : « Pause à chaque perte de focus ». Audit UNI-02 / SND
 
 ### Non vérifié
 Windows : Alt + Tab, minimisation, plein écran, page Son ouverte pendant l'Alt + Tab. Le clic qui redonne le focus agit comme un clic de jeu (comme avant).
+
+## Avance #238 : volumes des sons d'après snd_vol.dat (#237, audit SND-01, 04/11/2026)
+
+### Demande
+Sondage du 04/11/2026 : « Aligner sur l'original » (audit SND-01).
+
+### Fait
+- `son.py` : `Son.vol_snd(ident)` lit `assets/sound/snd_vol.dat` (1171 flottants, little-endian) à la première utilisation ; `_lancer_bgm` et `_lancer_se` jouent `en-tête x snd_vol` comme volume propre (`bgm_propre`, `_SE.propre`), donc un changement de curseur ou d'option plus tard garde le facteur. Table absente, indice hors table ou valeur absurde (0, > 1, nan, négatif) : 1,0. Cache disque des sons inchangé (le facteur est appliqué à la lecture).
+- Valeurs relues sur le vrai APK : BGM01 0,7 ; BGM02 0,8 ; BGM14 et BGM20 1,0 ; BGM21 et BGM22 0,8 ; SE0409 0,6 ; SE0300 et SE1170 1,0.
+- `tests/test_son_volumes.py` (9 tests, dans la CI, faux APK et faux lecteurs).
+- `docs/audit/lacunes_connues.md` G-047 et notes techniques mises à jour.
+
+### Non vérifié
+Écoute sur Windows.
