@@ -31,19 +31,20 @@ def ajuste(r, texte, dispo, nd=None):
 
 
 class TestFenetres(unittest.TestCase):
-    def fenetre(self, typ, noeuds):
+    def fenetre(self, typ, noeuds, port=0):
         def texte(nid): return {'id': nid, 'par': 1, 'pos': [-214.0, 4.0, -197.0], 'act': True, 'text': {'font': 'font', 'characterSize': 9.945, 'text': None, 'anchor': 3, 'alignment': 0, 'lineSpacing': 1.0}, 'mats': []}
         t = {'name': 'Make_Test()', 'err': None, 'nodes': [{'id': 1, 'par': None, 'pos': [0.0, 0.0, 0.0], 'act': True, 'mats': []}] + [texte(10 + k) for k in range(noeuds)],
-             'parts': [{'node': 1, 'ib': [{'k': 'text', 'go': 10 + k, 'variant': 0} for k in range(noeuds)]}], 'params': [{'id': 0, 'no': k, 'parts': 0, 'base': k} for k in range(noeuds)], 'codes': [], 'builds': []}
+             'parts': [{'node': 1, 'ib': [{'k': 'text', 'go': 10 + k, 'variant': 0} for k in range(noeuds)]}], 'params': [{'id': port, 'no': k, 'parts': 0, 'base': k} for k in range(noeuds)], 'codes': [], 'builds': []}
         return UM.Fenetre(types.SimpleNamespace(types={str(typ): t}, infos=[], cadres=[], hdr={'lang': {'hiro': 1.0}}, pousse=(0.0, 0.0)), typ)
 
     def test_table_des_descriptions(self):
-        self.assertEqual(UM.DESCRIPTIONS, {(7, 1): UM.DESC_FICHE_X_MAX, (10, 4): UM.DESC_FICHE_X_MAX, (38, 3): UM.DESC_COMBAT_X_MAX})
+        F = UM.DESC_FICHE_X_MAX      # (type, port, numero de chaine) : le port est dans la cle (#219 : la fenetre du casino a d'autres textes au meme numero)
+        self.assertEqual(UM.DESCRIPTIONS, {(7, 0, 1): F, (10, 0, 4): F, (38, 2, 3): UM.DESC_COMBAT_X_MAX, (46, 4, 3): F, (60, 4, 4): F, (61, 4, 4): F, (63, 0, 4): F, (70, 0, 3): F})
         self.assertLess(UM.DESC_COMBAT_X_MAX, 63.0)                  # la cellule « Attaque » commence a x = 63 : la description s'arrete avant son cadre
 
     def test_fiche_d_objet_en_combat(self):
-        fe = self.fenetre(38, 5)
-        for no, s in enumerate(('Ragnar', 'Objets', 'Épée de cuivre', "Peut aussi être utilisée comme objet au\r\ncombat.", 'Attaque\n   E 24')): fe.param_str(0, no, s)
+        fe = self.fenetre(38, 5, port=2)
+        for no, s in enumerate(('Ragnar', 'Objets', 'Épée de cuivre', "Peut aussi être utilisée comme objet au\r\ncombat.", 'Attaque\n   E 24')): fe.param_str(2, no, s)
         self.assertEqual([(fe.N[10 + k].get('wrap_x'), fe.N[10 + k].get('wrap_n')) for k in range(5)], [(None, None)] * 3 + [(UM.DESC_COMBAT_X_MAX, 2), (None, None)])
         self.assertEqual(fe.N[13]['text']['text'], "Peut aussi être utilisée comme objet au\r\ncombat.")       # le texte du moteur n'est pas modifie (c'est le rendu qui recoupe)
 
@@ -51,6 +52,20 @@ class TestFenetres(unittest.TestCase):
         fe = self.fenetre(10, 6)
         for no, s in enumerate(('Arme', 'Lance de fer', 'Attaque\n     E 50', "Ne semble pas avoir d'effets\r\nparticuliers.\n", '')): fe.param_str(0, no, s)
         self.assertEqual([fe.N[10 + k].get('wrap_x') for k in range(6)], [None, None, None, None, UM.DESC_FICHE_X_MAX, None])
+
+    def test_boutiques_et_casino(self):
+        """#219 (audit UI-04) : la barre du bas des fenetres du casino (46), d'achat (60, 61), de vente (63) et de la fiche d'objet de vente (70) est recoupee comme celle des fiches d'objet."""
+        for typ, port, no in ((46, 4, 3), (60, 4, 4), (61, 4, 4), (63, 0, 4), (70, 0, 3)):
+            fe = self.fenetre(typ, no + 1, port=port)
+            for k in range(no + 1): fe.param_str(port, k, 'x' * 60)
+            self.assertEqual([(fe.N[10 + k].get('wrap_x'), fe.N[10 + k].get('wrap_n')) for k in range(no + 1)], [(None, None)] * no + [(UM.DESC_FICHE_X_MAX, 2)], typ)
+
+    def test_meme_numero_dans_un_autre_port_pas_touche(self):
+        """Type 46 : les listes (ports 0 a 3) ont aussi un texte au numero 3 ; seule la barre du bas (port 4) est recoupee."""
+        for port in (0, 1, 2, 3):
+            fe = self.fenetre(46, 4, port=port)
+            for k in range(4): fe.param_str(port, k, 'x' * 60)
+            self.assertTrue(all(fe.N[10 + k].get('wrap_x') is None for k in range(4)), port)
 
     def test_une_autre_fenetre_n_est_pas_touchee(self):
         fe = self.fenetre(36, 5)
@@ -124,16 +139,16 @@ class TestDescriptionsReelles(unittest.TestCase):
             b = z.read(nom).decode('utf-8', 'replace'); cls.textes += [e for e in cls.SEP.split(b[b.find('@a@b'):]) if len(e.strip()) >= 6]
         cls.r = rendu(cls.bm.largeur); cls.r.textes.bitmap = cls.bm
 
-    def verifie(self, dispo):
+    def verifie(self, dispo, u=U):
         n_avant = n_comprimes = 0; fmin = 1.0
         for e in self.textes:
             lignes = e.split('\n'); utiles = [l for l in lignes]
             while utiles and not utiles[-1].strip(): utiles.pop()
-            if len(utiles) > 2 or max(self.bm.largeur(l.strip()) * U for l in utiles) > dispo + 0.5: n_avant += 1
-            out, f = self.r._ajuste_description({}, lignes, dispo, 2, self.bm, U, 1.0, 1.0, U)
+            if len(utiles) > 2 or max(self.bm.largeur(l.strip()) * u for l in utiles) > dispo + 0.5: n_avant += 1
+            out, f = self.r._ajuste_description({}, lignes, dispo, 2, self.bm, u, 1.0, 1.0, u)
             out = [l for l in out]
             while out and not out[-1].strip(): out.pop()
-            self.assertLessEqual(len(out), 2, e); self.assertLessEqual(max(self.bm.largeur(l.strip()) * U for l in out) * f, dispo + 0.5, e)
+            self.assertLessEqual(len(out), 2, e); self.assertLessEqual(max(self.bm.largeur(l.strip()) * u for l in out) * f, dispo + 0.5, e)
             self.assertEqual(' '.join(x.strip() for x in utiles if x.strip()).split(), ' '.join(x.strip() for x in out).split(), e)        # aucun mot perdu, ajoute ou deplace
             n_comprimes += f < 1.0; fmin = min(fmin, f)
         return n_avant, n_comprimes, fmin
@@ -150,6 +165,37 @@ class TestDescriptionsReelles(unittest.TestCase):
     def test_menu_objets(self):
         n_avant, n_comprimes, fmin = self.verifie(DISPO_OBJETS)
         self.assertGreater(n_avant, 0); self.assertEqual(n_comprimes, 0)       # aucune n'a besoin d'etre comprimee : le recoupage suffit
+
+    def test_boutiques_et_casino(self):
+        """#219 : barre du bas des fenetres 46, 60, 61, 70 (texte a l'ancre x = -213,5, taille 9,945) : 24 descriptions sur 360 sortaient du cadre (pire : +72 unites), aucune ne sort apres."""
+        n_avant, n_comprimes, fmin = self.verifie(UM.DESC_FICHE_X_MAX + 213.5)
+        self.assertGreaterEqual(n_avant, 20); self.assertGreaterEqual(fmin, 0.7 - 1e-9)
+
+    def test_vente_texte_plus_petit(self):
+        """Type 63 : texte de taille 8,2875 (0,83 fois les autres) : aucune ligne trop large, mais 3 descriptions de plus de 2 lignes (comprimees pour tenir sur 2)."""
+        n_avant, n_comprimes, fmin = self.verifie(UM.DESC_FICHE_X_MAX + 213.5, u=0.82875)
+        self.assertEqual(n_avant, 3)
+
+
+@unittest.skipUnless(os.path.exists(os.path.join(CACHE, 'ui_layout.json')), "mise en page reelle : cache de l'interface (ui_layout.json, DQ_UI_CACHE)")
+class TestMiseEnPageReelle(unittest.TestCase):
+    """Les cles de UM.DESCRIPTIONS designent bien, dans la vraie mise en page, la barre de description du bas de chaque fenetre (et rien d'autre)."""
+    @classmethod
+    def setUpClass(cls): cls.ml = UM.MiseEnPage(os.path.join(CACHE, 'ui_layout.json'))
+
+    def test_chaque_cle_designe_une_cellule_de_texte_du_bas(self):
+        for (typ, port, no), limite in UM.DESCRIPTIONS.items():
+            fe = UM.Fenetre(self.ml, typ); pt, ib = fe._ib(fe.params[(port, no)])
+            self.assertEqual(ib['k'], 'text', (typ, port, no)); nd = fe.N[ib['go']]
+            self.assertTrue(nd['pos'][2] < -190 and nd['pos'][0] < -200, (typ, port, no, nd['pos']))             # barre du bas (z -324 ou -323,5) ou cellule de gauche en combat (z -197), texte a gauche
+            self.assertGreater(limite - nd['pos'][0], 250.0)
+
+    def test_une_seule_cellule_recoupee_par_fenetre(self):
+        for typ in sorted({t for t, _, _ in UM.DESCRIPTIONS}):
+            fe = UM.Fenetre(self.ml, typ)
+            for (port, no) in list(fe.params): fe.param_str(port, no, 'x' * 60)
+            recoupes = [n for n in fe.N.values() if n.get('wrap_x') is not None]
+            self.assertEqual(len(recoupes), sum(1 for t, _, _ in UM.DESCRIPTIONS if t == typ), typ)
 
 
 if __name__ == '__main__':
