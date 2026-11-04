@@ -46,7 +46,7 @@ class CameraLibre(unittest.TestCase):
 
 def faux_marche(partie, msg=False):
     mo = types.SimpleNamespace(etat=types.SimpleNamespace(partie=partie, effet=None, attente_charge=None, garde_trans=0, transition_combat=lambda: False), msg_visible=msg, menu_actif=lambda: None, drapeaux=lambda: 0x28)
-    return types.SimpleNamespace(reg={'vitesse_marche': 2.0, 'vitesse_accel': 1.5}, moteur=mo, pad=lambda: MO.DROITE, _tenue=lambda a: a == 'accel', _horloge_combat=lambda: False)
+    return types.SimpleNamespace(reg={'vitesse_marche': 2.0, 'vitesse_accel': 1.5}, moteur=mo, pad=lambda: MO.DROITE, _tenue=lambda a: a == 'accel', hud=types.SimpleNamespace(croix_course=lambda: False), _horloge_combat=lambda: False)
 
 
 class VitesseDeMarche(unittest.TestCase):

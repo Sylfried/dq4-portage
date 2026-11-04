@@ -2826,7 +2826,7 @@ class Jeu(pyglet.window.Window):
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
         if mo.drapeaux() & MO.DRAPEAU_JOUEUR_VERROUILLE: return 1.0       # le jeu a la main (scene, evenement sans message, fondu de sortie) : son rythme est le sien, la direction tenue n'y change rien ; un fondu seul (arrivee sur une carte, joueur libre) n'y compte plus (#107)
         f = float(R['vitesse_marche'])
-        if self._tenue('accel'): f *= float(R['vitesse_accel'])
+        if self._tenue('accel') or self.hud.croix_course(): f *= float(R['vitesse_accel'])          # course : touche d'accelerateur tenue, ou croix a l'ecran tenue au bord de son anneau (hud_mobile.COURSE_SEUIL)
         return max(0.25, min(8.0, f))
 
     def _horloge_combat(self):

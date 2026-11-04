@@ -109,7 +109,7 @@ class Horloge(unittest.TestCase):
     def jeu(e, vitesse_combat=1.0, marche=1.0, accel=1.0, accel_tenue=False, direction=True, menu=None, drapeaux=0x28):
         j = types.SimpleNamespace(reg={'vitesse_combat': vitesse_combat, 'vitesse_marche': marche, 'vitesse_accel': accel})
         j.moteur = types.SimpleNamespace(etat=e, msg_visible=False, menu_actif=lambda: menu, drapeaux=lambda: drapeaux, ui=types.SimpleNamespace(msg={'feed': False}))
-        j.pad = lambda: MO.HAUT if direction else 0; j._tenue = lambda a: accel_tenue and a == 'accel'
+        j.pad = lambda: MO.HAUT if direction else 0; j._tenue = lambda a: accel_tenue and a == 'accel'; j.hud = types.SimpleNamespace(croix_course=lambda: False)
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))
         j.facteur = lambda: F.Jeu._facteur_vitesse(j)
         return j

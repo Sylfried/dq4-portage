@@ -1434,3 +1434,17 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « le même effet accélératif que pour les combats » désigne la règle des rencontres (1 + x) / 2 ; la vitesse de combat (Rapide, Très rapide) ne touche pas l'horloge du monde.
 - **Sous Windows** : à confirmer par Sylfried (marche longue sur la carte du monde avec l'accélérateur).
 - **Établi** : seule la carte du monde fait avancer l'horloge (`ChangeTime(0)` n'est appelé que par `checkDokuDamage`) ; villes et donjons ne sont pas concernés.
+
+## Avance #169 : croix x2 et course au bord de l'anneau (#166, 04/11/2026)
+
+### Demande (D-227, 04/11 10 h 46)
+« Double la taille de la croix directionnelle, et fais en sorte que lorsque le joystick touche les bords le personnage se met à courir, sinon il marche normalement. »
+
+### Fait
+- `hud_mobile.DIAM_CROIX` = 2 x 161,28 : le diamètre de base de l'anneau est le double de celui du mobile (à 800 de haut : 322,56 ; à 1080 : 435 px). Le réglage « Taille de la croix » (50 à 200 %) s'applique par-dessus : **50 % = la taille du mobile**, 200 % = le quadruple. Une fenêtre plus étroite que le portrait 9:16 réduit la croix (`LARGEUR_CROIX_MAX` = 0,75 de la largeur : le double du mobile en prend 0,72 au portrait) pour qu'elle ne sorte pas de l'écran (la vidéo du 04/11 est une fenêtre de 394 x 1102).
+- `Boutons.croix_course()` : croix tenue dans une direction à `COURSE_SEUIL` = 0,9 du rayon de l'anneau ou plus (la prise va jusqu'à 1,178). `Jeu._facteur_vitesse` applique alors le multiplicateur de l'accélérateur comme la touche d'accélérateur tenue (les deux ensemble ne se cumulent pas) ; plus près du centre, le héros marche normalement (« Vitesse de marche » seule). La direction envoyée au jeu ne change pas. La boule s'allume (halo) tant que la croix est au bord, pour que le joueur sache qu'il court.
+- Tests : `outils/test_croix_course.py` (16 tests : constante, diamètre selon la hauteur et le réglage, fenêtres étroites, croix dans l'écran à 5 formats, seuil, 24 directions, croix lâchée, direction inchangée, vraie `Jeu._facteur_vitesse`). Les faux jeux des tests de vitesse existants reçoivent une croix factice (`croix_course` faux).
+
+### À trancher / non vérifié
+- **Supposé** : « touche les bords » = le pointeur atteint 90 % du rayon de l'anneau ; « double » = le diamètre de base (un réglage enregistré à 100 % donne donc le double sans rien changer dans `reglages.json`).
+- **Sous Windows** : taille de la croix (plus grande qu'avant : elle peut gêner l'image), seuil de la course (si trop tôt ou trop tard : `COURSE_SEUIL`), halo en course.
