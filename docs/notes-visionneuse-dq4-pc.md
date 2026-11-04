@@ -1967,3 +1967,15 @@ Relire tout le jeu d'origine contre le portage, corriger ce qui est mal fait ou 
 ### Non vérifié
 Rien de nouveau côté code ; documents seulement.
 
+## Avance #236 : pause du jeu et du son à chaque perte de focus de la fenêtre (#235, audit UNI-02 / SND-07, 04/11/2026)
+
+### Demande
+Sondage du 04/11/2026 : « Pause à chaque perte de focus ». Audit UNI-02 / SND-07 : l'original appelle `Sound.SystemPause` quand l'application perd le focus ; la visionneuse laissait le jeu et la musique tourner.
+
+### Fait
+- `fenetre/jeu.py` : `on_deactivate` (jeu gelé dans `_boucle`, `Son.perdre_focus(True)`, boutons de souris tenus relâchés : molette, croix à l'écran, bouton appuyé) et `on_activate` (son repris, horloge remise à zéro sans rattrapage, touches déjà tenues = pas de nouvel appui). Événements reçus avant la fin du chargement (`_pret`) : seul le drapeau est posé, `_boucle` met le son en pause dès qu'elle tourne.
+- `son.py` : `Son.perdre_focus` (`hors_focus`) prioritaire sur l'écoute de la page Son (`_doit_pauser`) ; reprise : les échéances (jingle, bruitages) sont décalées de la durée de la pause. Un menu Paramètres qui suspend encore le jeu garde la pause après le retour du focus.
+- `tests/test_perte_focus.py` (10 tests : 5 Son dans la CI, 5 faux Jeu en local) ; tous échouent sans le correctif.
+
+### Non vérifié
+Windows : Alt + Tab, minimisation, plein écran, page Son ouverte pendant l'Alt + Tab. Le clic qui redonne le focus agit comme un clic de jeu (comme avant).

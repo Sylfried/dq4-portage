@@ -149,3 +149,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #230 | un arrêt de la musique pendant un jingle à reprise fait repartir la musique d'avant ; un morceau sans boucle fini, redemandé, repart (#229, audit SND-05 / SND-06) |
 | 04/11 | #232 | repli « menus simples » : le canevas du message est lu de façon circulaire (512 lignes), le texte des combats ne disparaît plus (#231, audit CMB-04) |
 | 04/11 | #234 | bilan de l'audit complet : documents d'audit mis à jour, décisions du sondage du 04/11 enregistrées (#233) |
+| 04/11 | #236 | le jeu et le son se mettent en pause à chaque perte de focus de la fenêtre (Alt + Tab, minimisation) et reprennent sans rattrapage (#235, audit UNI-02 / SND-07, sondage du 04/11) |

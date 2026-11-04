@@ -235,6 +235,27 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
             self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}; self.survol = None; self.appui = None; self.survol_nd = None
             self.garde_souris.clavier(self.souris)             # le pointeur ne choisit rien dans les menus du jeu tant qu'il ne s'est pas ecarte de sa position d'avant (la selection au clavier ne doit pas sauter ; voir entrees.GardeSouris)
 
+    _focus_perdu = False                                               # la fenetre n'a plus le focus : le jeu et le son sont geles (#235, sondage du 04/11/2026 : « pause a chaque perte de focus ») ; voir on_deactivate / on_activate et _boucle
+
+    def on_deactivate(self):
+        """La fenetre perd le focus (Alt + Tab, clic sur une autre fenetre ou un autre ecran, minimisation) : le jeu s'arrete (`_boucle`), la musique et les bruitages se mettent en pause (Son.perdre_focus, comme Sound.SystemPause de l'original) et les boutons de la souris tenus sont relaches (le relachement hors de la fenetre n'arrive jamais : camera a la molette, croix a l'ecran, bouton appuye)."""
+        self._focus_perdu = True
+        if not self._pret: return                # (pendant la creation de la fenetre, rien n'existe encore : `_boucle` gele le jeu et met le son en pause des qu'elle tourne)
+        try: self.son.perdre_focus(True)
+        except Exception as ex: print('Son : pause a la perte du focus impossible (%r)' % (ex,), flush=True)
+        self.molette.annuler(); self.appui = None; self.survol = None; self.hud.croix_lacher(); self.hud.appui = None
+
+    def on_activate(self):
+        """La fenetre reprend le focus : le son repart la ou il s'etait arrete, le jeu reprend sans rattraper le temps passe (horloge remise a zero, comme a la fermeture du menu) et les touches deja tenues ne comptent pas comme un nouvel appui."""
+        self._focus_perdu = False
+        if not self._pret: return
+        try: self.son.perdre_focus(False)
+        except Exception as ex: print('Son : reprise au retour du focus impossible (%r)' % (ex,), flush=True)
+        self.acc = 0.0; self.t_boucle = None; self.t_cam = None
+        if self._pret:
+            self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}
+            self.garde_souris.clavier(self.souris)
+
     def quitter(self):
         """Menu Echap > Quitter > Oui (et « Quitter » du menu de depart) : la meme fermeture que la croix de la fenetre (reglages, historique, son ; aucune sauvegarde de partie : comme le jeu d'origine, l'automatique n'est ecrite qu'a l'arrivee sur une carte, voir docs/notes-technique-portage-dq4.md)."""
         self.on_close(); pyglet.app.exit()
@@ -263,6 +284,9 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self.n_boucle += 1
         if self.args.touches_test or self.args.shots_boucle: self._touches_test()
         if self.args.options_test: self._options_test()
+        if self._focus_perdu:
+            if not self.son.hors_focus: self.son.perdre_focus(True)
+            self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return          # fenetre sans focus : le moteur est arrete (le son : Son.perdre_focus), l'image reste celle du dernier pas ; au retour, pas de rattrapage (on_activate)
         if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
         if self.pause.ouvert:
             self.pause.maj(); self._synchroniser_gel()
