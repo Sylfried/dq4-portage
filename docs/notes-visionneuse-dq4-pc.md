@@ -1886,3 +1886,16 @@ Windows ; le moteur n'a pas ouvert ces fenêtres (rôle des cellules supposé d'
 
 ### Non vérifié
 Un vrai changement ou retrait de périphérique audio (Windows) ; la durée réelle d'une panne de pilote (les délais sont un choix).
+
+## Avance #224 : la teinte plein écran de l'effet 35 couvre toute la largeur 16/9 (#223, audit CMB-02, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi (capture de la visionneuse, effet 35 forcé dans un combat, 1280 × 720) : l'effet 35 est un quad plein écran de 12,9 × 12,9 (paquet 25, modèle 5035) calé sur le champ 4:3 d'origine ; avec le combat élargi en 16/9 (choix de Sylfried) il ne couvrait que x 108 à 1202 sur 1280 : deux bandes latérales sans teinte. Supposé : les autres quads larges (effet 9, 7 unités) sont plus grands que le champ et corrects. Quel déclencheur du jeu utilise l'effet 35 : non vérifié (forcé).
+
+### Fait
+- `combat/effets_plein_ecran.py` (nouveau) : `elargir(loc, modele, aspect)` étire en largeur de `aspect / (4/3)`, autour de son centre, les coordonnées locales d'un maillage de combat dont le modèle est dans `MODELES_PLEIN_ECRAN` (5035 seul) ; rien pour un écran 4:3 ou plus étroit ni pour un autre modèle.
+- `fenetre/scene_combat.py:_maillages_combat` : appel juste après la lecture des coordonnées locales (combat seulement).
+- Capture avant / après (vrai rendu, 1280 × 720) : teinte sur toute la largeur après. `tests/test_effets_plein_ecran.py` (7 tests, dans la CI).
+
+### Non vérifié
+Windows ; les autres effets d'écran (3, 5, 6 : #68).
