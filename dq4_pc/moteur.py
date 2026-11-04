@@ -98,7 +98,7 @@ class CoreJeu(T.Core):
 
 class Etat:
     """Ce que Unity saurait a l'ecran : decode des paquets du moteur."""
-    vitesse_fondu = 1.0                        # reglage du joueur : les fondus au noir durent 1 / vitesse_fondu de leur duree d'origine
+    vitesse_fondu = 1.0                        # les fondus au noir durent 1 / vitesse_fondu de leur duree d'origine : FIXE a 1 (duree du jeu) depuis #101, plus un reglage du joueur (les tests la font varier)
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
         self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}

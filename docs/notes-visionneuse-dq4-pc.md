@@ -1356,3 +1356,21 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - **Sous Windows** : à confirmer par Sylfried (fluidité réelle, vitesse du zoom).
 - **Supposé** : « à la même vitesse qu'elle tourne » = même nombre par seconde (100 % / s et 100 ° / s, mêmes réglages de vitesse). Si trop vite ou trop lent : la constante `CAM_DIST_VIT`.
 - L / R n'ont plus Page haut / Page bas : en menu de jeu, A et R tournent les pages (réattribuable dans Commandes).
+
+## Avance #159 : plus de réglage de vitesse de transition (#101, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 45)
+« Et supprime l'option pour changer la vitesse de transition, on la laisse à 1x tout court. »
+
+### Établi
+- Cette décision **remplace** celle de #101 (16 h 47 le 03/11 : transitions de porte à x4 fixe, reconnues à leur bruitage) : les transitions gardent la **durée du jeu (x1)**, sans accélération ni reconnaissance par bruitage.
+- Le moteur garde son paramètre interne `Etat.vitesse_fondu` (1,0, durée d'origine) : les tests le font varier, plus aucun réglage du joueur ne le change.
+
+### Fait
+- `reglages.py` : clés `vitesse_fondu` et `vitesse_fondu_v` retirées (défauts, bornes, crans x1 à x4, migration de l'ancien défaut x2). Un ancien `reglages.json` qui les contient se charge sans erreur ; la clé est ignorée et n'est plus réécrite.
+- `pause.py` : la ligne « Vitesse de transition » de Commandes › Vitesses est retirée ; `fenetre.py` : plus de `regler_fondu` ni de lecture du réglage au démarrage.
+- Tests mis à jour : `test_reglages_son_texte.py` (plus de réglage, ancien fichier ignoré), `test_pause_pages.py`, `test_reglages_interface.py`.
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (la ligne n'est plus dans Commandes › Vitesses ; les transitions durent la durée du jeu).
+- Le critère « x4 pour les portes » de #101 est abandonné (décision du 04/11) : à fermer quand Sylfried valide.

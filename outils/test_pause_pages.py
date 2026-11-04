@@ -208,7 +208,7 @@ class PageModifications(unittest.TestCase):
 
 
 class PageCommandes(unittest.TestCase):
-    LIBS = ('Vitesse de marche', 'Vitesse de caméra', 'Vitesse de transition')
+    LIBS = ('Vitesse de marche', 'Vitesse de caméra')                                          # (plus de « Vitesse de transition » depuis #101 : fixe a x1)
 
     def test_vitesses_en_options(self):
         J, p = menu('commandes')
@@ -233,7 +233,7 @@ class PageCommandes(unittest.TestCase):
         for lib, cle in zip(self.LIBS, RG.VITESSES_X_CLES):
             x = par_libelle(p, lib)
             for v in (4.0, 3.0, 2.0, 1.0): x['set'](v); self.assertEqual(J.reg[cle], v); self.assertEqual(x['v'](), 'x%d' % v)
-        x = par_libelle(p, 'Vitesse de transition'); x['set'](3.0); self.assertEqual(J.fondu, 3.0)               # le moteur est prevenu
+        self.assertNotIn('Vitesse de transition', [e.get('l') for e in p._entrees()])                           # (#101 : retiree, les transitions restent a x1)
 
     def test_aides(self):
         _, p = menu('commandes')
