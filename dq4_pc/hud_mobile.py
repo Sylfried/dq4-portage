@@ -1,6 +1,6 @@
 """Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe, et la croix (manette tactile, utilisable a la souris).
 En combat, seul le bouton propre au portage « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide ; clic = vitesse suivante) est montre : pas de bouton equivalent dans le jeu mobile, il n'envoie rien au moteur.
-Il est rattache au coin inferieur gauche de la boite du bas (commandes ou message), comme le bouton « Fuir » l'est au coin inferieur droit des commandes, et n'a pas de libelle : des fleches disent la vitesse
+Il est sur le bord gauche de l'ecran (case de la grille, depuis #188 ; DQ_VITESSE_ANCRE=1 le rattache au coin inferieur gauche de la boite du bas (commandes ou message), comme le bouton « Fuir » l'est au coin inferieur droit des commandes, c'etait le defaut de #47), et n'a pas de libelle : des fleches disent la vitesse
 (triangle creux : Manuel ; un triangle : Normal ; deux : Rapide ; trois : Tres rapide). Un joueur qui le deplace dans l'editeur d'interface le garde a l'endroit choisi.
 
 Le jeu d'origine les dessine dans la couche Unity (TouchPad : « Map Button » = touche 0x1000, « Command Button » = 0x800, « Talk Button » = 0x400 ; icones 3, 4 et 15 de la feuille
@@ -17,6 +17,14 @@ import pyglet
 from pyglet import gl
 
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
+ANCRAGE_VITESSE_DEF = False                 # bouton de vitesse de combat : False = a sa place de la grille, sur le bord gauche de l'ecran (defaut depuis #188 : « remets-le sur le bord gauche pour le moment ») ; True = rattache au coin bas gauche de la boite du bas (#47)
+
+def ancrage_vitesse():
+    """Le bouton de vitesse de combat se rattache-t-il a la boite du bas ? Non par defaut (#188) : il reste sur le bord gauche de l'ecran, a la case de la grille (DEFAUT) ou la ou le joueur l'a place. Essai : variable d'environnement DQ_VITESSE_ANCRE=1 (rattache au coin bas gauche de la boite, #47) ou 0."""
+    v = os.environ.get('DQ_VITESSE_ANCRE')
+    if v is None or not v.strip(): return ANCRAGE_VITESSE_DEF
+    v = v.strip().lower()
+    return True if v in ('1', 'oui', 'yes', 'true', 'vrai') else False if v in ('0', 'non', 'no', 'false', 'faux') else ANCRAGE_VITESSE_DEF
 NOMS = ('carte', 'menu', 'discussion')
 CROIX = 'croix'
 COMBAT = 'combat'                            # bouton « Vitesse de combat » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
@@ -176,13 +184,14 @@ class Boutons:
         """Rattachement du bouton de vitesse de combat a la boite du bas (dict x, y, w, h en pixels, calcule par la fenetre : bord gauche et bord bas de la boite, taille de la plaque « Fuir »), ou None : hors combat, dans
         l'editeur, quand le joueur l'a place lui-meme, ou tant qu'aucune boite n'a ete vue (position de la grille)."""
         J = self.J; a = getattr(J, 'ancre_combat', None)
-        if a is None or self.edition or J.reg['bouton_vitesse_pos']: return None
+        if a is None or self.edition or J.reg['bouton_vitesse_pos'] or not ancrage_vitesse(): return None
         from moteur import PARTIE_COMBAT
         return a if J.moteur.etat.partie == PARTIE_COMBAT else None
 
     def _ancre_prete(self):
         """Le bouton de vitesse n'est montre que s'il a une place : celle que le joueur lui a donnee, ou, avec les menus d'origine, son ancre sous la boite du bas (calculee par la fenetre avant le dessin : jamais la position par defaut de la grille, qui est a gauche de l'ecran)."""
         J = self.J
+        if not ancrage_vitesse(): return True                                          # (#188) pas d'ancre : le bouton est a sa case de la grille, sur le bord gauche, des la premiere image
         return bool(J.reg['bouton_vitesse_pos']) or getattr(J, 'ui_msg', None) is None or getattr(J, 'ancre_combat', None) is not None
 
     def dims(self, nom):
