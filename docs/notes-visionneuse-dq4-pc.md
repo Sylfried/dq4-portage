@@ -1482,3 +1482,16 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - Pendant un effet d'écran, Ctrl + Page haut / Page bas ne remet que la distance (la molette zoome encore à ce moment, les flèches ne tournent pas).
 - **Sous Windows** : Ctrl + flèche, Ctrl + Page haut, Ctrl + Page bas au clavier réel.
 
+## Avance #175 : croix réduite de 25 % par défaut (#172, 04/11/2026)
+
+### Demande (D-228, 04/11 11 h 30)
+« Finalement réduit la taille de la croix de 25 % par défaut »
+
+### Fait
+- `hud_mobile.DIAM_CROIX` = 1,5 x 161,28 (241,92 unités sur 800 de haut ; à 1080 de haut : 327 px) : 25 % de moins que le double de l'avance #169 (0,75 x 2 = 1,5 fois le mobile). Le réglage « Taille de la croix » (50 à 200 %, 100 % par défaut) s'applique toujours par-dessus ; 67 % redonne la taille du mobile. Le plafond des fenêtres étroites (`LARGEUR_CROIX_MAX` = 0,75 de la largeur) et le seuil de la course (`COURSE_SEUIL`) ne changent pas.
+- Test : `outils/test_croix_course.py` mis à jour (constante, diamètres à 800 de haut, 16/9 jamais réduite).
+
+### À trancher / non vérifié
+- **Supposé** : « de 25 % » = 25 % de moins que la taille par défaut actuelle (et non 25 % de moins que le mobile) ; un `reglages.json` à 100 % prend la nouvelle taille sans rien changer.
+- **Sous Windows** : la taille ressentie.
+
