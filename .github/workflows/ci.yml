@@ -67,4 +67,5 @@ jobs:
           python tests/test_effets_capture.py
           python tests/test_don_exp_toucher.py
           python tests/test_historique_cle.py
+          python tests/test_police_messages.py
           python tests/test_sans_notifications.py

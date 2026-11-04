@@ -861,8 +861,14 @@ class PoliceBitmap:
 class Textes:
     """Lignes de texte -> textures (police du jeu rendue par Pillow, blanche ; la couleur est appliquee au dessin)."""
     def __init__(self, police):
-        self.police = police; self.pol = {}; self.tex = {}; self.bitmap = None
+        self.police = police; self.pol = {}; self.tex = {}; self.bitmap = None; self.messages = None
         d = os.path.dirname(police); j, g = os.path.join(d, 'ui_garrir.json'), os.path.join(d, 'ui_garrir.png')
+        m = os.path.join(d, 'ui_messages.font')                   # police des messages du jeu (celle du canevas de texte du moteur : dialogues et combat), facultative : sans elle l'historique garde SE-GARRIR
+        if os.path.exists(m) and not os.environ.get('DQ_POLICE_GMARU'):
+            try:
+                from dq4_pc.menus.police_messages import PoliceMessages
+                self.messages = PoliceMessages(m)
+            except Exception as e: print('Police des messages illisible (%r) : SE-GARRIR a la place.' % (e,), flush=True)
         if os.path.exists(j) and os.path.exists(g) and not os.environ.get('DQ_POLICE_GMARU'):        # DQ_POLICE_GMARU=1 (test) : ancienne police japonaise, pour comparer
             try: self.bitmap = PoliceBitmap(j, g)
             except Exception as e: print('Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.' % (e,), flush=True)
@@ -1239,6 +1245,10 @@ def preparer_ressources(dossier_apk, cache, log=print):
     """Extrait des APK du jeu (une seule fois) : feuilles MenuTexture et Button, police, maillages des cadres. -> True si tout est la."""
     dest = {n: os.path.join(cache, n) for n in list(RESSOURCES) + ['ui_font.otf', 'ui_frameData.bin']}
     dest_g = [os.path.join(cache, n) for n in ('ui_garrir.json', 'ui_garrir.png')]            # police d'origine SE-GARRIR (facultative : sans elle, GMaruGoPro-M)
+    try:
+        from dq4_pc.menus.police_messages import extraire_police_messages
+        extraire_police_messages(dossier_apk, cache, log)                         # police des messages (facultative), meme quand les autres ressources sont deja la
+    except Exception as e: log('Police des messages non extraite : %r' % (e,))
     if all(os.path.exists(p) for p in list(dest.values()) + dest_g): return True
     try:
         import UnityPy, zipfile

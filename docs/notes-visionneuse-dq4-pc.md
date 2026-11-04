@@ -2255,3 +2255,24 @@ Sylfried (04/11/2026, 22 h 14) : « Enlève le message de notification en haut d
 ### Non vérifié
 - À regarder sur Windows : plus aucun message en haut de l'écran (touche de vitesse hors combat, états 1-9, import de sauvegardes).
 - Un avertissement de mémoire du moteur ou un échec d'écriture de sauvegarde n'est plus visible à l'écran : à rétablir sur demande.
+
+## Avance #270 : historique : la police et la coupure des messages du jeu
+
+### Demande
+Sylfried (04/11/2026, 23 h 02) : dans l'historique « certains caractères ne fonctionnent pas » (capture : n et r absents du texte du Tsar Stepan) ; « peux-tu utiliser le même moteur qui affiche les messages en temps normal pour les afficher ici ? ». À 23 h 11 : ce ne sont pas les seuls caractères spéciaux, il y en aura d'autres dans DQ5 et DQ6.
+
+### Cause (établi)
+Le patch écrit les n et r du Tsar avec `и` et `я`. Le jeu les dessine avec sa police de messages (`assets/English.font`) ; l'historique utilisait la police de menu SE-GARRIR, qui n'a pas ces glyphes.
+
+### Fait (D-229)
+- `dq4_pc/menus/police_messages.py` (nouveau, sans pyglet sauf pour la texture) : lecture du fichier de police du jeu (format TNOF : en-tête de 28 octets, table de 65 536 entrées, glyphes compressés), tous les glyphes, aucun caractère écrit dans le code. Copié dans le cache sous `ui_messages.font` au démarrage (`preparer_ressources`, une seule fois).
+- Placement du moteur (`SDrawCTRL::PutChar`, `TextCanvas::PutChar`) : avance = largeur du glyphe ; glyphes à drapeau (V, W, t, v, w, y) posés un pixel plus à gauche et avançant de deux pixels de moins ; espace de 6 (celle du moteur, pas celle de la police) ; tabulation 15 ; `;` et `$` non dessinés (langue 1) ; un code absent de la police prend le glyphe du `@` (comme le jeu). L'image est une pose de glyphes sans mélange, comme le canevas du moteur : 1 unité d'interface par pixel du canevas.
+- Coupure des lignes du moteur (`CTextAutoReturn::AutoReturn`, limite 410) : `PoliceMessages.couper`. Les pages et les lignes de l'historique sont donc celles de la boîte de dialogue.
+- `ui_historique.py` : corps du texte et en-tête des combats avec cette police (nom du locuteur, onglets, aide : SE-GARRIR comme avant) ; la mise en page de la boîte (`Boite`) est inchangée.
+- Sans la police (paquet de données absent ou illisible) : repli sur SE-GARRIR, avec un message dans la console.
+- `tests/test_police_messages.py` (27 tests) : 22 sans moteur (CI) sur une police synthétique ; 5 contre le vrai moteur sous Unicorn : pixels de `PutChar` identiques pour des phrases françaises, les lettres russes et les glyphes à drapeau, pour les 221 glyphes de la police, coupure identique à `AutoReturn` sur un échantillon de ~400 messages du jeu et sur des cas construits (`$`, `;`, tirets, espaces larges, mot trop long). Contrôle des tests : changer l'espace à 5, supprimer le crénage, la limite à 400 ou la largeur de `$` fait échouer les comparaisons.
+
+### Établi / supposé / non vérifié
+- Établi : 0 pixel de différence avec le canevas du vrai moteur pour tout ce qui précède ; rendu de l'historique vérifié sur une capture (n → `и`, r → `я`, mêmes lignes que la boîte de dialogue).
+- Supposé : DQ5 et DQ6 utilisent le même format de fichier de police (le code ne connaît aucun caractère : si le format change, la lecture échoue avec un message clair et le repli SE-GARRIR prend le relais).
+- Non vérifié : rendu sur Windows.
