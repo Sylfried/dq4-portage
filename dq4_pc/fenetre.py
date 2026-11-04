@@ -3214,13 +3214,13 @@ class Jeu(pyglet.window.Window):
             except ValueError: v = None
         return 1.0 if v is None else min(1.0, max(0.0, float(v) / 100.0))
 
-    INCLINAISON_SPRITES_DEF = 0.5                                       # (essai #134) part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux, 1 = parallele aux murs
+    INCLINAISON_SPRITES_DEF = 0.0                                       # part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux (defaut depuis #180 : l'essai #134 a 0,5 deformait les sprites pres des bords), 1 = parallele aux murs
 
     def _inclinaison_sprites(self):
-        """(Essai #134) Part (0 a 1) de l'inclinaison des VERTICALES DU MONDE (aretes de murs, portes...) que prend le panneau d'un personnage a l'ecran, 0,5 par defaut. Depuis la correction des bords (_panneau_ville) le sprite est
+        """(Essai #134, RETIRE par defaut en #180 : « remets l'affichage des PNJ comme sur la version mobile, ... ils s'etirent quand ils s'approchent du bord ») Part (0 a 1) de l'inclinaison des VERTICALES DU MONDE (aretes de murs, portes...) que prend le panneau d'un personnage a l'ecran, 0 par defaut (essai : 0,5). Depuis la correction des bords (_panneau_ville) le sprite est
         exactement vertical a l'ecran partout, mais les murs voisins penchent (11 a 19 degres a 9 unites du centre en 16/9, camera a 47 degres, contre 4 a 6,5 sur le portrait du mobile) et cet angle change quand le heros monte ou
         descend : le sprite semble alors se pencher par rapport au decor (illusion d'optique signalee dans #134). Le pencher a moitie vers la verticale du monde reduit cet ecart de moitie sans revenir au panneau d'origine
-        (qui s'ecartait du centre de l'image par son seul haut et se deformait). Comparaison / retour a l'etat precedent : variable d'environnement DQ_SPRITE_INCLINAISON, de 0 (bords verticaux) a 100 (parallele au decor)."""
+        (qui s'ecartait du centre de l'image par son seul haut et se deformait). Comparaison avec l'essai : variable d'environnement DQ_SPRITE_INCLINAISON, de 0 (bords verticaux, defaut) a 100 (parallele au decor)."""
         v = os.environ.get('DQ_SPRITE_INCLINAISON')
         if v is None or not v.strip(): return self.INCLINAISON_SPRITES_DEF
         try: return min(1.0, max(0.0, float(v) / 100.0))
@@ -3445,7 +3445,7 @@ class Jeu(pyglet.window.Window):
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
                 # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
                 # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
-                # (essai #134 : le panneau est ensuite cisaille a moitie vers la verticale du monde, voir _inclinaison_sprites : sinon, droit au milieu de murs qui penchent, il semble se pencher quand le heros monte ou descend)
+                # (essai #134, coupe par defaut depuis #180 : le panneau etait ensuite cisaille a moitie vers la verticale du monde, voir _inclinaison_sprites ; DQ_SPRITE_INCLINAISON le remet)
                 if dort and C_vue is not None:
                     # Pose couchee (paquets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep ; voir pose_couchee.py) : le panneau n'est PAS debout, la correction des bords (qui redresse un panneau debout) ne lui
                     # est jamais appliquee ; vu de dessus, a pleine taille, tourne selon la direction du sommeil, avec la profondeur du corps a plat (z-buffer, recouvrements par un lit, un mur...)
