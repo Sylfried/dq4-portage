@@ -10,6 +10,7 @@ from dq4_pc.noyau.historique import Capteur
 from dq4_pc.combat.historique_combat import CapteurCombat
 from dq4_pc.persistance.ecriture import ecrire_atomique
 
+ECHELLE_CHAMP = (0.25, 4.0)               # bornes de l'echelle de la carte du monde (paquet 30 ; le moteur n'envoie que 1,0 a 1,25 : la borne ne sert qu'a ecarter une valeur aberrante)
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
 PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
 PARTIE_VILLE = 0xc                         # ville, donjon, tour (decor 3D)
@@ -111,6 +112,8 @@ class CoreJeu(T.Core):
 class Etat:
     """Ce que Unity saurait a l'ecran : decode des paquets du moteur."""
     vitesse_fondu = 1.0                        # les fondus au noir durent 1 / vitesse_fondu de leur duree d'origine : FIXE a 1 (duree du jeu) depuis #101, plus un reglage du joueur (les tests la font varier)
+    champ_echelle = 1.0                        # paquet 30, entier < 0 : Field.SetScale(echelle) : la camera orthographique de la carte du monde voit echelle x plus de terrain (ballon : 1,0 a 1,25, renvoyee a chaque image par FieldData::setOffset) ; attribut de classe : un etat instantane enregistre avant #252 n'a pas cet attribut
+    flottants = ()                             # paquet 30, entier >= 0 : Field.SetFloatingObject(emplacement) : le panneau de ce personnage (le ballon : emplacement 12) est agrandi de `champ_echelle` (Field.FloatingObject.SetScale), il garde donc sa taille a l'ecran quand le terrain est vu de plus loin ; son ombre n'est pas touchee
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
         self.symboles = {}                            # carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
@@ -164,14 +167,18 @@ class Etat:
             if t == 0:
                 charge = True; cam_vue = False
                 if a and a[0] & 0x100: self.fen_entree = FENETRE_ENTREE_COMBAT          # scene de combat (cmd_fld_load, bit 8) : le fondu lance dans la foulee est le fondu d'arrivee du combat
-                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.fond_haut = self.fond_bas = None; self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0)      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
+                self.carte = lire_nom(); self.cartes_chargees += 1; self.sprites.clear(); self.fond = (0.0, 0.0, 0.0); self.fond_haut = self.fond_bas = None; self.modeles.clear(); self.maillages.clear(); self.mesh_etat.clear(); self.objets_cmd = [('carte',)]; self.cam_rot = None; self.cam_fov = None; self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.symboles.clear(); self.icones.clear(); self.fbx.clear(); self.teinte = (1.0, 1.0, 1.0); self.champ_echelle = 1.0; self.flottants = ()      # nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
             elif t == 8 and len(f) >= 6:
                 self.fond = tuple((f[i] + f[i + 3]) / 2 for i in range(3))     # couleur d'effacement : moyenne des deux teintes (repli, rendu hors ecran) ; le fond lui-meme est un degrade vertical (#111)
                 self.fond_haut = tuple(float(f[i]) for i in range(3)); self.fond_bas = tuple(float(f[i + 3]) for i in range(3))      # cmd_back_color (RVA 0xD14F44) : 6 flottants -> BackColor.SetColor(haut, bas, 0) (0xCC43F8) : haut = sommets 0 et 1 du quadrilatere plein ecran, bas = sommets 2 et 3
             elif t == 33 and len(f) >= 3:           # cmd_map_color_rate (D14E44) : r, g, b ; FldObject.m_color = (r, g, b, 1) (decor des villes et des combats : FldObject.update_material_color, a chaque image, Material.color = _OrgColor (1, 1, 1, alpha) x m_color, sauf les materiaux dont la texture a « tz_ » dans son nom) ; sur la carte du monde : Field.SetColor (tuiles et symboles)
                 self.teinte = (float(f[0]), float(f[1]), float(f[2]))
             elif t == 27:                           # cmd_field_load : Field.Init, materiau neuf (couleur blanche) ; le moteur renvoie la teinte de la carte du monde ensuite
-                self.teinte = (1.0, 1.0, 1.0)
+                self.teinte = (1.0, 1.0, 1.0); self.champ_echelle = 1.0; self.flottants = ()          # (Field.Init remet la taille de camera d'origine ; le moteur enregistre le ballon (paquet 30, emplacement 12) juste apres, a chaque chargement de la carte du monde)
+            elif t == 30 and a:                     # cmd_field_scale (D12794) : entier >= 0 = Field.SetFloatingObject(Chara de cet emplacement) ; entier < 0 = Field.SetScale(flottant)
+                if a[0] >= 0:
+                    if a[0] not in self.flottants: self.flottants = self.flottants + (a[0],)
+                elif f and 0.0 < f[0] < 1e6: self.champ_echelle = min(max(float(f[0]), ECHELLE_CHAMP[0]), ECHELLE_CHAMP[1])         # (FieldData::setOffset : 1 + decalage / 128, decalage <= 32 : de 1,00 a 1,25)
             elif t == 28 and len(a) >= 4:           # FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
                 self.champ = {'x0': a[0], 'y0': a[1], 'cols': a[2], 'tuiles': a[4:4 + a[3]], 'cam': (f[0], f[1]) if len(f) >= 2 else None}
             elif t == 29 and a:                     # FieldData::draw_symbol : idx | genre << 8 + [x, y, alpha] ; 0x8000 | idx = cacher ; 0xc000 | idx = remontrer

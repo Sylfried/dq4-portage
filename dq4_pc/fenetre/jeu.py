@@ -685,7 +685,8 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                     a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue, incl)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
-                a, b = p - dh * w * pw / 2, p + dh * w * pw / 2; upk = up * ph
+                kf = float(getattr(e, 'champ_echelle', 1.0)) if champ and slot in getattr(e, 'flottants', ()) else 1.0          # paquet 30 : le panneau du ballon (Field.SetFloatingObject) suit l'echelle du terrain, pieds fixes : il garde sa taille a l'ecran (MAP-02)
+                a, b = p - dh * w * kf * pw / 2, p + dh * w * kf * pw / 2; upk = up * ph * kf
                 q = np.array([a, b, b + upk, a, b + upk, a + upk], np.float32).ravel().tolist()
             uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
             cl = list(map(float, s['col'])) * 6
