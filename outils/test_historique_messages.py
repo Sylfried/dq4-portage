@@ -9,7 +9,7 @@ favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> fe
 Taille unique des boites (la boite de dialogue du jeu : 1, 2 ou 3 lignes, dialogue ou combat ; une page de plus au-dela de 3 lignes).
 `remplir(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
 """
-import json, os, shutil, struct, sys, tempfile, types, unittest
+import inspect, json, os, shutil, struct, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
 import pyglet
@@ -859,6 +859,55 @@ class TestVue(unittest.TestCase):
         self.assertEqual(UH.heure_jeu(60 * (3600 + 5 * 60 + 12)), '1:05:12'); self.assertEqual(UH.heure_jeu(-5), '0:00:00')
         self.assertEqual((UH.touche_suivante(UH.O_DIALOGUES), UH.touche_suivante(UH.O_COMBATS)), (UH.O_COMBATS, None))
         self.assertEqual((UH.onglet_suivant(1), UH.onglet_suivant(0, -1)), (0, 1))
+
+
+class TestSuivreLeJeu(unittest.TestCase):
+    """#178 : le jeu ne s'arrete plus derriere l'historique (aucune pause dans aucun menu) : ce qu'il y ecrit pendant que la fenetre est ouverte s'ajoute a la liste (`suivre_le_jeu`, appele a chaque image par Pause.maj)."""
+    def test_rien_de_neuf_rien_ne_change(self):
+        v = vue(n=5); sel, els = v.sel, list(v.elements); self.assertFalse(v.suivre_le_jeu()); self.assertEqual((v.sel, v.elements), (sel, els))
+
+    def test_en_bas_le_nouveau_message_s_ajoute_et_le_choix_suit_le_dernier(self):
+        v = vue(n=5); self.assertEqual(v.sel, 4)
+        v.J.historique.ajouter('Neuf.', 'Alena', 10 ** 6); self.assertTrue(v.suivre_le_jeu()); poser(v)
+        self.assertEqual((len(v.elements), v.sel, v.pos), (6, 5, 0.0)); self.assertEqual(v.elements[-1].texte, 'Neuf.')
+        self.assertFalse(v.suivre_le_jeu())                                                                              # (puis plus rien a faire)
+
+    def test_en_bas_le_choix_ailleurs_ne_saute_pas(self):
+        v = vue(n=8); v.sel = 3; cur = v.courant(); self.assertEqual(v.decal(), 0.0)
+        for i in range(2): v.J.historique.ajouter('Neuf %d.' % i, None, 10 ** 6 + i * 5000)
+        self.assertTrue(v.suivre_le_jeu()); self.assertEqual(len(v.elements), 10); self.assertIs(v.courant(), cur); self.assertEqual(v.sel, 3)    # le message choisi reste le meme
+
+    def test_en_lisant_plus_haut_la_liste_ne_bouge_pas_puis_se_met_a_jour_en_bas(self):
+        v = vue(n=20); v.pos = 400.0; poser(v); self.assertGreater(v.decal(), 0.5); avant = list(v.elements); sel = v.sel
+        v.J.historique.ajouter('Neuf.', None, 10 ** 6)
+        self.assertFalse(v.suivre_le_jeu()); self.assertEqual((v.elements, v.sel), (avant, sel))                       # la lecture ne saute pas
+        v.pos = 0.0; poser(v); self.assertTrue(v.suivre_le_jeu()); self.assertEqual(len(v.elements), 21)                  # retour en bas : mise a jour
+
+    def test_pas_pendant_un_glissement(self):
+        v = vue(n=5); v.J.historique.ajouter('Neuf.', None, 10 ** 6)
+        v.drag = [0.0, 0.0, True]; self.assertFalse(v.suivre_le_jeu()); v.drag = None; v.glisse_barre = 1.0; self.assertFalse(v.suivre_le_jeu())
+        v.glisse_barre = None; self.assertTrue(v.suivre_le_jeu())
+
+    def test_onglet_des_combats(self):
+        v = vue(n=3, combats=2); v.changer_onglet(UH.O_COMBATS); poser(v); self.assertEqual(len(v.elements), 2)
+        v.J.historique.ajouter('Neuf.', None, 10 ** 6); self.assertFalse(v.suivre_le_jeu())                              # un dialogue ne change pas l'onglet des combats
+        v.J.historique.ajouter_combat(combat(t=500)); self.assertTrue(v.suivre_le_jeu()); self.assertEqual((len(v.elements), v.sel), (3, 2))
+
+    def test_liste_pleine_le_plus_ancien_sort_le_dernier_entre(self):
+        v = vue(n=5); h = v.J.historique; h.dialogues.pop(0); h.ajouter('Neuf.', None, 10 ** 6)                              # (meme longueur : la limite de l'historique)
+        self.assertEqual(len(h.dialogues), len(v.elements)); self.assertTrue(v.suivre_le_jeu()); self.assertEqual(v.elements[-1].texte, 'Neuf.')
+
+    def test_favoris_seulement_ne_change_pas_avec_le_jeu(self):
+        v = vue(n=5); v.etoile(1); v.basculer_filtre(); poser(v); self.assertEqual(len(v.elements), 1)
+        v.J.historique.ajouter('Neuf.', None, 10 ** 6); self.assertFalse(v.suivre_le_jeu()); self.assertEqual(len(v.elements), 1)
+
+    def test_sans_historique(self):
+        v = vue(n=2); v.J.historique = None; self.assertFalse(v.suivre_le_jeu())
+
+    def test_pause_maj_le_fait_a_chaque_image_sur_la_page_historique(self):
+        import pause as PA
+        src = inspect.getsource(PA.Pause.maj)
+        self.assertIn("if self.ecran == 'historique': self.hist.suivre_le_jeu()", src)
 
 
 class TestPersistance(unittest.TestCase):

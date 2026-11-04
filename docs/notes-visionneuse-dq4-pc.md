@@ -1203,7 +1203,7 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### Fait
 - Le titre de la racine est « Paramètres » (`Pause.dessiner`). Les libellés internes, les noms de modules et les anciennes sections de ces notes gardent « Pause » (historique daté).
 - **Le jeu tourne derrière le menu, sans aucune entrée** : `Jeu.tick` envoie (0, 0) au moteur quand le menu est ouvert (les touches du menu, Z Q S D et flèches comprises, ne font pas marcher le héros ; un clic ne va pas au jeu) ; `_facteur_vitesse` rend 1,0 menu ouvert (pas de marche accélérée) ; le son continue (`pause_jeu` ne le coupe plus).
-- **Deux pages arrêtent le jeu** (`Pause.PAGES_FIGEES`) : l'**Historique** (lecture d'un combat qui avance tout seul en vitesse rapide) et la question **Quitter**. `Jeu._synchroniser_gel` coupe / rend le son et remet l'horloge à zéro (pas de rattrapage) quand on entre / sort de ces pages. Choix du portage, pas demandé tel quel : à confirmer.
+- **Deux pages arrêtent le jeu** (`Pause.PAGES_FIGEES`) : l'**Historique** (lecture d'un combat qui avance tout seul en vitesse rapide) et la question **Quitter**. `Jeu._synchroniser_gel` coupe / rend le son et remet l'horloge à zéro (pas de rattrapage) quand on entre / sort de ces pages. Choix du portage, pas demandé tel quel : à confirmer. **Remplacé en #179 : aucune page ne fige plus le jeu (D-229).**
 - README : « menu Paramètres (Échap) ».
 - Tests : `outils/test_parametres_sans_pause.py` (13 tests : titre, pages figées, arrêt et reprise du son, aucune entrée envoyée, pas de marche accélérée, boucle).
 
@@ -1526,3 +1526,19 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « effet de vague » = l'ondulation `ETIRURE` / `GLISSE` des bandes (seul effet de ce genre dans les notes) ; « comme convenu » = ce rendu, la teinte d'origine et la vitesse d'origine. Si un autre effet avait été convenu, il manque.
 - La texture de 256 x 256 est agrandie à la hauteur de la fenêtre (1080 px en 16/9) : le ciel est flou, c'est la conséquence directe de « la hauteur de la fenêtre ».
 - **Sous Windows** : le rendu réel à 1866 x 1050 et plein écran (netteté, raccords de tuile, sens et vitesse du défilement).
+
+## Avance #179 : aucune pause dans aucun menu (#178, 04/11/2026)
+
+### Demande (D-229, 04/11 11 h 40)
+« Le menu historique met le jeu en pause, il ne faut aucune pause dans aucun menu »
+
+### Fait
+- `Pause.PAGES_FIGEES` est vide (c'était `('historique', 'quitter')`) : le jeu, le son et l'horloge tournent derrière TOUTES les pages du menu Paramètres, sans recevoir ni touche ni clic (`Jeu.tick`, inchangé). Le mécanisme d'arrêt (`fige_le_jeu`, `_synchroniser_gel`, retour anticipé de `_boucle`) est gardé tel quel, inutilisé : une page ajoutée à `PAGES_FIGEES` l'arrêterait de nouveau (cela contredirait D-229).
+- Mesuré dans le jeu (ville `maout`, historique ouvert à l'image 60) : écart moyen entre les images 90 et 200 de la scène derrière la fenêtre = 0,0 avant (jeu figé), 4,07 après (le jeu avance).
+- Conséquence traitée : le jeu écrit maintenant dans l'historique pendant qu'on le lit. `VueHistorique.suivre_le_jeu` (appelée à chaque image par `Pause.maj` sur la page Historique) remplace la liste par la liste à jour quand la vue est tout en bas : le message choisi reste le même (reconnu par son objet), sauf s'il était le dernier (le choix suit alors le plus récent). Plus haut dans la liste, pendant un glissement ou avec la barre, la liste ne bouge pas (la lecture ne saute pas) ; elle se met à jour au retour en bas. Onglet Combats et « Favoris seulement » : mêmes règles.
+- Tests : `outils/test_parametres_sans_pause.py` (15) : aucune page du menu (toutes les `_e_*` plus racine, historique et quitter) ne fige le jeu, `PAGES_FIGEES` vide, le mécanisme d'arrêt est essayé avec une page de test ; `outils/test_historique_messages.py` (122) : 10 tests de `suivre_le_jeu` (rien de neuf, nouveau message en bas, choix ailleurs qui ne saute pas, lecture plus haut, glissement, onglet Combats, liste pleine, favoris seulement, sans historique, appel par `Pause.maj`).
+
+### À trancher / non vérifié
+- **Supposé** : « aucun menu » = toutes les pages du menu Paramètres (Historique et Quitter comprises), pas les fenêtres propres du jeu.
+- Effet voulu à connaître : un combat qui avance seul (vitesse rapide) ou un message minuté continue pendant la lecture de l'historique, et les rencontres aléatoires peuvent survenir pendant la question « Quitter » (le jeu ne reçoit aucune entrée).
+- **Sous Windows** : historique ouvert, la scène derrière bouge, le son continue, la liste reste lisible quand un message ou un combat s'ajoute.
