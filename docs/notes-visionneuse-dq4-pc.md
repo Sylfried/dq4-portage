@@ -1764,3 +1764,17 @@ Comportement exact de la bibliothèque son d'origine quand la fin dépasse (supp
 
 ### Non vérifié
 Rendu d'origine (aucune capture) ; Windows. Tri par distance d'Unity à priorité égale : non mesuré.
+
+## Avance #207 : charger un état instantané ne touche plus au moteur s'il est inutilisable (#206, audit ENG-06, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`persistance/etats.appliquer` réécrivait la mémoire du moteur (tas, données, pile locale) **avant** de décoder la partie Python de l'état (`pickle`). Un fichier d'état abîmé ou tronqué levait donc l'erreur après avoir déjà écrasé le moteur : la partie en cours restait dans un état mélangé. Et rien n'empêchait de charger un état enregistré avec un autre `libdq4core.so` (autre APK) : les adresses ne correspondent plus. Établi par lecture du code ; le cas « autre bibliothèque » n'a pas été observé en jeu.
+
+### Fait
+- `appliquer` : vérifie la version, **puis** l'empreinte de la bibliothèque, **puis** décode `python` et `viewer`, et seulement ensuite écrit dans le moteur. Un état refusé ne change plus rien.
+- `instantane` enregistre `lib_sha` (16 premiers caractères du SHA-256 de l'image de la bibliothèque). Les états déjà enregistrés n'ont pas cette clé : ils restent chargeables comme avant (aucune migration).
+- `tests/test_etats_ordre.py` (6 tests : 5 sans APK, dans la CI ; 1 avec le vrai moteur : un état tronqué laisse la mémoire intacte, l'état sain se recharge) ; `test_fld_priorite` ajouté à la CI (il y manquait depuis #205).
+
+### Non vérifié
+Windows ; un vrai changement d'APK entre l'enregistrement et le chargement.
+

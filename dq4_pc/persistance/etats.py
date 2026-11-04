@@ -6,7 +6,7 @@ compteurs du chargeur. A cela s'ajoute ce que la visionneuse a decode des paquet
 
 Fichier : b'DQ4ETAT1' | taille + JSON des infos | taille + PNG de la miniature | pickle compresse (zlib).
 Les etats ne contiennent AUCUN fichier du jeu : ils ne servent qu'avec l'APK qui les a produits (meme version de la bibliotheque)."""
-import io, json, os, pickle, struct, time, zlib
+import hashlib, io, json, os, pickle, struct, time, zlib
 
 # Anciens noms de modules (avant le rangement du 04/11/2026 : tout etait a plat dans dq4_pc) -> noms actuels : les etats enregistres avant cette date
 # gardent le nom de module `moteur` (ou autre) dans leur pickle ; on les relit sans les changer.
@@ -38,6 +38,11 @@ VERSION = 1
 PAGE = 4096
 
 
+def empreinte_lib(core):
+    """Empreinte de la bibliotheque du moteur (image apres relocation) : un etat n'a de sens qu'avec la bibliotheque qui l'a produit (#206)."""
+    return hashlib.sha256(bytes(core.elf.img)).hexdigest()[:16]
+
+
 def _pages_modifiees(core):
     """Pages de la bibliotheque (donnees, patchs) differentes de l'image apres relocation : [(numero, octets)]."""
     cur = core.mem(core.LIB_BASE, core.elf.size); ini = bytes(core.elf.img)
@@ -55,7 +60,7 @@ def instantane(m, viewer=None):
     finally:
         ui.obs = obs
     return {
-        'version': VERSION,
+        'version': VERSION, 'lib_sha': empreinte_lib(c),
         'heap': c.mem(c.HEAP_BASE, c.heap_ptr - c.HEAP_BASE), 'heap_ptr': c.heap_ptr,
         'data': c.mem(c.DATA_BASE, c.DATA_SIZE), 'tls': c.mem(c.TLS_BASE, c.TLS_SIZE), 'data_ptr': c.data_ptr,
         'lib': _pages_modifiees(c), 'next_file': c.next_file,
@@ -68,6 +73,8 @@ def appliquer(m, d):
     """Remet le moteur `m` dans l'etat `d` -> objet `viewer` donne a instantane. Les ressources liees a la fenetre (fenetres de menu d'origine, textures) sont a reconstruire par l'appelant (voir Jeu.charger_etat)."""
     if d.get('version') != VERSION: raise ValueError('etat d\'une autre version (%s)' % d.get('version'))
     c = m.core; uc = c.uc
+    if d.get('lib_sha') and d['lib_sha'] != empreinte_lib(c): raise ValueError('etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge')       # (les etats d'avant #206 n'ont pas d'empreinte : acceptes)
+    p = _charger(d['python']); viewer = _charger(d['viewer']) if d.get('viewer') else None            # TOUT est lu avant d'ecrire quoi que ce soit dans le moteur : un fichier abime laisse le jeu intact (#206)
     uc.mem_write(c.LIB_BASE, bytes(c.elf.img))
     for i, b in d['lib']: uc.mem_write(c.LIB_BASE + i * PAGE, b)
     if c.heap_ptr > d['heap_ptr']: uc.mem_write(c.HEAP_BASE + (d['heap_ptr'] - c.HEAP_BASE), bytes(c.heap_ptr - d['heap_ptr']))
@@ -76,7 +83,6 @@ def appliquer(m, d):
     c.files = {}
     for h, f in d['fichiers'].items():             # fichiers ouverts : on n'en garde la trace que si le moteur en avait ouvert (non vu entre deux images jusqu'ici)
         m.log('etat : fichier ouvert non restaure (%s)' % (f.get('name'),))
-    p = _charger(d['python'])
     old = m.ui.obs
     m.etat = p['etat']; m.ui = p['ui']; m.ui.obs = old
     if not hasattr(m.ui, 'degats'): m.ui.degats = []              # etat enregistre par une version plus ancienne (avant les nombres de degats)
@@ -85,7 +91,7 @@ def appliquer(m, d):
     m.reappliquer_correctifs()                                    # vitesses de heros d'origine (un etat enregistre par une ancienne version pendant une course les contient majorees), bouton « Paramètres » -> menu Pause (un etat enregistre
                                                                   # avant ce detournement a remis l'instruction d'origine), fenetre des lieux elargie et « Sauv. cloud » retiree (idem : l'image d'origine est rechargee ci-dessus)
     m.pk.begin()
-    return _charger(d['viewer']) if d.get('viewer') else None
+    return viewer
 
 
 def ecrire(chemin, d, infos, miniature_png=b''):
