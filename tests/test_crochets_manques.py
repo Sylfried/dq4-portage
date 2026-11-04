@@ -55,7 +55,7 @@ class SansMoteur(unittest.TestCase):
     def test_installateurs_signalent_leur_echec(self):
         """Un moteur dont les fonctions sont introuvables : chaque installateur le dit au lieu de se taire."""
         def introuvable(n): raise KeyError(n)
-        for nom in ('_crochets_texte', '_crochets_fondu', '_crochets_niveau', '_crochets_rencontres', '_crochets_horloge_jour', '_crochets_magie', '_detourner_parametres', '_elargir_symboles'):
+        for nom in ('_crochets_texte', '_crochets_fondu', '_crochets_niveau', '_crochets_rencontres', '_crochets_horloge_jour', '_crochets_temps_de_jeu', '_crochets_magie', '_detourner_parametres', '_elargir_symboles'):
             m = faux_moteur(); m.core.export = introuvable
             getattr(m, nom)()
             self.assertTrue(m.crochets_manques, nom + ' : echec silencieux')

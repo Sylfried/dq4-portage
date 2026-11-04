@@ -55,6 +55,9 @@ COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [
 STR_W8_X0 = 0xb9000008
 DOKU_CHANGETIME_B, DOKU_RET, DOKU_CHANGETIME_STUB = 0x38, 0x44, 0x2246b0      # FieldPlayerDoku::checkDokuDamage + 0x38 : `b FieldStage::ChangeTime` (saut terminal, via le stub PLT 0x2246b0 ; w1 = 0, le temps du monde avance de 2), + 0x44 : le `ret` de la fonction
 RET_A64 = 0xd65f03c0
+PLAYTIME_MOV_W1, PLAYTIME_BL, PLAYTIME_STUB, PLAYTIME_GOT, MOV_W1_2 = 0x14, 0x20, 0x227d90, 0x240968, 0x52800041
+PLAYTIME_STUB_MOTS = (0xb00000d0, 0xf944b611, 0x9125a210, 0xd61f0220)      # les 4 instructions du stub PLT 0x227d90
+# Global::NativeExec + 0x14 : `mov w1, #2` ; + 0x20 : `bl GameStatus::addPlayTime` (via le stub PLT 0x227d90 : x0 = status::g_Game, w1 = 2, void) : une fois par pas du moteur, +2 unites (1/60 s) du temps de jeu
 MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
 MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
 MAGIE_SON_SOIN, SUB_W8_W8_C4 = 0x100, 0x51031108          # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x100 : `sub w8, w8, #0xc4` (w8 = numero de l'action ; si le resultat est <= 2, c'est un sort de soin et le moteur joue le bruitage 501, `playSe(0x1f5)`, quel que soit son effet)
@@ -501,6 +504,7 @@ class Moteur:
         self._crochets_niveau()
         self._crochets_rencontres()
         self._crochets_horloge_jour()
+        self._crochets_temps_de_jeu()
         self._crochets_magie()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
@@ -601,6 +605,30 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: self._manque('horloge jour / nuit : crochet non installe : %s' % (ex,))
+
+    def _crochets_temps_de_jeu(self):
+        """Temps de jeu de la sauvegarde sur l'heure reelle (#239, audit ENG-04, sondage du 04/11/2026). Le moteur ajoute 2 unites (1/60 s) par pas (`GameStatus::addPlayTime(2)` dans `Global::NativeExec`) : a x1
+        (30 pas par seconde) c'est l'heure reelle, mais la marche acceleree et le combat rapide font `a` fois plus de pas par seconde et le temps de jeu (et l'horodatage de l'historique, qui le lit) court `a` fois trop vite.
+        `vitesse_horloge` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de l'horloge du jeu, marche ET combat ; 1 = normale) > 1 : le crochet saute l'appel (retour directement a l'instruction suivante, rien
+        d'autre n'est touche : x0 et w1 ne servent plus) pour la fraction 1 - 1 / a des pas (`Passeur`), regulierement. A 1 (ou moins, ralenti) : le jeu d'origine, a l'identique."""
+        c = self.core; self.vitesse_horloge = 1.0; self.temps_jeu = RE.Passeur()
+        try:
+            f = c.export('_ZN6Global10NativeExecEv'); ad = c.export('_ZN6status10GameStatus11addPlayTimeEj')
+            u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]; u64 = lambda a: struct.unpack('<Q', c.mem(a, 8))[0]
+            w = u32(f + PLAYTIME_BL) if f else 0
+            stub = struct.unpack('<4I', c.mem(c.LIB_BASE + PLAYTIME_STUB, 16))                                  # (le stub PLT : adrp x16 ; ldr x17, [x16, #0x968] ; add x16, x16, #0x968 ; br x17 : sa case de la table des adresses, 0x240968, contient addPlayTime)
+            if not f or not ad or u32(f + PLAYTIME_MOV_W1) != MOV_W1_2 or w & 0xfc000000 != 0x94000000 or f + PLAYTIME_BL + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) != c.LIB_BASE + PLAYTIME_STUB \
+                    or stub != PLAYTIME_STUB_MOTS or u64(c.LIB_BASE + PLAYTIME_GOT) != ad:
+                self._manque("temps de jeu : NativeExec inattendu, la vitesse du jeu change la vitesse du temps de jeu"); return
+            def _tj(uc, a, sz, u):
+                v = self.vitesse_horloge
+                if v <= 1.0: return                                                          # x1 : le jeu tel quel
+                p = self.temps_jeu; p.facteur = 1.0 / v
+                if not p.passe(): uc.reg_write(unicorn.arm64_const.UC_ARM64_REG_PC, a + 4)       # appel saute
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _tj, None, f + PLAYTIME_BL, f + PLAYTIME_BL)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: self._manque('temps de jeu : crochet non installe : %s' % (ex,))
 
     def _crochets_magie(self):
         """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
