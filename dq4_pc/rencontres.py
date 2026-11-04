@@ -1,4 +1,4 @@
-"""Rencontres aleatoires et vitesse de marche (#45).
+"""Rencontres aleatoires, horloge jour / nuit et vitesse de marche (#45, #163).
 
 Ce que fait le jeu d'origine (lu au desassemblage de libdq4core.so) :
   - Chaque image du moteur ou la position du heros a change (carte du monde : FieldPlayerDoku::checkDokuDamage ; villes et donjons : TownDamageFloor::checkDamageFloor, tous deux par
@@ -39,3 +39,17 @@ class Reducteur:
         self.reste += perte * self.facteur
         n = int(self.reste); self.reste -= n
         return n
+
+
+class Passeur:
+    """Laisse passer la fraction `facteur` (0 a 1) des appels, regulierement, avec report des fractions : sur n appels, floor(n x facteur) (a un pres) sont passes ; a 1 ou plus, tous."""
+
+    def __init__(self, facteur=1.0):
+        self.facteur = facteur; self.reste = 0.0
+
+    def passe(self):
+        """True si cet appel doit avoir lieu."""
+        if self.facteur >= 1.0: return True
+        self.reste += self.facteur
+        if self.reste >= 1.0: self.reste -= 1.0; return True
+        return False
