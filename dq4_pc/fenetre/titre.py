@@ -127,7 +127,12 @@ class TitreMixin:
         self.sauv = ES.EcranSauvegardes(self); self.appui = None; self.survol_nd = None
 
     def _sauv_fermer(self):
-        self.sauv = None                                  # (l'ecran Sauvegardes a deja relu le catalogue du moteur apres un import ; plus de message « Sauvegardes importees » depuis #267)
+        s, self.sauv = self.sauv, None
+        if s is not None and s.a_recharger: self._apres_import()
+
+    def _apres_import(self):
+        """Des journaux viennent d'etre importes (le catalogue du moteur a deja ete relu par l'ecran Sauvegardes)."""
+        self.toast('Sauvegardes importées')
 
     def _cadre_depart(self, fe, cx, cy, s, visibles=False):
         """Cadre noir (comme les autres menus du portage) derriere tout le menu de depart (ou de la fenetre d'avant-partie centree)."""

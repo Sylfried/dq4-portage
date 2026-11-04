@@ -2276,3 +2276,20 @@ Le patch écrit les n et r du Tsar avec `и` et `я`. Le jeu les dessine avec sa
 - Établi : 0 pixel de différence avec le canevas du vrai moteur pour tout ce qui précède ; rendu de l'historique vérifié sur une capture (n → `и`, r → `я`, mêmes lignes que la boîte de dialogue).
 - Supposé : DQ5 et DQ6 utilisent le même format de fichier de police (le code ne connaît aucun caractère : si le format change, la lecture échoue avec un message clair et le repli SE-GARRIR prend le relais).
 - Non vérifié : rendu sur Windows.
+
+## Avance #273 : notifications de sauvegarde rétablies
+
+### Demande
+Sylfried (04/11/2026, 23 h 02) : « Remets les notifications pour les sauvegardes alors... » (D-228 / #268 avaient retiré toutes les notifications du haut de l'écran).
+
+### Fait (D-230)
+- `Jeu.toast`, `Jeu.toasts` et le dessin du bandeau noir en haut de l'écran sont de retour, **pour les sauvegardes seulement** :
+  - états instantanés : « État N enregistré » (touche chiffre), « État N chargé » et « État N vide » (Ctrl + chiffre), « Chargement annulé », « Aucun chargement à annuler » (Ctrl + Maj), « <Enregistrement|Chargement> de l'état N impossible : … » (en plus de la console et du journal, ajoutés par #268) ;
+  - « Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log) » (6 s) quand le moteur n'a pas pu écrire une sauvegarde ;
+  - « Sauvegardes importées » (retour de l'écran Sauvegardes après un import).
+- **Restent retirés** (D-228 maintenu) : vitesse de combat hors combat, plein écran / fenêtre impossible, mémoire du moteur à 78 % et 94 %, réglages du moteur non appliqués, interruption du son (le crochet `alerte` de `son.py` n'est pas branché), ouverture de la page de confidentialité impossible : console et `erreurs_fenetre.log` seulement.
+- `tests/test_sans_notifications.py` devient `tests/test_notifications_sauvegardes.py` : liste blanche (lecture du code par `ast` : chaque `toast(...)` est un message de sauvegarde, et chacun est utilisé), et comportement (le message expire, annuler le chargement, échec d'état dans la console, le journal et à l'écran, import, la vitesse de combat ne montre rien). `test_ecriture_sauvegarde` reprend son contrôle du message. Capture headless : « État 3 enregistré » en haut de l'écran.
+
+### Non vérifié
+- À regarder sur Windows : chiffre (enregistrer), Ctrl + chiffre (charger), Ctrl + Maj (annuler), import de sauvegardes ; la touche de vitesse de combat hors combat n'affiche rien.
+- Choix de Claude : les avertissements de mémoire du moteur (qui préviennent d'un arrêt possible du jeu) sont restés retirés, car ils ne concernent pas une sauvegarde ; à rétablir sur demande.

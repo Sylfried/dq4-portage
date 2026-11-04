@@ -44,8 +44,9 @@ class ClavierSourisMixin:
             if self._tenue('modif'):
                 self.combo[1] = True
                 if self.infos_etat(n):
-                    try: self.charger_etat(n)
+                    try: self.charger_etat(n); self.toast('État %d chargé' % n)
                     except Exception as ex: self._noter_echec_etat('Chargement de l\'état %d' % n, ex)
+                else: self.toast('État %d vide' % n)
             else: self.sauve_rapide = n
             return pyglet.event.EVENT_HANDLED
         if symbol in (K.LSHIFT, K.RSHIFT) or symbol in self.reg.codes('modif'):      # Maj + touche modificatrice (sans chiffre) : annule le dernier chargement, au relachement
