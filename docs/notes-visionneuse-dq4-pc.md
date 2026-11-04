@@ -1337,3 +1337,22 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - **Sous Windows** : à confirmer par Sylfried (clic n'importe où, animation de la croix devant un personnage ou un coffre).
 - **Supposé** : « cliquer partout » = un clic gauche sur le terrain libre donne la touche d'action (lecture de sa phrase) ; « action réalisable » = une bulle d'icône est affichée sur la cible ; l'animation est une extension du portage (le jeu d'origine ne l'a que pour son tutoriel).
 - Un clic gauche sur le terrain sans cible fait la même chose que la touche d'action sans cible (rien, ou le message du jeu).
+
+## Avance #158 : caméra au clavier en continu, Page haut / Page bas, plus d'option de distance (#146, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 44)
+« Supprime l'option pour changer la distance de la caméra. Touches par défaut pour rapprocher la caméra : Page haut. Touche par défaut pour éloigner la caméra : Page bas. Ces 2 touches ne doivent pas être saccadées, il faut un effet fluide pour que tant qu'on maintient la touche la caméra avance ou recule (à la même vitesse qu'elle tourne). »
+
+### Établi
+- Le pas de 5 % avec répétition (avance #153) est remplacé par un mouvement **continu** : `Jeu._maj_distance_clavier` change la distance à chaque image selon le temps écoulé, de `CAM_DIST_VIT` = `CAM_LACET_VIT` (100) pourcents par seconde, multiplié par « Vitesse de caméra » et par le multiplicateur de l'accélérateur si la touche est tenue, comme la rotation. À vitesse x1 : de 100 % à 50 % en 0,5 s, de 100 % à 200 % en 1 s. Le zoom garde sa valeur exacte (le réglage enregistré est arrondi au pour cent).
+- Une touche ne sert qu'à une action (`test_touche_menu`) : Page haut / Page bas étaient la seconde touche par défaut de L / R (pages des menus du jeu) ; L / R gardent **A** et **R**. Le menu d'Échap et l'historique lisent Page haut / Page bas directement et ne changent pas.
+- Un ancien `reglages.json` : les défauts de l'avance #153 (pavé + / −, E / W) deviennent Page haut / Page bas, et Page haut / Page bas sont retirées de L / R ; un choix du joueur est gardé (une touche déjà prise par un autre choix n'est pas reprise à la caméra).
+
+### Fait
+- Menu Affichage : la ligne « Distance caméra » est retirée (la molette, Ctrl + molette et les touches la règlent). Elle reste affichée dans les infos F1.
+- Tests : `outils/test_distance_camera_clavier.py` (19 tests : défauts, migration, menu, vitesse, fluidité sans à-coup, bornes, vitesse de caméra et accélérateur, conditions d'action) ; `test_mode_fenetre.py` (ordre de la page Affichage).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (fluidité réelle, vitesse du zoom).
+- **Supposé** : « à la même vitesse qu'elle tourne » = même nombre par seconde (100 % / s et 100 ° / s, mêmes réglages de vitesse). Si trop vite ou trop lent : la constante `CAM_DIST_VIT`.
+- L / R n'ont plus Page haut / Page bas : en menu de jeu, A et R tournent les pages (réattribuable dans Commandes).

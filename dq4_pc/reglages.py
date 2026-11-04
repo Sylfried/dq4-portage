@@ -8,10 +8,11 @@ TOUCHES_DEF = {
     'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
     'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
-    'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
-    'cam_pres': ['NUM_ADD', 'E'], 'cam_loin': ['NUM_SUBTRACT', 'W'],      # distance de la camera au clavier (#146) : rapprocher / eloigner, par pas de 5 % entre 50 et 200 % ; pave numerique + / - ou E / W (libres : ni ZQSD, ni fleches, ni les chiffres des etats)
+    'L': ['A', None], 'R': ['R', None], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
+    'cam_pres': ['PAGEUP', None], 'cam_loin': ['PAGEDOWN', None],      # distance de la camera au clavier (#146) : rapprocher / eloigner en continu, de 50 a 200 % ; Page haut / Page bas (elles servaient aussi de seconde touche a L / R, pages des menus du jeu : une touche ne sert qu'a une action, L / R gardent A / R)
     'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
+ANCIEN_CAM = {'cam_pres': ['NUM_ADD', 'E'], 'cam_loin': ['NUM_SUBTRACT', 'W']}      # defauts des touches de distance de la camera de l'avance #153 (04/11) : remplaces par Page haut / Page bas (#146) quand le fichier les contient encore tels quels
 ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
@@ -226,11 +227,18 @@ class Reglages:
                     ts = self.v['touches']
                     if ts['menu'] == ANCIEN_MENU and not any('TAB' in l for a, l in ts.items() if a != 'menu'): ts['menu'] = list(TOUCHES_DEF['menu'])
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
-                for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise
-                    if a in saved: continue
+                for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise 
+                    if a in saved or a in ('cam_pres', 'cam_loin'): continue                  # (les deux touches de la camera : voir plus bas)
                     ts = self.v['touches']
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
+                for a, anc in ANCIEN_CAM.items():                       # touches de distance de la camera de l'avance #153 gardees telles quelles -> nouveaux defauts (Page haut / Page bas) ; un choix du joueur est garde
+                    if self.v['touches'][a] == anc: self.v['touches'][a] = list(TOUCHES_DEF[a])
+                for a, l in (('cam_pres', 'L'), ('cam_loin', 'R')):    # Page haut / Page bas etaient la seconde touche par defaut de L / R : un ancien fichier qui les a encore la leur retire pour la camera (une touche ne sert qu'a une action) ; prise par un autre choix du joueur, la camera ne l'a pas
+                    ts = self.v['touches']; n = TOUCHES_DEF[a][0]
+                    if ts[a][0] != n: continue
+                    if ts[l][1] == n: ts[l][1] = None
+                    if any(n in t for b, t in ts.items() if b != a): ts[a][0] = None
                 if d.get('vitesse_fondu_v') != DEFAUT['vitesse_fondu_v'] and self.v['vitesse_fondu'] == 2.0: self.v['vitesse_fondu'] = DEFAUT['vitesse_fondu']      # ancien defaut x2 -> nouveau defaut x1, une seule fois (#48)
                 self.v['touches_v'] = DEFAUT['touches_v']
                 self.v['interface_v'] = DEFAUT['interface_v']
