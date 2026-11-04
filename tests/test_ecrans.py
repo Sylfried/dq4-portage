@@ -130,7 +130,7 @@ class PleinEcran(unittest.TestCase):
 
     def test_echec_de_l_entree_reste_en_fenetre(self):
         f = self.deux(); f._windowed_location = (2000, 100); os.environ['DQ_SIM_ECHEC'] = '1'; f.regler_plein_ecran(True)
-        self.assertFalse(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (0, 0)); self.assertEqual(f.toasts, ['Plein écran impossible'])
+        self.assertFalse(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.mode_fen, f.reg['mode_fenetre']), (0, 0))
 
     def test_retour_en_fenetre_sans_place_memorisee_centre_sur_le_moniteur_du_plein_ecran(self):
         f = self.deux(plein=True, ecran=1); f._noter_zone_plein(); f.regler_plein_ecran(False)                     # (lancee en plein ecran sur B)

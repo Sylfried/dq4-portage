@@ -24,11 +24,10 @@ def faux_jeu(partie=MO.PARTIE_VILLE, flag=0, msg=False, menu=None, effet=None, a
     """Ce que `controle_joueur` lit du moteur et de la fenetre."""
     e = types.SimpleNamespace(partie=partie, effet=effet, attente_charge=attente, garde_trans=garde)
     mo = types.SimpleNamespace(etat=e, msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: flag)
-    j = types.SimpleNamespace(moteur=mo, titre=titre, toasts=[], appels=[])
+    j = types.SimpleNamespace(moteur=mo, titre=titre, appels=[])
     j._horloge_combat = lambda: F.Jeu._horloge_combat(j)
     j.controle_joueur = lambda: F.Jeu.controle_joueur(j)
     j.historique_possible = lambda: F.Jeu.historique_possible(j)
-    j.toast = lambda t, duree=1.8: j.toasts.append(t)
     j.pause = types.SimpleNamespace(ouvrir=lambda page=None: j.appels.append(page))
     return j
 
@@ -68,11 +67,11 @@ class TestHistoriquePossible(unittest.TestCase):
 
 class TestTouche(unittest.TestCase):
     def test_ouvre_quand_le_joueur_a_la_main(self):
-        j = faux_jeu(); F.Jeu._touche_historique(j); self.assertEqual(j.appels, ['historique']); self.assertEqual(j.toasts, [])
+        j = faux_jeu(); F.Jeu._touche_historique(j); self.assertEqual(j.appels, ['historique'])
 
     def test_ne_fait_rien_sans_message_sinon(self):          # #194 : le joueur n'a pas a etre informe
         for kw in (dict(partie=MO.PARTIE_COMBAT), dict(msg=True), dict(flag=MO.DRAPEAU_JOUEUR_VERROUILLE)):
-            j = faux_jeu(**kw); F.Jeu._touche_historique(j); self.assertEqual(j.appels, [], kw); self.assertEqual(j.toasts, [], kw)
+            j = faux_jeu(**kw); F.Jeu._touche_historique(j); self.assertEqual(j.appels, [], kw)
 
     def test_on_key_press_passe_par_la_regle(self):
         src = inspect.getsource(F.Jeu.on_key_press)
@@ -115,7 +114,7 @@ class TestFermeture(unittest.TestCase):
         p.fermer = lambda: p.appels.append('ferme'); return p
 
     def test_suit_le_jeu_tant_que_le_joueur_a_la_main(self):
-        j = faux_jeu(); p = self.pause(j, ['racine', 'historique']); p.maj(); self.assertEqual(p.appels, ['suit']); self.assertEqual(p.pile, ['racine', 'historique']); self.assertEqual(j.toasts, [])
+        j = faux_jeu(); p = self.pause(j, ['racine', 'historique']); p.maj(); self.assertEqual(p.appels, ['suit']); self.assertEqual(p.pile, ['racine', 'historique'])
 
     def test_le_jeu_reprend_la_main_retour_a_la_racine(self):          # sans message (#194)
         for kw in (dict(partie=MO.PARTIE_COMBAT), dict(msg=True), dict(flag=MO.DRAPEAU_JOUEUR_VERROUILLE)):
@@ -124,15 +123,15 @@ class TestFermeture(unittest.TestCase):
                 if k == 'partie': j.moteur.etat.partie = v
                 elif k == 'msg': j.moteur.msg_visible = v
                 elif k == 'flag': j.moteur.drapeaux = lambda v=v: v
-            p.maj(); self.assertEqual(p.pile, ['racine'], kw); self.assertNotIn('ferme', p.appels); self.assertEqual(j.toasts, [], kw)
+            p.maj(); self.assertEqual(p.pile, ['racine'], kw); self.assertNotIn('ferme', p.appels)
 
     def test_ouverte_par_la_touche_le_menu_se_ferme(self):
-        j = faux_jeu(msg=True); p = self.pause(j, ['historique']); p.maj(); self.assertEqual(p.appels, ['ferme']); self.assertEqual(j.toasts, [])
+        j = faux_jeu(msg=True); p = self.pause(j, ['historique']); p.maj(); self.assertEqual(p.appels, ['ferme'])
 
     def test_les_autres_pages_ne_sont_pas_touchees(self):
         for page in ('racine', 'affichage', 'son', 'commandes'):
             j = faux_jeu(partie=MO.PARTIE_COMBAT, msg=True); p = self.pause(j, ['racine'] + ([page] if page != 'racine' else [])); pile = list(p.pile); p.maj()
-            self.assertEqual(p.pile, pile, page); self.assertEqual(j.toasts, [], page)
+            self.assertEqual(p.pile, pile, page)
 
 
 if __name__ == '__main__':

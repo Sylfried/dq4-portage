@@ -1,8 +1,8 @@
-"""Alerte du tas du moteur (ENG-01, audit du 04/11/2026) : le tas n'est jamais libere et fait 256 Mo ; la fenetre previent le joueur a 200 Mo puis a 240 Mo.
+"""Alerte du tas du moteur (ENG-01, audit du 04/11/2026) : le tas n'est jamais libere et fait 256 Mo ; la fenetre le note dans le journal des erreurs a 200 Mo puis a 240 Mo (plus de message a l'ecran depuis #267).
 
   1. `Core.tas_utilise` : octets alloues (heap_ptr - HEAP_BASE) ; seuils 200 et 240 Mo sous la taille du tas ;
-  2. `Jeu._surveiller_tas` : rien sous 200 Mo ; un message (et une ligne du journal) a 200 Mo, un autre a 240 Mo, chacun UNE fois ; le tas qui redescend (chargement d'un etat) rearme les alertes ;
-     un saut direct au-dela de 240 Mo donne le message pressant ; aucun etat instantane n'est ecrit (il garderait le tas plein).
+  2. `Jeu._surveiller_tas` : rien sous 200 Mo ; une ligne du journal a 200 Mo, une autre a 240 Mo, chacune UNE fois, et aucun message a l'ecran (le faux jeu n'a pas de `toast`) ; le tas qui redescend (chargement d'un etat) rearme les alertes ;
+     un saut direct au-dela de 240 Mo donne une seule ligne ; aucun etat instantane n'est ecrit (il garderait le tas plein).
 
     python3 tests/test_alerte_tas.py
 """
@@ -42,8 +42,8 @@ class Seuils(unittest.TestCase):
 @unittest.skipIf(FE is None, 'fenetre/jeu.py non importable ici')
 class Alerte(unittest.TestCase):
     def setUp(self):
-        self.toasts = []; self.journal = []
-        self.j = types.SimpleNamespace(_tas_niveau=0, toast=lambda t, duree=1.8: self.toasts.append((t, duree)))
+        self.journal = []
+        self.j = types.SimpleNamespace(_tas_niveau=0)
         self.j._surveiller_tas = types.MethodType(FE.Jeu._surveiller_tas, self.j)
         self.ancien = FE.noter_erreur; FE.noter_erreur = lambda t: self.journal.append(t)
 
@@ -51,24 +51,23 @@ class Alerte(unittest.TestCase):
 
     def test_rien_sous_200_mo(self):
         for u in (0, 14, 150, 199.9): self.j._surveiller_tas(core(u))
-        self.assertEqual(self.toasts, []); self.assertEqual(self.journal, [])
+        self.assertEqual(self.journal, [])
 
     def test_un_message_par_palier(self):
         for u in (100, 200, 205, 230, 239.9): self.j._surveiller_tas(core(u))
-        self.assertEqual(len(self.toasts), 1); self.assertIn('78 %', self.toasts[0][0]); self.assertIn('relancer', self.toasts[0][0]); self.assertGreaterEqual(self.toasts[0][1], 8.0)
-        self.assertEqual(len(self.journal), 1); self.assertIn('200 Mo sur 256 Mo', self.journal[0])
+        self.assertEqual(len(self.journal), 1); self.assertIn('200 Mo sur 256 Mo', self.journal[0]); self.assertIn('a 78 %', self.journal[0])
         for u in (240, 245, 255): self.j._surveiller_tas(core(u))
-        self.assertEqual(len(self.toasts), 2); self.assertIn('94 %', self.toasts[1][0]); self.assertIn('maintenant', self.toasts[1][0]); self.assertEqual(len(self.journal), 2)
+        self.assertEqual(len(self.journal), 2); self.assertIn('a 94 %', self.journal[1])
 
     def test_saut_direct_au_dela_de_240(self):
-        self.j._surveiller_tas(core(250)); self.assertEqual(len(self.toasts), 1); self.assertIn('presque pleine', self.toasts[0][0])
-        self.j._surveiller_tas(core(252)); self.assertEqual(len(self.toasts), 1)
+        self.j._surveiller_tas(core(250)); self.assertEqual(len(self.journal), 1); self.assertIn('a 98 %', self.journal[0])
+        self.j._surveiller_tas(core(252)); self.assertEqual(len(self.journal), 1)
 
     def test_le_tas_qui_redescend_rearme(self):
-        self.j._surveiller_tas(core(210)); self.j._surveiller_tas(core(12)); self.j._surveiller_tas(core(12)); self.assertEqual(len(self.toasts), 1)             # (etat charge : tas de 12 Mo)
-        self.j._surveiller_tas(core(210)); self.assertEqual(len(self.toasts), 2)
-        self.j._surveiller_tas(core(245)); self.j._surveiller_tas(core(215)); self.assertEqual(len(self.toasts), 3)                                       # 94 % puis retour a 84 % : pas de nouvelle alerte (le palier bas est deja passe)
-        self.j._surveiller_tas(core(215)); self.assertEqual(len(self.toasts), 3)
+        self.j._surveiller_tas(core(210)); self.j._surveiller_tas(core(12)); self.j._surveiller_tas(core(12)); self.assertEqual(len(self.journal), 1)             # (etat charge : tas de 12 Mo)
+        self.j._surveiller_tas(core(210)); self.assertEqual(len(self.journal), 2)
+        self.j._surveiller_tas(core(245)); self.j._surveiller_tas(core(215)); self.assertEqual(len(self.journal), 3)                                       # 94 % puis retour a 84 % : pas de nouvelle alerte (le palier bas est deja passe)
+        self.j._surveiller_tas(core(215)); self.assertEqual(len(self.journal), 3)
 
 
 if __name__ == '__main__':

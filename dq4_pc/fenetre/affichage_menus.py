@@ -1,5 +1,5 @@
-"""Messages, fenetres de menu du jeu et editeur d'interface ; fondus, vignette et petits messages (toasts)."""
-import os, random, time
+"""Messages, fenetres de menu du jeu et editeur d'interface ; fondus et vignette."""
+import os, random
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -17,11 +17,7 @@ from dq4_pc.fenetre.aides import sans_validation
 
 
 class MenusMixin:
-    """Messages, fenetres de menu du jeu et editeur d'interface ; fondus, vignette et petits messages (toasts)."""
-
-    def toast(self, texte, duree=1.8):
-        """Petit message en haut de l'ecran (sauvegardes rapides...)."""
-        self.toasts = [(texte, time.time() + duree)]
+    """Messages, fenetres de menu du jeu et editeur d'interface ; fondus et vignette (plus de petits messages en haut de l'ecran depuis #267)."""
 
     def ui_g_reset(self):
         """Refait les fenetres de menu d'origine d'apres la memoire de l'interface (apres le chargement d'un etat)."""

@@ -73,15 +73,15 @@ class Fenetre(unittest.TestCase):
         with open(self.journal, encoding='utf-8') as f: return f.read()
 
     def test_signalement_une_fois_puis_les_nouveaux(self):
-        toasts = []; j = types.SimpleNamespace(toast=lambda t, duree=1.8: toasts.append((t, duree)), _crochets_signales=0)
+        j = types.SimpleNamespace(_crochets_signales=0)                                  # (sans `toast` : depuis #267 aucun message a l'ecran, seulement le journal)
         mo = types.SimpleNamespace(crochets_manques=['vitesse du texte non installee', 'rencontres : CountDown::exec inattendu'])
         self.F.Jeu._signaler_crochets_manques(j, mo)
-        self.assertEqual(j._crochets_signales, 2); self.assertEqual(len(toasts), 1); self.assertGreaterEqual(toasts[0][1], 6.0)
+        self.assertEqual(j._crochets_signales, 2)
         txt = self.lire()
         self.assertIn('vitesse du texte', txt); self.assertIn('CountDown', txt); self.assertEqual(txt.count('\n'), 2)
         mo.crochets_manques.append('sorts sans effet : menu Magie inattendu')            # trouve apres le chargement d'un etat
         self.F.Jeu._signaler_crochets_manques(j, mo)
-        self.assertEqual(j._crochets_signales, 3); self.assertEqual(len(toasts), 2)
+        self.assertEqual(j._crochets_signales, 3)
         txt = self.lire(); self.assertEqual(txt.count('\n'), 3); self.assertIn('menu Magie', txt)
 
 
