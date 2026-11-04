@@ -2097,3 +2097,21 @@ Rendu du moteur réel (1280 x 720) avant correction : `ev09` a un grand coin noi
 
 ### Non vérifié
 Rendu à d'autres tailles de fenêtre / formats (21:9) ; l'aspect du miroir en pleine partie sur Windows ; scènes qui déplacent la caméra sur ces cartes.
+
+## Avance #252 : carte du monde en ballon : échelle du terrain du jeu (paquet 30) et ballon flottant
+
+### Demande
+Audit du 04/11/2026, MAP-02 / UNI-05 / SPR-06 : le paquet 30 (`field_scale`) était ignoré ; décision de Sylfried (sondage) : **reproduire l'original** (échelle du jeu × ton zoom).
+
+### Établi
+Désassemblage : `cmd_field_scale` (D12794) : entier ≥ 0 = `Field.SetFloatingObject(Chara.m_chara de cet emplacement)`, entier < 0 = `Field.SetScale(flottant)` ; `Field.SetScale` (CD353C) règle `Camera.orthographicSize = taille d'origine × échelle` puis `FloatingObject.SetScale(échelle)` (CD3708 : `localScale = échelle de départ × échelle`) sur chaque objet flottant, donc le panneau du ballon garde sa taille à l'écran quand le terrain est vu de plus loin (son ombre, transform séparé, non). Personne n'appelle `RemoveFloatingObject` (balayage de libil2cpp). Moteur lancé sur la sauvegarde 4 : à l'entrée sur la carte du monde, `(27, [1])` puis `(30, [12])` (image 31) : le ballon (emplacement 12) est toujours enregistré ; l'échelle `[-1] [1,25]` ne sort qu'en vol (relevé de l'audit, drapeau 344 forcé).
+
+### Fait
+- `Etat.champ_echelle` et `Etat.flottants` (attributs de classe : un état instantané enregistré avant #252 reste valide), mis à jour par le paquet 30, remis à 1 / vide au paquet 0 (carte) et 27 (carte du monde) ; échelle bornée à 0,25 - 4 (le moteur n'envoie que 1,00 à 1,25), valeurs absentes, nulles, négatives, NaN, infinies ignorées.
+- `_camera_champ` : hauteur visible × `champ_echelle`, par-dessus le zoom du joueur.
+- `jeu.py` : sur la carte du monde, un sprite flottant est agrandi de `champ_echelle` (pieds fixes).
+- Vérifié à l'écran (moteur réel, 1280 x 720, ballon injecté à l'échelle 1,25 sur la sauvegarde 4, avant / après) : le terrain montre 25 % de terrain en plus (symboles de lieux et décor à 0,8 de leur taille), l'enveloppe du ballon garde sa taille (45 → 48 px, aux arrondis du pixel près).
+- `tests/test_ballon_echelle.py` (10 tests, dans la CI ; les 3 de la caméra sont ignorés là-bas faute de pyglet).
+
+### Non vérifié
+Un vol réel (la montée, la descente, l'échelle qui varie d'une image à l'autre) : les sauvegardes sont au chapitre 1. Le comportement exact de `Field.Init` sur la liste des objets flottants (la liste est vidée ici à chaque chargement de la carte du monde ; le moteur réenregistre le ballon juste après). Le comportement en pixel perfect (la caméra reste calée sur les pixels de la carte, l'échelle 1,25 n'est pas entière).

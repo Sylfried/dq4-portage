@@ -36,7 +36,7 @@ Relecture de tout le jeu d'origine contre le portage (moteur, cartes, sprites, s
 - Plaque « Sauvegarde automatique » grisée : **gardée** ; écriture à la fermeture : **non** (comme l'original) ; proportions d'interface (×1,12, commandes 510 / 459) : **gardées** ; `pause.py` et `ui_menu.py` : **non découpés**.
 - Poker « Abandonner » (SVC-03) : **police réduite** (décidé plus tôt). Mémoire du moteur (ENG-01) : alerte à 200 Mo + sauvegarde automatique (par discernement).
 
-**Reste à faire sans décision à prendre** : FSRA, FEAN et FEMV non rejoués (UNI-03, MAP-03, taille M à L), paquets 1, 6, 30 et 34 partiel (SVC-06), phase 23 à rejouer avec le vrai PNJ (SVC-08), préchargement de la musique de la carte suivante (SND-11), entrée de la position de la caméra (UNI-07).
+**Reste à faire sans décision à prendre** : FSRA, FEAN et FEMV non rejoués (UNI-03, MAP-03, taille M à L), paquets 1, 6 et 34 partiel (SVC-06 ; le paquet 30 est traité, #252), phase 23 à rejouer avec le vrai PNJ (SVC-08), préchargement de la musique de la carte suivante (SND-11), entrée de la position de la caméra (UNI-07).
 
 ## Décisions de Sylfried
 

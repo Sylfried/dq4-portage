@@ -18,10 +18,10 @@ class CameraMixin:
 
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
-        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) x distance d'affichage / zoom.
+        (en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VUE_HAUT tuiles (le heros a la meme taille que dans les villes) x distance d'affichage / zoom x echelle du jeu (ballon, paquet 30).
         L'angle et la rotation de la camera (fleches) ne s'appliquent pas ici."""
         cx, cz = (e.champ['cam'] if e.champ and e.champ['cam'] else (0.0, 0.0))
-        dh = CH_VUE_HAUT / 2 / self.zoom; dl = dh * aspect                      # meme champ pour tous les shaders : le zoom ne depend pas du style de rendu
+        dh = CH_VUE_HAUT / 2 / self.zoom * float(getattr(e, 'champ_echelle', 1.0)); dl = dh * aspect          # meme champ pour tous les shaders : le zoom ne depend pas du style de rendu ; echelle du jeu (ballon : jusqu'a 1,25, Field.SetScale : orthographicSize x echelle) multipliee par le zoom du joueur (MAP-02)
         if self.mode == MODE_PP: cx, cz = round(cx) / CH_PX, round(cz) / CH_PX; ech = 1.0       # pixel perfect : camera sur un pixel de la carte, heros a sa taille exacte (24 x 32 pixels de la carte)
         else: cx, cz = cx / CH_PX, cz / CH_PX; ech = CH_ECHELLE
         self._vue_champ = (cx, cz, dl, dh)                                      # (la camera de la carte du monde ne se regle pas : ni angle ni rotation)

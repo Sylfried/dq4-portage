@@ -157,3 +157,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #247 | alerte de la mémoire du moteur (audit ENG-01) : message à 200 Mo puis à 240 Mo sur 256, une fois par palier ; rien d'écrit par l'alerte |
 | 04/11 | #248 | poker du casino (audit SVC-03) : les étiquettes des boutons sont comprimées pour tenir dans leur plaque (« Abandonner » ne chevauche plus ses voisins) ; les autres débordements du français sont inchangés |
 | 04/11 | #250 | MAP-05 : ciel des cartes dpout et ev09 prolongé de part et d'autre par symétrie (plus de coins noirs en 16/9) ; test_ciel_etendu |
+| 04/11 | #252 | MAP-02 / UNI-05 / SPR-06 : paquet 30 rejoué (zone visible ×1,00 à ×1,25 en ballon, panneau du ballon à la même échelle, ton zoom multiplié) ; test_ballon_echelle |
