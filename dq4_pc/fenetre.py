@@ -133,6 +133,7 @@ CH_VUE_HAUT = 32.0 / CH_PX * CH_ECHELLE / HEROS_FRAC                         # c
 CH_GOUT = 2                                                                 # carte du monde : gouttiere (pixels repetes) autour de chaque tuile de 16 px dans l'atlas copie : aucun debordement d'une tuile sur sa voisine au filtrage
 CH_CASE = 16 + 2 * CH_GOUT
 ZOOM_MIN, ZOOM_MAX = 0.5, 2.0                                               # zoom interne (1 = vue habituelle) ; reglage « Distance camera » du menu Echap et molette : 200 % (loin) a 50 % (pres)
+DIST_PAS, DIST_DELAI, DIST_REPETE = 5, 0.4, 0.08                              # touches « Caméra (Rapprocher) » et « Caméra (Éloigner) » (#146) : pas de la distance en pourcentage (comme le curseur du menu), attente avant la repetition (s), puis un pas toutes les 0,08 s (~ 60 % par seconde)
 CAM_LACET_VIT, CAM_TANGAGE_VIT = 100.0, 45.0                                # fleches : tourner la camera (degres / s), relever ou abaisser son angle (degres / s)
 CAM_ANGLE_MIN, CAM_ANGLE_MAX = -20.0, 40.0                                  # angle de camera (0 = comme le jeu)
 CAM_CENTRE_MAX = 60.0                                                        # camera centree sur le heros : garde-fou, ecart maximal (unites) entre la cible du jeu et le heros pour corriger (position du heros perimee) ; le vrai critere est le verrou TownCamera (cam_jeu)
@@ -794,6 +795,27 @@ class Jeu(pyglet.window.Window):
     def regler_distance(self, pourcent):
         """Menu Echap : distance de la camera en pourcentage (50 = deux fois plus pres, 200 = deux fois plus loin)."""
         self.regler_zoom(100.0 / max(1.0, float(pourcent)))
+
+    def distance_au_pas(self, sens):
+        """Distance de la camera (pourcentage) un pas plus loin (sens +1) ou plus pres (sens -1), arrondie au pas de 5 % : 91 % -> 90 % (pres) ou 95 % (loin), 95 % -> 90 % ou 100 %. Bornee a 50 - 200 %."""
+        lo, hi = RG.BORNES['distance_camera']; q = 100.0 / self.zoom / DIST_PAS
+        k = round(q) + sens if abs(q - round(q)) < 1e-3 else (math.ceil(q) if sens > 0 else math.floor(q))
+        return min(hi, max(lo, k * DIST_PAS))
+
+    _dist_sens = 0; _dist_tenue = 0.0; _dist_rep = 0.0; _t_dist = None
+
+    def _maj_distance_clavier(self):
+        """Touches « Caméra (Rapprocher) » / « Caméra (Éloigner) » (a chaque image affichee) : un pas de 5 % a l'appui, puis, touche maintenue plus de 0,4 s, un pas toutes les 0,08 s. Memes conditions que la molette
+        (_zoom_possible : terrain, jamais un menu, un message ou un combat) ; les deux touches ensemble ne font rien. Meme valeur que le curseur « Distance caméra » et la molette (regler_distance)."""
+        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self._t_dist is None else min(0.1, t - self._t_dist)); self._t_dist = t
+        sens = (1 if self._tenue('cam_loin') else 0) - (1 if self._tenue('cam_pres') else 0)
+        if not sens or not self._zoom_possible(): self._dist_sens = 0; self._dist_tenue = 0.0; self._dist_rep = 0.0; return
+        if sens != self._dist_sens: self._dist_sens = sens; self._dist_tenue = 0.0; self._dist_rep = 0.0; self.regler_distance(self.distance_au_pas(sens)); return
+        self._dist_tenue += dt
+        if self._dist_tenue < DIST_DELAI: return
+        self._dist_rep += dt
+        while self._dist_rep >= DIST_REPETE:
+            self._dist_rep -= DIST_REPETE; self.regler_distance(self.distance_au_pas(sens))
 
     def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
@@ -2776,7 +2798,7 @@ class Jeu(pyglet.window.Window):
         if self.pause.ouvert:
             self.pause.maj(); self._synchroniser_gel()
             if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # historique, question « Quitter » : le moteur est arrete ; sur les autres pages, il tourne sans entree (tick)
-        self._maj_camera()
+        self._maj_camera(); self._maj_distance_clavier()
         t = time.perf_counter()
         dt = 0.0 if self.t_boucle is None else t - self.t_boucle
         self.t_boucle = t

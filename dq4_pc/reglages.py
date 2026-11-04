@@ -9,12 +9,14 @@ TOUCHES_DEF = {
     'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', 'PAGEUP'], 'R': ['R', 'PAGEDOWN'], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
+    'cam_pres': ['NUM_ADD', 'E'], 'cam_loin': ['NUM_SUBTRACT', 'W'],      # distance de la camera au clavier (#146) : rapprocher / eloigner, par pas de 5 % entre 50 et 200 % ; pave numerique + / - ou E / W (libres : ni ZQSD, ni fleches, ni les chiffres des etats)
     'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
 ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
            ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
+           ('cam_pres', 'Caméra (Rapprocher)'), ('cam_loin', 'Caméra (Éloigner)'),
            ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
@@ -22,7 +24,7 @@ RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule fenetr
 NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
         'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
         'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
-        'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
+        'NUM_ADD': 'Pavé +', 'NUM_SUBTRACT': 'Pavé -', 'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
 
 # Fenetres de commandes du combat (le cadre du bas : Combattre / Fuir, Attaquer / Magie / Objets / Defense, cibles, objets et sorts, infos) : cadre de 459 unites d'interface, alors que les messages d'action du combat
 # (types 2 et 3 de la fenetre de message) en font 510. Par defaut ces fenetres sont agrandies a la largeur des boites de dialogue (510 / 459) : le bouton de vitesse, colle au coin bas gauche de la boite du bas, ne se
