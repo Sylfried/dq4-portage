@@ -17,8 +17,8 @@ def main(argv=None):
     except Exception as ex: print('Migration des fichiers impossible (%r) : le jeu continue avec les dossiers actuels.' % (ex,), flush=True)
     ap = argparse.ArgumentParser(prog='dq4_pc')
     ap.add_argument('--apk', default=d.apk, help='dossier des 3 APK (version francaise) ; par defaut donnees\\apk')
-    ap.add_argument('--saves-lecture', default=None, help='dossier contenant data1.dat... (par defaut : la plus recente sauvegarde de donnees\\sauvegardes\\mobile)')
-    ap.add_argument('--saves-ecriture', default=d.portage, help='dossier des sauvegardes ecrites par le portage ; par defaut donnees\\sauvegardes\\portage (les etats instantanes sont dans donnees\\sauvegardes\\etats)')
+    ap.add_argument('--saves-lecture', default=None, help='dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans donnees\\sauvegardes)')
+    ap.add_argument('--saves-ecriture', default=d.portage, help='dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut donnees\\sauvegardes (les etats instantanes sont dans donnees\\sauvegardes\\etats)')
     ap.add_argument('--cache', default=d.cache, help='dossier des fichiers calcules a partir des APK ; par defaut donnees\\cache')
     ap.add_argument('--slot', type=int, default=0, help='numero de sauvegarde a charger directement (1-5) en sautant l\'ecran-titre ; 0 (defaut) = le jeu demarre par ses logos, son titre et son menu de depart')
     ap.add_argument('--sans-logos', action='store_true', help='saute les logos d\'entree (SQUARE ENIX, ArtePiazza)')
@@ -65,7 +65,7 @@ def main(argv=None):
     if a.volume_bruitages is None: a.volume_bruitages = reg['volume_bruitages']
     print('Jeu : APK dans %s' % a.apk, flush=True)
     if not os.path.isfile(os.path.join(a.apk, 'base.apk')):
-        print('\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, ta sauvegarde du telephone dans %s\\<date>\\data1.dat). Autre dossier : set DQ4_DONNEES=chemin\\vers\\donnees' % (os.path.normpath(a.apk), d.mobile), flush=True)
+        print('\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DONNEES=chemin\\vers\\donnees' % (os.path.normpath(a.apk), d.sauvegardes), flush=True)
         sys.exit(1)
     sys.setswitchinterval(0.001)      # le calcul HD en tache de fond ne doit pas retarder le dessin
     if a.saves_lecture is None:

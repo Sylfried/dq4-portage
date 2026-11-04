@@ -21,7 +21,7 @@ class Disposition(unittest.TestCase):
     def test_par_defaut(self):
         d = CH.Dossiers('/projet', env={})
         self.assertEqual(d.donnees, os.path.normpath('/projet/donnees'))
-        for nom, attendu in (('apk', 'donnees/apk'), ('mobile', 'donnees/sauvegardes/mobile'), ('portage', 'donnees/sauvegardes/portage'), ('etats', 'donnees/sauvegardes/etats'),
+        for nom, attendu in (('apk', 'donnees/apk'), ('mobile', 'donnees/sauvegardes/mobile'), ('portage', 'donnees/sauvegardes'), ('ancien_portage', 'donnees/sauvegardes/portage'), ('etats', 'donnees/sauvegardes/etats'),
                              ('cache', 'donnees/cache'), ('reglages', 'donnees/reglages/reglages.json'), ('favoris', 'donnees/reglages/historique_favoris.json'),
                              ('journal_fenetre', 'donnees/journaux/erreurs_fenetre.log')):
             self.assertEqual(getattr(d, nom), os.path.normpath('/projet/' + attendu), nom)
@@ -31,7 +31,7 @@ class Disposition(unittest.TestCase):
         self.assertEqual(d.apk, os.path.normpath('/ailleurs/mes_donnees/apk')); self.assertEqual(d.cache, os.path.normpath('/ailleurs/mes_donnees/cache'))
         d = CH.Dossiers('/projet', env={'DQ4_JEUX': '/jeux/DQ4'})                      # ancien fonctionnement : APK et sauvegardes du telephone la-bas, le reste dans donnees
         self.assertEqual(d.apk, os.path.normpath('/jeux/DQ4/patched_apks')); self.assertEqual(d.mobile, os.path.normpath('/jeux/DQ4/saves'))
-        self.assertEqual(d.portage, os.path.normpath('/projet/donnees/sauvegardes/portage'))
+        self.assertEqual(d.portage, os.path.normpath('/projet/donnees/sauvegardes'))
 
     def test_etats_et_copies_selon_le_dossier_d_ecriture(self):
         d = CH.Dossiers('/projet', env={})
@@ -52,6 +52,7 @@ class Migration(unittest.TestCase):
         r = self.t
         ecrire(os.path.join(r, 'jeux', 'DQ4', 'patched_apks', 'base.apk'), b'APK1'); ecrire(os.path.join(r, 'jeux', 'DQ4', 'patched_apks', 'split_config.arm64_v8a.apk'), b'APK2')
         ecrire(os.path.join(r, 'jeux', 'DQ4', 'saves', '20261103_222423', 'data1.dat'), b'T1'); ecrire(os.path.join(r, 'jeux', 'DQ4', 'saves', '20261007_190735', 'data1.dat'), b'T0')
+        ecrire(os.path.join(r, 'jeux', 'DQ4', 'saves', '20261103_222423', 'data2.dat'), b'T2'); ecrire(os.path.join(r, 'jeux', 'DQ4', 'saves', '20261007_190735', 'data3.dat'), b'T3_ancien')
         ecrire(os.path.join(r, 'dq4_pc', 'cache', 'carte10_a.pkl'), b'CACHE'); ecrire(os.path.join(r, 'dq4_pc', 'cache', 'il2cpp', 'dump.cs'), b'DUMP')
         ecrire(os.path.join(r, 'dq4_pc', 'sauvegardes', 'data1.dat'), b'P1'); ecrire(os.path.join(r, 'dq4_pc', 'sauvegardes', 'etats', 'etat_01.dqs'), b'E1')
         ecrire(os.path.join(r, 'dq4_pc', 'sauvegardes', 'avant_import_20261101_101010', 'data2.dat'), b'AV')
@@ -65,10 +66,13 @@ class Migration(unittest.TestCase):
     def test_reprise_complete(self):
         fait = CH.migrer(self.d, log=lambda *a: None)
         self.assertGreaterEqual(len(fait), 6)
-        self.assertEqual(self.lire('donnees', 'apk', 'base.apk'), b'APK1'); self.assertEqual(self.lire('donnees', 'sauvegardes', 'mobile', '20261103_222423', 'data1.dat'), b'T1')
-        self.assertEqual(self.lire('donnees', 'sauvegardes', 'mobile', '20261007_190735', 'data1.dat'), b'T0')
+        self.assertEqual(self.lire('donnees', 'apk', 'base.apk'), b'APK1')
+        self.assertEqual(self.lire('donnees', 'sauvegardes', 'data1.dat'), b'P1')                                        # les journaux du portage d'avant passent avant la copie du telephone (T1)
+        self.assertEqual(self.lire('donnees', 'sauvegardes', 'data2.dat'), b'T2')                                        # ... qui complete ce qui manque (la plus recente seulement)
+        self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees', 'sauvegardes', 'data3.dat')))                    # (pas celui d'une date plus ancienne)
+        self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees', 'sauvegardes', 'mobile'))); self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees', 'sauvegardes', 'portage')))
         self.assertEqual(self.lire('donnees', 'cache', 'carte10_a.pkl'), b'CACHE'); self.assertEqual(self.lire('donnees', 'cache', 'il2cpp', 'dump.cs'), b'DUMP')
-        self.assertEqual(self.lire('donnees', 'sauvegardes', 'portage', 'data1.dat'), b'P1'); self.assertEqual(self.lire('donnees', 'sauvegardes', 'etats', 'etat_01.dqs'), b'E1')
+        self.assertEqual(self.lire('donnees', 'sauvegardes', 'etats', 'etat_01.dqs'), b'E1')
         self.assertEqual(self.lire('donnees', 'sauvegardes', 'avant_import_20261101_101010', 'data2.dat'), b'AV')
         self.assertEqual(self.lire('donnees', 'reglages', 'reglages.json'), b'{"a": 1}'); self.assertEqual(self.lire('donnees', 'reglages', 'historique_favoris.json'), b'[]')
         self.assertEqual(self.lire('donnees', 'journaux', 'erreurs_fenetre.log'), b'LOG')
@@ -82,9 +86,9 @@ class Migration(unittest.TestCase):
 
     def test_rien_n_est_ecrase_et_la_reprise_ne_se_repete_pas(self):
         ecrire(os.path.join(self.t, 'donnees', 'reglages', 'reglages.json'), b'{"nouveau": 2}')                 # reglages deja changes dans la nouvelle version : gardes
-        ecrire(os.path.join(self.t, 'donnees', 'sauvegardes', 'portage', 'data1.dat'), b'NEUF')
+        ecrire(os.path.join(self.t, 'donnees', 'sauvegardes', 'portage', 'data1.dat'), b'NEUF')                       # le dossier d'ecriture d'hier : ce que le jeu a ecrit ensuite l'emporte sur le vieux portage (P1)
         CH.migrer(self.d, log=lambda *a: None)
-        self.assertEqual(self.lire('donnees', 'reglages', 'reglages.json'), b'{"nouveau": 2}'); self.assertEqual(self.lire('donnees', 'sauvegardes', 'portage', 'data1.dat'), b'NEUF')
+        self.assertEqual(self.lire('donnees', 'reglages', 'reglages.json'), b'{"nouveau": 2}'); self.assertEqual(self.lire('donnees', 'sauvegardes', 'data1.dat'), b'NEUF')
         self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
 
     def test_cache_deja_present_n_est_pas_touche(self):
