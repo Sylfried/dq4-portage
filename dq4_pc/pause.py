@@ -246,7 +246,8 @@ class Pause:
 
     def _e_racine(self):
         return [dict(t='act', l='Reprendre', ok=self.fermer),
-                dict(t='act', l='Historique', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True),
+                dict(t='act', l='Historique', ok=lambda: (self.hist.entrer(), self._aller('historique')()), sous=True, off=lambda: not getattr(self.J, 'historique_possible', lambda: True)(),
+                     aide="Disponible seulement quand vous avez la main sur votre personnage : ni pendant un combat, ni pendant un dialogue, une scène ou un événement du jeu, ni dans un menu du jeu"),
                 dict(t='act', l='États', ok=self._aller('etats'), sous=True),
                 dict(t='act', l='Affichage', ok=self._aller('affichage'), sous=True),
                 dict(t='act', l='Son', ok=self._aller('son'), sous=True),
@@ -621,7 +622,9 @@ class Pause:
     def maj(self):
         """Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image). Page Son : les sons jouent (le jeu est arrete) pour qu'on entende les volumes qu'on regle."""
         S = self.J.son; ecoute = self.ecran == 'son'
-        if self.ecran == 'historique': self.hist.suivre_le_jeu()          # le jeu tourne derriere l'historique (#178) : ce qu'il y ecrit s'ajoute en bas de la liste
+        if self.ecran == 'historique':
+            if not getattr(self.J, 'historique_possible', lambda: True)(): self.retour(); self.J.toast(getattr(self.J, 'MSG_HISTORIQUE_FERME', 'Historique fermé'))          # le jeu a repris la main (combat, dialogue, scene : le jeu tourne derriere le menu, #178) : l'historique n'est accessible qu'avec la main sur son personnage (#187)
+            else: self.hist.suivre_le_jeu()          # le jeu tourne derriere l'historique (#178) : ce qu'il y ecrit s'ajoute en bas de la liste
         if ecoute != S.ecoute: S.ecouter(ecoute)
         if ecoute: S.tick()
         if self.pan_plier_a is not None and self.pan_appui is None and time.time() >= self.pan_plier_a: self._plier_en_attente()          # clic simple sur la barre de titre : le pliage a lieu quand le delai du double clic est ecoule sans second appui (#145)

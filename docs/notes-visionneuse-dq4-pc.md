@@ -1599,3 +1599,23 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - **Supposé** : « ne doivent pas s'aligner si on monte ou descend la caméra » = le personnage ne se redresse plus face à la caméra quand on l'incline. Conséquence : à forte inclinaison (vue de dessus) les PNJ et le héros paraissent couchés, comme des objets debout. Si tu préfères qu'ils restent de face à la caméra : `DQ_SPRITES_SUR_VUE=1` (ancien alignement), à passer en réglage ou en comportement par défaut.
 - Non vérifié : le rendu sous Windows ; les donjons, tours et la pose couchée (inchangée) n'ont pas été regardés un par un.
+
+## Avance #187 : l'historique seulement quand le joueur a la main (#186, 04/11/2026)
+
+### Demande (D-232, 04/11 13 h 25)
+« L'historique doit pouvoir être accessible uniquement quand j'ai le contrôle de mon perso, donc pas pendant un combat ni pendant un moment où le jeu prend le contrôle »
+
+### Établi
+- Avant : la touche H ouvrait l'historique en ville, sur la carte du monde et en combat, même pendant un message ; la ligne « Historique » du menu Paramètres était toujours active.
+- Le moteur dit lui-même quand le joueur a la main : verrou du joueur (`Global.Flag` bit 4 : événement, scène, discussion, fondu de sortie), message affiché, menu du jeu ouvert, effet d'écran / chargement, partie « combat » (même condition que la marche accélérée, `Jeu._facteur_vitesse`).
+
+### Fait
+- `Jeu.controle_joueur()` : vrai seulement en ville / donjon / tour / carte du monde, joueur non verrouillé, sans message, sans menu du jeu, sans effet d'écran ni chargement, hors combat (partie combat, cascade d'entrée, écran noir d'attente, entre deux fondus). Un fondu seul (arrivée sur une carte, retour de combat, joueur libre) n'y compte pas. `Jeu.historique_possible()` : en plus, jamais à l'écran titre.
+- Touche H (`Jeu._touche_historique`) : ouvre la page si possible, sinon le message « Historique indisponible : le jeu a la main ».
+- Menu Paramètres : la ligne « Historique » est grisée (infobulle : « Disponible seulement quand vous avez la main sur votre personnage… ») quand ce n'est pas possible, relue à chaque image.
+- `Pause.maj` : page historique ouverte alors que le jeu reprend la main (il tourne derrière le menu depuis #179) : retour à la racine (ou menu fermé si la page venait de la touche H) et message « Historique fermé : le jeu a repris la main ».
+- Tests : `outils/test_historique_acces.py` (19) : table de vérité de `controle_joueur`, écran titre, touche H (ouvre / message), ligne du menu active / grisée / relue, faux jeu minimal, fermeture automatique.
+
+### À trancher / non vérifié
+- **Supposé** : le menu du jeu ouvert (commandes, Divers, boutique) compte comme « le jeu a la main » : en passant par « Paramètres » du menu Divers, la ligne Historique est grisée ; la touche H reste utilisable après avoir fermé ce menu.
+- **Non vérifié sous Windows** : H en ville, pendant un dialogue, une scène, un combat ; fermeture automatique quand un événement reprend la main (cas rare : le jeu ne reçoit aucune entrée derrière le menu).
