@@ -1288,9 +1288,9 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - Mesuré au vrai moteur et à la vraie fenêtre (Xvfb, sauvegarde 2, bulle forcée au-dessus du héros) : le carré de la bulle est projeté avec la matrice de la ville (même formule que `DQ_PROJ`) ; un clic au centre donne `clic_a`, un clic à 5 pixels du coin de l'écran rien ; un toucher du rond central donne `clic_a`, un appui à 0,3 du diamètre (glissement vers la droite) pas d'action au relâchement ; `pad_clignote` vrai dessine la boule orange et son halo.
 
 ### Fait
-- `bulles.py` (fonctions pures : `projeter`, `dans_quadrilatere`) ; `fenetre.py` : `_icones` garde les 4 coins monde de chaque bulle (`icone_quads`), `_bulle_sous` les projette (matrice de la dernière image) et `on_mouse_press` donne `clic_a` (la touche A, comme l'espace) sur le terrain libre uniquement ; clic droit inchangé (annuler).
+- (retiré par l'avance #157 : `bulles.py`, projection et clic sur la bulle) ; `fenetre.py` : `_icones` garde les 4 coins monde de chaque bulle (`icone_quads`), `_bulle_sous` les projette (matrice de la dernière image) et `on_mouse_press` donne `clic_a` (la touche A, comme l'espace) sur le terrain libre uniquement ; clic droit inchangé (annuler).
 - `hud_mobile.py` : `croix_glisse` (sorti du rond central), `croix_relacher()` (True = toucher du rond central) ; `fenetre.on_mouse_release` donne `clic_a` sur le terrain libre ; le rond central s'éclaire (boule orange + halo, morceaux `CurLight` et `CurBS` de la feuille `Button`) pendant un toucher et **clignote** (période de 1 s) quand le jeu le demande ; les directions ne changent pas.
-- Tests : `outils/test_bulles_et_croix.py` (27 tests : projection, quadrilatère, paquets 19, toucher / glissement de la croix, clic sur la bulle, terrain libre seulement, emplacement 0).
+- Tests : `outils/test_bulles_et_croix.py`, devenu `outils/test_croix_et_clic.py` à l'avance #157 (27 tests : projection, quadrilatère, paquets 19, toucher / glissement de la croix, clic sur la bulle, terrain libre seulement, emplacement 0).
 
 ### À trancher / non vérifié
 - **Sous Windows** : à confirmer par Sylfried (clic sur une bulle réelle, toucher de la croix).
@@ -1318,3 +1318,22 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - **Sous Windows** : à confirmer par Sylfried que le sprite ne « se penche » plus quand le héros monte ou descend ; si le cisaillement lui paraît trop fort ou trop faible : `DQ_SPRITE_INCLINAISON=30` ou `70` (ou 0 pour revenir en arrière), puis fixer la valeur définitive.
 - **Supposé** : 50 % par défaut (milieu entre « droit » et « parallèle aux murs ») ; le cisaillement d'un sprite en pixel art peut montrer de légers escaliers sur les bords.
 - Sur le mobile, les sprites sont aussi cisaillés par la perspective du panneau d'origine (4 à 6 degrés, non mesuré sur l'appareil) : la comparaison avec « droits sur mobile » n'a pas pu être faite ici.
+
+## Avance #157 : plus de clic sur la bulle, la croix s'anime (#131, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 44)
+« Finalement supprime le fait de "cliquer sur la bulle", cliquer partout sur l'écran suffit, mais par contre je n'ai pas l'animation sur le joystick de la croix directionnelle quand une action est réalisable. »
+
+### Établi
+- Le jeu d'origine ne lie le clignotement de la croix (`TouchPad.SetPadBlink`, paquet 19 avec un emplacement >= 16) qu'à son **tutoriel** (voir `docs/audit/specs/audit_menus_pave.md`) : sur une bulle ordinaire le moteur n'envoie rien, d'où l'absence d'animation constatée par Sylfried.
+- Rendu réel (Xvfb, sauvegarde 2, château de Bastione, bulle forcée au-dessus du héros) : sans bulle la boule est grise ; avec une bulle elle est orange avec son halo ; la bulle retirée, elle redevient grise.
+
+### Fait
+- Retrait de `bulles.py`, de `Jeu._bulle_sous` et de `icone_quads` ; `on_mouse_press` : un clic gauche sur le **terrain libre** (ni menu, ni message, ni carte, ni combat, ni effet), hors boutons et croix du HUD, donne la touche d'action (`clic_a`, comme l'espace). Clic droit = annuler, inchangé.
+- `hud_mobile.Boutons.action_possible()` : vrai quand le jeu fait clignoter la croix (paquet 19) ou, sur le terrain libre, quand une bulle d'icône est affichée (position posée, opacité > 0,02) ; la croix pulse alors (boule orange et halo, 1 s).
+- Tests : `outils/test_croix_et_clic.py` (23 tests : paquet 19, toucher et glissement de la croix, `action_possible`, clic n'importe où, pas de clic d'action hors du terrain libre).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (clic n'importe où, animation de la croix devant un personnage ou un coffre).
+- **Supposé** : « cliquer partout » = un clic gauche sur le terrain libre donne la touche d'action (lecture de sa phrase) ; « action réalisable » = une bulle d'icône est affichée sur la cible ; l'animation est une extension du portage (le jeu d'origine ne l'a que pour son tutoriel).
+- Un clic gauche sur le terrain sans cible fait la même chose que la touche d'action sans cible (rien, ou le message du jeu).

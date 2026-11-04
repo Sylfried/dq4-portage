@@ -361,9 +361,18 @@ class Boutons:
                 self.art[nom] = pyglet.sprite.Sprite(t)
         return self.art
 
+    def action_possible(self):
+        """Une action est-elle realisable maintenant ? (#131 : la croix s'anime alors, comme sur mobile.) Oui quand le jeu fait clignoter le rond central (paquet 19, TouchPad.SetPadBlink, tutoriel) ; sinon, sur le terrain
+        libre, quand une bulle d'icone est affichee (le jeu pose la bulle sur la cible que le heros peut parler, fouiller ou ouvrir : supposé, le jeu d'origine ne lie le clignotement de la croix qu'a son tutoriel)."""
+        e = self.J.moteur.etat
+        if getattr(e, 'pad_clignote', False): return True
+        libre = getattr(self.J, '_terrain_libre', None)
+        if libre is not None and not libre(): return False
+        return any(ic.get('pos') is not None and ic.get('alpha', 0.0) > 0.02 for ic in getattr(e, 'icones', {}).values())
+
     def _croix(self, edition=False):
-        """Croix : anneau, huit pastilles (celle de la direction tenue s'allume), boule qui suit la souris. Toujours opaque et la boule reste normale (SetVisibleColMove : boule orange et halo
-        seulement pendant le clignotement du tutoriel, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA sont des constantes inutilisees)."""
+        """Croix : anneau, huit pastilles (celle de la direction tenue s'allume), boule qui suit la souris. Toujours opaque ; la boule orange et son halo (SetVisibleColMove) pulsent quand une action est possible
+        (voir action_possible) ; MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA sont des constantes inutilisees."""
         art = self._art_croix(); x, y, c, _ = self.rect(CROIX); cx, cy = x + c / 2, y + c / 2; k = c / 256.0
         sect = self.croix_secteur()
         a = 1.0                                                                            # (masquee, elle reste entiere dans l'editeur : le voile « Masquée » de pause.py l'assombrit comme les autres elements)
@@ -377,7 +386,7 @@ class Boutons:
         if n > COURSE_BOULE: vx, vy = vx * COURSE_BOULE / n, vy * COURSE_BOULE / n
         bx, by = cx + vx * c / 2, cy + vy * c / 2
         if self.croix_on and not self.croix_glisse: poser('halo', bx, by); poser('boule_on', bx, by)                 # toucher en cours : boule eclairee
-        elif getattr(self.J.moteur.etat, 'pad_clignote', False) and not edition:                                     # le jeu fait clignoter le rond central : la boule orange et son halo apparaissent et disparaissent doucement
+        elif self.action_possible() and not edition:                                                                  # une action est possible (bulle affichee) ou le jeu fait clignoter le rond central : la boule orange et son halo apparaissent et disparaissent doucement
             ph = 0.5 - 0.5 * math.cos(2.0 * math.pi * (time.perf_counter() % PERIODE_CLIGNOTE) / PERIODE_CLIGNOTE)
             poser('boule', bx, by); poser('halo', bx, by, 0.0, ph); poser('boule_on', bx, by, 0.0, ph)
         else: poser('boule', bx, by)
