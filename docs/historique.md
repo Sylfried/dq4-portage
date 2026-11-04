@@ -139,3 +139,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #211 | le bateau de la carte du monde est découpé comme dans le jeu (cases de 40 × 40 sur 12 colonnes, panneau de 0,8 × 0,8) : navire entier, sillage visible ; alias 194 -> 193 (#210, audit SPR-01 et SPR-05) |
 | 04/11 | #213 | l'ombre du ballon est posée où le moteur la demande sur la carte du monde (32 pixels au sud de la nacelle) au lieu d'être collée dessous (paquet 15, bit 14) (#212, audit SPR-02) |
 | 04/11 | #215 | l'import de sauvegardes refuse un journal abîmé ou qui n'en est pas un (somme de contrôle, avec la raison) et écrit chaque fichier en entier ou pas du tout (#214, audit ENG-07) |
+| 04/11 | #216 | `Moteur.demarrer_ville` refuse un nom de carte sans fichier `.stg` (le moteur d'origine plantait) ; ticket #76 rectifié et clos : `za3f3` est une carte orpheline, `ev01` ne plante que lancée par `startTown` (audit ENG-10) |
