@@ -46,6 +46,16 @@ from dq4_pc.fenetre.shaders import *       # noqa
 from dq4_pc.fenetre.aides import *         # noqa
 
 
+def noter_erreur(texte):
+    """Ajoute `texte` (lignes finies par un retour a la ligne) au journal des erreurs de la fenetre (erreurs_fenetre.log, dossier des journaux) ; ne leve jamais : -> True si ecrit."""
+    try:
+        chemin = CH.DOSSIERS.journal_erreurs(); os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
+        with open(chemin, 'a', encoding='utf-8') as f: f.write(texte)
+        return True
+    except Exception as ex:
+        print('Erreur non notee dans le journal (%r) : %s' % (ex, texte.strip()), flush=True); return False
+
+
 class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, MenusMixin, ClavierSourisMixin, InstantanesMixin, OptionsMixin, pyglet.window.Window):
     def __init__(self, args, reg=None):
         SV.noter('demarrage', largeur=args.largeur, hauteur=args.hauteur, plein_ecran=getattr(args, 'plein_ecran', 0), shot=bool(args.shot))
@@ -92,7 +102,8 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self.hud = HM.Boutons(self); self.hud_decl = 0; self.carte_vue = 1; self.carte_ouverte = False; self.carte_deux_vues = False; self.carte_bascule = False; self.nb_degats = []; self._nb_tex = None
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._lancer_preparation(args.cache)
-        self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son)
+        self.son = SON.Son(self.moteur.apk_donnees, args.cache, log=lambda *a: print(*a, flush=True), volume_musique=args.volume_musique, volume_bruitages=args.volume_bruitages, actif=bool(self.reg['son']) and not args.sans_son,
+                           journal=lambda t: noter_erreur('--- %s : son : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), t)), alerte=lambda t: self.toast(t, duree=5.0))
         self.son.precharger(SE_COURANTS); self.son.precharger_musiques()
         self._opt_son = None; self._t_apercu = 0.0; self.appliquer_mixage(depart=True); self.appliquer_texte(); self.appliquer_jeu(); self.moteur.rappel_defilement = self._adopter_defilement; self.appliquer_defilement()
         self.touches = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.touches)
@@ -448,11 +459,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         """Sauvegarde que le moteur n'a pas pu ecrire (CoreJeu.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; petit message a l'ecran et ligne dans le journal des erreurs."""
         lignes, core.echecs_ecriture = core.echecs_ecriture, None
         texte = ''.join('--- %s : sauvegarde impossible : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lignes)
-        print(texte, end='', flush=True)
-        try:
-            chemin = CH.DOSSIERS.journal_erreurs(); os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
-            with open(chemin, 'a', encoding='utf-8') as f: f.write(texte)
-        except Exception as ex: print('Echec de sauvegarde non note (%r)' % (ex,), flush=True)
+        print(texte, end='', flush=True); noter_erreur(texte)
         self.toast('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', duree=6.0)
 
     def _signaler_crochets_manques(self, mo):
@@ -460,10 +467,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         des erreurs et un message a l'ecran, une seule fois (les points trouves plus tard, apres le chargement d'un etat, sont annonces a leur tour)."""
         nouveaux = mo.crochets_manques[self._crochets_signales:]; self._crochets_signales = len(mo.crochets_manques)
         texte = ''.join('--- %s : reglage du moteur non applique : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in nouveaux)
-        try:
-            chemin = CH.DOSSIERS.journal_erreurs(); os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
-            with open(chemin, 'a', encoding='utf-8') as f: f.write(texte)
-        except Exception as ex: print('Reglages non appliques non notes (%r)' % (ex,), flush=True)
+        noter_erreur(texte)
         self.toast('Certains réglages du moteur ne sont pas appliqués (autre version du jeu ?) : détails dans erreurs_fenetre.log', duree=8.0)
 
     def tick(self, dt, muet=False):

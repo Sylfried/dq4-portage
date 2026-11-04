@@ -1872,3 +1872,17 @@ Un autre APK (aucun disponible : le message n'a été vu que sur faux moteur) ; 
 
 ### Non vérifié
 Windows ; le moteur n'a pas ouvert ces fenêtres (rôle des cellules supposé d'après la géométrie).
+
+## Avance #222 : un échec de lecture ne coupe plus le son jusqu'à la fermeture du jeu (#221, audit SND-10 et SND-12, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi (lecture de `son.py`) : `_lancer_se` et `_lancer_bgm` faisaient `self.ok = False` sur n'importe quelle exception de lecture (périphérique retiré ou changé, pilote) : tout le son était coupé jusqu'à la fermeture, sans trace hors console. La reprise après pause et `_appliquer_volumes` avalaient leurs erreurs (SND-12). Non vérifié : un déclenchement réel (changement de périphérique sous Windows).
+
+### Fait
+- `son.py` : compteur d'échecs consécutifs (`ECHECS_MAX` = 3) ; à 3, le son est coupé un moment puis rouvert tout seul (`DELAIS_REESSAI` 2 s, 10 s, puis 30 s) ; à la réouverture un seul échec recoupe aussitôt (délai suivant) ; un son qui part remet le compteur à zéro. Pendant la coupure rien n'est tenté (pas d'échecs en cascade) et la dernière musique de fond demandée est gardée : elle est relancée au retour (un arrêt la supprime, un jingle à reprise la laisse). Pas de pilote audio au départ (pyglet absent) : ni coupure ni nouvel essai, comme avant.
+- Journal : chaque échec, la coupure et le retour vont dans `erreurs_fenetre.log` (au plus 40 lignes par session) ; message à l'écran « Son interrompu : nouvel essai automatique » et « Son rétabli ». Erreurs avalées (volume de la musique / des bruitages, reprise après pause) : notées une seule fois par session.
+- `fenetre/jeu.py` : `noter_erreur(texte)` (écriture dans le journal des erreurs, ne lève jamais) remplace les trois copies du même code (échecs d'écriture des sauvegardes, réglages du moteur non appliqués, son).
+- `tests/test_son_echecs.py` (13 tests, dans la CI : faux lecteurs sans carte son).
+
+### Non vérifié
+Un vrai changement ou retrait de périphérique audio (Windows) ; la durée réelle d'une panne de pilote (les délais sont un choix).
