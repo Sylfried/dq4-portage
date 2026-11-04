@@ -63,10 +63,11 @@ class Fenetre(unittest.TestCase):
         d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
         os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'journaux', 'erreurs_fenetre.log')
         self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
-        j = types.SimpleNamespace()                                                   # (sans `toast` : depuis #267 aucun message a l'ecran, seulement la console et le journal)
+        toasts = []; j = types.SimpleNamespace(toast=lambda t, duree=1.8: toasts.append((t, duree)))           # (message a l'ecran rendu aux sauvegardes : D-230)
         core = types.SimpleNamespace(echecs_ecriture=["data1.dat : PermissionError('x')"])
         F.Jeu._signaler_echecs_ecriture(j, core)
         self.assertIsNone(core.echecs_ecriture)                                       # vide : un seul message par echec
+        self.assertEqual(len(toasts), 1); self.assertIn('Sauvegarde impossible', toasts[0][0])
         with open(os.environ['DQ_JOURNAL_FENETRE'], encoding='utf-8') as f: txt = f.read()
         self.assertIn('data1.dat', txt); self.assertIn('sauvegarde impossible', txt)
 

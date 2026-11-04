@@ -86,7 +86,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.cur_pas = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
-        self.etat_annul = None; self.sauve_rapide = None; self.combo = [False, False]
+        self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
         self.t_demarrage = time.time()
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -481,15 +481,17 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self._suivi_n = n + 1
 
     def _noter_echec_etat(self, quoi, ex):
-        """Un etat instantane (raccourci chiffre, Ctrl + chiffre) n'a pas pu etre enregistre ou charge : une ligne dans la console et dans le journal des erreurs (le petit message a l'ecran est retire depuis #267)."""
+        """Un etat instantane (raccourci chiffre, Ctrl + chiffre) n'a pas pu etre enregistre ou charge : une ligne dans la console et dans le journal des erreurs, et le petit message a l'ecran (D-230)."""
         texte = '--- %s : %s impossible : %r ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), quoi, ex)
         print(texte, end='', flush=True); noter_erreur(texte)
+        self.toast('%s impossible : %r' % (quoi, ex))
 
     def _signaler_echecs_ecriture(self, core):
-        """Sauvegarde que le moteur n'a pas pu ecrire (CoreJeu.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; une ligne dans la console et dans le journal des erreurs (aucun message a l'ecran depuis #267)."""
+        """Sauvegarde que le moteur n'a pas pu ecrire (CoreJeu.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; petit message a l'ecran (D-230) et ligne dans le journal des erreurs."""
         lignes, core.echecs_ecriture = core.echecs_ecriture, None
         texte = ''.join('--- %s : sauvegarde impossible : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lignes)
         print(texte, end='', flush=True); noter_erreur(texte)
+        self.toast('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', duree=6.0)
 
     def _surveiller_tas(self, core):
         """Tas du moteur (ENG-01, audit du 04/11/2026 : « Core.malloc » avance toujours, « h_free » ne libere rien, 256 Mo en tout ; environ 480 combats ou 7 000 chargements de carte, soit des heures de jeu) : le moteur s'arreterait d'un coup
@@ -573,12 +575,17 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if self.sauve_rapide is not None and not self.pause.ouvert:       # raccourci chiffre : l'etat et la miniature sont pris sur l'image qui vient d'etre dessinee
             n, self.sauve_rapide = self.sauve_rapide, None
             try:
-                t = self._copier_miniature(); png = self._png_miniature(t); t.delete(); self.sauver_etat(n, png)
+                t = self._copier_miniature(); png = self._png_miniature(t); t.delete(); self.sauver_etat(n, png); self.toast('État %d enregistré' % n)
             except Exception as ex: self._noter_echec_etat('Enregistrement de l\'état %d' % n, ex)
         if not self.pause.ouvert: self.hud.dessiner(self.hud.visibles())
         if self.pause.ouvert:
             if self.pause.veut_miniature: self.pause.mini_tex = self._copier_miniature(); self.pause.veut_miniature = False       # le jeu sans le menu, pour la miniature des etats (copie sur la carte graphique : pas de relecture qui bloque)
             self.pause.dessiner()
+        if self.toasts and time.time() < self.toasts[0][1]:                # message bref en haut de l'ecran (sauvegardes seulement, D-230)
+            k = max(0.75, self.height / 900.0); gl.glDisable(gl.GL_DEPTH_TEST); gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            et = self._etiq(self.toasts[0][0], 16 * k, (255, 255, 255, 255)); w = et.content_width + 28 * k; h = 36 * k
+            r = pyglet.shapes.Rectangle((self.width - w) / 2, self.height - 24 * k - h, w, h, color=(0, 0, 0)); r.opacity = 170; r.draw()
+            et.x = (self.width - et.content_width) / 2; et.y = self.height - 24 * k - h + 11 * k; et.draw()
 
     def _dessiner_scene(self):
         t_debut = time.perf_counter()

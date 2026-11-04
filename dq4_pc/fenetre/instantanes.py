@@ -51,9 +51,9 @@ class InstantanesMixin:
 
     def annuler_chargement(self):
         """Revient a l'etat juste avant le dernier chargement (un deuxieme appel refait le chargement)."""
-        if self.etat_annul is None: return False
+        if self.etat_annul is None: self.toast('Aucun chargement à annuler'); return False
         actuel = self._etat_complet(); d, self.etat_annul = self.etat_annul, actuel
-        self._appliquer_etat(d)
+        self._appliquer_etat(d); self.toast('Chargement annulé')
         return True
 
     def _appliquer_etat(self, d):

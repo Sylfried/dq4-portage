@@ -1,5 +1,5 @@
-"""Messages, fenetres de menu du jeu et editeur d'interface ; fondus et vignette."""
-import os, random
+"""Messages, fenetres de menu du jeu et editeur d'interface ; fondus, vignette et petits messages des sauvegardes (toasts)."""
+import os, random, time
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -17,7 +17,12 @@ from dq4_pc.fenetre.aides import sans_validation
 
 
 class MenusMixin:
-    """Messages, fenetres de menu du jeu et editeur d'interface ; fondus et vignette (plus de petits messages en haut de l'ecran depuis #267)."""
+    """Messages, fenetres de menu du jeu et editeur d'interface ; fondus, vignette et petits messages des sauvegardes (toasts)."""
+
+    def toast(self, texte, duree=1.8):
+        """Petit message en haut de l'ecran, SEULEMENT pour les sauvegardes (etats instantanes, sauvegarde du jeu impossible, import) : depuis #267 les autres notifications (vitesse de combat, plein ecran, memoire du moteur, reglages, son...) n'existent plus (D-228) ;
+        les sauvegardes les ont retrouvees le 04/11/2026 (D-230). tests/test_notifications_sauvegardes.py garde la liste des appels permis."""
+        self.toasts = [(texte, time.time() + duree)]
 
     def ui_g_reset(self):
         """Refait les fenetres de menu d'origine d'apres la memoire de l'interface (apres le chargement d'un etat)."""
