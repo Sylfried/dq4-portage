@@ -14,7 +14,7 @@ from dq4_pc.noyau import moteur as MO
 from dq4_pc.noyau import suivi_charge as SV
 from dq4_pc.rendu import ciel_titre as CT
 from dq4_pc.rendu import postfx as PF
-from dq4_pc.fenetre.constantes import (CH_ATLAS, CH_CASE, CH_GOUT, CH_ICONES, CH_MOTIF_FIN, CH_MOTIF_LIM, CH_MOTIF_NUM, CH_MOTIF_PAS,
+from dq4_pc.fenetre.constantes import (CH_ATLAS, CH_CASE, CIELS_ETENDUS, CH_GOUT, CH_ICONES, CH_MOTIF_FIN, CH_MOTIF_LIM, CH_MOTIF_NUM, CH_MOTIF_PAS,
     CH_MOTIF_PERIODE, CH_PX, DECOR_BIAIS, DIR_BITS, GOUT_ORIG, HD_GOUTTIERE, HD_NIVEAUX, MODE_PP, SPRITE_H, SPRITE_L)
 
 
@@ -259,6 +259,7 @@ class ChampMixin:
         self.objets.sale = set(); self.objets.sale_uv = set(); self.objets.sale_col = set()
         self.plages = c.get('plages', {}); self.noms = c.get('noms', {})
         if nom == 'ev01': self._ciel_titre(c, src)         # ecran-titre : ciel prolonge de part et d'autre de la zone portrait
+        elif nom in CIELS_ETENDUS: self._ciel_etendu(c, src, nom)         # dpout, ev09 : plan de ciel prolonge par symetrie (MAP-05)
         allp = np.concatenate([g[0] for g in c['groupes'].values()]) if c['groupes'] else np.zeros((1, 3), np.float32)
         self.bornes_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
         self.carte_nom = nom
@@ -554,7 +555,7 @@ class ChampMixin:
         if self.palettes is not None: self.palettes.tick()
         sales_uv, sales_col = self.objets.sale_uv, self.objets.sale_col; self.objets.sale_uv = set(); self.objets.sale_col = set()
         for tex, vl, key, deb, n, dx in self.carte_ext:
-            if key in sales: vl.position[:] = (self.objets.cur[key][deb:deb + n] + np.array([dx, 0, 0], np.float32)).ravel()
+            if key in sales: vl.position[:] = CT.positions_copie(self.objets.cur[key][deb:deb + n], dx).ravel()
         for tex, vl, key in self.carte_vl:
             if key in sales: vl.position[:] = self.objets.cur[key].ravel()
             if key in sales_uv: vl.tex_coords[:] = self.objets.uv(key).ravel()

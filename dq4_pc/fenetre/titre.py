@@ -6,7 +6,7 @@ from pyglet import gl
 from dq4_pc.menus import avant_partie as AP
 from dq4_pc.menus import ecran_sauvegardes as ES
 from dq4_pc.rendu import ciel_titre as CT
-from dq4_pc.fenetre.constantes import DECOR_BIAIS, SE_BOUTON
+from dq4_pc.fenetre.constantes import CIELS_ETENDUS, DECOR_BIAIS, SE_BOUTON
 
 
 class TitreMixin:
@@ -51,7 +51,22 @@ class TitreMixin:
                     except Exception as ex: print('Ciel du titre : %s (copies decalees a la place)' % ex, flush=True)
                 cur = self.objets.cur[key][deb:deb + n]; larg = float(cur[:, 0].max() - cur[:, 0].min())
                 for dx in (-larg, larg):
-                    vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', (cur + np.array([dx, 0, 0], np.float32)).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
+                    vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', CT.positions_copie(cur, dx).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
+                    self.carte_ext.append((self.tex_gl[(src, key)], vl, key, deb, n, dx))
+
+    def _ciel_etendu(self, c, src, nom):
+        """Plan de ciel des cartes de CIELS_ETENDUS (dpout, ev09 ; MAP-05) : concu pour l'ecran portrait, il s'arrete avant les bords de la fenetre en 16/9 (coins noirs). De part et d'autre, une copie SYMETRIQUE du plan (bord gauche et bord droit
+        servent de miroir, memes coordonnees de texture : l'image se prolonge sans couture, a la maniere des copies du ciel du titre) ; la zone portrait centrale garde exactement le ciel d'origine. Ajoutee a `carte_ext` (dessinee et mise a jour comme les copies du titre)."""
+        mots = CIELS_ETENDUS.get(nom, ())
+        for iobj, nm in self.noms.items():
+            if not any(m in nm.lower() for m in mots): continue
+            for key, deb, n in self.plages.get(iobj, []):
+                if key not in c['textures'] or (src, key) not in self.tex_gl: continue
+                cur = self.objets.cur[key][deb:deb + n]
+                if not len(cur): continue
+                for xe in (float(cur[:, 0].min()), float(cur[:, 0].max())):
+                    dx = ('miroir', xe)
+                    vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', CT.positions_copie(cur, dx).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
                     self.carte_ext.append((self.tex_gl[(src, key)], vl, key, deb, n, dx))
 
     def _tracer_ciel_plat(self, t):

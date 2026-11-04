@@ -41,7 +41,7 @@ dq4-portage\
 `donnees.py` (lecture des données Unity avec UnityPy, cache), `fld.py` (format des cartes), `fbx.py` (modèles 3D animés), `objets_carte.py` (objets animés des cartes), `hd.py` (agrandissement EPX des sprites), `decors_plats.py` (scintillement des décors plats), `contours_decor.py`, `teinte_carte.py` (jour / nuit).
 
 ### `dq4_pc\rendu\`
-`postfx.py` (rendu hors écran : MSAA, suréchantillonnage, netteté, luminosité), `ciel_titre.py` (ciel de l'écran-titre en 16/9).
+`postfx.py` (rendu hors écran : MSAA, suréchantillonnage, netteté, luminosité), `ciel_titre.py` (ciel de l'écran-titre en 16/9 ; copies de ciel décalées ou en miroir).
 
 ### `dq4_pc\combat\`
 `effet_combat.py` (effet de début de combat), `vitesse_combat.py` (horloge du moteur pendant un combat), `historique_combat.py` (résultats de combat pour l'historique). La partie « fenêtre » du combat est dans `fenetre\scene_combat.py`.
@@ -62,7 +62,7 @@ La classe `Jeu` (fenêtre pyglet) est assemblée à partir de neuf morceaux (« 
 | `camera.py` | zoom, distance, rotation, recentrage, caméra des villes / du combat / du titre, bords des sprites |
 | `champ.py` | terrain : cartes, décors, sprites, ombres, carte du monde, icônes de lieux |
 | `scene_combat.py` | combat : monstres, fond, effets, nombres de dégâts, vitesse et pas du moteur en combat |
-| `titre.py` | écran-titre (ciel, logo), licence, saisie du nom, écran Sauvegardes |
+| `titre.py` | écran-titre (ciel, logo), ciel prolongé de `dpout` et `ev09`, licence, saisie du nom, écran Sauvegardes |
 | `affichage_menus.py` | messages, fenêtres de menu du jeu, éditeur d'interface, fondus, vignette, petits messages |
 | `clavier_souris.py` | touches, souris, manette : tous les `on_*` d'entrée |
 | `instantanes.py` | états instantanés (enregistrer / charger) |
