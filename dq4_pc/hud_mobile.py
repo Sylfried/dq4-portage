@@ -10,7 +10,7 @@ joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige e
 La croix est celle de TouchPad (feuille « Button » : anneau, huit pastilles de direction avec leur fleche, boule) ; dans le code d'origine l'anneau ne bouge pas (seule la boule suit le doigt) et il est toujours opaque. Sur PC
 elle est fixe (en bas a droite par defaut, a deplacer dans l'editeur d'interface) : un appui dans sa zone de prise (1,178 rayon) la prend, la boule suit la souris (limitee a 0,4526 rayon), la direction est l'un des huit secteurs de
 45 degres, comme les touches du clavier (elle suit donc la camera). Le bouton « mode de la carte » n'est plus ici : c'est celui de la fenetre de la carte (type 22)."""
-import math, os
+import math, os, time
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -39,13 +39,14 @@ PLAQUE_DQ = {'carte': (72.0, 64.0, 57.6), 'menu': (72.0, 64.0, 57.6), 'discussio
 COIN_PLAQUE = 16.0                           # coins de la plaque 9 tranches (feuille « Button », partie 7), en unites d'interface
 
 # ---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
-ART_CROIX = {'anneau': (256, 256, 256, 256), 'pastille': (384, 192, 128, 64), 'pastille_on': (256, 192, 128, 64), 'boule': (448, 128, 64, 64)}      # (CurLight 384, 128 et CurBS 320, 128 : boule orange et halo du clignotement du tutoriel, inexistant sur PC)
+ART_CROIX = {'anneau': (256, 256, 256, 256), 'pastille': (384, 192, 128, 64), 'pastille_on': (256, 192, 128, 64), 'boule': (448, 128, 64, 64), 'boule_on': (384, 128, 64, 64), 'halo': (320, 128, 64, 64)}      # (CurLight 384, 128 et CurBS 320, 128 : boule orange et halo du clignotement de la croix, TouchPad.SetPadBlink ; #131)
 # Valeurs d'origine (TouchPad, libil2cpp.so, RVA ; audit de fidelite du 01/11/2026) : c_PadScaleTBL, MPad 256 x 0,63, Dirs a 104 unites du centre, c_MoveThreshold 10, c_moveNakaLimit 36,5, c_padColRad 95 pour un rayon de 80,64
 DIAM_CROIX = 161.28                           # diametre de l'anneau (256 x c_PadBaseScaleXY 0,63 ; unites de l'interface d'origine, 800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage
 ECHELLE_CROIX = (1.225, 1.0, 0.775)           # option « Taille de la croix » du jeu (g_pad_size : 0 Grande, 1 Moyenne (defaut), 2 Petite) -> facteur (c_PadScaleTBL)
 RAYON_PASTILLE = 104.0 / 256.0                # distance du centre de l'anneau au centre d'une pastille (fraction du diametre ; le quad de 128 x 64 va de 72 a 136 unites)
 COURSE_BOULE = 0.4526                         # deplacement maximal de la boule (fraction du rayon de l'anneau : 36,5 / 80,64)
 ZONE_MORTE = 0.124                            # en dessous (fraction du rayon : 10 / 80,64), aucune direction
+PERIODE_CLIGNOTE = 1.0                        # clignotement du rond central (secondes par cycle) : valeur choisie par le portage (les constantes du jeu, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA, sont inutilisees ; supposé)
 PRISE_CROIX = 1.178                           # rayon de la zone de prise (fraction du rayon de l'anneau : collider de 95 / 80,64, un peu plus large que l'anneau dessine)
 
 # ---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
@@ -158,7 +159,7 @@ class Boutons:
     def __init__(self, jeu):
         self.J = jeu; self.spr = {}; self.orig = {}; self.pris = None; self.appui = None; self.edition = False; self.cle = None
         self.pose_prise = None                  # (nom, decalage x, decalage y) pendant un deplacement
-        self.croix_on = False; self.cv = (0.0, 0.0); self.art = None      # croix tenue par la souris ; position de la souris relative au centre (rayon de l'anneau = 1) ; textures
+        self.croix_on = False; self.croix_glisse = False; self.cv = (0.0, 0.0); self.art = None      # croix tenue par la souris ; position de la souris relative au centre (rayon de l'anneau = 1) ; textures
 
     # ---- geometrie
     def echelle(self, nom=None):
@@ -235,7 +236,7 @@ class Boutons:
     # ---- souris
     def appuyer(self, x, y, visibles):
         n = self.sous(x, y, visibles)
-        if n == CROIX: self.croix_on = True; self.croix_glisser(x, y)
+        if n == CROIX: self.croix_on = True; self.croix_glisse = False; self.croix_glisser(x, y)
         elif n: self.appui = n
         return n
 
@@ -268,9 +269,16 @@ class Boutons:
         """Souris deplacee (ou appuyee) : position relative au centre de l'anneau, en rayons."""
         rx, ry, c, _ = self.rect(CROIX); r = c / 2
         self.cv = ((x - rx - r) / r, (y - ry - r) / r)
+        if math.hypot(*self.cv) >= ZONE_MORTE: self.croix_glisse = True            # sorti du rond central : c'est un glissement (une direction), plus un toucher
 
     def croix_lacher(self):
-        self.croix_on = False; self.cv = (0.0, 0.0)
+        self.croix_on = False; self.croix_glisse = False; self.cv = (0.0, 0.0)
+
+    def croix_relacher(self):
+        """Bouton de la souris relache sur la croix. -> True si c'etait un TOUCHER du rond central : appuye puis relache sans jamais en sortir (sans glissement) ; le jeu y voit la touche d'action (comme la touche A)."""
+        tap = self.croix_on and not self.croix_glisse
+        self.croix_lacher()
+        return tap
 
     def croix_secteur(self):
         """Secteur de 45 degres de la direction tenue (0 haut, 1 haut-droite, 2 droite... dans le sens horaire) ou None (zone morte, croix non tenue)."""
@@ -368,7 +376,11 @@ class Boutons:
         vx, vy = self.cv if self.croix_on else (0.0, 0.0); n = math.hypot(vx, vy)
         if n > COURSE_BOULE: vx, vy = vx * COURSE_BOULE / n, vy * COURSE_BOULE / n
         bx, by = cx + vx * c / 2, cy + vy * c / 2
-        poser('boule', bx, by)
+        if self.croix_on and not self.croix_glisse: poser('halo', bx, by); poser('boule_on', bx, by)                 # toucher en cours : boule eclairee
+        elif getattr(self.J.moteur.etat, 'pad_clignote', False) and not edition:                                     # le jeu fait clignoter le rond central : la boule orange et son halo apparaissent et disparaissent doucement
+            ph = 0.5 - 0.5 * math.cos(2.0 * math.pi * (time.perf_counter() % PERIODE_CLIGNOTE) / PERIODE_CLIGNOTE)
+            poser('boule', bx, by); poser('halo', bx, by, 0.0, ph); poser('boule_on', bx, by, 0.0, ph)
+        else: poser('boule', bx, by)
 
     def dessiner(self, visibles, edition=False, grille=True):
         if not visibles and not edition: return

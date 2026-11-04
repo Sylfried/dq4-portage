@@ -29,6 +29,7 @@ import decors_plats as DP
 import contours_decor as CD
 import fbx as FX
 import ciel_titre as CT
+import bulles as BU
 import vitesse_combat as VC
 import teinte_carte as TC
 import ecrans as EK          # moniteurs detectes et ecran de la fenetre (logique pure : ecrans.py)
@@ -2232,6 +2233,7 @@ class Jeu(pyglet.window.Window):
 
     def _icones(self, e, champ, bataille, dh, cam3d=None):
         """Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)]."""
+        self.icone_quads = {}                                           # emplacement -> les 4 coins de la bulle dans le monde (pour le clic, voir _bulle_sous)
         if champ or bataille or not e.icones or e.cam_pos is None or e.cam_cible is None: return []
         fwd = np.array(e.cam_cible, float) - np.array(e.cam_pos, float); fwd /= np.linalg.norm(fwd) or 1
         out = []; corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None
@@ -2245,17 +2247,28 @@ class Jeu(pyglet.window.Window):
                 P = self._ancrer_icone(e, np.array(ic['pos'], float), cam3d); r_, u_, f_ = cam3d; D = self._decaler_profondeur
                 A0, B0 = P - r_ * 0.48, P + r_ * 0.48
                 a, b, c, d = D(A0, f_, 0.48, corr, C_vue), D(B0, f_, 0.48, corr, C_vue), D(B0 + u_ * 0.96, f_, 0.48, corr, C_vue), D(A0 + u_ * 0.96, f_, 0.48, corr, C_vue)
-                q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
+                q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist(); self.icone_quads[slot] = np.array([a, b, c, d], float)
             else:
                 p = np.array(ic['pos'], float) - fwd * 0.48
                 a, b, up = p - dh * 0.48, p + dh * 0.48, np.array([0.0, 0.96, 0.0])
-                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist(); self.icone_quads[slot] = np.array([a, b, b + up, a + up], float)
             uv = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]; cl = [1.0, 1.0, 1.0, float(min(max(ic['alpha'], 0.0), 1.0))] * 6
             vl = self.icone_vl.get(slot)
             if vl is None: vl = self.icone_vl[slot] = self.prog.vertex_list(6, gl.GL_TRIANGLES, position=('f', q), tex_coords=('f', uv), colors=('f', cl))
             else: vl.position[:] = q; vl.tex_coords[:] = uv; vl.colors[:] = cl
             out.append((tex, vl))
         return out
+
+    icone_quads = {}                                                   # bulles d'icone de la derniere image dessinee : emplacement -> 4 coins dans le monde
+
+    def _bulle_sous(self, x, y):
+        """Numero d'emplacement de la bulle d'icone (au-dessus d'un personnage, d'un coffre, d'un tonneau...) sous le pointeur (x, y en pixels), ou None. Seulement sur le terrain libre (aucun menu, message ni effet) ;
+        le carre de la bulle est projete avec la matrice de la derniere image de la ville."""
+        if not self.icone_quads or self._M_ville is None or not self._terrain_libre(): return None
+        for slot, quad in sorted(self.icone_quads.items()):
+            pts = BU.projeter(self._M_ville, quad, self.width, self.height)
+            if pts is not None and BU.dans_quadrilatere((x, y), pts): return slot
+        return None
 
     def _ancrer_icone(self, e, P, cam3d):
         """Position d'une bulle d'icone (paquet 20) pour la camera de la visionneuse. Le moteur la pose au-dessus de la cible (1,294 au-dessus de ses pieds, mesure sur trois villageois) en coordonnees du MONDE, alors que
@@ -2310,6 +2323,7 @@ class Jeu(pyglet.window.Window):
             if vis:
                 n = self.hud.appuyer(x, y, vis)                                                            # boutons a l'ecran (Carte, Commandes, Discussion) et croix
                 if n: n != HM.CROIX and self.son.jouer_se(SE_BOUTON); return
+        if bouton == M.LEFT and self._bulle_sous(x, y) is not None: self.clic_a = True; return                      # clic sur une bulle d'icone (au-dessus d'un personnage, d'un coffre...) : touche d'action, comme l'espace (#131)
         if bouton != M.LEFT or not self.ui_rendu: return
         cp = self._carte_ports()
         if 22 in cp:                                                               # boutons de la fenetre de la carte (sans numero) : retour (touche de manette 0x400, ferme la carte) et mode (haut de la manette, change de vue), actifs au relachement
@@ -2367,7 +2381,9 @@ class Jeu(pyglet.window.Window):
         if bouton == pyglet.window.mouse.MIDDLE: self._molette_relache(modifiers); return
         if self.pause.ouvert: self.pause.relache(x, y, bouton); return
         if self.licence is not None: self.licence.glisse = None; return
-        if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on: self.hud.croix_lacher(); return
+        if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on:
+            if self.hud.croix_relacher() and self._terrain_libre(): self.clic_a = True              # toucher du rond central de la croix (sans glisser) = touche d'action, comme sur mobile (#131)
+            return
         if bouton == pyglet.window.mouse.LEFT and self.hud.appui:
             n = self.hud.relacher(x, y, self.hud.visibles())
             if n == HM.COMBAT: self.changer_vitesse_combat('bouton')                      # bouton de vitesse de l'ecran de combat : ne passe rien au moteur

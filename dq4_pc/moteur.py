@@ -106,6 +106,7 @@ class Etat:
         self.mesh_etat = {}                           # combat : emplacement -> {'shader', 'vis', 'col', 'off'} (paquets 21, 23, 24, 25, 26 : MeshChara cote Unity)
         self.cam_near = None; self.cam_far = None; self.cam_yoff = None; self.cam_libre = False; self.cam_bas = None      # paquet 11 : near, far, yOffset (None = valeurs de Global.CameraInitParams), camera libre (sans cible), lookDownAdjust (None = 0,2 du .cctor de SceneCamera)
         self.cam_fov = None                           # paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
+        self.pad_clignote = False                     # paquet 19 avec un emplacement >= 16 (TouchPad.SetPadBlink) : le jeu fait clignoter le rond central de la croix (boule orange et halo) tant qu'une action est possible / attendue ; numero d'icone < 0 = fin (#131)
         self.icones = {}                              # paquets 19/20 (Riseup) : emplacement (0..15) -> {'id' (case 32 x 32 de la feuille MenuTexture), 'pos', 'alpha'} : bulle « ! » au-dessus d'un personnage
         self.sprites = {}; self.cartes_chargees = 0; self.objets_cmd = []; self.fond = (0.0, 0.0, 0.0); self.fond_haut = None; self.fond_bas = None       # fond : moyenne des deux teintes du paquet 8 ; fond_haut / fond_bas : teintes du haut et du bas de l'ecran (BackColor, degrade ; None = pas de paquet 8) ; objets_cmd : ordres sur les objets de la carte (paquets 2 a 5 et 7), vides par la fenetre : (genre, objet, valeurs...)
         self.partie = 0; self.champ = None        # partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
@@ -193,6 +194,8 @@ class Etat:
                     if v & 0xc00: s['ombre_sep'] = bool(v & 0x400)
                     if v & 0x1000 and len(fl) >= 3: s['ombre_pos'] = tuple(fl[:3]); fl = fl[3:]
                     if v & 0x2000 and fl: s['ombre_a'] = float(fl[0])
+            elif t == 19 and len(a) >= 2 and a[0] >= 16:            # cmd_rise_icon_load avec un emplacement >= 16 : pas une bulle, le clignotement de la croix (TouchPad.SetPadBlink) ; numero < 0 = arret
+                self.pad_clignote = a[1] >= 0
             elif t == 19 and len(a) >= 2 and 0 <= a[0] < 16:        # cmd_rise_icon_load : emplacement, numero d'icone (< 0 = liberation) ; objet Riseup, materiau Custom/Riseup sur la feuille MenuTexture
                 if a[1] >= 0: self.icones[a[0]] = {'id': a[1], 'pos': None, 'alpha': 1.0}
                 else: self.icones.pop(a[0], None)
