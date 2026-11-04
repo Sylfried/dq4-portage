@@ -5,9 +5,9 @@ title Dragon Quest IV - portage PC (essai 16/9)
 echo.
 echo  Dragon Quest IV - portage PC (essai)
 echo  ------------------------------------
-echo  Lit tes APK francais dans "donnees\apk" et ta derniere sauvegarde du telephone dans "donnees\sauvegardes\mobile"
+echo  Lit tes APK francais dans "donnees\apk" et tes sauvegardes dans "donnees\sauvegardes" ^(data1.dat... copies du telephone^)
 echo  ^(autre emplacement des donnees : set DQ4_DONNEES=chemin\vers\donnees^)
-echo  (tes fichiers ne sont jamais modifies ; les sauvegardes du portage vont dans "donnees\sauvegardes\portage")
+echo  ^(le jeu y lit et y ecrit ses sauvegardes ; les etats instantanes sont dans "donnees\sauvegardes\etats"^)
 echo.
 
 rem --- 1. Python : on prefere une version stable ayant des paquets precompiles

@@ -30,7 +30,7 @@ Courts, au présent, préfixés : `feat:`, `fix:`, `docs:`, `refactor:`, `chore:
 ## Règles du projet
 - **Aucun contenu Square Enix** dans le dépôt (voir `.gitignore`, ne jamais forcer avec `git add -f`). Les outils lisent les fichiers de l'utilisateur sur son PC. Pas de dump IL2CPP, pas de capture du jeu.
 - Projet séparé du patch FR : ne jamais toucher à ses fichiers (APK patchés, `*.mpt`, Excel, `DQ_Patch_FR.exe`, `build_exe.bat`).
-- Les sauvegardes de l'utilisateur ne sont jamais modifiées (les nouvelles vont dans `donnees\sauvegardes\portage`) ; les tests lisent une copie en lecture seule et écrivent dans `/tmp`.
+- Les vraies sauvegardes de l'utilisateur (`donnees\sauvegardes`, où le jeu lit et écrit depuis D-232) ne sont jamais touchées par le travail de l'agent ni par les tests : ils lisent une copie en lecture seule et écrivent dans `/tmp`.
 - Le jeu d'origine fait foi : ce que la visionneuse remplace doit coller au comportement du mobile, sauf demande contraire.
 - **Le moteur** : le fichier `libdq4core.so` n'est jamais modifié. En mémoire, seuls existent les correctifs ciblés et les crochets listés dans `docs/notes-technique-portage-dq4.md` (section « Écritures et crochets en mémoire du moteur ») ; **tout nouveau correctif ou crochet s'ajoute à cette liste**, avec sa garde (instruction d'origine vérifiée avant d'écrire) et son rôle. Aucun ne doit toucher un scénario, l'or, l'inventaire ni la position du héros sans accord de Sylfried.
 

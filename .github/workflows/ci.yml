@@ -70,3 +70,4 @@ jobs:
           python tests/test_police_messages.py
           python tests/test_notifications_sauvegardes.py
           python tests/test_oui_non_empile.py
+          python tests/test_sauvegardes_un_dossier.py

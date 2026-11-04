@@ -17,7 +17,7 @@ from dq4_pc import chemins as CH
 from dq4_pc.persistance import format_journal as FJ
 from dq4_pc.persistance.ecriture import ecrire_atomique
 
-NOMS = tuple('data%d.dat' % n for n in (1, 2, 3, 4, 5, 9))
+NOMS = CH.NOMS_JOURNAUX
 TAILLES = {'data1.dat': 0x3c00, 'data2.dat': 0x3c00, 'data3.dat': 0x3c00, 'data4.dat': 0x3c00, 'data5.dat': 0x3c00, 'data9.dat': 512}
 RE_JOURNAL = re.compile(r'(?:^|[\\/])(data[1-59]\.dat)$', re.I)
 RE_ETAT = re.compile(r'(?:^|[\\/])etats[\\/](etat_\d\d\.dqs)$', re.I)

@@ -2309,3 +2309,20 @@ Sylfried (04/11/2026, 23 h 02, capture d'écran) : « Les options OUI/NON appara
 ### Non vérifié
 - À regarder sur Windows : retour au titre, achat, suppression d'un état, tout dialogue à Oui / Non ; la pile est en haut à droite, ne cache pas le nom du locuteur ; flèches haut / bas, clic et manette choisissent Oui ou Non au bon endroit.
 - Suppose (non vu en jeu) : les dialogues Oui / Non du combat se posent de la même façon (même chemin de code, boîte de combat descendue) ; les réglages déjà enregistrés pour « Oui / Non » dans l'éditeur s'appliquent maintenant au coin de la pile (valeurs relatives inchangées).
+
+## Avance #276 : Un seul dossier de sauvegardes (data1 à data5, data9, etats)
+
+### Demande
+Sylfried (04/11/2026, 23 h 55) : « Tu ne pourrais juste pas stocker tous les fichiers directement dans le dossier "sauvegardes" ou un seul sous-dossier pour coller à la logique des états ? Comme ça si je veux transférer toutes les sauvegardes du mobile sur le patch je n'ai pas besoin de faire de gymnastique mentale à deviner quel fichier mettre dans quel dossier. »
+
+### Fait (D-232)
+- **Un seul dossier** : `donnees\sauvegardes\` contient `data1.dat` à `data5.dat`, `data9.dat`, `etats\` et les copies `avant_import_<date>\` : le contenu du .zip d'export. Le jeu y lit **et** y écrit ; `Dossiers.portage` est devenu un autre nom de `sauvegardes` (les états y étaient déjà : `sauvegardes\etats`). Transférer les sauvegardes du téléphone = copier ses `dataN.dat` dans ce dossier.
+- **Reprise au démarrage** (`chemins._ranger_anciens_dossiers`, appelée par `migrer`, donc par le lanceur et par le jeu) : les journaux de l'ancien `sauvegardes\portage` (ce que le jeu écrivait, prioritaire) puis ceux de la copie du téléphone la plus récente (`sauvegardes\mobile\<date>`) sont **copiés** dans `sauvegardes\` sans rien écraser (c'est l'ordre dans lequel le jeu les lisait, fichier par fichier : la partie en cours ne change pas) ; puis `portage\` et `mobile\` sont **déplacés tels quels** dans `sauvegardes\avant_rangement_<date>\` (avec le `manifest.json` et les copies plus anciennes). Rien n'est supprimé. Une erreur (fichier ouvert...) laisse les anciens dossiers en place et le jeu lit déjà `sauvegardes\` ; la reprise suivante termine. Une seconde reprise ne fait rien.
+- **Ordre de priorité** : la reprise du 04/11 passe **avant** celle de l'ancienne disposition (`dq4_pc\sauvegardes`, `jeux\DQ4\saves`), qui ne remplit plus que ce qui manque : le vieux `dq4_pc\sauvegardes` encore présent sur le PC de Sylfried ne doit pas passer devant ses fichiers du jour.
+- `DQ4_JEUX` (copie du téléphone ailleurs, lue seulement) : sans effet, comme `--saves-lecture` pour les tests. `NOMS` (sauvegardes.py) vient de `chemins.NOMS_JOURNAUX`. Aides de `--saves-lecture` / `--saves-ecriture`, message « APK introuvables », `lancer_dq4.bat` (fins de ligne CRLF conservées), README, workflow, reprise et plan du code à jour.
+- `tests/test_sauvegardes_un_dossier.py` (16 tests, sans pyglet : la CI les exécute) : disposition, reprise du cas réel (portage plus ancien que le téléphone, manifeste, vieux `dq4_pc`), rien d'écrasé ni perdu, seconde reprise vide, erreur de déplacement ou de copie, `DQ4_JEUX`, lecture par le moteur, export à plat = contenu du dossier. `test_chemins.py` adapté.
+
+### Non vérifié
+- À regarder sur Windows au premier lancement : le Continuer propose les mêmes journaux qu'avant ; `sauvegardes\` contient `dataN.dat` et `etats\` ; `avant_rangement_<date>\` contient `portage\` et `mobile\`.
+- Chez Sylfried, `data2.dat` à `data4.dat` du portage (1 à 3 novembre) sont **plus anciens** que ceux du téléphone (3 novembre, 21 h 24) : le jeu lisait déjà les plus anciens, la reprise garde cet ordre (aucun choix à la date). Pour avoir ceux du téléphone, les copier dans `sauvegardes\` (jeu fermé) : ils remplacent les fichiers actuels, que la copie d'import ne sauvegarde pas (copie manuelle = pas de `avant_import`).
+- Le jeu écrit maintenant dans les fichiers copiés du téléphone : l'original reste sur le téléphone.
