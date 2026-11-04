@@ -1659,7 +1659,7 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 
 ### À trancher / non vérifié
 - Sous Windows (écrans 1920 x 1200 et 2560 x 1440) : non vu.
-- Autres fenêtres qui ont la même barre de description en bas : boutiques (types 46, 60, 61, 63) et fiche d'objet de la boutique de vente (70). Les chaînes de description sont (46, 3), (60, 4), (61, 4), (63, 4), (70, 3) ; leur bord droit n'a pas été mesuré (barre supposée identique : 148). Non ajoutées sans capture.
+- Autres fenêtres qui ont la même barre de description en bas : boutiques (types 46, 60, 61, 63) et fiche d'objet de la boutique de vente (70). Les chaînes de description sont (46, 3), (60, 4), (61, 4), (63, 4), (70, 3) ; leur bord droit n'a pas été mesuré (barre supposée identique : 148). Non ajoutées sans capture. → ajoutées en #220 (mise en page réelle, police réelle et capture hors écran).
 - Si les proportions d'origine sont quand même voulues : `reglages.LARGEUR_COMMANDES` (fenêtres de combat) et `fenetre.UI_ZOOM` (1,12) sont les deux réglages du port ; ils ne changent rien à ce défaut.
 
 ## Avance #193 : sauvegarde automatique, lecture du code du jeu (#192, 04/11/2026)
@@ -1859,3 +1859,16 @@ Chaque réglage posé dans le moteur d'origine (vitesse du texte, défilement de
 
 ### Non vérifié
 Un autre APK (aucun disponible : le message n'a été vu que sur faux moteur) ; Windows.
+
+## Avance #220 : les descriptions du bas des boutiques, du casino et de la vente sont recoupées à la largeur de leur cadre (#219, audit UI-04, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi (mise en page réelle, police réelle, 360 descriptions du patch) : la barre de description du bas des fenêtres du casino (type 46), d'achat (60, 61), de vente (63) et de la fiche d'objet de vente (70) n'était pas dans `ui_menu.DESCRIPTIONS` : 24 descriptions sur 360 dépassaient du cadre (pire : +72 unités, sous le bouton retour), 3 avaient plus de 2 lignes. Type 63 : texte plus petit (8,29), aucune ligne trop large, 3 descriptions de plus de 2 lignes. Supposé : le rôle des cellules (fenêtres non ouvertes dans le moteur).
+
+### Fait
+- `menus/ui_menu.py` : `DESCRIPTIONS` indexée par **(type, port, numéro de chaîne)** au lieu de (type, numéro) : la fenêtre du casino (46) a quatre autres textes au numéro 3 (listes, ports 0 à 3) qu'un simple ajout aurait recoupés. Anciennes entrées : (7, 0, 1), (10, 0, 4), (38, 2, 3) ; nouvelles : (46, 4, 3), (60, 4, 4), (61, 4, 4), (63, 0, 4), (70, 0, 3), bord droit 148 comme la fiche d'un sort. Le texte du moteur n'est pas modifié : c'est le rendu qui recoupe (et comprime jusqu'à ×0,7 si 2 lignes ne suffisent pas).
+- `tests/test_description_objet.py` (22 tests, à la main : pyglet) : table, un seul port recoupé par fenêtre, vraie mise en page (chaque clé désigne une cellule de texte du bas), 360 descriptions avec la vraie police pour 46 / 60 / 61 / 70 et pour 63 (aucune ne sort, aucun mot perdu).
+- Capture hors écran avant / après (vrai rendu, fenêtres 60 et 46) : la ligne qui passait sous le bouton retour passe sur 2 lignes dans le cadre ; les listes du casino ne bougent pas.
+
+### Non vérifié
+Windows ; le moteur n'a pas ouvert ces fenêtres (rôle des cellules supposé d'après la géométrie).

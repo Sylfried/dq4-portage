@@ -161,10 +161,12 @@ NOMS_DEPART, NOMS_PAS = 382.0, 67.0         # mise en page exportee : rangee k a
 COUT_FICHE_X_MAX = 214.0              # fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
 DESC_FICHE_X_MAX = 148.0              # fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
 DESC_COMBAT_X_MAX = 56.0              # infos d'un objet en combat (type 38) : bord droit utile de la description (cellule de gauche : x -226 a 64,7, mesure sur une capture du moteur reel, moins la marge) ; la cellule n'a que 2 lignes de haut, la cellule « Attaque E 24 » est a sa droite
-# Descriptions d'objets et de sorts : (type de fenetre, numero de chaine) -> bord droit utile (unites d'interface) de leur cadre, qui ne montre que 2 lignes. Le texte francais du patch a des lignes de 38 caracteres, ou une seule ligne de 50
+# Descriptions d'objets et de sorts : (type de fenetre, port, numero de chaine) -> bord droit utile (unites d'interface) de leur cadre, qui ne montre que 2 lignes. Le port est dans la cle : la fenetre du casino (type 46)
+# a quatre autres cellules de texte au meme numero de chaine (les listes, port 0 a 3) qui ne sont pas des descriptions. Le texte francais du patch a des lignes de 38 caracteres, ou une seule ligne de 50
 # (« Peut aussi etre utilisee comme objet au / combat. », « Au combat, ils peuvent inverser le cours du temps. ») : il sortait du cadre et recouvrait « Attaque E 74 » (type 38) ou le bouton du sac (type 10). Rendu._texte le recoupe a cette largeur puis, si
 # 2 lignes ne suffisent pas, le comprime (Rendu._ajuste_description).
-DESCRIPTIONS = {(7, 1): DESC_FICHE_X_MAX, (10, 4): DESC_FICHE_X_MAX, (38, 3): DESC_COMBAT_X_MAX}
+DESCRIPTIONS = {(7, 0, 1): DESC_FICHE_X_MAX, (10, 0, 4): DESC_FICHE_X_MAX, (38, 2, 3): DESC_COMBAT_X_MAX,
+                (46, 4, 3): DESC_FICHE_X_MAX, (60, 4, 4): DESC_FICHE_X_MAX, (61, 4, 4): DESC_FICHE_X_MAX, (63, 0, 4): DESC_FICHE_X_MAX, (70, 0, 3): DESC_FICHE_X_MAX}      # 46, 60, 61, 63, 70 : barre du bas des boutiques et du casino (meme cadre que la fiche d'un sort ; Suppose : fenetres non ouvertes dans le moteur, #219)
 COMPRESSION_MIN = 0.7                 # compression horizontale maximale d'une description qui ne tient pas en 2 lignes
 
 
@@ -327,7 +329,7 @@ class Fenetre:
                     elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
-        if (self.typ, no) in DESCRIPTIONS: nd['wrap_x'] = DESCRIPTIONS[(self.typ, no)]; nd['wrap_n'] = 2        # description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Rendu._ajuste_description)
+        if (self.typ, i, no) in DESCRIPTIONS: nd['wrap_x'] = DESCRIPTIONS[(self.typ, i, no)]; nd['wrap_n'] = 2        # description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Rendu._ajuste_description)
         if self.typ == 7 and no == 2: nd['fit_x'] = COUT_FICHE_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Rendu._texte
         s = tabuler(s, nd['text'].get('tabSize'))                              # voir tabuler : toutes les cellules a tabSize (types 8, 20, 31, 33, 34, 35, 39), plus seulement la liste des magies (#208, audit UI-03)
         nd['text']['text'] = s; nd['vu'] = True
