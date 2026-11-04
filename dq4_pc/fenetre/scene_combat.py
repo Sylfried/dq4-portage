@@ -3,6 +3,7 @@ import math, os, time
 import numpy as np
 import pyglet
 from pyglet import gl
+from dq4_pc.combat import effets_plein_ecran as EPE
 from dq4_pc.combat import vitesse_combat as VC
 from dq4_pc.menus import avant_partie as AP
 from dq4_pc.monde import hd as HD
@@ -149,6 +150,7 @@ class CombatMixin:
             if self.cb_ordre and len(ix) % 6 == 0: ix = ix.reshape(-1, 6)[::-1].ravel()          # (essai) quadrilateres en ordre inverse
             P = V[ix]
             loc = P[:, 2:5]
+            if not ville: loc = EPE.elargir(loc, mid, self.width / max(1, self.height))          # effet a quad plein ecran (35) : etire a la largeur de l'ecran 16/9 (CMB-02)
             if ville and mid in AP.LOGO_MODELES and self.carte_nom == CARTE_TITRE: loc = self._agrandir_logo_titre(loc, mm['pos'], Rb)          # ecran-titre : logo et sous-titre deux fois plus grands (ecart voulu, issue #108)
             xyz = (loc @ Rb.T.astype(np.float32)) * np.array([-1 if self.cb_mx else 1, 1, 1], np.float32) + np.array(self._pos_effet(e, slot, mm['pos']) if ville else mm['pos'], np.float32)
             uv = np.c_[P[:, 0] + st['off'][0], 1.0 + P[:, 1] + st['off'][1]].astype(np.float32)
