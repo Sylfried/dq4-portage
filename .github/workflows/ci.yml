@@ -58,3 +58,4 @@ jobs:
           python tests/test_perte_focus.py
           python tests/test_son_volumes.py
           python tests/test_temps_de_jeu.py
+          python tests/test_etats_liste_blanche.py

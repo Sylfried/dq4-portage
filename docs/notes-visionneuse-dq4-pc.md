@@ -124,6 +124,7 @@ Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://
 - **Réglages** (`reglages.py`, `reglages.json` à côté de `fenetre.py`, ignoré par git) : shader (0..4), zoom (depuis #26, en pourcentage de 40 à 400 %, indépendant du shader ; depuis #27 : `distance_camera`, 50 à 200 %, l'ancien `zoom` est converti ; avant : distance d'affichage x1 / x2 / x4 / x8 en #25, échelle pixel perfect et zoom de la carte avant #25), lissage, plein écran, anticrénelage (au prochain lancement), infos à l'écran, son et volumes, touches. Les options de ligne de commande (`--hd`, `--msaa`, `--carte-zoom`, `--volume-*`) priment sur le fichier pour la session.
 - **Touches** : deux touches par action (`TOUCHES_DEF`), capture dans le menu (Échap annule, Suppr efface, Échap seule non réattribuable ; une touche déjà prise est retirée de l'ancienne action). `pad()` lit les actions : haut / bas / gauche / droite / A / B = bits du pad du moteur ; X et Start (depuis #26 : Entrée) = ouvrir le menu de commandes sur le terrain (BTN_MENU 0x800) ; L / R = gauche / droite dans les menus (page précédente / suivante). Y (0x1000) ouvre la fenêtre de type 25 « ma_map1 » (carte de la ville), que la visionneuse ne sait pas dessiner : non transmis. Start / Select / FL / FR (0x2000, 0x4000, 0x40, 0x80) n'ont aucun effet dans le moteur.
 - **États instantanés** (`etats.py`) : mémoire du moteur (tas 2,4 Mo, données et TLS de 64 Ko, pages de la bibliothèque modifiées par rapport à `elf.img`, pointeurs du chargeur) + état Python (`Moteur.etat`, `ui`, images, animations, messages, grille...) + état de la visionneuse (objets animés de la carte, eau de la carte du monde). Fichier `DQ4ETAT1` : JSON d'infos + miniature PNG + pickle zlib (~ 250 Ko), dans `<sauvegardes>/etats/etat_NN.dqs`. Aucun fichier du jeu dedans, mais un état ne se recharge qu'avec l'APK qui l'a produit. `Interface` garde `ints` et `dispo` pour que `Gestionnaire.rejouer` reconstruise les fenêtres d'origine après un chargement. Vérifié : rechargé dans un nouveau lancement, le jeu redonne exactement la même image (ville, carte du monde avec menu de commandes ouvert, combat ; au plus 1 niveau d'écart sur 91 pixels en combat).
+- **Liste blanche de classes (depuis #242, audit ENG-05)** : `etats._Depickler.find_class` n'accepte que `Etat` et `Interface` du moteur, les types de base, les tableaux numpy (`numpy.core` et `numpy._core`) et `OrderedDict` / `defaultdict` / `deque` ; tout autre nom (`os.system`, `eval`, `subprocess`, `Moteur`, nom pointé) fait refuser le fichier (`UnpicklingError` en français, rien n'est exécuté). `lire` ne décode que le conteneur externe (octets) ; `appliquer` refuse avant d'écrire dans le moteur (#206). États relus sur de vrais états : ville, carte du monde, combat.
 - Options d'essai : `--touches-test "n:NOM,..."` (touches, `+NOM` / `-NOM` maintenue / relâchée, `@x@y` clic, `cN+k` = k images de boucle après N images de combat) et `--shots-boucle "n,..."` (captures `<shot>_b<n>.png`, la dernière quitte), `--reglages` pour ne pas toucher au vrai fichier.
 
 ## Combat : boîte de message, mise en page des menus (31/10/2026, #16)
@@ -2009,3 +2010,19 @@ Sondage du 04/11/2026 : « Recaler sur l'heure réelle » (audit ENG-04).
 
 ### Non vérifié
 Windows, partie réelle ; le budget de calcul des pas rapides (`BUDGET_PAS_RAPIDES`) peut faire moins de pas que prévu : le temps de jeu retarde alors un peu.
+
+## Avance #242 : liste blanche de classes pour les états instantanés (#241, audit ENG-05, 04/11/2026)
+
+### Demande
+Sondage du 04/11/2026 : « Liste blanche de classes » (audit ENG-05).
+
+### Établi
+Un `.dqs` est lu par `pickle` (`etats.lire` pour le conteneur externe, `appliquer` pour les parties `python` et `viewer`) : un fichier fabriqué exécute du code Python au chargement (charge inoffensive écrivant un fichier témoin, audit). Le portage importe des ZIP de sauvegardes (`sauvegardes.importer`) : un état reçu est un vecteur.
+
+### Fait
+- `persistance/etats.py` : `CLASSES_AUTORISEES` et `_Depickler.find_class` ; les anciens noms de modules sont traduits d'abord (`ANCIENS_MODULES`), la liste blanche s'applique ensuite. Autorisés : `dq4_pc.noyau.moteur.Etat` et `Interface`, les types de base (`list`, `dict`, `set`, `bytearray`...), `OrderedDict`, `defaultdict`, `deque`, `numpy.dtype` / `ndarray` et les fonctions de reconstruction des tableaux (`numpy.core` et `numpy._core`). Relevé fait sur de vrais états (ville, carte du monde, combat) : rien d'autre. Un nom pointé du protocole 4 (`os.system` pris dans un module autorisé) est comparé en entier : refusé.
+- Refus : `UnpicklingError` avec un message en français qui donne le nom demandé ; rien n'est exécuté ; `appliquer` refuse avant d'écrire dans le moteur (#206). Les écrans qui chargent un état affichent déjà l'erreur (toast, page des états).
+- `tests/test_etats_liste_blanche.py` (15 tests ; pièges `os.system`, `eval`, `exec`, `open`, `__import__`, `getattr`, `subprocess`, `shutil`, `numpy.save` / `load`, `Moteur`, `CoreJeu`, noms pointés, fichier complet piégé, conteneur externe piégé).
+
+### Non vérifié
+Un vrai état d'une ancienne version (le dossier `etats\` de ta machine est vide) ; les états d'avant #206 sans empreinte de bibliothèque suivent le même chemin.
