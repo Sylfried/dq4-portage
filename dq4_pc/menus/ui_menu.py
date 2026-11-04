@@ -185,6 +185,34 @@ def uv_icone(info, no, decal):
     return [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
 
 
+ALPHA_FEUILLES = {}                           # feuille (0 = MenuTexture, 1 = Button...) -> opacite (hauteur x largeur, uint8) de la feuille du jeu, posee par Rendu : sert a mesurer le bord VISIBLE d'un cadre
+
+
+def bords_visibles(vtx, uv, tris, alpha, seuil=127):
+    """(x0, x1, z0, z1) du dessin VISIBLE d'une maille de cadre, dans le repere local de la maille (unites d'interface), ou None.
+    Un cadre est une grille de cases dont celles du bord ont une marge transparente dans la feuille, de taille differente d'un cadre a l'autre (le cadre des dialogues : 6 unites a droite, 4,5 en haut ; celui de Oui / Non : presque
+    rien) : poser deux cadres bord a bord sur les bords de leurs mailles les decale de ces marges. Pour chaque case (maille, triangles `tris`), on cherche dans `alpha` les colonnes et les rangees dont l'opacite depasse `seuil`
+    (la colonne de texture croit avec x, la rangee decroit quand z monte : v = -rangee / hauteur de la feuille)."""
+    h, l = alpha.shape; x0 = z0 = 1e9; x1 = z1 = -1e9; vues = set()
+    for i in range(0, len(tris) - 2, 3):
+        ids = tris[i:i + 3]; P = [vtx[j] for j in ids]; U = [uv[j] for j in ids]
+        bx0, bx1 = min(p[0] for p in P), max(p[0] for p in P); bz0, bz1 = min(p[1] for p in P), max(p[1] for p in P)
+        if bx1 - bx0 < 1e-6 or bz1 - bz0 < 1e-6: continue
+        c0 = min(u[0] for u in U) * l; c1 = max(u[0] for u in U) * l; r0 = min(-u[1] for u in U) * h; r1 = max(-u[1] for u in U) * h
+        if c1 - c0 < 1e-6 or r1 - r0 < 1e-6: continue
+        cle = (round(bx0, 3), round(bx1, 3), round(bz0, 3), round(bz1, 3), round(c0, 3), round(r0, 3))
+        if cle in vues: continue
+        vues.add(cle)
+        ca, ra = int(math.floor(c0 + 1e-6)), int(math.floor(r0 + 1e-6))
+        a = alpha[ra:int(math.ceil(r1 - 1e-6)), ca:int(math.ceil(c1 - 1e-6))] > seuil
+        if not a.any(): continue
+        cols = np.where(a.any(axis=0))[0]; rangs = np.where(a.any(axis=1))[0]
+        fx0 = max((ca + cols[0] - c0) / (c1 - c0), 0.0); fx1 = min((ca + cols[-1] + 1 - c0) / (c1 - c0), 1.0)        # fractions de la case, depuis la gauche et depuis le haut
+        fh = max((ra + rangs[0] - r0) / (r1 - r0), 0.0); fb = min((ra + rangs[-1] + 1 - r0) / (r1 - r0), 1.0)
+        x0 = min(x0, bx0 + (bx1 - bx0) * fx0); x1 = max(x1, bx0 + (bx1 - bx0) * fx1); z1 = max(z1, bz1 - (bz1 - bz0) * fh); z0 = min(z0, bz1 - (bz1 - bz0) * fb)
+    return (x0, x1, z0, z1) if x0 < 1e8 else None
+
+
 class Fenetre:
     """Une fenetre de menu ouverte (un port du moteur) : etat modifiable d'apres les messages du moteur."""
     def __init__(self, ml, typ):
@@ -203,6 +231,7 @@ class Fenetre:
         if self.noms:
             for nd in self._marques(): nd['marque'] = True
         self.debut = nom.startswith('Make_StartMenuSelect')                       # menu de depart : cadre choisi par le code 3
+        if nom.startswith('Make_YesNo'): self._empiler_oui_non()                  # Oui / Non : les deux plaques l'une sur l'autre (D-231)
         self.vals_code = {}; self.auto_grise = False                              # derniere valeur de chaque code recu ; plaque « Sauvegarde automatique » grisee par la visionneuse (voir plaque_auto)
         for pt in self.parts:
             nd = self.N.get(pt['node'])
@@ -631,6 +660,19 @@ class Fenetre:
         zs = [nd['pos'][2] + v[1] for nd in self.N.values() if nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id']) for v in nd['vtx']]
         return (min(zs), max(zs)) if zs else None
 
+    def etendue_visible(self):
+        """(x0, x1, z0, z1) du dessin VISIBLE des parties montrees de la fenetre, en unites d'interface (voir `bords_visibles` : les marges transparentes des cadres ne comptent pas) ; les bords des mailles quand la feuille n'est pas connue. None si rien n'est dessine."""
+        r = None
+        for nd in self.N.values():
+            if not (nd['vtx'] and nd['mats'] and not nd.get('marque') and self.visible(nd['id'])): continue
+            cle = (id(nd['vtx']), len(nd['vtx']), nd['mats'][0].get('sheet'))
+            if nd.get('_vis_cle') != cle:
+                al = ALPHA_FEUILLES.get(nd['mats'][0].get('sheet')); sub = (nd.get('sub') or {}).get('0')
+                nd['_vis_cle'] = cle; nd['_vis'] = (bords_visibles(nd['vtx'], nd['uv'], sub, al) if (al is not None and sub and nd['uv']) else None) or (min(v[0] for v in nd['vtx']), max(v[0] for v in nd['vtx']), min(v[1] for v in nd['vtx']), max(v[1] for v in nd['vtx']))
+            b = nd['_vis']; b = (nd['pos'][0] + b[0], nd['pos'][0] + b[1], nd['pos'][2] + b[2], nd['pos'][2] + b[3])
+            r = b if r is None else (min(r[0], b[0]), max(r[1], b[1]), min(r[2], b[2]), max(r[3], b[3]))
+        return r
+
     def rects(self):
         """Rectangles (x0, z0, x1, z1) des elements dessines (visibles, avec maillage) de la fenetre : les cadres et les plaques."""
         out = []
@@ -713,6 +755,32 @@ class Fenetre:
             c = self._ex_cache = ((min(xs), max(xs)) if xs else None,)
         return c[0]
 
+    ECART_OUI_NON = 1.0                       # espace entre les deux plaques empilees (celui qui separait les deux plaques cote a cote : de -0,5 a +0,5)
+
+    def _empiler_oui_non(self):
+        """Oui / Non (Make_YesNo, type 1) : sur mobile les deux plaques du cadre sont cote a cote (« Oui » a gauche, « Non » a droite, 134 x 48 unites chacune, une unite entre les deux) ; ici elles sont l'une sur l'autre,
+        « Oui » au-dessus de « Non », comme sur DS (demande de Sylfried du 04/11/2026 : la pile est posee sur le coin haut droit de la boite de dialogue, voir `Jeu._ui_ouinon`). La pile garde la colonne de la plaque de gauche
+        (x de -134,5 a -0,5) ; les mailles (cadre, plaque, texte) sont deplacees d'un bloc, rien d'autre ne change : le curseur du moteur range deja Oui / Non en une colonne (haut = Oui, bas = Non), les zones tactiles
+        et la selection suivent les noeuds deplaces. Sans deux plaques numerotees (autre mise en page), rien n'est change."""
+        plaques = sorted((n for n in self.N.values() if n['buttonId'] is not None and n['mats'] and n['mats'][0].get('part') == 7 and n['vtx']), key=lambda n: n['pos'][0])
+        if len(plaques) != 2 or plaques[0]['par'] != plaques[1]['par']: return
+        cadre = self.N.get(plaques[0]['par'])                                             # le cadre (deux panneaux) est le parent commun des deux plaques
+        if cadre is None or not cadre['vtx'] or len(cadre['vtx']) % 4: return
+        g, d = plaques; dx = g['pos'][0] - d['pos'][0]                                    # decalage horizontal : la plaque de droite passe sur la colonne de gauche
+        milieu = (g['pos'][0] + d['pos'][0]) / 2.0 - cadre['pos'][0]                      # frontiere entre les deux panneaux du cadre (repere local du cadre)
+        quads = [range(i, i + 4) for i in range(0, len(cadre['vtx']), 4)]
+        droite = [q for q in quads if sum(cadre['vtx'][i][0] for i in q) / 4.0 > milieu]; gauche = [q for q in quads if q not in droite]
+        if not droite or not gauche: return
+        zs = [cadre['vtx'][i][1] for q in gauche for i in q]; dz = -(max(zs) - min(zs) + self.ECART_OUI_NON)       # la hauteur d'un panneau + l'ecart
+        for q in droite:
+            for i in q: cadre['vtx'][i][0] += dx; cadre['vtx'][i][1] += dz
+        suivis = {d['id']}; changed = True                                                # la plaque de droite et tout ce qui en descend (son texte)
+        while changed:
+            changed = False
+            for n in self.N.values():
+                if n['id'] not in suivis and n['par'] in suivis: suivis.add(n['id']); changed = True
+        for nid in suivis: n = self.N[nid]; n['pos'][0] += dx; n['pos'][2] += dz
+
     def visible(self, nid):
         while nid is not None:
             nd = self.N.get(nid)
@@ -777,6 +845,18 @@ class FenetreMessage:
         if not c or not c['vtx']: return None
         vt = self._base['vtx'] if self.avec_nom else c['vtx']          # (l'onglet du nom ne compte pas : le Oui/Non et l'echelle gardent la place du cadre sans onglet)
         return (c['pos'][2] + min(v[1] for v in vt), c['pos'][2] + max(v[1] for v in vt))
+
+    def etendue_visible(self):
+        """(x0, x1, z0, z1) du dessin VISIBLE du cadre des dialogues (sans l'onglet du nom), en unites d'interface (voir `bords_visibles`) ; les bords de la maille quand la feuille n'est pas connue."""
+        c = self.N.get('cadre')
+        if not c or not c['vtx']: return None
+        b = getattr(self, '_vis', None)
+        if b is None or b[0] != (self.type, self.avec_nom):
+            m = self._base if self.avec_nom else dict(vtx=c['vtx'], uv=c['uv'], tris=(c['sub'] or {}).get('0'))
+            al = ALPHA_FEUILLES.get(c['mats'][0].get('sheet')) if c['mats'] else None
+            v = bords_visibles(m['vtx'], m['uv'], m['tris'], al) if (al is not None and m.get('tris')) else None
+            self._vis = b = ((self.type, self.avec_nom), v or (min(p[0] for p in m['vtx']), max(p[0] for p in m['vtx']), min(p[1] for p in m['vtx']), max(p[1] for p in m['vtx'])))
+        v = b[1]; return (c['pos'][0] + v[0], c['pos'][0] + v[1], c['pos'][2] + v[2], c['pos'][2] + v[3])
 
     def bas(self):
         """Ordonnee (unites d'interface) du bord bas du cadre."""
@@ -911,6 +991,7 @@ class Rendu:
         self.tex = {}
         from dq4_pc.monde.hd import _dilater
         for k, arr in feuilles.items():
+            ALPHA_FEUILLES[k] = np.ascontiguousarray(arr[..., 3])             # (opacite d'origine : bords visibles des cadres)
             arr = _dilater(arr, 3)                          # pixels transparents = couleur du bord voisin (alpha inchange) : les cases de ces feuilles gardent du blanc / rose sous leurs pixels transparents, que le filtrage lineaire ramenait en liseré clair (« aura ») autour des icones et des portraits
             h, w = arr.shape[:2]
             img = pyglet.image.ImageData(w, h, 'RGBA', np.ascontiguousarray(arr[::-1]).tobytes(), pitch=w * 4)
