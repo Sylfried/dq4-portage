@@ -737,7 +737,7 @@ class Jeu(pyglet.window.Window):
             return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'infos': self.aide = not self.aide; self.reg['infos'] = self.aide; return pyglet.event.EVENT_HANDLED
         if self.reg.action_de(symbol) == 'vit_combat': self.changer_vitesse_combat(); return pyglet.event.EVENT_HANDLED          # Manuel -> Normal -> Rapide -> Très rapide (en combat comme ailleurs)
-        if self.reg.action_de(symbol) == 'historique' and self.titre is None and self.moteur.etat.partie in (MO.PARTIE_VILLE, MO.PARTIE_COMBAT, MO.PARTIE_CHAMP): self.pause.ouvrir('historique'); return pyglet.event.EVENT_HANDLED          # touche de l'historique des messages (meme pendant un message : le moteur s'arrete comme avec le menu Echap)
+        if self.reg.action_de(symbol) == 'historique' and self.titre is None and self.moteur.etat.partie in (MO.PARTIE_VILLE, MO.PARTIE_COMBAT, MO.PARTIE_CHAMP): self._touche_historique(); return pyglet.event.EVENT_HANDLED          # touche de l'historique des messages (#187 : seulement quand le joueur a la main sur son personnage)
         n = self._num_etat(symbol)
         if n is not None:                                                  # raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
             if self._tenue('modif'):
@@ -2908,6 +2908,28 @@ class Jeu(pyglet.window.Window):
         f = float(R['vitesse_marche'])
         if self._tenue('accel') or self.hud.croix_course(): f *= float(R['vitesse_accel'])          # course : touche d'accelerateur tenue, ou croix a l'ecran tenue au bord de son anneau (hud_mobile.COURSE_SEUIL)
         return max(0.25, min(8.0, f))
+
+    MSG_HISTORIQUE_INDISPONIBLE = "Historique indisponible : le jeu a la main"
+    MSG_HISTORIQUE_FERME = "Historique fermé : le jeu a repris la main"
+
+    def controle_joueur(self):
+        """Le joueur a-t-il la main sur son personnage ? Oui seulement sur le terrain (ville, donjon, tour, carte du monde), quand le jeu n'a verrouille ni le joueur (evenement, scene, discussion avec un PNJ, fondu de sortie :
+        Global.Flag 4, la meme condition que la marche acceleree, voir _facteur_vitesse), sans message, sans menu du jeu (commandes, boutique, Divers...), sans effet d'ecran ni chargement, et hors combat (partie
+        « combat », cascade d'entree, ecran noir qui attend la scene du combat, entre deux fondus d'un combat). Un fondu seul (arrivee sur une carte, retour de combat, joueur libre) n'y compte pas (#107, #127)."""
+        mo = self.moteur; e = mo.etat
+        if e.partie not in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) or self._horloge_combat() or e.garde_trans > 0: return False
+        if mo.msg_visible or mo.menu_actif() is not None: return False
+        return not (mo.drapeaux() & MO.DRAPEAU_JOUEUR_VERROUILLE)
+
+    def historique_possible(self):
+        """L'historique (touche H, ligne « Historique » du menu Paramètres) n'est accessible que quand le joueur a la main sur son personnage (#187) : ni pendant un combat, ni quand le jeu prend la main (dialogue, scene, evenement,
+        fondu de sortie, menu du jeu), ni a l'ecran titre."""
+        return self.titre is None and self.controle_joueur()
+
+    def _touche_historique(self):
+        """Touche de l'historique : ouvre la page si le joueur a la main, sinon un message bref dit pourquoi rien ne s'ouvre (toujours acquittee : la touche ne sert qu'a cela)."""
+        if self.historique_possible(): self.pause.ouvrir('historique')
+        else: self.toast(self.MSG_HISTORIQUE_INDISPONIBLE)
 
     def _horloge_combat(self):
         """Le jeu est-il dans un combat, au sens de l'horloge du moteur ? Partie « combat » du moteur (0xd), mais aussi l'effet d'ecran qui le lance et l'ecran noir qui attend le chargement de sa scene (Etat.effet,
