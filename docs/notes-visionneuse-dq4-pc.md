@@ -1738,3 +1738,16 @@ Windows (antivirus, OneDrive) : le cas réel d'un verrou n'a pas été reproduit
 
 ### Non vérifié
 Windows et l'écoute.
+
+## Avance #204 : trois bruitages à boucle de nouveau bouclés (#201, audit SND-03, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+SE0329 (fin de boucle 62 501 pour 62 496 échantillons décodés), SE0331 (58 983 / 58 976) et SE1118 (113 314 / 113 312) déclarent une boucle dont la fin dépasse de quelques échantillons la fin des données (reste d'un bloc ADPCM). Le garde `0 < fin <= n` de `decoder_akb` les déclarait « sans boucle ». Établi par lecture des en-têtes sur les 634 bruitages : 14 boucles reconnues sur 17 déclarées. Quels événements du jeu les jouent : non vérifié (identifiants calculés).
+
+### Fait
+- `son.decoder_akb` : une fin de boucle qui dépasse de **au plus 2 048 échantillons** (`TOLERANCE_FIN_BOUCLE`) la fin des données est ramenée à la fin des données (la boucle va jusqu'au bout) ; au-delà le garde reste. Les 17 boucles déclarées sont maintenant reconnues ; aucun autre bruitage ne change.
+- Cache disque des bruitages (`son_SE*.npz`) versionné (`VERSION_CACHE_SON` = 2, 5e valeur de `p`) : un cache d'avant #201 (qui garde « sans boucle ») est refait au premier usage, sans rien à supprimer à la main.
+- `tests/test_son_decodage.py` : 6 tests de plus (10 au total).
+
+### Non vérifié
+Comportement exact de la bibliothèque son d'origine quand la fin dépasse (supposé : la boucle va jusqu'à la fin des données) ; l'écoute ; Windows.
