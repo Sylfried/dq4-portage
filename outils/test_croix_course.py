@@ -2,7 +2,7 @@
 
     python3 outils/test_croix_course.py
 
-1. Taille : `hud_mobile.DIAM_CROIX` = 2 x 161,28 ; diametre a l'ecran = H / 800 x DIAM_CROIX x option du jeu x reglage « Taille de la croix » (50 % = la taille du mobile).
+1. Taille : `hud_mobile.DIAM_CROIX` = 1,5 x 161,28 (le double de #169 moins 25 %, #172) ; diametre a l'ecran = H / 800 x DIAM_CROIX x option du jeu x reglage « Taille de la croix » (67 % = la taille du mobile).
 2. Course : `Boutons.croix_course()` vaut vrai au bord de l'anneau (COURSE_SEUIL du rayon ou plus, dans une direction), faux plus pres du centre, dans la zone morte, croix lachee ou non tenue ; la direction envoyee au jeu ne change pas.
 3. Vitesse (vraie `Jeu._facteur_vitesse`, faux jeu et vraie croix) : marche normale (x vitesse de marche) tant que le pointeur est dans l'anneau, x multiplicateur de l'accelerateur au bord ; la touche d'accelerateur
    fait toujours courir, et les deux ensemble ne se cumulent pas.
@@ -24,14 +24,15 @@ except Exception as ex:
 
 
 class Taille(unittest.TestCase):
-    def test_constante_double_du_mobile(self):
-        self.assertAlmostEqual(HM.DIAM_CROIX, 2 * 161.28, places=6)
+    def test_constante_une_fois_et_demie_le_mobile(self):
+        self.assertAlmostEqual(HM.DIAM_CROIX, 1.5 * 161.28, places=6)
+        self.assertAlmostEqual(HM.DIAM_CROIX, 0.75 * 2 * 161.28, places=6)                                 # (le double de #169, moins 25 % : #172)
 
     def test_diametre_a_l_ecran(self):
         J = TC.faux_jeu(1280, 800); b = HM.Boutons(J)
-        self.assertAlmostEqual(b.diametre_croix(), 322.56, places=4, msg='800 de haut, option du jeu moyenne, reglage 100 % : le double du mobile')
-        J.reg['croix_taille'] = 0.5; self.assertAlmostEqual(b.diametre_croix(), 161.28, places=4, msg='reglage a 50 % : la taille du mobile')
-        J.reg['croix_taille'] = 2.0; self.assertAlmostEqual(b.diametre_croix(), 645.12, places=4)
+        self.assertAlmostEqual(b.diametre_croix(), 241.92, places=4, msg='800 de haut, option du jeu moyenne, reglage 100 % : une fois et demie le mobile')
+        J.reg['croix_taille'] = 0.5; self.assertAlmostEqual(b.diametre_croix(), 120.96, places=4, msg='reglage a 50 %')
+        J.reg['croix_taille'] = 2.0; self.assertAlmostEqual(b.diametre_croix(), 483.84, places=4)
 
     def test_proportionnel_a_la_hauteur(self):
         d720 = HM.Boutons(TC.faux_jeu(1280, 720)).diametre_croix(); d1080 = HM.Boutons(TC.faux_jeu(1920, 1080)).diametre_croix()
@@ -40,7 +41,7 @@ class Taille(unittest.TestCase):
     def test_fenetre_etroite_la_croix_est_reduite_pour_tenir(self):
         b = HM.Boutons(TC.faux_jeu(394, 1102)); self.assertAlmostEqual(b.diametre_croix(), HM.LARGEUR_CROIX_MAX * 394, places=6)
         b = HM.Boutons(TC.faux_jeu(450, 800)); self.assertLessEqual(b.diametre_croix(), 0.75 * 450 + 1e-6)
-        b = HM.Boutons(TC.faux_jeu(1280, 720)); self.assertAlmostEqual(b.diametre_croix(), 720 / 800.0 * 322.56, places=4, msg='16:9 : jamais reduite')
+        b = HM.Boutons(TC.faux_jeu(1280, 720)); self.assertAlmostEqual(b.diametre_croix(), 720 / 800.0 * 241.92, places=4, msg='16:9 : jamais reduite')
 
     def test_la_croix_reste_dans_l_ecran(self):
         for W, H in ((1280, 720), (1920, 1080), (1866, 1050), (394, 1102), (3440, 1440)):

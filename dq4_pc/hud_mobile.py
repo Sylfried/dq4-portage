@@ -9,7 +9,7 @@ joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige e
 
 La croix est celle de TouchPad (feuille « Button » : anneau, huit pastilles de direction avec leur fleche, boule) ; dans le code d'origine l'anneau ne bouge pas (seule la boule suit le doigt) et il est toujours opaque. Sur PC
 elle est fixe (en bas a droite par defaut, a deplacer dans l'editeur d'interface) : un appui dans sa zone de prise (1,178 rayon) la prend, la boule suit la souris (limitee a 0,4526 rayon), la direction est l'un des huit secteurs de
-45 degres, comme les touches du clavier (elle suit donc la camera). Son diametre est le DOUBLE de celui du mobile (DIAM_CROIX ; le reglage « Taille de la croix » a 50 % redonne la taille d'origine). Tenue au BORD de l'anneau
+45 degres, comme les touches du clavier (elle suit donc la camera). Son diametre est une fois et demie celui du mobile (DIAM_CROIX ; le reglage « Taille de la croix » a 67 % redonne la taille d'origine). Tenue au BORD de l'anneau
 (`croix_course` : COURSE_SEUIL du rayon ou plus), elle fait courir le heros comme la touche d'accelerateur ; plus pres du centre il marche normalement. Le bouton « mode de la carte » n'est plus ici : c'est celui de la fenetre de la carte (type 22)."""
 import math, os, time
 import numpy as np
@@ -42,7 +42,7 @@ COIN_PLAQUE = 16.0                           # coins de la plaque 9 tranches (fe
 # ---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
 ART_CROIX = {'anneau': (256, 256, 256, 256), 'pastille': (384, 192, 128, 64), 'pastille_on': (256, 192, 128, 64), 'boule': (448, 128, 64, 64), 'boule_on': (384, 128, 64, 64), 'halo': (320, 128, 64, 64)}      # (CurLight 384, 128 et CurBS 320, 128 : boule orange et halo du clignotement de la croix, TouchPad.SetPadBlink ; #131)
 # Valeurs d'origine (TouchPad, libil2cpp.so, RVA ; audit de fidelite du 01/11/2026) : c_PadScaleTBL, MPad 256 x 0,63, Dirs a 104 unites du centre, c_MoveThreshold 10, c_moveNakaLimit 36,5, c_padColRad 95 pour un rayon de 80,64
-DIAM_CROIX = 2 * 161.28                       # diametre de l'anneau en unites de l'interface d'origine (800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage : le DOUBLE de celui du mobile (256 x c_PadBaseScaleXY 0,63 = 161,28), demande de Sylfried le 04/11/2026 (la croix, petite sur un ecran de PC, se manie a la souris) ; le reglage « Taille de la croix » a 50 % redonne la taille du mobile
+DIAM_CROIX = 1.5 * 161.28                     # diametre de l'anneau en unites de l'interface d'origine (800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage : UNE FOIS ET DEMIE celui du mobile (256 x c_PadBaseScaleXY 0,63 = 161,28). Historique (04/11/2026) : le double (#169, 10 h 46 : la croix, petite sur un ecran de PC, se manie a la souris), puis « reduit la taille de la croix de 25 % par defaut » (11 h 30, #172) : 0,75 x 2 = 1,5 ; le reglage « Taille de la croix » (50 a 200 %) s'applique par-dessus
 ECHELLE_CROIX = (1.225, 1.0, 0.775)           # option « Taille de la croix » du jeu (g_pad_size : 0 Grande, 1 Moyenne (defaut), 2 Petite) -> facteur (c_PadScaleTBL)
 RAYON_PASTILLE = 104.0 / 256.0                # distance du centre de l'anneau au centre d'une pastille (fraction du diametre ; le quad de 128 x 64 va de 72 a 136 unites)
 COURSE_BOULE = 0.4526                         # deplacement maximal de la boule (fraction du rayon de l'anneau : 36,5 / 80,64)
