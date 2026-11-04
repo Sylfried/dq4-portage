@@ -144,3 +144,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #220 | les descriptions du bas des boutiques (achat, vente), du casino et de la fiche d'objet de vente sont recoupées à la largeur du cadre (24 descriptions sur 360 dépassaient) ; la table est indexée aussi par le port (#219, audit UI-04) |
 | 04/11 | #222 | le son ne se coupe plus jusqu'à la fermeture au premier échec de lecture : 3 échecs de suite le coupent un moment, nouvel essai tout seul (2 s, 10 s, 30 s), musique relancée au retour, tout noté dans `erreurs_fenetre.log` avec un message à l'écran (#221, audit SND-10 / SND-12) |
 | 04/11 | #224 | la teinte plein écran de l'effet 35 couvre toute la largeur de l'écran 16/9 en combat (avant : deux bandes latérales sans teinte) (#223, audit CMB-02) |
+| 04/11 | #226 | une texture de monstre absente des données (25 numéros) n'arrête plus le jeu : texture transparente à la place (#225, audit CMB-03) |
