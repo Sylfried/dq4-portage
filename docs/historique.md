@@ -151,3 +151,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #234 | bilan de l'audit complet : documents d'audit mis à jour, décisions du sondage du 04/11 enregistrées (#233) |
 | 04/11 | #236 | le jeu et le son se mettent en pause à chaque perte de focus de la fenêtre (Alt + Tab, minimisation) et reprennent sans rattrapage (#235, audit UNI-02 / SND-07, sondage du 04/11) |
 | 04/11 | #238 | les volumes suivent snd_vol.dat comme l'original : 49 musiques et la fanfare un peu plus basses (#237, audit SND-01, sondage du 04/11) |
+| 04/11 | #240 | le temps de jeu de la sauvegarde suit l'heure réelle quand le jeu est accéléré : seule la part 1 / a des pas compte (#239, audit ENG-04, sondage du 04/11) |

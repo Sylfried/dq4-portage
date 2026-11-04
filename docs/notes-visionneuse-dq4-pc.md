@@ -1993,3 +1993,19 @@ Sondage du 04/11/2026 : « Aligner sur l'original » (audit SND-01).
 
 ### Non vérifié
 Écoute sur Windows.
+
+## Avance #240 : temps de jeu de la sauvegarde sur l'heure réelle (#239, audit ENG-04, 04/11/2026)
+
+### Demande
+Sondage du 04/11/2026 : « Recaler sur l'heure réelle » (audit ENG-04).
+
+### Établi
+`Global::NativeExec` (+ 0x14 : `mov w1, #2` ; + 0x20 : `bl` du stub PLT 0x227d90, dont la case 0x240968 contient `GameStatus::addPlayTime`) ajoute 2 unités (1/60 s) par pas du moteur à `status::g_Game + 4`. L'historique lit le même compteur.
+
+### Fait
+- `noyau/moteur.py` : `_crochets_temps_de_jeu` (installé avec les autres crochets) ; avant la pose, on relit l'instruction `mov w1, #2`, le `bl`, les 4 instructions du stub et la case de la table des adresses ; sinon `crochets_manques` le dit. `vitesse_horloge` > 1 : l'appel est sauté (retour à l'instruction suivante) pour la fraction 1 - 1 / a des pas, régulièrement (`Passeur`, comme les rencontres et la nuit) ; x1 ou ralenti : le jeu d'origine à l'identique.
+- `fenetre/jeu.py` : `Jeu._boucle` écrit `moteur.vitesse_horloge = f` (marche ET combat ; `vitesse_marche` reste réservé à la marche).
+- `tests/test_temps_de_jeu.py`, `tests/test_crochets_manques.py` (installateur ajouté).
+
+### Non vérifié
+Windows, partie réelle ; le budget de calcul des pas rapides (`BUDGET_PAS_RAPIDES`) peut faire moins de pas que prévu : le temps de jeu retarde alors un peu.
