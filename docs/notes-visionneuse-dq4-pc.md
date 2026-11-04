@@ -1298,3 +1298,23 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - **Supposé** : l'éclairage pendant le toucher et la période de clignotement (1 s) sont des choix du portage (les constantes du jeu, `MOVE_WAIT_TIME` / `MOVE_LIMIT_ALPHA`, sont inutilisées) ; quand le jeu envoie ce clignotement (tutoriel seulement ? à chaque action possible ?) n'a pas été relevé.
 - La bulle n'a pas été vue dessinée à côté de son carré projeté (la sauvegarde de ce poste est sur l'écran noir du chapitre 1) : la projection est celle de `DQ_PROJ`, mais l'alignement visuel reste à confirmer.
 - Une bulle cachée derrière un personnage ou un décor reste cliquable (pas de test de profondeur).
+
+## Avance #156 : sprites inclinés vers la verticale du monde (#134, 04/11/2026)
+
+### Demande (D-225, 03/11 23 h 27)
+« Il y a une sorte d'effet d'optique avec ce PNJ, autant l'aplatissement sur les bords comme on a vu c'est nickel, autant quand mon perso monte ou descend sur la carte, j'ai l'impression que les sprites des PNJ (peut-être autres ?) se penchent alors que sur mobile ils restent bien droits. »
+
+### Établi
+- Depuis la correction des bords (`Jeu._panneau_ville`), le panneau d'un personnage est **exactement vertical à l'écran** partout (bords gauche / droit à moins de 0,01 px de la verticale, mesuré sur 15 états de caméra et 30 positions : `outils/test_sprites_droits.py`).
+- Les **verticales du monde** (arêtes de murs, portes) penchent, elles, à l'écran : 11 à 19 degrés à 9 unités du centre en 16/9 (caméra à 47 degrés), 4 à 6,5 degrés sur le portrait d'origine ; l'angle change de plus de 5 degrés quand le héros monte ou descend (le personnage change de hauteur à l'écran). Le sprite reste à 0 : il paraît pencher **par rapport au décor** (c'est l'illusion d'optique de #134, cause établie par le calcul, pas par un essai sur Windows).
+- Rendu réel (Xvfb, sauvegarde 2, château de Bastione, `DQ_SPRITE_INCLINAISON` à 0, 50 et 100 dans la même image du jeu) : à 0 le PNJ du bord gauche est droit, à 100 il penche du même côté que les murs voisins, à 50 entre les deux, pieds au même endroit.
+
+### Fait
+- `Jeu._panneau_ville(..., inc)` : après la correction des bords, le panneau est **cisaillé** vers la verticale du monde, pieds fixes : le haut glisse de `inc` x tan(inclinaison d'une verticale du monde au pied) x hauteur à l'écran, à la **même profondeur** (z-buffer, recouvrements, taille et position du bas inchangés). Au centre de l'image la verticale du monde est droite : rien ne change.
+- `Jeu._inclinaison_sprites()` : 0,5 par défaut (essai), variable d'environnement `DQ_SPRITE_INCLINAISON` de 0 (bords verticaux, état d'avant) à 100 (parallèle aux murs).
+- Tests : `outils/test_sprites_droits.py` (10 tests : bords verticaux partout, profondeur et centre inchangés, garde-fou du panneau d'origine, constat des verticales du monde, angle exact du cisaillement, taille / profondeur inchangées, écart sprite / mur divisé par deux, réglage par variable d'environnement, caméra inconnue).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried que le sprite ne « se penche » plus quand le héros monte ou descend ; si le cisaillement lui paraît trop fort ou trop faible : `DQ_SPRITE_INCLINAISON=30` ou `70` (ou 0 pour revenir en arrière), puis fixer la valeur définitive.
+- **Supposé** : 50 % par défaut (milieu entre « droit » et « parallèle aux murs ») ; le cisaillement d'un sprite en pixel art peut montrer de légers escaliers sur les bords.
+- Sur le mobile, les sprites sont aussi cisaillés par la perspective du panneau d'origine (4 à 6 degrés, non mesuré sur l'appareil) : la comparaison avec « droits sur mobile » n'a pas pu être faite ici.

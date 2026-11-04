@@ -3178,6 +3178,18 @@ class Jeu(pyglet.window.Window):
             except ValueError: v = None
         return 1.0 if v is None else min(1.0, max(0.0, float(v) / 100.0))
 
+    INCLINAISON_SPRITES_DEF = 0.5                                       # (essai #134) part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux, 1 = parallele aux murs
+
+    def _inclinaison_sprites(self):
+        """(Essai #134) Part (0 a 1) de l'inclinaison des VERTICALES DU MONDE (aretes de murs, portes...) que prend le panneau d'un personnage a l'ecran, 0,5 par defaut. Depuis la correction des bords (_panneau_ville) le sprite est
+        exactement vertical a l'ecran partout, mais les murs voisins penchent (11 a 19 degres a 9 unites du centre en 16/9, camera a 47 degres, contre 4 a 6,5 sur le portrait du mobile) et cet angle change quand le heros monte ou
+        descend : le sprite semble alors se pencher par rapport au decor (illusion d'optique signalee dans #134). Le pencher a moitie vers la verticale du monde reduit cet ecart de moitie sans revenir au panneau d'origine
+        (qui s'ecartait du centre de l'image par son seul haut et se deformait). Comparaison / retour a l'etat precedent : variable d'environnement DQ_SPRITE_INCLINAISON, de 0 (bords verticaux) a 100 (parallele au decor)."""
+        v = os.environ.get('DQ_SPRITE_INCLINAISON')
+        if v is None or not v.strip(): return self.INCLINAISON_SPRITES_DEF
+        try: return min(1.0, max(0.0, float(v) / 100.0))
+        except ValueError: return self.INCLINAISON_SPRITES_DEF
+
     @staticmethod
     def _decaler_profondeur(X, F, delta, t, C):
         """Point X (d'un panneau parallele a l'ecran) rapproche de la camera de `delta` unites de profondeur. t = 0 : le long de l'axe de la camera (F), comme les sommets du panneau de la bulle Riseup dans Unity (Riseup.s_vtxDepth) ;
@@ -3187,13 +3199,15 @@ class Jeu(pyglet.window.Window):
         if z <= delta * 1.5: return X - F * delta                          # (tout contre la camera : pas de division par une profondeur nulle)
         return X - ((1.0 - t) * delta) * F - (t * delta / z) * d
 
-    def _panneau_ville(self, p, r_, u_, f_, w, h, zb, zt, t, C):
+    def _panneau_ville(self, p, r_, u_, f_, w, h, zb, zt, t, C, inc=0.0):
         """Les 4 sommets (bas gauche, bas droit, haut droit, haut gauche) du panneau d'un personnage de ville dont les pieds sont en p : un rectangle w x h parallele a l'ecran, dont le bas est recule de `zb` et le haut de `zt`
         vers la camera (profondeur du panneau d'origine, qui penche de 36 degres). t = 0 : le panneau d'origine (decalages le long de l'axe de la camera). Defaut de l'original, rendu visible par le champ horizontal du 16/9
         (le portrait du mobile en voyait bien moins) : le haut, plus proche, s'ecarte du centre de l'image (de zt x ecart / profondeur) et le sprite « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a
         20 degres) ; de plus la hauteur a l'ecran se comprime vers le bas de l'image, d'ou un sprite trop large (jusqu'a 0,9 au lieu de 0,75). t = 1 : le panneau est reconstruit A L'ECRAN : meme position, meme hauteur
         et memes profondeurs qu'avant (taille, recouvrements et z-buffer inchanges), mais bords verticaux et largeur = 0,72 x la hauteur a l'ecran (la proportion du panneau au centre de l'image : la largeur y est la
-        moyenne de celles du bas et du haut), donc le sprite garde ses proportions partout. Au centre de l'image, rien ne change. Entre les deux : melange lineaire des sommets. Camera inconnue ou panneau contre la camera : l'original."""
+        moyenne de celles du bas et du haut), donc le sprite garde ses proportions partout. Au centre de l'image, rien ne change. Entre les deux : melange lineaire des sommets. Camera inconnue ou panneau contre la camera : l'original.
+        `inc` (0 a 1, essai #134, voir _inclinaison_sprites) : le panneau reconstruit est ensuite CISAILLE vers la verticale du monde, les pieds fixes : le haut glisse de inc x (inclinaison a l'ecran d'une verticale du monde au pied du
+        personnage) x hauteur, a la meme profondeur. Taille, profondeur et bas inchanges ; 0 : bords verticaux ; 1 : bords paralleles aux murs. Au centre de l'image la verticale du monde est droite : rien ne change."""
         a, b = p - r_ * (w / 2), p + r_ * (w / 2)
         orig = (a - f_ * zb, b - f_ * zb, b + u_ * h - f_ * zt, a + u_ * h - f_ * zt)
         if t <= 0.0 or C is None: return orig
@@ -3201,7 +3215,12 @@ class Jeu(pyglet.window.Window):
         if z <= zt * 1.5: return orig
         xs, yb, yt = float(d @ r_) / (z - zb), float(d @ u_) / (z - zb), (float(d @ u_) + h) / (z - zt)      # a l'ecran (focale 1) : abscisse du centre du bas, ordonnees du bas et du haut du panneau d'origine
         hw = 0.5 * (w / h) * (z - zt) / (z - 0.5 * (zb + zt)) * (yt - yb)                                    # demi-largeur a l'ecran : proportion (largeur moyenne / hauteur) du panneau d'origine au centre de l'image
-        new = [C + r_ * ((xs + sx * hw) * (z - dz)) + u_ * (ys * (z - dz)) + f_ * (z - dz) for sx, ys, dz in ((-1, yb, zb), (1, yb, zb), (1, yt, zt), (-1, yt, zt))]
+        gl_ = 0.0                                                                                                   # glissement du haut (unites de l'ecran, focale 1) : inc x tan(inclinaison d'une verticale du monde au pied) x hauteur a l'ecran
+        if inc > 0.0:
+            Y = np.array([0.0, 1.0, 0.0]); db = d - f_ * zb; zz = z - zb                                             # pied du panneau : sa direction a l'ecran (une droite du monde reste une droite) = derivee de la projection quand on monte de dy
+            vx = float(Y @ r_) / zz - float(db @ r_) * float(Y @ f_) / zz ** 2; vy = float(Y @ u_) / zz - float(db @ u_) * float(Y @ f_) / zz ** 2
+            if abs(vy) > 1e-3: gl_ = min(1.0, max(-1.0, vx / vy)) * min(1.0, max(0.0, inc)) * (yt - yb)
+        new = [C + r_ * ((xs + sx * hw + gh) * (z - dz)) + u_ * (ys * (z - dz)) + f_ * (z - dz) for sx, ys, dz, gh in ((-1, yb, zb, 0.0), (1, yb, zb, 0.0), (1, yt, zt, gl_), (-1, yt, zt, gl_))]
         return tuple(o + t * (n - o) for o, n in zip(orig, new))
 
     def _coupure_camera(self, e):
@@ -3366,6 +3385,7 @@ class Jeu(pyglet.window.Window):
         a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
         phi = self._lacet_eff() if cam3d is not None else 0.0
         corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None          # correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
+        incl = self._inclinaison_sprites()                                         # essai #134 : part de l'inclinaison des verticales du monde prise par les sprites
         rang = {}
         if champ: rang = rang_profondeur_champ(e.sprites)      # carte du monde : sprites a plat, tous a la meme hauteur, superposes selon rang_profondeur_champ
         for slot, s in sorted(e.sprites.items()):
@@ -3389,6 +3409,7 @@ class Jeu(pyglet.window.Window):
                 r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
                 # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
                 # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
+                # (essai #134 : le panneau est ensuite cisaille a moitie vers la verticale du monde, voir _inclinaison_sprites : sinon, droit au milieu de murs qui penchent, il semble se pencher quand le heros monte ou descend)
                 if dort and C_vue is not None:
                     # Pose couchee (paquets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep ; voir pose_couchee.py) : le panneau n'est PAS debout, la correction des bords (qui redresse un panneau debout) ne lui
                     # est jamais appliquee ; vu de dessus, a pleine taille, tourne selon la direction du sommeil, avec la profondeur du corps a plat (z-buffer, recouvrements par un lit, un mur...)
@@ -3397,7 +3418,7 @@ class Jeu(pyglet.window.Window):
                     if qv is None: continue
                     a, b, c, d = qv
                 else:
-                    a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue)
+                    a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue, incl)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
                 a, b = p - dh * w / 2, p + dh * w / 2
