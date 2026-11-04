@@ -4,7 +4,7 @@ Ce qui s'exporte : les six fichiers du jeu (data1.dat a data3.dat = journaux, da
 (le dossier d'ecriture d'abord, sinon celui de lecture) et les etats instantanes du portage (etats/etat_NN.dqs). Un fichier .zip les contient a plat (`data1.dat`, `etats/etat_01.dqs`).
 Ce qui s'importe : un .zip de ce genre, ou des fichiers dataN.dat isoles (par exemple ceux copies depuis un telephone Android) ; les noms sont reconnus meme dans des sous-dossiers du .zip.
 Rien n'est jamais ecrase sans copie : avant l'import, les fichiers du dossier d'ecriture qui vont etre remplaces sont copies dans `donnees\\sauvegardes\\avant_import_<date>\\` ; les dossiers de lecture (tes sauvegardes d'origine) ne sont jamais modifies.
-Aucun fichier du jeu n'est lu ni interprete ici (seulement copies) ; les tailles sont verifiees (journal : 15 360 octets ; data9 : 512)."""
+Les fichiers ne sont pas interpretes ici, seulement controles : taille (journal : 15 360 octets ; data9 : 512) et somme de controle d'un journal (format_journal : un fichier abime ou qui n'est pas un journal du jeu est refuse, avec la raison, au lieu de donner une « banque vide » au chargement) ; chaque fichier est ecrit en entier ou pas du tout (fichier temporaire puis remplacement)."""
 import glob
 import os
 import re
@@ -14,6 +14,8 @@ import time
 import zipfile
 
 from dq4_pc import chemins as CH
+from dq4_pc.persistance import format_journal as FJ
+from dq4_pc.persistance.ecriture import ecrire_atomique
 
 NOMS = tuple('data%d.dat' % n for n in (1, 2, 3, 4, 5, 9))
 TAILLES = {'data1.dat': 0x3c00, 'data2.dat': 0x3c00, 'data3.dat': 0x3c00, 'data4.dat': 0x3c00, 'data5.dat': 0x3c00, 'data9.dat': 512}
@@ -67,6 +69,8 @@ def lire_sources(chemins):
         if m:
             nom = m.group(1).lower(); d = lire()
             if len(d) != TAILLES[nom]: pb.append('%s : taille %d au lieu de %d (%s)' % (nom, len(d), TAILLES[nom], origine)); return
+            raison = FJ.verifier(nom, d)
+            if raison: pb.append('%s : %s (%s)' % (nom, raison, origine)); return
             jr[nom] = d; return
         m = RE_ETAT.search(nom_complet) or RE_ETAT_ISOLE.match(os.path.basename(nom_complet))
         if m:
@@ -105,12 +109,17 @@ def importer(chemins, ecriture, lecture):
         p = os.path.join(dossier_etats, nom)
         if os.path.isfile(p):
             os.makedirs(os.path.join(copie, 'etats'), exist_ok=True); shutil.copy2(p, os.path.join(copie, 'etats', nom)); n_copie += 1
+    ecrits_j = ecrits_e = 0
     for nom, d in jr.items():
-        with open(os.path.join(ecriture, nom), 'wb') as f: f.write(d)
-    if et: os.makedirs(dossier_etats, exist_ok=True)
+        ex = ecrire_atomique(os.path.join(ecriture, nom), d)
+        if ex is None: ecrits_j += 1
+        else: pb.append('%s : ecriture impossible (%s) ; le fichier actuel est inchange' % (nom, ex))
     for nom, d in et.items():
-        with open(os.path.join(dossier_etats, nom), 'wb') as f: f.write(d)
-    return len(jr), len(et), (copie if n_copie else None), pb
+        ex = ecrire_atomique(os.path.join(dossier_etats, nom), d)
+        if ex is None: ecrits_e += 1
+        else: pb.append('%s : ecriture impossible (%s) ; le fichier actuel est inchange' % (nom, ex))
+    if not ecrits_j and not ecrits_e: raise ValueError('Aucun fichier n\'a pu etre ecrit (%s).' % '; '.join(pb))
+    return ecrits_j, ecrits_e, (copie if n_copie else None), pb
 
 
 # ---- boites de dialogue de fichiers (tkinter, dans un fil a part pour que la fenetre du jeu reste vivante)

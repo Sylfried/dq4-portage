@@ -99,6 +99,14 @@ class Migration(unittest.TestCase):
 def journal(octets=0x3c00): return bytes(octets)
 
 
+def journal_valide(n=0):
+    """Un journal du jeu valide (en-tete « rate », somme de controle, chiffre) ; `n` le distingue des autres."""
+    import struct
+    from dq4_pc.persistance import format_journal as FJ
+    clair = bytearray(FJ.TAILLE_JOURNAL); struct.pack_into('<II', clair, 0, FJ.MAGIE1, FJ.MAGIE2); clair[0x30] = n
+    struct.pack_into('<I', clair, 8, FJ.somme(bytes(clair))); return FJ.dechiffrer(bytes(clair))
+
+
 class Sauvegardes(unittest.TestCase):
     """Import / export avec la disposition de donnees\\sauvegardes (etats et copies a cote de `portage`)."""
     def setUp(self):
@@ -107,26 +115,26 @@ class Sauvegardes(unittest.TestCase):
     def tearDown(self): CH.DOSSIERS = self.avant; shutil.rmtree(self.t, ignore_errors=True)
 
     def test_import_dans_la_disposition_habituelle(self):
-        ecrire(os.path.join(self.d.portage, 'data1.dat'), b'a' * 0x3c00); ecrire(os.path.join(self.d.etats, 'etat_01.dqs'), b'e' * 2000)
+        ecrire(os.path.join(self.d.portage, 'data1.dat'), journal_valide(1)); ecrire(os.path.join(self.d.etats, 'etat_01.dqs'), b'e' * 2000)
         zip_ = os.path.join(self.t, 'import.zip')
-        with zipfile.ZipFile(zip_, 'w') as z: z.writestr('data1.dat', b'b' * 0x3c00); z.writestr('etats/etat_01.dqs', b'f' * 2000)
+        with zipfile.ZipFile(zip_, 'w') as z: z.writestr('data1.dat', journal_valide(2)); z.writestr('etats/etat_01.dqs', b'f' * 2000)
         nj, ne, copie, pb = S.importer([zip_], self.d.portage, self.d.mobile)
         self.assertEqual((nj, ne, pb), (1, 1, []))
-        with open(os.path.join(self.d.portage, 'data1.dat'), 'rb') as f: self.assertEqual(f.read(), b'b' * 0x3c00)
+        with open(os.path.join(self.d.portage, 'data1.dat'), 'rb') as f: self.assertEqual(f.read(), journal_valide(2))
         with open(os.path.join(self.d.etats, 'etat_01.dqs'), 'rb') as f: self.assertEqual(f.read(), b'f' * 2000)
         self.assertEqual(os.path.dirname(copie), self.d.sauvegardes); self.assertTrue(os.path.basename(copie).startswith('avant_import_'))
-        with open(os.path.join(copie, 'data1.dat'), 'rb') as f: self.assertEqual(f.read(), b'a' * 0x3c00)
+        with open(os.path.join(copie, 'data1.dat'), 'rb') as f: self.assertEqual(f.read(), journal_valide(1))
         with open(os.path.join(copie, 'etats', 'etat_01.dqs'), 'rb') as f: self.assertEqual(f.read(), b'e' * 2000)
 
     def test_export_reprend_les_etats_du_bon_dossier(self):
-        ecrire(os.path.join(self.d.portage, 'data1.dat'), b'a' * 0x3c00); ecrire(os.path.join(self.d.etats, 'etat_02.dqs'), b'e' * 2000)
+        ecrire(os.path.join(self.d.portage, 'data1.dat'), journal_valide(1)); ecrire(os.path.join(self.d.etats, 'etat_02.dqs'), b'e' * 2000)
         sortie = os.path.join(self.t, 'sortie.zip'); self.assertEqual(S.exporter(self.d.portage, self.d.mobile, sortie), (1, 1))
         with zipfile.ZipFile(sortie) as z: self.assertEqual(sorted(z.namelist()), ['data1.dat', 'etats/etat_02.dqs'])
 
     def test_dossier_d_ecriture_particulier(self):                            # (tests, --saves-ecriture) : tout reste sous ce dossier
-        ecr = os.path.join(self.t, 'autre'); ecrire(os.path.join(ecr, 'data1.dat'), b'a' * 0x3c00)
+        ecr = os.path.join(self.t, 'autre'); ecrire(os.path.join(ecr, 'data1.dat'), journal_valide(1))
         zip_ = os.path.join(self.t, 'i.zip')
-        with zipfile.ZipFile(zip_, 'w') as z: z.writestr('data1.dat', b'b' * 0x3c00); z.writestr('etats/etat_03.dqs', b'g' * 2000)
+        with zipfile.ZipFile(zip_, 'w') as z: z.writestr('data1.dat', journal_valide(2)); z.writestr('etats/etat_03.dqs', b'g' * 2000)
         _, _, copie, _ = S.importer([zip_], ecr, self.d.mobile)
         self.assertTrue(os.path.isfile(os.path.join(ecr, 'etats', 'etat_03.dqs'))); self.assertEqual(os.path.dirname(copie), ecr)
 

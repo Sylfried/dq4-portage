@@ -1819,3 +1819,17 @@ Rendu de l'original (aucune capture) ; Windows ; le bateau en situation réelle 
 ### Non vérifié
 Rendu de l'original (aucune capture) ; Windows ; que l'ombre passe bien par-dessus les bâtiments de la carte (supposé) ; le vol complet du ballon (seul le départ au sol a été rejoué).
 
+## Avance #215 : l'import de sauvegardes contrôle la somme des journaux et écrit sans fichier à moitié écrit (#214, audit ENG-07, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`sauvegardes.importer` ne contrôlait que la taille des journaux et écrivait directement. Un journal abîmé (ou qui n'en est pas un) était importé, puis refusé par le moteur (« banque vide », sans raison pour le joueur) ; l'écriture directe pouvait laisser un fichier à moitié écrit. Établi : le moteur ne plante pas sur un journal abîmé (statut invalide, retour au titre).
+
+### Fait
+- `persistance/format_journal.py` (nouveau) : `dechiffrer` (filtre du jeu, `Cryption::Filter`), `somme`, `verifier(nom, octets)` -> `None` ou la raison : en-tête « rate » + somme de contrôle des 0x3660 premiers octets ; banque neuve (`DWEN`) ou supprimée (`DLED`) valides ; `data9.dat` sans somme. Vérifié sur 452 journaux réels (sauvegardes du téléphone et écritures du moteur) : aucune fausse alerte ; seul le fichier de bruit de l'audit est refusé.
+- `persistance/ecriture.py` (nouveau) : `ecrire_atomique` (déplacée depuis `CoreJeu`, qui garde le même nom) ; `sauvegardes.importer` l'utilise : chaque fichier est écrit en entier ou pas du tout, un échec laisse l'ancien fichier et est signalé dans « Ignorés », les autres fichiers passent ; rien d'écrit = erreur claire.
+- `lire_sources` refuse un journal abîmé avec sa raison. `test_chemins` : journaux valides fabriqués (`journal_valide`) au lieu d'octets quelconques.
+- `tests/test_import_sauvegardes.py` (13 tests, dans la CI : valide, banques vides, octet changé, somme changée, bruit, import partiel, tout refusé, échec d'écriture simulé sans fichier temporaire oublié, vraies sauvegardes).
+
+### Non vérifié
+Windows ; un export fait avec un autre jeu (même format ?) : seul le format du jeu est reconnu.
+

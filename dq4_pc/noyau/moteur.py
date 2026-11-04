@@ -8,6 +8,7 @@ from dq4_pc.noyau import rencontres as RE
 from dq4_pc.noyau.pktlog import PacketLog
 from dq4_pc.noyau.historique import Capteur
 from dq4_pc.combat.historique_combat import CapteurCombat
+from dq4_pc.persistance.ecriture import ecrire_atomique
 
 CUR_I, CUR_F = 0x258278, 0x258280          # curseurs d'ecriture (entiers / flottants) dans la bibliotheque
 PARTIE_DEPART = 0x3                         # menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
@@ -92,23 +93,7 @@ class CoreJeu(T.Core):
 
     echecs_ecriture = None                    # fichiers de sauvegarde que le moteur n'a pas pu ecrire (liste de phrases, lue et videe par la fenetre : petit message + journal)
 
-    @staticmethod
-    def ecrire_atomique(chemin, octets, essais=2, pause=0.25):
-        """Ecrit `octets` dans `chemin` : fichier temporaire a cote puis remplacement d'un coup (jamais de fichier a moitie ecrit) ; en cas d'erreur d'E/S (antivirus qui verrouille le fichier, disque plein...), `essais` tentatives
-        espacees de `pause` s. -> None si tout va bien, sinon l'exception de la derniere tentative ; l'ancien fichier reste alors intact."""
-        dernier = None
-        for i in range(max(1, essais)):
-            tmp = chemin + '.tmp'
-            try:
-                os.makedirs(os.path.dirname(chemin), exist_ok=True)
-                with open(tmp, 'wb') as fh: fh.write(octets); fh.flush(); os.fsync(fh.fileno())
-                os.replace(tmp, chemin); return None
-            except OSError as ex:
-                dernier = ex
-                try: os.remove(tmp)
-                except OSError: pass
-                if i + 1 < essais: time.sleep(pause)
-        return dernier
+    ecrire_atomique = staticmethod(ecrire_atomique)                  # (persistance/ecriture.py : partagee avec l'import de sauvegardes)
 
     def h_fclose(self, h, *a):
         f = self.files.get(h)
