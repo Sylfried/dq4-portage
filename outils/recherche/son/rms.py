@@ -1,6 +1,6 @@
 import sys, zipfile, numpy as np
 sys.path.insert(0, '/home/claude/wt45-son/dq4_pc')
-import son
+from dq4_pc import son
 z = zipfile.ZipFile('/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks/split_UnityDataAssetPack.apk')
 for nom in sys.argv[1:]:
     r = son.decoder_akb(z.read('assets/sound/%s.akb' % nom))

@@ -6,7 +6,7 @@ import numpy as np, pyglet
 from pyglet import gl
 from PIL import Image
 from harnais import *
-import ui_menu as UI
+from dq4_pc.menus import ui_menu as UI
 slot = int(sys.argv[1]); sortie = sys.argv[2]
 mo = demarrer(slot)
 for i in range(100): mo.step(0, 0x10 if i % 10 == 0 else 0)

@@ -10,7 +10,7 @@ from PIL import Image
 out = sys.argv[1]; onglet = int(sys.argv[2]) if len(sys.argv) > 2 else 0; filtre = len(sys.argv) > 3 and sys.argv[3] == '1'; fin = int(sys.argv[4]) if len(sys.argv) > 4 else -1
 W = int(sys.argv[5]) if len(sys.argv) > 5 else 1280; H = int(sys.argv[6]) if len(sys.argv) > 6 else 720
 win = pyglet.window.Window(W, H, visible=True)
-import ui_menu as UM, reglages as RG, pause as PA, ui_historique as UH, historique as HI
+from dq4_pc.menus import ui_menu as UM; from dq4_pc.persistance import reglages as RG; from dq4_pc.menus import pause as PA; from dq4_pc.menus import ui_historique as UH; from dq4_pc.noyau import historique as HI
 import test_historique_messages as T
 CACHE = '/tmp/uicache4'
 ml = UM.MiseEnPage(os.path.join(CACHE, 'ui_layout.json'), os.path.join(CACHE, 'ui_frameData.bin'))

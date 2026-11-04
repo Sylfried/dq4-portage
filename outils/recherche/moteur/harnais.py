@@ -3,7 +3,7 @@ Usage (depuis un script) : from harnais import *; mo = demarrer(slot=4); ... mo.
 Les messages (port, [shorts]) de chaque image sont gardes dans JOURNAL = [(image, partie, port, args)]."""
 import os, sys, struct
 sys.path.insert(0, os.environ.get('DQ4_SRC', '/home/claude/wt-audit/dq4_pc'))
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'
 SAVES = '/mnt/user-data/uploads/Downloads/DQ Patch/jeux/DQ4/saves/20261007_190735'
 JOURNAL = []

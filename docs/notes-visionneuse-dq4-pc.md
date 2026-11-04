@@ -1,5 +1,7 @@
 # Visionneuse PC de DQ4 (dq4_pc) : notes (mises à jour le 31/10/2026)
 
+> **Rangement du 04/11/2026 (#196)** : les chemins `dq4_pc/xxx.py` cités plus bas datent d'avant le rangement du projet (modules maintenant dans `dq4_pc/noyau`, `monde`, `menus`, `fenetre`…, `fenetre.py` découpé en plusieurs modules ; `dq4_pc/cache` et `jeux/DQ4` remplacés par `donnees/`). Table de correspondance ancien nom → nouveau dans [`plan_du_code.md`](plan_du_code.md) ; les numéros de ligne ne valent plus, chercher le nom de la fonction.
+
 Complète `notes-technique-portage-dq4.md` (référence pour le protocole moteur->Unity). Remplace ses sections « Rendu : état » et « Inconnues » pour la visionneuse.
 
 ## Ce qui marche
@@ -1688,3 +1690,25 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - L'infobulle de la ligne « Historique » grisée du menu Paramètres (« Disponible seulement quand vous avez la main… ») est gardée : elle n'apparaît qu'au survol de la ligne. À retirer aussi si Sylfried le veut.
 - Sous Windows : non vu.
+
+## Avance #197 : rangement du projet (#196, 04/11/2026)
+
+### Demande (D-237, D-238, 04/11 14 h 57)
+« Refais aussi une passe sur la structure du projet [...] clean un peu le tout avec des dossiers, revoir la qualité du code, simplifier l'utilisation, centraliser les sauvegardes et les nommages car par exemple le dossier `jeux` reprend l'exacte forme de l'autre projet de traduction. »
+- **D-237 (sondage)** : « Un dossier `donnees\` dans le projet (Recommandé) » : `apk\`, `sauvegardes\{mobile\<date>, portage, etats, avant_import_<date>}`, `cache\`, `reglages\`, `journaux\` ; un seul `lancer_dq4.bat` à la racine ; `dq4_pc\` ne contient plus que du code.
+- **D-238 (sondage)** : « dossiers + nettoyage sûr + découpage des fichiers seulement si ça permet de mieux structurer [...] je te laisse juger si c'est nécessaire de le faire, et si oui comment le faire ».
+
+### Fait
+- Plan complet et table ancien nom → nouveau : `docs/plan_du_code.md`.
+- Code rangé en paquets : `noyau` (moteur émulé), `monde` (cartes, décors, sprites), `rendu`, `combat`, `menus`, `persistance`, `fenetre`. `dq4_pc/fenetre.py` (3 761 lignes, 254 fonctions dans une seule classe `Jeu`) est découpé en 13 modules par thème ; la classe `Jeu` est assemblée par héritage de neuf « mixins ». Vérifié par l'arbre syntaxique : les 254 fonctions sont strictement identiques à celles d'avant, rien d'autre n'a changé dans le code du jeu.
+- `dq4_pc/chemins.py` : tous les dossiers et fichiers en un seul endroit (`Dossiers`), variables d'environnement `DQ4_DONNEES` et `DQ4_JEUX` (ancien fonctionnement), reprise de l'ancienne disposition `chemins.migrer()` : copie sans jamais écraser ni supprimer (le cache, lourd, est déplacé d'un coup s'il n'existe pas encore dans `donnees\cache`). `dq4_pc/principal.py` : lecture des arguments et ouverture de la fenêtre (ancienne `fenetre.main`).
+- `persistance/etats.py` : les états instantanés enregistrés avant le rangement se rechargent (table `ANCIENS_MODULES` + `Unpickler.find_class`).
+- Un seul lanceur `lancer_dq4.bat` à la racine (Python, `.venv` à la racine, reprise des anciens fichiers, génération des mises en page, lancement) ; l'ancien `dq4_pc\lancer_dq4.bat` redirige vers lui. `outils\generer_ui.bat` et `outils\dump_il2cpp.bat` suivent.
+- Tests dans `tests\` (`test_chemins.py` : 15 tests nouveaux ; `tests/_chemins.py` : aides communes). Entretien : six tests déjà en échec avant le rangement sont réparés, sans toucher au jeu (`test_mode_fenetre` : valeur par défaut de la correction des bords depuis #184 ; `test_historique_messages` : code de `Pause.maj` changé par #187 ; `test_casino_bestiaire`, `test_priorite_jeu`, `test_transition_combat`, `test_vitesse_combat` : fausse fenêtre sans `pause`). Nettoyage sûr : variables et imports inutilisés.
+- CI : compilation de `dq4_pc tests outils`, motifs interdits (+`donnees`), tests `test_chemins` et `test_rencontres`.
+
+### Non fait / à savoir
+- `menus/pause.py` (1 459 lignes) et `menus/ui_menu.py` (1 255 lignes) restent d'un seul tenant : un fichier par page du menu Paramètres serait possible, mais le gain est moindre que pour `fenetre.py` et le risque non nul ; à reprendre si Sylfried le souhaite.
+- Cache : les fichiers du cache sont des dictionnaires et des tableaux numpy sans référence aux modules du code (supposé, non vérifié sur son PC) ; en cas de doute, supprimer `donnees\cache` (il est refait).
+- Les anciens dossiers (`jeux\`, `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`…) ne sont pas supprimés : à effacer à la main après vérification.
+- Sous Windows : non vu (double-clic sur `lancer_dq4.bat` à la racine, premier démarrage avec reprise des fichiers).

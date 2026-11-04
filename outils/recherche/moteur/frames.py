@@ -1,6 +1,6 @@
 """Cadres du frameData : python3 frames.py <i0> <i1>  (sous xvfb-run : ui_menu importe pyglet)"""
 import sys; sys.path.insert(0,'/home/claude/dq4-portage/dq4_pc')
-import ui_menu as U
+from dq4_pc.menus import ui_menu as U
 c=U.lire_cadres('/tmp/r3_res/ui_frameData.bin')
 a=int(sys.argv[1]) if len(sys.argv)>1 else 0; b=int(sys.argv[2]) if len(sys.argv)>2 else len(c)
 print('nb cadres',len(c))

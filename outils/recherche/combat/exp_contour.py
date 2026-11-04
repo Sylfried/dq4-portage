@@ -1,6 +1,6 @@
 import sys, pickle, numpy as np, os
 sys.path.insert(0, '/home/claude/wt45-combat/dq4_pc')
-import hd as HD
+from dq4_pc.monde import hd as HD
 from scipy import ndimage as ndi
 from skimage import measure
 C = '/tmp/cb45/cache'

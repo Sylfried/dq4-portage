@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, '/home/claude/wt45-decor/dq4_pc')
-import fenetre as F
+from dq4_pc.fenetre import jeu as F
 orig = F.Jeu._dessiner_scene
 n = [0]
 def patched(self):

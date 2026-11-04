@@ -1,6 +1,6 @@
 import sys, os, struct, tempfile
 sys.path.insert(0, '/home/claude/wt45-combat/dq4_pc'); os.chdir('/home/claude/wt45-combat/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'; SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 for slot in (1, 2, 3, 4, 5):
     mo = MO.Moteur(APK, SAVES, tempfile.mkdtemp(prefix='sv_cb_'))

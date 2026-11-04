@@ -1,5 +1,5 @@
 import sys; sys.path.insert(0, '/tmp/cam45')
-import cam45_h as H, moteur as MO
+import cam45_h as H; from dq4_pc.noyau import moteur as MO
 m = H.nouveau('cam45e')
 nom = sys.argv[1]
 m.demarrer_ville(nom)

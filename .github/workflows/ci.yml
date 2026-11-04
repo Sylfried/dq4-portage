@@ -20,12 +20,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: "Compilation du code (syntaxe de dq4_pc et outils)"
-        run: python -m compileall -q dq4_pc outils
+      - name: "Compilation du code (syntaxe de dq4_pc, tests et outils)"
+        run: python -m compileall -q dq4_pc tests outils
 
       - name: "Fichiers interdits (motifs du .gitignore : contenu du jeu, sauvegardes, caches)"
         run: |
-          motifs='(^|/)(jeux|saves|sauvegardes|cache|captures|il2cpp)/|(^|/)(dump\.cs|script\.json)$|\.(apk|so|unity3d|obb|mpt|dat|pkl)$'
+          motifs='(^|/)(donnees|jeux|saves|sauvegardes|cache|captures|il2cpp)/|(^|/)(dump\.cs|script\.json)$|\.(apk|so|unity3d|obb|mpt|dat|pkl)$'
           interdits=$(git ls-files | grep -E "$motifs" || true)
           if [ -n "$interdits" ]; then
             echo "::error::Fichiers interdits dans le dépôt (contenu du jeu, sauvegardes, caches) :"
@@ -33,3 +33,11 @@ jobs:
             exit 1
           fi
           echo "Aucun fichier interdit."
+
+      - name: "Installation des modules (numpy, unicorn)"
+        run: python -m pip install --disable-pip-version-check numpy unicorn
+
+      - name: "Tests sans fenêtre ni jeu (dossiers, migration, états, rencontres)"
+        run: |
+          python tests/test_chemins.py
+          python tests/test_rencontres.py

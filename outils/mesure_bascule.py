@@ -25,8 +25,8 @@ ARBRE = os.path.abspath(sys.argv[1])
 sys.argv = [os.path.join(ARBRE, 'fenetre.py')] + sys.argv[2:]
 sys.path.insert(0, ARBRE)
 import pyglet
-import fenetre as FE
-import postfx as PF
+from dq4_pc.fenetre import jeu as FE
+from dq4_pc.rendu import postfx as PF
 
 TRAMES_APRES = 12            # trames comptees apres la fin de l'appel de bascule
 ETAT = {'rec': None, 'n': 0, 'fait': []}

@@ -2,7 +2,7 @@
 import os, sys, time, collections, shutil
 sys.path.insert(0, '/home/claude/wt-audit/dq4_pc')
 os.chdir('/home/claude/wt-audit/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'
 SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 def nouveau(nom='h', lecture=SAVES):

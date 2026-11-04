@@ -474,7 +474,6 @@ def _classe_source(media):
 
 class _Fabrique:
     def __call__(self, media, *a):
-        global SourceBoucle
         return _classe_source(media)(media, *a)
 
 

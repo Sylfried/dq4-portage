@@ -5,7 +5,7 @@ import os as _os
 sys.path.insert(0, _os.environ.get('SON_DIR', '/home/claude/wt45-son/dq4_pc'))
 sys.modules['pyglet'] = None
 import numpy as np
-import son as SON
+from dq4_pc import son as SON
 
 import os, time as _time
 RT = bool(os.environ.get('RT'))                       # RT=1 : horloge reelle (le decodage prend son vrai temps), les images du moteur sont cadencees a 30 x facteur par seconde

@@ -3,8 +3,8 @@ Variables : ENC_N (tick ou on force la rencontre), CRIT=1 (coup critique force),
 import sys, os, struct, time
 wt = os.environ.get('CB_WT', '/home/claude/wt45-combat')
 sys.path.insert(0, wt + '/dq4_pc'); os.chdir(wt + '/dq4_pc')
-import fenetre as F
-import moteur as MO
+from dq4_pc.fenetre import jeu as F
+from dq4_pc.noyau import moteur as MO
 import unicorn
 orig = F.Jeu.tick
 LOG = os.environ.get('CB_LOG', '/tmp/cb45/gl.log'); open(LOG, 'w').close()

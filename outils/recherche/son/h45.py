@@ -3,7 +3,7 @@ import os, sys, struct, time, shutil, collections
 sys.path.insert(0, '/home/claude/wt45-son/dq4_pc')
 os.chdir('/home/claude/wt45-son/dq4_pc')
 import unicorn
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'
 SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 PAS_JOUEUR, OFF_HS = 0x530, 0x58

@@ -2,7 +2,7 @@
 import os, sys, shutil
 sys.path.insert(0, '/home/claude/wt45-camera/dq4_pc')
 os.chdir('/home/claude/wt45-camera/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'
 SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 

@@ -7,7 +7,7 @@ import numpy as np, pyglet
 if os.environ.get('HL'): pyglet.options['headless'] = True
 from pyglet import gl
 from PIL import Image
-import ui_menu as UI
+from dq4_pc.menus import ui_menu as UI
 S = 1.688; W, H = 810, 483
 win = pyglet.window.Window(W, H, visible=False)
 cache = '/tmp/uicache4'

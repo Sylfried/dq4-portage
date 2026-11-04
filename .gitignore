@@ -1,4 +1,5 @@
-# --- Contenu Square Enix : JAMAIS dans ce dépôt ---
+# --- Contenu Square Enix et fichiers de l'utilisateur : JAMAIS dans ce dépôt ---
+donnees/
 *.apk
 *.so
 *.unity3d

@@ -18,7 +18,7 @@
 **Conclusion de travail** : traiter Unicorn comme **GPL v2**, la lecture la plus prudente.
 
 **Conséquences**
-- Aujourd'hui, le dépôt ne contient aucun code d'Unicorn ; `dq4_pc/lancer_dq4.bat` l'installe depuis PyPI sur la machine de l'utilisateur (`pip install … unicorn …`). Le portage ne redistribue donc pas Unicorn.
+- Aujourd'hui, le dépôt ne contient aucun code d'Unicorn ; `lancer_dq4.bat` (racine) l'installe depuis PyPI sur la machine de l'utilisateur (`pip install … unicorn …`). Le portage ne redistribue donc pas Unicorn.
 - Un `.exe` qui **embarque** Unicorn (issue #87, packaging) en serait une redistribution : les obligations de la GPL v2 s'appliquent (texte de la licence, code source correspondant et, selon la lecture usuelle de la GPL, une licence compatible pour le programme qui l'embarque). **À faire confirmer** avant de publier.
 
 ## Choix à faire (par Sylfried, avant le `.exe`, issue #87)
