@@ -1465,3 +1465,20 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : vitesse du retour (60 % / s au minimum, 5 x l'écart par seconde, comme la rotation) ; « les deux touches » = Page haut + Page bas ou leurs remplaçantes réattribuées.
 - **Sous Windows** : le ressenti de l'animation (trop rapide / trop lente : `CAM_RECENTRE_DIST` et le facteur 5) ; la pression double des deux touches du clavier réel.
 
+## Avance #171 : Ctrl + touche de caméra remet tous les états de la caméra (#168, 04/11/2026)
+
+### Demande (D-227, 04/11 10 h 46)
+« CTRL + touche du clavier pour la caméra réinitialise TOUS les états de la caméra ».
+
+### Fait
+- Avant : Ctrl (la « Touche spéciale » des réglages) + une flèche ne remettait que la rotation et l'inclinaison (retour animé) ; la distance restait, et Ctrl + Page haut / Page bas zoomait comme sans Ctrl.
+- `Jeu.reinitialiser_camera` : la position (`recentrer_camera`, si `_camera_pilotable` : terrain libre d'une ville, d'un donjon ou d'une tour, lieu sans interdiction de tourner) ET la distance (`distance_par_defaut`, retour animé de l'avance #170). Appelée par `_maj_camera` pour Ctrl + une des quatre flèches (sur la carte du monde et dans un lieu qui interdit de tourner, seule la distance revient) et par `_maj_distance_clavier` pour Ctrl + Page haut ou Page bas (même condition que la molette : `_zoom_possible`).
+- Les touches tenues ensuite ne font plus rien ; Ctrl relâchée avant la touche, la touche seule n'agit pas tant qu'elle n'est pas relâchée (même logique que les deux flèches opposées). Les deux touches de distance sans Ctrl ne remettent toujours que la distance (#167), les deux flèches opposées que la position.
+- Aide de la page Commandes mise à jour.
+- Tests : `outils/test_camera_ctrl_tout.py` (15 tests : les trois états reviennent depuis plusieurs départs, par animation monotone, sans Ctrl rien ne change, carte du monde / lieu bloqué / hors terrain, effet d'écran).
+
+### À trancher / non vérifié
+- **Supposé** : « tous les états de la caméra » = rotation, inclinaison et distance ; « touche du clavier pour la caméra » = les quatre flèches, Page haut et Page bas (ou leurs remplaçantes réattribuées).
+- Pendant un effet d'écran, Ctrl + Page haut / Page bas ne remet que la distance (la molette zoome encore à ce moment, les flèches ne tournent pas).
+- **Sous Windows** : Ctrl + flèche, Ctrl + Page haut, Ctrl + Page bas au clavier réel.
+

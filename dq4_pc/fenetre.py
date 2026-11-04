@@ -641,6 +641,13 @@ class Jeu(pyglet.window.Window):
         Le mouvement est fait par _maj_distance_clavier (a chaque image) ; une molette ou une touche de distance seule l'interrompt."""
         self.dist_retour = True
 
+    def reinitialiser_camera(self):
+        """Remet TOUS les etats de la camera a leur valeur d'origine (#168) : la position (rotation et inclinaison, par l'animation de recentrage) ET la distance (retour anime a 100 %). Touche speciale (Ctrl) + une touche de camera :
+        les quatre fleches, Page haut, Page bas. Chaque etat ne se remet que la ou il se regle : la position sur le terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde, ni un lieu qui interdit de tourner la camera),
+        la distance partout ou le zoom agit (_zoom_possible, verifie a chaque image par _maj_distance_clavier)."""
+        if self._camera_pilotable(): self.recentrer_camera()
+        self.distance_par_defaut()
+
     def on_mouse_scroll(self, x, y, sx, sy):
         """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap ; Ctrl + molette (vers le haut OU vers le bas) = retour anime a la distance par defaut (100 %).
         pyglet ne donne pas les modificateurs de la molette : Ctrl = la « Touche speciale » des reglages (Ctrl par defaut, voir _ctrl_actif)."""
@@ -805,14 +812,15 @@ class Jeu(pyglet.window.Window):
     def _maj_distance_clavier(self):
         """Touches « Caméra (Rapprocher) » / « Caméra (Éloigner) » (a chaque image affichee) : tant qu'une touche est tenue, la distance de la camera diminue / augmente EN CONTINU (sans a-coup, selon le temps ecoule), a la
         vitesse de rotation de la camera (CAM_DIST_VIT x reglage « Vitesse de caméra » x accelerateur tenu), entre 50 et 200 %. Memes conditions que la molette (_zoom_possible : terrain, jamais un menu, un message ou un
-        combat). Les DEUX touches ensemble (#167) ramenent la distance a 100 % par une animation (comme les deux fleches opposees pour la rotation) : vitesse minimale CAM_RECENTRE_DIST, 5 x l'ecart par seconde, fois le
+        combat). Les DEUX touches ensemble (#167), ou Ctrl + l'une d'elles (#168 : la position revient aussi, voir reinitialiser_camera), ramenent la distance a 100 % par une animation (comme les deux fleches opposees pour la rotation) : vitesse minimale CAM_RECENTRE_DIST, 5 x l'ecart par seconde, fois le
         reglage « Vitesse de caméra » ; tant qu'il en reste une enfoncee apres cette pression double, rien ne se passe ; une nouvelle pression seule, ou un cran de molette, interrompt l'animation (distance_par_defaut la lance aussi : Ctrl + molette,
         Ctrl + clic molette). Meme valeur que la molette (regler_distance)."""
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self._t_dist is None else min(0.1, t - self._t_dist)); self._t_dist = t
         pres, loin = self._tenue('cam_pres'), self._tenue('cam_loin')
         if not (pres or loin): self.dist_bloque = False
         if not self._zoom_possible(): self.dist_retour = False; return
-        if pres and loin: self.dist_retour = True; self.dist_bloque = True; sens = 0
+        if (pres or loin) and self._tenue('modif'): self.reinitialiser_camera(); self.dist_bloque = True; sens = 0                          # Ctrl + l'une des deux touches (#168) : TOUS les etats de la camera reviennent a l'origine
+        elif pres and loin: self.distance_par_defaut(); self.dist_bloque = True; sens = 0                                                    # les deux touches ensemble (#167) : la distance seule
         elif self.dist_bloque: sens = 0
         else:
             sens = (1 if loin else 0) - (1 if pres else 0)
@@ -2753,17 +2761,18 @@ class Jeu(pyglet.window.Window):
 
     def _maj_camera(self):
         """Fleches sur le terrain (a chaque image affichee) : gauche / droite tournent la camera autour du heros (villes, donjons, tours seulement), haut / bas relevent ou abaissent son angle ;
-        deux fleches opposees ensemble la remettent par defaut par une animation, par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglages « Vitesse de caméra » et « Multiplicateur de l'accélérateur » (touche tenue)."""
+        deux fleches opposees ensemble la remettent par defaut par une animation ; Ctrl + une fleche remet aussi la distance (reinitialiser_camera), par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglages « Vitesse de caméra » et « Multiplicateur de l'accélérateur » (touche tenue)."""
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_cam is None else min(0.1, t - self.t_cam)); self.t_cam = t
         if not self._terrain_libre(): return
         g, d, h, b = (self._tenue(a) for a in ('cam_gauche', 'cam_droite', 'cam_haut', 'cam_bas'))
         vit = float(self.reg['vitesse_camera']); ville = self.moteur.etat.partie == MO.PARTIE_VILLE
-        if not ville or self.cam_bloquee:                                                                          # carte du monde, ou lieu ou le jeu interdit de tourner la camera : les touches de la camera ne font rien
+        if not ville or self.cam_bloquee:                                                                          # carte du monde, ou lieu ou le jeu interdit de tourner la camera : les touches de la camera ne tournent rien
+            if self._tenue('modif') and (g or d or h or b): self.reinitialiser_camera()                              # (Ctrl + fleche : la distance revient quand meme, comme avec la molette ; la position, non : _camera_pilotable est faux)
             for ax in self.cam_axe.values(): ax[0] = False; ax[1] = bool(g or d or h or b)
             return
         acc = self._tenue('accel')                                                                                # camera acceleree : touche d'accelerateur tenue (comme la course)
-        if self._tenue('modif') and (g or d or h or b):                                                            # touche modificatrice + touche de la camera : retour animé a la vue d'origine, dans toutes les directions (les touches tenues ensuite ne font plus rien)
-            self.recentrer_camera(); sl = sa = 0
+        if self._tenue('modif') and (g or d or h or b):                                                            # touche modificatrice + fleche : TOUS les etats de la camera (rotation, inclinaison ET distance) reviennent a l'origine par une animation (#168 ; les touches tenues ensuite ne font plus rien)
+            self.reinitialiser_camera(); sl = sa = 0
         else: sl = self._etat_axe('lacet', g, d); sa = self._etat_axe('angle', b, h)
         vit_m = vit * (float(self.reg['vitesse_accel']) if acc else 1.0)                                            # acceleration : rotation et inclinaison a la main plus rapides (le recentrage garde sa vitesse)
         if sl:
