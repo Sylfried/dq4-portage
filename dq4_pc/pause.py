@@ -1,6 +1,6 @@
 """Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), retour a l'ecran titre.
 
-Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
+Pendant que le menu est ouvert le jeu CONTINUE de tourner derriere lui, sur toutes les pages, sans recevoir ni touche ni clic (#178 : aucune pause dans aucun menu ; la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
 Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, rien n'est encadre : comme au toucher sur mobile, la plaque (ou le bouton) sous le pointeur s'assombrit et se rallume quand il sort.
 Les reglages sont enregistres dans reglages.json. Fenetres noires, curseur dore et bouton retour : ceux des menus du jeu (feuilles MenuTexture et Button)."""
@@ -200,10 +200,10 @@ class Pause:
             e = 62.4 / 64.0 * w; ic.blit(x + (w - e) / 2, y + (h - e) / 2, width=e, height=e)
 
     # ---- ouverture / fermeture
-    PAGES_FIGEES = ('historique', 'quitter')          # pages qui arretent le jeu derriere elles (lecture de l'historique, question de sortie) ; sur les autres, le jeu continue de tourner (sans touche ni clic : voir Fenetre.tick)
+    PAGES_FIGEES = ()                                 # pages qui arretent le jeu derriere elles : AUCUNE (#178, D-229 : « il ne faut aucune pause dans aucun menu » ; l'historique et la question « Quitter » arretaient le jeu jusque-la). Le jeu tourne derriere toutes les pages, sans touche ni clic (voir Fenetre.tick)
 
     def fige_le_jeu(self):
-        """Le jeu est-il arrete derriere le menu ? Non sur la racine « Paramètres » et ses pages de reglages (le jeu tourne, il ne recoit aucune entree) ; oui sur l'historique et la question « Quitter »."""
+        """Le jeu est-il arrete derriere le menu ? Non, sur aucune page (racine « Paramètres », reglages, historique, question « Quitter ») : le jeu tourne, il ne recoit aucune entree. Reste vrai seulement pour une page ajoutee a PAGES_FIGEES (vide : voir la regle ci-dessus)."""
         return self.ouvert and self.ecran in self.PAGES_FIGEES
 
     def ouvrir(self, page=None):
@@ -621,6 +621,7 @@ class Pause:
     def maj(self):
         """Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image). Page Son : les sons jouent (le jeu est arrete) pour qu'on entende les volumes qu'on regle."""
         S = self.J.son; ecoute = self.ecran == 'son'
+        if self.ecran == 'historique': self.hist.suivre_le_jeu()          # le jeu tourne derriere l'historique (#178) : ce qu'il y ecrit s'ajoute en bas de la liste
         if ecoute != S.ecoute: S.ecouter(ecoute)
         if ecoute: S.tick()
         if self.pan_plier_a is not None and self.pan_appui is None and time.time() >= self.pan_plier_a: self._plier_en_attente()          # clic simple sur la barre de titre : le pliage a lieu quand le delai du double clic est ecoule sans second appui (#145)

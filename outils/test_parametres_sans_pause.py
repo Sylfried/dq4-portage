@@ -1,13 +1,14 @@
 """Test (sans moteur ni affichage) de l'ecran « Paramètres » (#136) : l'ecran qui s'appelait « Pause » (menu Echap) s'appelle « Paramètres » et ne met plus le jeu en pause : le jeu tourne derriere lui
-(sans touche ni clic : les touches du menu ne font pas marcher le heros), seules les pages « Historique » et « Quitter » l'arretent.
+(sans touche ni clic : les touches du menu ne font pas marcher le heros). Depuis #178 (D-229, « il ne faut aucune pause dans aucun menu ») AUCUNE page ne l'arrete, pas meme « Historique » ni « Quitter » ;
+le mecanisme (Pause.PAGES_FIGEES, vide) reste et est essaye ici avec une page figee de test.
 
     python3 outils/test_parametres_sans_pause.py
 
   1. le titre de la racine est « Paramètres » (plus « Pause ») ;
-  2. Pause.fige_le_jeu : faux menu ferme, faux sur la racine et les pages de reglages, vrai sur l'historique et la question de sortie ;
-  3. Jeu._synchroniser_gel : le son et l'horloge ne s'arretent qu'en entrant sur une page figee, et repartent en la quittant (sans rattrapage du temps passe) ; Jeu.pause_jeu : ouvrir ne coupe rien, fermer rend le son s'il etait arrete ;
+  2. Pause.fige_le_jeu : faux menu ferme, faux sur TOUTES les pages (racine, reglages, historique, question de sortie ; toute page `_e_*` du menu), Pause.PAGES_FIGEES vide ;
+  3. Jeu._synchroniser_gel : le son et l'horloge ne s'arretent qu'en entrant sur une page figee (ici une page de test ajoutee a PAGES_FIGEES ; aucune par defaut), et repartent en la quittant (sans rattrapage du temps passe) ; Jeu.pause_jeu : ouvrir ne coupe rien, fermer rend le son s'il etait arrete ;
   4. Jeu.tick : aucune entree n'est envoyee au moteur menu ouvert ; Jeu._facteur_vitesse : pas de marche acceleree menu ouvert (aucune direction n'est envoyee au jeu) ;
-  5. Jeu._boucle : le moteur tourne menu ouvert (sauf page figee).
+  5. Jeu._boucle : le moteur tourne menu ouvert (sauf page figee : aucune).
 """
 import inspect, os, sys, types, unittest
 
@@ -35,14 +36,24 @@ class TestPagesFigees(unittest.TestCase):
         for page in ('racine', 'affichage', 'son', 'commandes', 'interface', 'etats', 'modifications'):
             self.assertFalse(menu(page).fige_le_jeu(), page)
 
-    def test_historique_et_quitter_arretent_le_jeu(self):
-        for page in ('historique', 'quitter'): self.assertTrue(menu(page).fige_le_jeu(), page)
+    def test_historique_et_quitter_n_arretent_plus_le_jeu(self):                                                      # #178 : « le menu historique met le jeu en pause, il ne faut aucune pause dans aucun menu »
+        for page in ('historique', 'quitter'): self.assertFalse(menu(page).fige_le_jeu(), page)
+
+    def test_aucune_page_du_menu_ne_fige_le_jeu(self):
+        pages = {n[3:] for n in dir(PA.Pause) if n.startswith('_e_')} | {'racine', 'historique', 'quitter'}
+        self.assertGreaterEqual(len(pages), 8)                                                                           # (toutes les pages du menu, pas seulement celles que ce test connait)
+        for page in sorted(pages): self.assertFalse(menu(page).fige_le_jeu(), page)
+        self.assertEqual(tuple(PA.Pause.PAGES_FIGEES), ())
 
     def test_menu_ferme(self):
         self.assertFalse(menu('historique', ouvert=False).fige_le_jeu())
 
-    def test_le_retour_de_l_historique_relance_le_jeu(self):
-        p = menu('historique'); self.assertTrue(p.fige_le_jeu()); p.pile.pop(); self.assertFalse(p.fige_le_jeu())
+    def test_une_page_ajoutee_a_PAGES_FIGEES_figerait_le_jeu_jusqu_a_son_retour(self):                                  # (le mecanisme reste, vide)
+        ancien = PA.Pause.PAGES_FIGEES
+        try:
+            PA.Pause.PAGES_FIGEES = ('historique',)
+            p = menu('historique'); self.assertTrue(p.fige_le_jeu()); p.pile.pop(); self.assertFalse(p.fige_le_jeu())
+        finally: PA.Pause.PAGES_FIGEES = ancien
 
 
 class Faux:
@@ -55,6 +66,15 @@ class Faux:
 
 
 class TestArret(unittest.TestCase):
+    """Le mecanisme d'arret (page de PAGES_FIGEES), essaye avec la page « historique » ajoutee le temps du test : par defaut plus aucune page n'arrete le jeu (voir TestPagesFigees)."""
+    def setUp(self): self._anc = PA.Pause.PAGES_FIGEES; PA.Pause.PAGES_FIGEES = ('historique',)
+    def tearDown(self): PA.Pause.PAGES_FIGEES = self._anc
+
+    def test_par_defaut_ouvrir_l_historique_ne_coupe_rien(self):
+        PA.Pause.PAGES_FIGEES = self._anc
+        J = Faux('racine'); J.pause.pile.append('historique'); J.acc = 7.0; F.Jeu._synchroniser_gel(J)
+        self.assertEqual(J.appels, []); self.assertFalse(J._jeu_fige); self.assertEqual((J.acc, J.t_boucle), (7.0, 1.0))      # ni son coupe, ni horloge remise a zero
+
     def test_entrer_sur_une_page_figee_coupe_le_son_et_l_horloge(self):
         J = Faux('racine'); F.Jeu._synchroniser_gel(J); self.assertEqual(J.appels, []); self.assertFalse(J._jeu_fige)       # racine : rien ne s'arrete
         J.pause.pile.append('historique'); J.acc = 7.0; F.Jeu._synchroniser_gel(J)
@@ -97,7 +117,7 @@ class TestEntrees(unittest.TestCase):
 class TestBoucle(unittest.TestCase):
     def test_le_moteur_tourne_menu_ouvert_sauf_page_figee(self):
         src = inspect.getsource(F.Jeu._boucle)
-        self.assertIn('if self.pause.fige_le_jeu():', src)                                           # seul le retour anticipe d'une page figee arrete le moteur
+        self.assertIn('if self.pause.fige_le_jeu():', src)                                           # seul le retour anticipe d'une page figee (aucune par defaut) arrete le moteur
         self.assertNotIn('if self.pause.ouvert: self.pause.maj(); self.acc = 0.0', src)                 # l'ancien arret general a disparu
         self.assertIn('self._synchroniser_gel()', src)
 

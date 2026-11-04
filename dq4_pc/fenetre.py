@@ -1128,7 +1128,7 @@ class Jeu(pyglet.window.Window):
         self.appliquer_defilement()
 
     def pause_jeu(self, oui):
-        """Menu « Paramètres » (Echap) ouvert (oui) ou ferme. Le jeu continue de tourner derriere lui, sans aucune entree (voir `tick`) ; seules les pages de Pause.PAGES_FIGEES l'arretent (moteur et son : `_synchroniser_gel`, a chaque image).
+        """Menu « Paramètres » (Echap) ouvert (oui) ou ferme. Le jeu continue de tourner derriere lui, sans aucune entree (voir `tick`), sur toutes les pages (#178) ; une page de Pause.PAGES_FIGEES (vide) l'arreterait (moteur et son : `_synchroniser_gel`, a chaque image).
         A la fermeture, les touches deja tenues ne comptent pas comme un nouvel appui."""
         self.acc = 0.0; self.t_boucle = None
         if not oui:
@@ -2855,7 +2855,7 @@ class Jeu(pyglet.window.Window):
         if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
         if self.pause.ouvert:
             self.pause.maj(); self._synchroniser_gel()
-            if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # historique, question « Quitter » : le moteur est arrete ; sur les autres pages, il tourne sans entree (tick)
+            if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # page de PAGES_FIGEES (aucune depuis #178) : le moteur est arrete ; sinon il tourne sans entree (tick)
         self._maj_camera(); self._maj_distance_clavier()
         t = time.perf_counter()
         dt = 0.0 if self.t_boucle is None else t - self.t_boucle

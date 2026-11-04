@@ -13,7 +13,8 @@ Un dialogue tient dans une boite de 3 lignes (la suite est dans une boite suivan
 de lignes que le combat en demande, au moins 3 ; le cadre du jeu est etire (c'est un cadre a neuf morceaux : seul le milieu s'allonge, les coins gardent leur taille) ; au-dela de MAX_LIGNES_COMBAT lignes, le reste
 continue dans une boite suivante. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
 dans un fichier jusqu'a ce qu'on retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.OPACITE_JEU).
-Le moteur est arrete tant que la fenetre est ouverte (Pause.ouvrir -> pause_jeu) : le message affiche reste tel quel et aucune touche n'arrive au jeu.
+Le jeu NE S'ARRETE PAS tant que la fenetre est ouverte (#178 : aucune pause dans aucun menu) : aucune touche ni clic n'arrive au jeu, mais il continue de tourner et d'ecrire dans l'historique ; la liste suit (`suivre_le_jeu` : les nouveaux
+messages s'ajoutent en bas quand la vue est en bas ; quand on lit plus haut, la liste ne bouge pas, elle se met a jour au retour en bas).
 Clavier : haut / bas (message precedent / suivant, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
 (etoile du message choisi), F ou Carte (case « Favoris seulement »), la touche de l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette (2 lignes par cran), barre de defilement (fleches : une ligne,
 piste : une page, curseur : glisser), glisser dans la liste (le contenu suit le pointeur), clic sur un onglet, sur la case ou sur une etoile.
@@ -212,7 +213,7 @@ class VueHistorique:
 
     # ---- donnees
     def entrer(self, onglet=O_DIALOGUES):
-        """A l'ouverture de la page : recharge la liste (le moteur est arrete, elle ne change plus), tout en bas sur l'element le plus recent."""
+        """A l'ouverture de la page : recharge la liste, tout en bas sur l'element le plus recent (ensuite elle suit le jeu : `suivre_le_jeu`)."""
         self.onglet = onglet if 0 <= onglet < len(ONGLETS) else O_DIALOGUES
         self.glisse_barre = None; self.drag = None; self._lignes.clear()
         self.favoris_seuls = self._lire_filtre()
@@ -225,6 +226,20 @@ class VueHistorique:
         if garder: self.sel = max(0, min(n - 1, self.sel))
         else: self.pos = 0.0; self.sel = max(0, n - 1)
         self.zones = []; self.zones_etoile = []
+
+    def suivre_le_jeu(self):
+        """Le jeu tourne derriere la fenetre (#178) et peut ecrire dans l'historique (un dialogue, la fin d'un combat). Appele a chaque image : quand la vue est tout en bas (rien n'est cache plus bas), la liste est remplacee par la
+        liste a jour ; le message choisi reste le meme (reconnu par son objet), sauf s'il etait le dernier : le choix suit alors le plus recent. Quand on lit plus haut, un glissement ou la barre est en cours, la liste ne bouge pas
+        (la lecture ne saute pas) ; elle se met a jour des qu'on revient en bas. -> True si la liste a change."""
+        h = getattr(self.J, 'historique', None)
+        if h is None or self.decal() > 0.5 or self.drag is not None or self.glisse_barre is not None: return False
+        el = h.liste(ONGLETS[self.onglet][1], self.favoris_seuls); anc = self.elements
+        if len(el) == len(anc) and all(a is b for a, b in zip(el, anc)): return False
+        cur = self.courant(); suivre = cur is None or self.sel >= len(anc) - 1
+        self.elements = el; n = len(el); self._mise = None; self.centrer = None; self.debuts = []; self.fins = []; self.zones = []; self.zones_etoile = []; self.pos = 0.0
+        i = None if suivre else next((k for k, e in enumerate(el) if e is cur), None)
+        self.sel = max(0, n - 1) if i is None else i
+        return True
 
     def changer_onglet(self, i):
         i %= len(ONGLETS)
