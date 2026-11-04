@@ -159,3 +159,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #250 | MAP-05 : ciel des cartes dpout et ev09 prolongé de part et d'autre par symétrie (plus de coins noirs en 16/9) ; test_ciel_etendu |
 | 04/11 | #252 | MAP-02 / UNI-05 / SPR-06 : paquet 30 rejoué (zone visible ×1,00 à ×1,25 en ballon, panneau du ballon à la même échelle, ton zoom multiplié) ; test_ballon_echelle |
 | 04/11 | #254 | UNI-04 / MAP-04 : sépia des retours en arrière (paquet 1 : gris pondéré + décalage du shader du jeu, décor seulement, remis à zéro au chargement de carte) ; test_sepia_decor |
+| 04/11 | #256 | UNI-06 : effets d'écran de la classe Capture rejoués (voyage et ailes de Chimère, arrivée comprise ; lampe Ranaruta nuit / matin ; Riremito) : formules du jeu en float32, flou à demi-résolution, bit 1 levé puis abaissé, noir entre départ et arrivée ; test_effets_capture |

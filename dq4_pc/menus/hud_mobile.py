@@ -237,7 +237,7 @@ class Boutons:
     def visibles(self):
         """Boutons a montrer : ceux que le moteur autorise (hors menu Echap, combat, effets d'ecran) ; en combat, le seul bouton de vitesse des combats (hors ecran noir et fondu au noir)."""
         J = self.J
-        if J.pause.ouvert or J.moteur.etat.effet is not None: return ()
+        if J.pause.ouvert or J.moteur.etat.effet is not None or getattr(J.moteur.etat, 'effet_ecran', None) is not None: return ()
         from dq4_pc.noyau.moteur import PARTIE_COMBAT
         if J.moteur.etat.partie == PARTIE_COMBAT: return (COMBAT,) if J.reg['bouton_vitesse'] and combat_visible(J.moteur.etat) and self._ancre_prete() else ()        # (le bouton de vitesse a son propre reglage d'affichage)
         if not J.reg['boutons']: return ()
@@ -250,7 +250,7 @@ class Boutons:
         """Le moteur autorise-t-il ce bouton du terrain (Carte, Commandes, Discussion) en ce moment, que le reglage « boutons » l'affiche ou non ? Le clavier y joue le bruitage du bouton (D-156 : les mêmes situations qu'au doigt)."""
         J = self.J
         from dq4_pc.noyau.moteur import PARTIE_COMBAT
-        if J.pause.ouvert or J.moteur.etat.effet is not None or J.moteur.etat.partie == PARTIE_COMBAT or J.carte_ouverte: return False
+        if J.pause.ouvert or J.moteur.etat.effet is not None or getattr(J.moteur.etat, 'effet_ecran', None) is not None or J.moteur.etat.partie == PARTIE_COMBAT or J.carte_ouverte: return False
         f = J.moteur.drapeaux()
         return (f & (8 | 0x30047)) == 8 and (nom != 'carte' or bool(f & 0x20))
 

@@ -70,7 +70,7 @@ class ClavierSourisMixin:
         if mo.etat.partie in MO.PARTIES_MINIJEU:          # casino, bestiaire : Echap = bouton retour de la fenetre ouverte (manette 0x20) ; rouleaux en marche, message, cartes en cours de distribution : pas de retour, le menu Echap s'ouvre
             p = mo.menu_actif()
             return p is not None and not mo.msg_visible and self._retour_possible(p)
-        if mo.etat.partie not in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) or mo.etat.effet is not None: return False
+        if mo.etat.partie not in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) or mo.etat.effet is not None or getattr(mo.etat, 'effet_ecran', None) is not None: return False
         return bool(self.carte_ouverte) or (not mo.msg_visible and mo.menu_actif() is not None)
 
     def _retour_possible(self, port):

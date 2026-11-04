@@ -41,7 +41,7 @@ dq4-portage\
 `donnees.py` (lecture des données Unity avec UnityPy, cache), `fld.py` (format des cartes), `fbx.py` (modèles 3D animés), `objets_carte.py` (objets animés des cartes), `hd.py` (agrandissement EPX des sprites), `decors_plats.py` (scintillement des décors plats), `contours_decor.py`, `teinte_carte.py` (jour / nuit).
 
 ### `dq4_pc\rendu\`
-`postfx.py` (rendu hors écran : MSAA, suréchantillonnage, netteté, luminosité), `ciel_titre.py` (ciel de l'écran-titre en 16/9 ; copies de ciel décalées ou en miroir).
+`postfx.py` (rendu hors écran : MSAA, suréchantillonnage, netteté, luminosité), `ciel_titre.py` (ciel de l'écran-titre en 16/9 ; copies de ciel décalées ou en miroir), `effets_capture.py` (squelette de la classe `Capture` du jeu : constantes, boucle de pas), `effet_tabi.py` (voyage, ailes de Chimère), `effet_lampe.py` (Ranaruta), `effet_riremito.py` (Riremito) : effets d'écran du paquet 34, modules purs.
 
 ### `dq4_pc\combat\`
 `effet_combat.py` (effet de début de combat), `vitesse_combat.py` (horloge du moteur pendant un combat), `historique_combat.py` (résultats de combat pour l'historique). La partie « fenêtre » du combat est dans `fenetre\scene_combat.py`.
@@ -53,7 +53,7 @@ dq4-portage\
 `reglages.py` (réglages du joueur, `reglages.json`), `sauvegardes.py` (export / import des `data*.dat`), `etats.py` (états instantanés ; relit aussi les états d'avant le rangement).
 
 ### `dq4_pc\fenetre\` : la fenêtre
-La classe `Jeu` (fenêtre pyglet) est assemblée à partir de neuf morceaux (« mixins »), un par thème, pour qu'un fichier ne dépasse pas ~650 lignes :
+La classe `Jeu` (fenêtre pyglet) est assemblée à partir de dix morceaux (« mixins »), un par thème, pour qu'un fichier ne dépasse pas ~650 lignes :
 
 | Module | Contenu |
 |---|---|
@@ -66,6 +66,7 @@ La classe `Jeu` (fenêtre pyglet) est assemblée à partir de neuf morceaux (« 
 | `affichage_menus.py` | messages, fenêtres de menu du jeu, éditeur d'interface, fondus, vignette, petits messages |
 | `clavier_souris.py` | touches, souris, manette : tous les `on_*` d'entrée |
 | `instantanes.py` | états instantanés (enregistrer / charger) |
+| `effets_capture.py` | effets d'écran du voyage, de la lampe et de Riremito : capture de l'écran, deux textures de flou, dessin du maillage de l'effet (l'interface reste par-dessus) |
 | `options.py` | réglages du joueur appliqués au jeu en cours (son, texte, défilement, vitesse de combat) |
 | `constantes.py`, `shaders.py`, `aides.py` | constantes, programmes GLSL, petites fonctions sans état |
 | `entrees.py`, `ecrans.py` | logique pure (sans fenêtre), testée seule : gestes souris / clavier ; moniteurs |

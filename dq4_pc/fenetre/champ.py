@@ -584,7 +584,7 @@ class ChampMixin:
     def _terrain_libre(self):
         """Terrain sans fenetre : ni menu d'Echap, ni message, ni menu ou carte du jeu, ni combat, ni effet d'ecran. Les fleches pilotent alors la camera ; sinon elles naviguent dans les fenetres."""
         mo = self.moteur; e = mo.etat
-        return (not self.pause.ouvert and self.titre is None and e.partie in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte and e.effet is None)
+        return (not self.pause.ouvert and self.titre is None and e.partie in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte and e.effet is None and getattr(e, 'effet_ecran', None) is None)
 
     def _lacet_eff(self):
         """Rotation de la camera (degres) qui s'applique a la scene : villes, donjons et tours seulement, et pas pendant une camera libre des scenes."""
