@@ -73,6 +73,15 @@ class CtrlPlusToucheDeCamera(unittest.TestCase):
                 prev = e
             n = next(i for i, e in enumerate(out) if e == (0.0, 0.0, 100.0)); self.assertTrue(10 < n < 100, (t, n))                  # ni un saut, ni une longue attente
 
+    def test_la_distance_va_a_la_meme_vitesse_que_la_rotation(self):
+        """#173 : un ecart de X % se resorbe comme un ecart de X degres : rotation et distance arrivent a l'origine a la meme image (a une image pres)."""
+        for dist, lacet in ((200, 100.0), (170, 70.0), (150, 50.0), (130, -30.0), (60, 40.0), (50, -50.0), (200, -100.0)):
+            j = Faux(distance=dist, lacet=lacet, angle=0.0); out = j.images(240, 'modif', 'cam_gauche')
+            n_lacet = next(i for i, e in enumerate(out) if e[0] == 0.0); n_dist = next(i for i, e in enumerate(out) if e[2] == 100.0)
+            self.assertLessEqual(abs(n_lacet - n_dist), 1, (dist, lacet, n_lacet, n_dist))
+            for i in range(0, min(n_lacet, n_dist) - 1, 3):                                                         # (et pendant le mouvement : la meme part de l'ecart restant, a quelques points pres)
+                self.assertLess(abs(abs(out[i][0]) / abs(lacet) - abs(out[i][2] - 100.0) / abs(dist - 100.0)) if lacet else 0.0, 0.2, (dist, lacet, i))
+
     def test_les_touches_tenues_gardent_l_origine(self):
         j = Faux(); j.images(180, 'modif', 'cam_gauche'); a = etats(j); j.images(60, 'modif', 'cam_gauche'); self.assertEqual(etats(j), a)           # la fleche ne tourne plus la camera tant que Ctrl est tenue
         j.images(60, 'modif', 'cam_pres'); self.assertEqual(etats(j), (0.0, 0.0, 100.0))
