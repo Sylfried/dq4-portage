@@ -8,13 +8,14 @@
      en bas de l'ecran pour le panneau d'origine) ;
   3. garde-fou : le panneau d'ORIGINE (correction coupee) se penche bien de plus de 8 degres pres des bords, donc le test 1 verifie quelque chose ;
   4. essai d'inclinaison (#134) : avec `inc` > 0 le panneau est cisaille vers la verticale du monde, pieds fixes, a taille, profondeur et position de bas inchangees ; son bord penche de atan(inc x tan(angle d'une
-     verticale du monde au pied)) ; inc = 1 : parallele aux murs ; 0,5 par defaut (`Jeu._inclinaison_sprites`, variable DQ_SPRITE_INCLINAISON) ;
+     verticale du monde au pied)) ; inc = 1 : parallele aux murs ; 0 PAR DEFAUT depuis #180 (« remets l'affichage des PNJ comme sur la version mobile ... ils s'etirent pres du bord » : le cisaillement a 0,5 deformait les
+     sprites ; `Jeu._inclinaison_sprites`, variable DQ_SPRITE_INCLINAISON pour l'essayer) : l'etat livre (correction des bords seule, aucun cisaillement) donne des bords exactement verticaux et la proportion constante ;
   5. constat (cause de l'impression de #134, voir `Jeu._panneau_ville`) : les VERTICALES DU MONDE (murs, portes) penchent a l'ecran selon leur position (point de fuite sous l'image, camera a 47 degres), de beaucoup plus en 16/9 que
      sur le portrait d'origine, et cet angle change de plusieurs degres quand le heros monte ou descend (le PNJ change de hauteur a l'ecran) alors que le sprite, lui, reste a 0 : le sprite parait pencher PAR RAPPORT aux murs voisins.
 
     python3 outils/test_sprites_droits.py        (Linux sans ecran : pyglet en mode « headless »)
 """
-import itertools, math, os, sys, unittest
+import itertools, math, os, sys, types, unittest
 
 import numpy as np
 
@@ -81,6 +82,20 @@ class TestSpritesDroits(unittest.TestCase):
             r_min, r_max = min(r_min, ratio), max(r_max, ratio)
         self.assertLess(pire, 0.01, 'le panneau doit etre un rectangle droit a l\'ecran, a toute position et pour toute camera')
         self.assertGreater(r_min, 0.730); self.assertLess(r_max, 0.745)                                              # proportion constante a +- 1 % (0,72 x la hauteur au centre de l'image : 0,738 mesure)
+
+    def test_etat_livre_par_defaut_bords_verticaux_sans_cisaillement(self):
+        """#180 : avec les reglages par defaut du jeu (correction des bords complete, inclinaison nulle), le PNJ est un rectangle droit a l'ecran partout, a toute camera (pas de sprite deforme pres des bords)."""
+        ancien = os.environ.pop('DQ_SPRITE_INCLINAISON', None); ancien_b = os.environ.pop('DQ_CORRECTION_BORDS', None)
+        try:
+            pire = 0.0; j0 = faux_jeu(); j0.args = types.SimpleNamespace(correction_bords=None); j0.INCLINAISON_SPRITES_DEF = F.Jeu.INCLINAISON_SPRITES_DEF
+            t, inc = F.Jeu._correction_bords(j0), F.Jeu._inclinaison_sprites(j0); self.assertEqual((t, inc), (1.0, 0.0))
+            for nom, (dx, dz) in itertools.product(ETATS, POSITIONS):
+                (M, q, _, _), _ = cas(nom, dx, dz, t, inc); g, d, ratio, (A, B, Cc, D) = forme(M, q)
+                pire = max(pire, abs(D[0] - A[0]), abs(Cc[0] - B[0]), abs(A[1] - B[1]), abs(D[1] - Cc[1])); self.assertAlmostEqual(ratio, 0.738, delta=0.008)
+            self.assertLess(pire, 0.01)
+        finally:
+            for k, v in (('DQ_SPRITE_INCLINAISON', ancien), ('DQ_CORRECTION_BORDS', ancien_b)):
+                if v is not None: os.environ[k] = v
 
     def test_butte_montee_et_descente(self):
         """Camera de la butte (#110) : la hauteur de la camera suit le sol (CAM_Y_RELIEF) ou retarde (escalier) ; a chaque image, un PNJ au bord gauche, au bord droit et en haut reste droit."""
@@ -178,11 +193,11 @@ class TestSpritesDroits(unittest.TestCase):
         self.assertLess(max(e5) - min(e5), 0.55 * (max(e0) - min(e0)))
 
     def test_reglage_par_variable_d_environnement(self):
-        """DQ_SPRITE_INCLINAISON : 0 a 100 (%) ; absente, vide ou illisible : 50 % (essai) ; bornee."""
+        """DQ_SPRITE_INCLINAISON : 0 a 100 (%) ; absente, vide ou illisible : 0 % (defaut depuis #180) ; bornee."""
         j = TC.faux_jeu(); j.INCLINAISON_SPRITES_DEF = F.Jeu.INCLINAISON_SPRITES_DEF; ancien = os.environ.pop('DQ_SPRITE_INCLINAISON', None)
         try:
-            self.assertEqual(F.Jeu._inclinaison_sprites(j), 0.5); self.assertEqual(F.Jeu.INCLINAISON_SPRITES_DEF, 0.5)
-            for val, att in (('0', 0.0), ('100', 1.0), ('30', 0.3), ('70.5', 0.705), ('250', 1.0), ('-5', 0.0), ('', 0.5), ('  ', 0.5), ('abc', 0.5)):
+            self.assertEqual(F.Jeu._inclinaison_sprites(j), 0.0); self.assertEqual(F.Jeu.INCLINAISON_SPRITES_DEF, 0.0)
+            for val, att in (('0', 0.0), ('100', 1.0), ('30', 0.3), ('70.5', 0.705), ('250', 1.0), ('-5', 0.0), ('', 0.0), ('  ', 0.0), ('abc', 0.0)):
                 os.environ['DQ_SPRITE_INCLINAISON'] = val; self.assertAlmostEqual(F.Jeu._inclinaison_sprites(j), att, 9, repr(val))
         finally:
             os.environ.pop('DQ_SPRITE_INCLINAISON', None)

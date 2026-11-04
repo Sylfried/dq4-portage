@@ -1542,3 +1542,21 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « aucun menu » = toutes les pages du menu Paramètres (Historique et Quitter comprises), pas les fenêtres propres du jeu.
 - Effet voulu à connaître : un combat qui avance seul (vitesse rapide) ou un message minuté continue pendant la lecture de l'historique, et les rencontres aléatoires peuvent survenir pendant la question « Quitter » (le jeu ne reçoit aucune entrée).
 - **Sous Windows** : historique ouvert, la scène derrière bouge, le son continue, la liste reste lisible quand un message ou un combat s'ajoute.
+
+## Avance #181 : PNJ sans le cisaillement de #156 (#180, 04/11/2026)
+
+### Demande (D-229, 04/11 11 h 40)
+« Finalement remet l'affichage des PNJ comme sur la version mobile, de l'exact même façon, car là il y a des comportements bizarres où on peut les voir s'étirer et autre quand ils s'approchent du bord »
+
+### Établi
+- Comparaison de rendus (village de Maout, 1920 x 1080, même image du jeu) près des bords gauche / droit : (1) état de la veille = correction des bords + cisaillement à 50 % de #156 : parallélogramme, tête décalée, pixels en escalier ; (2) correction des bords seule (état d'avant #156) : rectangle droit, proportion constante (0,738) ; (3) panneau brut d'origine (`DQ_CORRECTION_BORDS=0`) : penché vers l'extérieur de 15 à 20 degrés et trop large (jusqu'à 0,9 au lieu de 0,75) en 16/9.
+- Le cisaillement (#156) est la seule modification récente du dessin des sprites : c'est lui qui crée l'étirement signalé.
+
+### Fait
+- `Jeu.INCLINAISON_SPRITES_DEF` : 0,5 -> 0 (bords exactement verticaux). Rendu **identique au pixel** à l'état d'avant #156 (0 pixel de différence, mesuré). L'essai reste disponible : `DQ_SPRITE_INCLINAISON` de 0 à 100. La correction des bords (toujours complète) est inchangée.
+- Tests : `outils/test_sprites_droits.py` (11) : nouveau test de l'état livré (correction 1, inclinaison 0 : rectangle droit et proportion 0,738 +- 0,008 pour les 15 états de caméra et 30 positions), test de la variable d'environnement adapté (défaut 0).
+
+### À trancher / non vérifié
+- **Supposé** : « comme sur la version mobile, de l'exact même façon » = sprites droits aux proportions constantes, comme sur le portrait du mobile (le panneau d'origine n'y penche que de 4 à 6 degrés), donc l'état (2). Le panneau brut (3) n'est PAS remis : il reproduirait en 16/9 l'inclinaison et l'élargissement que la correction des bords (« exactement la correction que j'attendais », #43) retire. Si Sylfried voulait le brut : `DQ_CORRECTION_BORDS=0` (ou changer `_correction_bords`).
+- L'impression d'optique de #134 (le sprite paraît pencher par rapport aux murs quand le héros monte ou descend) revient : c'est le prix du retour à l'état d'avant (cause établie : les verticales du monde penchent à l'écran, le sprite reste droit).
+- **Sous Windows** : PNJ près des bords gauche et droit, droits et sans étirement.
