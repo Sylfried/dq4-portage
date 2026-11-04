@@ -8,6 +8,7 @@ from dq4_pc.noyau import rencontres as RE
 from dq4_pc.noyau.pktlog import PacketLog
 from dq4_pc.noyau.historique import Capteur
 from dq4_pc.combat.historique_combat import CapteurCombat
+from dq4_pc.rendu import effets_capture as EF
 from dq4_pc.persistance.ecriture import ecrire_atomique
 
 ECHELLE_CHAMP = (0.25, 4.0)               # bornes de l'echelle de la carte du monde (paquet 30 ; le moteur n'envoie que 1,0 a 1,25 : la borne ne sert qu'a ecarter une valeur aberrante)
@@ -30,6 +31,7 @@ MSG_RETOUR_TITRE = 0xcba2f                     # identifiant du message de la bo
 MESSAGE_RESULTAT = 0x10                        # TownMenu_MESSAGE + 0x10 : reponse de la boite (1 = Oui, 2 = Non ; remis a 0 a l'ouverture) ; lue par TownMenu_OPERATION_SETTING::menuUpdate (etat 5)
 EFFET_COMBAT = 4                            # paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
 EFFET_COMBAT_IMAGES = 57                    # Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
+ECRAN_NOIR_MAX = 1800                       # images (30 Hz) d'ecran noir apres le depart d'un voyage (Capture.Tabi) avant de renoncer a attendre l'arrivee (garde-fou : le jeu la lance toujours, bien avant)
 CHARGEMENT_COUVERT = 0.9                    # opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (Etat.chargement)
 CHARGEMENT_MIN, CHARGEMENT_PLACEMENT, CHARGEMENT_MAX = 1, 2, 6      # images du moteur apres le paquet 0 : au moins 1 (le moteur place la camera et les personnages a l'image suivante, sur 529 cartes), 2 au plus pour attendre les positions des personnages visibles, 6 : garde-fou (jamais d'attente plus longue)
 ATTENTE_CHARGE_MAX = 240                    # images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
@@ -114,6 +116,8 @@ class Etat:
     vitesse_fondu = 1.0                        # les fondus au noir durent 1 / vitesse_fondu de leur duree d'origine : FIXE a 1 (duree du jeu) depuis #101, plus un reglage du joueur (les tests la font varier)
     sepia = False                              # paquet 1 (cmd_map_effect_sepia : FldObject.calculateExecSepia) : le decor des villes passe aux shaders `Custom/fld_*_sepia` (retours en arriere) jusqu'au chargement de carte suivant ; attribut de classe : un etat instantane enregistre avant #254 n'a pas cet attribut
     champ_echelle = 1.0                        # paquet 30, entier < 0 : Field.SetScale(echelle) : la camera orthographique de la carte du monde voit echelle x plus de terrain (ballon : 1,0 a 1,25, renvoyee a chaque image par FieldData::setOffset) ; attribut de classe : un etat instantane enregistre avant #252 n'a pas cet attribut
+    effet_ecran = None                         # paquet 34, valeurs 3 (voyage), 5 (lampe), 6 (Riremito) : effet de la classe Capture en cours {'n': images ecoulees, 'duree': images du moteur, 'images': appels de MoveNext d'origine, 'genre', 'inverse', 'matin'} (voir Moteur._debut_effet_ecran) ; attribut de classe : un etat instantane enregistre avant #256 n'a pas cet attribut
+    ecran_noir = None                          # fin du depart d'un voyage (Capture.Tabi : les deux couches passent a l'alpha 0, la camera du jeu reste coupee) : {'n': images ecoulees} tant que l'ecran reste noir, jusqu'a la fin de l'arrivee (voir Moteur._effet_ecran)
     flottants = ()                             # paquet 30, entier >= 0 : Field.SetFloatingObject(emplacement) : le panneau de ce personnage (le ballon : emplacement 12) est agrandi de `champ_echelle` (Field.FloatingObject.SetScale), il garde donc sa taille a l'ecran quand le terrain est vu de plus loin ; son ombre n'est pas touchee
     def __init__(self):
         self.carte = None; self.cam_pos = None; self.cam_cible = None; self.cam_rot = None
@@ -320,6 +324,15 @@ class Etat:
             fd['fin'] = 0.0
             if d <= 1: fd['a'] = 0.0; fd['n'] = 0; fd['pas'] = 0.0
             else: fd['a'] = 1.0; fd['pas'] = -1.0 / d; fd['n'] = d
+
+    def fondu_noir_net(self):
+        """Fade.SetFadeOutBlack(0) sur le plan 0 (devant tout) : opaque, noir, tout de suite (fin des effets lampe et Riremito) ; il reste ainsi jusqu'a un fondu d'entree lance par le moteur."""
+        fd = self.fondu; fd['noir'] = 0; fd['col'] = (0.0, 0.0, 0.0); fd['fin'] = 1.0; fd['a'] = 1.0; fd['n'] = 0; fd['pas'] = 0.0; fd['combat'] = False
+
+    def fondu_entree_courant(self, images):
+        """Fade.SetFadeIn(images) sur le plan 0 (arrivee d'un voyage, Capture.Tabi) : de l'opacite COURANTE du plan vers 0, en `images` pas egaux (FadePlane.Command, IN) : sans effet visible si le plan est transparent, et
+        le bit « fondu en cours » de Global.Flag reste leve pendant `images` images (CheckFade), comme dans le jeu."""
+        fd = self.fondu; fd['noir'] = 0; fd['fin'] = 0.0; fd['pas'] = -fd['a'] / images; fd['n'] = images
 
     def maj_chargement(self):
         """Fin de la retenue du dessin apres un chargement de carte (une fois par image du moteur, apres `appliquer`). La visionneuse n'a vu que le paquet 0 (nouveau decor) a l'image du chargement : camera de la scene
@@ -930,6 +943,34 @@ class Moteur:
             ac['n'] += 1
             if ac['n'] > ATTENTE_CHARGE_MAX + EFFET_COMBAT_IMAGES: self.etat.attente_charge = None
 
+    def _debut_effet_ecran(self, valeur):
+        """Paquet 34, valeurs 3 (voyage : ailes de Chimere), 5 (lampe : Ranaruta) et 6 (Riremito) : Capture.ScreenEffect leve le bit 1 de Global.Flag, que le moteur attend, et lance une coroutine qui dure
+        EF.IMAGES[...] images (63 a 64 au depart, 45 a l'arrivee d'un voyage) ; la fenetre dessine l'effet (fenetre/effets_capture.py), voir _effet_ecran. Bit 7 de la valeur : bReverse (voyage : arrivee) ou bMorning
+        (lampe : teinte du matin). Comme la cascade du combat, l'effet suit « Vitesse de transition » (moins d'images du moteur)."""
+        genre = EF.GENRES.get(valeur & 0xf)
+        if genre is None or self.etat.effet_ecran is not None: return
+        bit7 = bool(valeur & 0x80); inverse = genre == 'tabi' and bit7; images = EF.images_de(genre, inverse)
+        self.etat.effet_ecran = {'n': 0, 'duree': PJ.duree_fondu(images, Etat.vitesse_fondu), 'images': images, 'genre': genre, 'inverse': inverse, 'matin': genre == 'lampe' and bit7}
+        self._drapeau_effet(True)
+
+    def _effet_ecran(self):
+        """Une image du jeu : avance l'effet Capture en cours. Le noir immediat (lampe, Riremito : Fade.SetFadeOutBlack(0)) et le fondu d'entree de l'arrivee d'un voyage (Fade.SetFadeIn(30)) sont lances a leur appel de
+        MoveNext ; a la fin, le drapeau retombe (le moteur reprend a l'image suivante). Fin du depart d'un voyage : l'ecran reste noir (Etat.ecran_noir) jusqu'a la fin de l'arrivee. L'ecran noir est abandonne s'il
+        dure trop (garde-fou) ou si le jeu revient au titre."""
+        e = self.etat
+        if e.ecran_noir is not None:
+            e.ecran_noir['n'] += 1
+            if e.ecran_noir['n'] > ECRAN_NOIR_MAX or e.partie == PARTIE_DEPART or e.carte == CARTE_TITRE: e.ecran_noir = None
+        ef = e.effet_ecran
+        if ef is None: return
+        ef['n'] += 1; genre = ef['genre']; appels = EF.appels_faits(ef['n'], ef['duree'], ef['images'])
+        if genre in EF.APPEL_NOIR and appels >= EF.APPEL_NOIR[genre] and not ef.get('noir'): ef['noir'] = True; e.fondu_noir_net()
+        if ef['inverse'] and appels >= EF.APPEL_FONDU_ENTRANT and not ef.get('fondu'): ef['fondu'] = True; e.fondu_entree_courant(EF.FONDU_ENTRANT)
+        if ef['inverse'] and appels >= ef['images']: e.ecran_noir = None            # dernier appel de l'arrivee (etat 4) : la camera du jeu est rendue au jeu, la scene reparait
+        if ef['n'] >= ef['duree']:
+            self._drapeau_effet(False); e.effet_ecran = None
+            if genre == 'tabi' and not ef['inverse']: e.ecran_noir = {'n': 0}
+
     def _nom_carte(self):
         s = self.core.read_cstr(self.L + NOM_RESSOURCE).decode('latin-1')
         return s.split('/')[-1]
@@ -943,7 +984,7 @@ class Moteur:
         w2 = (w | 1) if self.etat.fondu_en_cours() else (w & ~1)      # (Global::IsFadeEnd : auberge, titres de chapitre, ecran de chargement, ouverture des menus, sifflet...)
         if w2 != w: c.mem_w(c.outp, struct.pack('<I', w2))
         self._finir_anims()
-        self._effet_combat()
+        self._effet_combat(); self._effet_ecran()
         if os.environ.get('DQ_CALLHOP'):                                       # (test) "image:monstre:hauteur:degats,..." : appelle BattleMenu_setHoppingNumbers comme le moteur apres un coup
             for spec in os.environ['DQ_CALLHOP'].split(','):
                 im, ch, hh, nn = [int(x) for x in spec.split(':')]
@@ -975,6 +1016,7 @@ class Moteur:
         self._decompte_sortie()
         for t, a, f in pq:
             if t == 34 and a and (a[0] & 0xf) == EFFET_COMBAT: self._debut_effet_combat(avant)
+            elif t == 34 and a: self._debut_effet_ecran(a[0])
         ac = self.etat.attente_charge
         if ac is not None and self.etat.effet is None and self.etat.cartes_chargees > ac['base']: self.etat.attente_charge = None      # la scene du combat est arrivee
         self.etat.maj_chargement()

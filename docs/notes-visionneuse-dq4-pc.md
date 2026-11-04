@@ -2132,3 +2132,21 @@ Audit du 04/11/2026, UNI-04 / MAP-04 : le paquet 1 (effet sépia des retours en 
 
 ### Non vérifié
 Un vrai retour en arrière joué par le script (quand l'effet commence et finit) ; les matériaux `fld_transz` (le jeu n'a pas de variante sépia : le port les passe en sépia comme le reste) ; la carte du monde (pas de FldObject : non concernée).
+
+## Avance #256 : effets d'écran du voyage, de la lampe et de Riremito (paquet 34, valeurs 3, 5, 6)
+
+### Demande
+Audit du 04/11/2026, UNI-06 : le paquet 34 ne rejouait que la valeur 4 (début de combat) ; voyage / ailes de Chimère (3), lampe « Ranaruta » (5) et Riremito (6) n'avaient aucun effet, et le moteur n'attendait pas leur fin.
+
+### Établi
+Trois coroutines de la classe `Capture` (`<Tabi>d__49`, `<DarkLamp>d__47`, `<Riremito>d__48`), avancées d'un pas par `LateUpdate` (30 Hz) : capture de l'écran du jeu sans interface, passe de flou (l'état de l'image précédente redessiné dans l'une de deux textures de demi-résolution), un `MoveNext`. Durées : 64 appels (voyage, départ), 45 (arrivée, bit 7), 64 (lampe), 63 (Riremito) ; aucun `Random`, aucune horloge. Voyage et lampe : sommets, couleurs et champs comparés au vrai code machine sous Unicorn, identiques au bit près ; Riremito relu à la main. La lampe et Riremito rendent l'écran noir d'un coup (appels 63 et 62) ; le départ d'un voyage laisse l'écran noir ; l'arrivée lance un fondu d'entrée de 30 images à l'appel 3 et rend la scène à l'appel 45.
+
+### Fait
+- Modules purs `rendu/effets_capture.py`, `effet_tabi.py`, `effet_lampe.py`, `effet_riremito.py`.
+- `Moteur._debut_effet_ecran` / `_effet_ecran` : bit 1 levé puis abaissé après la durée de l'effet (suit « Vitesse de transition »), noir immédiat (`Etat.fondu_noir_net`), `Etat.ecran_noir` entre le départ et l'arrivée (borné à 60 s ; levé au retour au titre), fondu d'entrée (`Etat.fondu_entree_courant`). `Etat.effet_ecran` et `Etat.ecran_noir` : attributs de classe.
+- `fenetre/effets_capture.py` (`EffetsCaptureMixin`) : capture, deux textures de flou, dessin ; `jeu.py` l'appelle depuis `_dessiner_scene` ; commandes, caméra et boutons tactiles bloqués pendant l'effet.
+- Vérifié à l'écran (moteur réel, 1280 x 720, carte `caf1`, image par image) : lampe nuit et matin, Riremito (noir net à l'appel 62), voyage (départ, noir, arrivée, scène normale au dernier appel).
+- `tests/test_effets_capture.py` (21 tests).
+
+### Non vérifié
+L'aspect exact face à l'original (aucune capture de référence) ; le contenu initial des textures de flou (noir supposé) ; l'interface dessinée par-dessus l'effet (supposé) ; le tourbillon du voyage, elliptique en 16/9 (le maillage est en coordonnées d'écran normalisées) ; 28 et 14 rangées gardées comme sur mobile (le jeu en calcule moins en 16/9) ; la cadence de 30 Hz ; la capture contient la vignette et le fondu du fond ; la durée réelle de l'effet de début de combat (57 images dans le port, non revérifiée).

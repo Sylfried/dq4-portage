@@ -86,8 +86,8 @@ class MenusMixin:
         gl.glBindTexture(t.target, t.id)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
 
-    def _copier_ecran(self):
-        """Copie l'image qui vient d'etre dessinee dans une texture (la capture que l'effet de debut de combat brise en morceaux)."""
+    def _copier_ecran(self, combat=True):
+        """Copie l'image qui vient d'etre dessinee dans une texture (la capture que l'effet de debut de combat brise en morceaux, ou que les effets voyage, lampe et Riremito deforment : `combat` faux, voir effets_capture.py)."""
         w, h = self.get_framebuffer_size()
         if self.effet_tex is not None: self.effet_tex.delete()
         t = pyglet.image.Texture.create(w, h, internalformat=gl.GL_RGBA8)
@@ -97,6 +97,7 @@ class MenusMixin:
         gl.glGenerateMipmap(t.target)
         gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
         self.effet_tex = t
+        if not combat: return
         self.effet_sim = EC.EffetTuiles(self.width / max(1, self.height))
         n = self.effet_sim.rows * EC.COLS * 6
         if self.effet_vl is not None: self.effet_vl.delete()

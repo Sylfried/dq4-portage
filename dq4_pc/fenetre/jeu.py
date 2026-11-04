@@ -36,6 +36,7 @@ from dq4_pc.fenetre.affichage_menus import MenusMixin
 from dq4_pc.fenetre.camera import CameraMixin
 from dq4_pc.fenetre.champ import ChampMixin
 from dq4_pc.fenetre.clavier_souris import ClavierSourisMixin
+from dq4_pc.fenetre.effets_capture import EffetsCaptureMixin
 from dq4_pc.fenetre.instantanes import InstantanesMixin
 from dq4_pc.fenetre.options import OptionsMixin
 from dq4_pc.fenetre.plein_ecran import PleinEcranMixin
@@ -56,7 +57,7 @@ def noter_erreur(texte):
         print('Erreur non notee dans le journal (%r) : %s' % (ex, texte.strip()), flush=True); return False
 
 
-class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, MenusMixin, ClavierSourisMixin, InstantanesMixin, OptionsMixin, pyglet.window.Window):
+class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, MenusMixin, ClavierSourisMixin, InstantanesMixin, OptionsMixin, EffetsCaptureMixin, pyglet.window.Window):
     def __init__(self, args, reg=None):
         SV.noter('demarrage', largeur=args.largeur, hauteur=args.hauteur, plein_ecran=getattr(args, 'plein_ecran', 0), shot=bool(args.shot))
         self._journal_logo = False
@@ -311,12 +312,12 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         (le heros marche des l'image 13, mesure sur le vrai moteur) ; avant, `Etat.transition_combat` coupait l'acceleration pendant les 30 images, soit 0,6 s de marche normale malgre la touche de course tenue. Pendant le fondu de sortie, le joueur est verrouille (flag 4) : rien n'y change. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
         les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas)."""
         R = self.reg; mo = self.moteur; e = mo.etat
-        if e.effet is not None: return 1.0          # cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Moteur._debut_effet_combat) ; ni vitesse de combat, ni de marche, ni accelerateur
+        if e.effet is not None or getattr(e, 'effet_ecran', None) is not None: return 1.0          # effet d'ecran de la classe Capture (voyage, lampe, Riremito : le moteur attend sa fin) ; cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Moteur._debut_effet_combat) ; ni vitesse de combat, ni de marche, ni accelerateur
         if self._horloge_combat(): return VC.facteur(R['vitesse_combat'], True)          # combat, des la fin de la cascade (ecran noir, fondu d'arrivee, message « X apparait ») jusqu'au fondu de fin compris : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
         if self.pause.ouvert: return 1.0          # menu « Paramètres » : pas de marche acceleree (aucune direction n'est envoyee au jeu)
         if e.garde_trans > 0: return 1.0          # entre deux fondus d'un combat (le moteur change de scene 1 a 3 images plus tard) : horloge du jeu. Le fondu de RETOUR a la carte, lui, n'est plus coupe d'office (#127) : seul le verrou du joueur (plus bas) compte, comme pour le fondu d'arrivee sur une carte (#107)
         if R['vitesse_marche'] == 1.0 and R['vitesse_accel'] == 1.0: return 1.0
-        if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
+        if e.partie == MO.PARTIE_COMBAT or e.partie in MO.PARTIES_MINIJEU or mo.msg_visible or mo.menu_actif() is not None or e.effet is not None or getattr(e, 'effet_ecran', None) is not None or e.attente_charge is not None: return 1.0          # casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
         if not (self.pad() & (MO.HAUT | MO.BAS | MO.GAUCHE | MO.DROITE)): return 1.0
         if mo.drapeaux() & MO.DRAPEAU_JOUEUR_VERROUILLE: return 1.0       # le jeu a la main (scene, evenement sans message, fondu de sortie) : son rythme est le sien, la direction tenue n'y change rien ; un fondu seul (arrivee sur une carte, joueur libre) n'y compte plus (#107)
         f = float(R['vitesse_marche'])
@@ -607,6 +608,10 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                 e.cam_pos = tuple(a + b for a, b in zip(e.cam_pos, dv)); e.cam_cible = tuple(a + b for a, b in zip(e.cam_cible, dv))
         if e.effet is not None and self.effet_ref is not e.effet: self.effet_ref = e.effet; self.effet_tex_prete = False      # nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
         if e.effet is not None and self.effet_tex_prete: self._dessin_genre = 'effet'; self._dessiner_effet(e.effet); self._dessiner_aide(); return
+        ef_c = self._capt_etat(e)                                            # effet d'ecran de la classe Capture (voyage, lampe, Riremito) : meme principe, mais l'interface reste dessinee par-dessus (effets_capture.py)
+        if ef_c is not None and self.capt_prete:
+            sim = self._capt_avancer(ef_c)
+            if sim.rendu_actif or e.ecran_noir is not None: self._dessin_genre = 'effet d\'ecran'; self._dessiner_effet_capture(sim); return          # (les deux premieres images, le jeu est encore affiche normalement ; a l'arrivee d'un voyage c'est le noir du depart)
         if e.effet is None and e.attente_charge is not None:                # fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
             self._dessin_genre = 'noir (attente du combat)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self._dessiner_aide(); return
         champ = e.partie == MO.PARTIE_CHAMP and e.champ is not None        # carte du monde (tuiles) ou ville (decor 3D)
@@ -620,7 +625,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         gl.glClearColor(fond[0], fond[1], fond[2], 1.0)
         self.clear()
         bataille = e.partie == MO.PARTIE_COMBAT and e.cam_pos is not None and e.cam_rot is not None
-        if retenu or (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
+        if retenu or (e.ecran_noir is not None and ef_c is None) or (e.partie == MO.PARTIE_CHAMP and e.champ is None) or (not champ and not bataille and e.partie != MO.PARTIE_COMBAT and (e.carte or '').startswith('btl_')):
             # carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite) ;
             # ou chargement de carte pas encore complet (retenu) : le moteur n'a envoye que le decor, la camera et les personnages arrivent a l'image suivante
             self._dessin_genre = 'noir (retenue du chargement)' if retenu else 'noir (scene pas arrivee)'; gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
@@ -752,7 +757,11 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self.prog.stop()
         gl.glDisable(gl.GL_DEPTH_TEST)
         if e.partie != MO.PARTIE_COMBAT and not champ: self._dessiner_vignette()          # (pas sur la carte du monde, entierement en 2D)
-        self._dessiner_fondu(True); self.post.fin(); self._dessiner_degats(e)
+        self._dessiner_fondu(True); self.post.fin()
+        if ef_c is not None and not self.capt_prete:                         # effet Capture qui demarre : la scene (sans interface) est copiee, puis les images normales continuent (le noir d'un voyage en cours couvre tout)
+            self._capt_capturer(ef_c)
+            if e.ecran_noir is not None: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
+        self._dessiner_degats(e)
         self._maj_message(); self._dessiner_saisie_nom(); self._dessiner_message(); self._dessiner_menus(); self._dessiner_fondu(); self._dessiner_titre(); self._dessiner_licence(); self._dessiner_sauvegardes()
         self.dt_dessin += (time.perf_counter() - t_debut - self.dt_dessin) * 0.1
         if e.effet is not None and not self.effet_tex_prete: self._copier_ecran(); self.effet_tex_prete = True       # capture de l'ecran du jeu, sans les lignes d'aide

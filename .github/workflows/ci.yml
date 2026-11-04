@@ -64,3 +64,4 @@ jobs:
           python tests/test_ciel_etendu.py
           python tests/test_ballon_echelle.py
           python tests/test_sepia_decor.py
+          python tests/test_effets_capture.py
