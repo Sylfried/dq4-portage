@@ -59,6 +59,10 @@ def decoder_msadpcm(d, canaux, bloc):
     return sortie.reshape(-1, canaux).astype(np.int16)
 
 
+VERSION_CACHE_SON = 2             # version des bruitages gardes dans le cache disque (son_SE*.npz) : 2 depuis #201 (boucles des SE 329, 331, 1118) ; un cache d'une autre version est refait
+TOLERANCE_FIN_BOUCLE = 2048     # echantillons : au-dela, l'en-tete est juge incoherent et le son n'est pas bouclé (garde d'origine du portage)
+
+
 def decoder_ogg(octets):
     """Ogg Vorbis -> int16 (n, canaux). Lu en flottants puis ECRETE a la pleine echelle : Vorbis depasse parfois +-1,0 apres decodage, et la lecture directe en int16 faisait deborder ces echantillons
     (un pic devenait un pic de signe oppose : BGM 14, 3 echantillons vers 91 s ; BGM 34, 7 echantillons ; #200)."""
@@ -79,6 +83,7 @@ def decoder_akb(d):
         return None
     n = len(pcm)
     deb, fin = h['debut'], h['fin']
+    if n < fin <= n + TOLERANCE_FIN_BOUCLE: fin = n          # fin de boucle qui depasse de quelques echantillons la fin des donnees (reste d'un bloc ADPCM : SE 329, 331, 1118 ; #201) : la boucle va jusqu'a la fin des donnees
     boucle = 0 < fin <= n and deb < fin
     return dict(pcm=np.ascontiguousarray(pcm), frequence=h['frequence'], debut=deb if boucle else 0, fin=fin if boucle else 0, volume=h['volume'], boucle=boucle)
 
@@ -181,13 +186,14 @@ class Son:
         f = os.path.join(self.cache, 'son_%s.npz' % nom)
         try:
             if os.path.exists(f):
-                z = np.load(f); return dict(pcm=z['pcm'], frequence=int(z['p'][0]), debut=int(z['p'][1]), fin=int(z['p'][2]), volume=float(z['v'][0]), boucle=bool(z['p'][3]))
+                z = np.load(f)
+                if len(z['p']) > 4 and int(z['p'][4]) == VERSION_CACHE_SON: return dict(pcm=z['pcm'], frequence=int(z['p'][0]), debut=int(z['p'][1]), fin=int(z['p'][2]), volume=float(z['v'][0]), boucle=bool(z['p'][3]))        # (cache d'une ancienne version : refait)
         except Exception: pass
         d = self._octets(nom)
         if d is None: return None
         r = decoder_akb(d)
         if r is not None and nom.startswith('SE'):                        # les bruitages sont petits : cache disque (une musique longue, elle, prend plus d'une seconde : voir BGM_PRECHARGES)
-            try: np.savez(f, pcm=r['pcm'], p=np.array([r['frequence'], r['debut'], r['fin'], int(r['boucle'])], np.int64), v=np.array([r['volume']], np.float32))
+            try: np.savez(f, pcm=r['pcm'], p=np.array([r['frequence'], r['debut'], r['fin'], int(r['boucle']), VERSION_CACHE_SON], np.int64), v=np.array([r['volume']], np.float32))
             except Exception: pass
         return r
 
