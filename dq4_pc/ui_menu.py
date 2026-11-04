@@ -773,6 +773,9 @@ class FenetreMessage:
         return [(c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx']))]
 
 
+ESPACES_FINES = '\u00a0\u202f\u2009'                       # espaces que la police du jeu dessine plus larges (U+00A0 : 11 px au lieu de 5) ou n'a pas (U+202F, U+2009)
+
+
 class PoliceBitmap:
     """Police bitmap Unity du jeu pour la langue anglaise (et le patch FR) : « SE-GARRIR » (Font « Garrick », 20 px, 218 glyphes) ; elle remplace GMaruGoPro-M, la police japonaise.
     Les donnees (ui_garrir.json : metriques et rectangles des glyphes ; ui_garrir.png : atlas 256 x 256, alpha) sont extraites de base.apk par preparer_ressources.
@@ -794,9 +797,9 @@ class PoliceBitmap:
         self.tex = {}; self.larg = {}; self.secours = None
 
     def _glyphe(self, c):
+        if c in ESPACES_FINES and 32 in self.G: return self.G[32]      # espace insecable (U+00A0), fine (U+202F) ou mince (U+2009) = l'espace normale (5 px) : le glyphe 160 de la police a un advance de 11 px (le patch FR met U+00A0 avant « ! », « ? » et « : »)
         g = self.G.get(ord(c))
         if g is not None: return g
-        if c in '\u00a0\u202f\u2009': return self.G.get(32)
         if c < ' ': return (0, 0, 0, np.zeros((0, 0), np.uint8))       # caracteres de controle (« \r » en fin de ligne) : ni largeur ni dessin
         return None
 

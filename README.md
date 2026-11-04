@@ -20,7 +20,7 @@ Le jeu Android est un moteur C++ autonome (`libdq4core.so`, ARM64) piloté par u
 ## Les dépôts du projet
 | Dépôt | Rôle |
 |---|---|
-| **`dq4-portage`** (celui-ci) | le portage natif, sans Unity ; travail **par pull request** (« Avance #N : titre », de #1 à #160 au 04/11/2026) et reste à faire **par issues** (#51 à #112, #121 à #123 puis #126 à #131, jalons 1 à 5, créées le 03/11/2026 ; voir [`docs/workflow.md`](docs/workflow.md)) |
+| **`dq4-portage`** (celui-ci) | le portage natif, sans Unity ; travail **par pull request** (« Avance #N : titre », de #1 à #162 au 04/11/2026) et reste à faire **par issues** (#51 à #112, #121 à #123 puis #126 à #131, jalons 1 à 5, créées le 03/11/2026 ; voir [`docs/workflow.md`](docs/workflow.md)) |
 | `dq4-portage-unity` | essai « Unity comme afficheur » (piste 3), alimenté par le moteur de ce dépôt |
 | `dq456-traductions-fr` | patch français des APK (jamais modifié ici) |
 | ~~`dq4-pc`~~ (supprimé le 03/11/2026) | l'ancien dépôt d'origine n'existe plus : **tout se fait ici, dans `dq4-portage`**. Les numéros « issue #n » ou « PR #n » cités dans les notes et dans les anciennes pull requests y renvoient ; l'état de ses 43 issues au 02/11/2026 est conservé dans [`docs/audit/github_issues.md`](docs/audit/github_issues.md) |

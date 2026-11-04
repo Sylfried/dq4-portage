@@ -1394,3 +1394,23 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### À trancher / non vérifié
 - **Sous Windows** : à confirmer par Sylfried (le délai réel du système et la tolérance de position, qu'il peut régler dans Windows).
 - **Supposé** : le rectangle 4 x 4 px de Windows est étroit ; sur un écran à haute densité de pixels, un tremblement de la main peut sortir du rectangle et le panneau agit alors plus tôt (comportement identique à celui d'une fenêtre Windows).
+
+## Avance #162 : l'espace avant « ! » n'est plus trop large (#161, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 44)
+Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais espace qui est affiché avant le « ! » donc ça en fait un trop large ». Sylfried propose d'aller chercher les règles du projet de traduction ; le code et ce projet ont suffi (consulté via l'API GitHub, sans clone).
+
+### Établi
+- Les textes du patch FR (`assets/msg/en/*.mpt`) mettent **U+00A0** avant « ! » (8 582 fois), « ? » (3 951) et « : » (170).
+- Police `SE-GARRIR` (extraite du `base.apk` patché, 218 glyphes) : espace normale **advance 5**, glyphe 160 (U+00A0) **advance 11**, sans dessin ; U+202F et U+2009 n'existent pas (déjà dessinées comme l'espace normale).
+- Projet de traduction (`PROJET.md`, 26/10) : « l'espace insécable n'existe pas dans Large.font (menus) », test de Sylfried sur DQ4 : espace normale = bon, insécable = mauvais (cas du « ; »).
+
+### Fait
+- `ui_menu.py` : `PoliceBitmap._glyphe` dessine U+00A0, U+202F et U+2009 comme l'espace normale (`ESPACES_FINES`) ; largeur d'une ligne et texture suivent. Le glyphe 160 garde son advance dans les données de la police.
+- Effet de bord : l'historique des combats écrit `Or : n` + 5 U+00A0 + `Expérience : n` ; l'écart passe de 55 px de police (5 x 11) à 25 px (5 espaces).
+- Test : `outils/test_espace_insecable.py` (police factice, vraie police si `DQ_CACHE_UI`, texture de ligne de même taille).
+- Comparaison avant / après sur les vraies lignes du jeu (rendu de `PoliceBitmap.ligne`) : « en l'air !» passe de 2 espaces visuelles à une.
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried sur son écran (capture du dialogue d'origine).
+- **Supposé** : le jeu d'origine dessine la même espace de 11 px ; la correction s'écarte donc peut-être du mobile, dans le sens demandé. Si une espace plus fine que 5 px est préférée avant « ! », elle se règle dans `PoliceBitmap._glyphe`.
