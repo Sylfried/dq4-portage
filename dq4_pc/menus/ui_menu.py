@@ -167,7 +167,14 @@ DESC_COMBAT_X_MAX = 56.0              # infos d'un objet en combat (type 38) : b
 # 2 lignes ne suffisent pas, le comprime (Rendu._ajuste_description).
 DESCRIPTIONS = {(7, 0, 1): DESC_FICHE_X_MAX, (10, 0, 4): DESC_FICHE_X_MAX, (38, 2, 3): DESC_COMBAT_X_MAX,
                 (46, 4, 3): DESC_FICHE_X_MAX, (60, 4, 4): DESC_FICHE_X_MAX, (61, 4, 4): DESC_FICHE_X_MAX, (63, 0, 4): DESC_FICHE_X_MAX, (70, 0, 3): DESC_FICHE_X_MAX}      # 46, 60, 61, 63, 70 : barre du bas des boutiques et du casino (meme cadre que la fiche d'un sort ; Suppose : fenetres non ouvertes dans le moteur, #219)
+TYPES_COMPRESSION_BOUTONS = (48,)       # fenetres dont les etiquettes de bouton sont comprimees pour tenir dans leur plaque MEME avec la police d'origine : le poker du casino (type 48, SVC-03 : « Abandonner » sortait des 5 boutons sous les cartes et se chevauchait ; choix du joueur : police reduite)
 COMPRESSION_MIN = 0.7                 # compression horizontale maximale d'une description qui ne tient pas en 2 lignes
+
+
+def comprimer_etiquette(police_origine, fit_x, type_fenetre):
+    """Un texte plus large que sa plaque est-il comprime pour y tenir ? Toujours avec la police de repli ; avec la police d'origine (SE-GARRIR) seulement quand la fenetre pose une limite (`fit_x` : ligne de cout de la fiche d'un sort) ou
+    pour les etiquettes de bouton des fenetres de TYPES_COMPRESSION_BOUTONS (poker). Ailleurs un texte francais plus long que son bouton depasse comme sur le mobile (choix du joueur, audit UI-05)."""
+    return (not police_origine) or fit_x is not None or type_fenetre in TYPES_COMPRESSION_BOUTONS
 
 
 def uv_icone(info, no, decal):
@@ -1146,7 +1153,7 @@ class Rendu:
                 dispo = {0: ex[1] - self.MARGE_PLAQUE - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.MARGE_PLAQUE, 2: xa - ex[0] - self.MARGE_PLAQUE}[col]
                 if dispo < 0.4 * bl: dispo = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
         if nd.get('fit_x') is not None and col == 0: dispo = nd['fit_x'] - nd['pos'][0]      # limite posee par la fenetre (ligne de cout de la fiche d'un sort) : le cadre n'est pas un element de la fenetre
-        if dispo and bl > dispo and (not bm or nd.get('fit_x') is not None):      # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
+        if dispo and bl > dispo and comprimer_etiquette(bool(bm), nd.get('fit_x'), fen.typ):      # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
             f = max(0.7, dispo / bl); ts *= f; larg = [w * f for w in larg]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue

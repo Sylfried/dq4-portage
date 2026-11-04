@@ -60,3 +60,4 @@ jobs:
           python tests/test_temps_de_jeu.py
           python tests/test_etats_liste_blanche.py
           python tests/test_alerte_tas.py
+          python tests/test_poker_police.py
