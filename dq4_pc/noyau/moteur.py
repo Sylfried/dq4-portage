@@ -217,7 +217,8 @@ class Etat:
                     if v & 0x300: s['ombre'] = bool(v & 0x100)
                     if v & 0xc00: s['ombre_sep'] = bool(v & 0x400)
                     if v & 0x1000 and len(fl) >= 3: s['ombre_pos'] = tuple(fl[:3]); fl = fl[3:]
-                    if v & 0x2000 and fl: s['ombre_a'] = float(fl[0])
+                    if v & 0x2000 and fl: s['ombre_a'] = float(fl[0]); fl = fl[1:]
+                    if v & 0x4000 and len(fl) >= 3: s['ombre_champ'] = tuple(fl[:3])          # SetFieldShadowPosition : (x, y, hauteur) en pixels de la carte ; le ballon : 32 pixels (2 tuiles) au sud de ses pieds
             elif t == 19 and len(a) >= 2 and a[0] >= 16:            # cmd_rise_icon_load avec un emplacement >= 16 : pas une bulle, le clignotement de la croix (TouchPad.SetPadBlink) ; numero < 0 = arret
                 self.pad_clignote = a[1] >= 0
             elif t == 19 and len(a) >= 2 and 0 <= a[0] < 16:        # cmd_rise_icon_load : emplacement, numero d'icone (< 0 = liberation) ; objet Riseup, materiau Custom/Riseup sur la feuille MenuTexture
