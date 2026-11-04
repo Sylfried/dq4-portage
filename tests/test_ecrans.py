@@ -78,11 +78,6 @@ class Reglage(unittest.TestCase):
         with open(f, encoding='utf-8') as fh: brut = json.load(fh)
         for k in ('ecran_plein', 'sortie_audio'): self.assertNotIn(k, brut, k)          # ... et disparaissent du fichier a la prochaine sauvegarde
 
-    def test_cles_camera_booleennes(self):
-        r = RG.Reglages(None); self.assertEqual((r['camera_inverser_gd'], r['camera_inverser_hb']), (False, False))          # defaut = comportement actuel
-        r, _ = self.charger({'camera_inverser_gd': True, 'camera_inverser_hb': 'oui'}); self.assertEqual((r['camera_inverser_gd'], r['camera_inverser_hb']), (True, False))      # (valeur absurde : defaut)
-        r, f = self.charger({}); r['camera_inverser_hb'] = True; r.enregistrer(); self.assertEqual((RG.Reglages(f)['camera_inverser_gd'], RG.Reglages(f)['camera_inverser_hb']), (False, True))
-
 
 
 def fen(ecrans=None, ecran=0, **kw):

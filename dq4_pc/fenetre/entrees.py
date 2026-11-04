@@ -1,6 +1,5 @@
 """Entrees souris / clavier de la visionneuse : la logique pure (sans fenetre ni OpenGL), pour la tester (outils/test_entrees.py).
 - souris_active / GardeSouris : quand le pointeur reprend la main apres un usage du clavier (survol et selection) ;
-- GesteMolette / pivoter : clic molette (clic simple = position de la camera remise, Ctrl + clic = position et distance remises, glisser = rotation de la camera, sens reglable) ;
 - zone_infos : ou se pose le bloc d'infos de F1 (en haut a droite)."""
 import math
 
@@ -37,56 +36,6 @@ class GardeSouris:
         """Mouvement du pointeur en `pos` : vrai si la souris a (ou reprend) la main, faux si ce n'est qu'un tremblement apres l'usage du clavier."""
         if souris_active(self.ref, pos, self.tol): self.ref = None; return True
         return False
-
-
-# ---- clic molette
-SEUIL_GLISSE = 4.0            # pixels : deplacement, depuis l'appui, a partir duquel un clic molette devient un glissement (en dessous : un clic ; le tremblement de la main n'en fait pas un glissement)
-CAM_SOURIS_LACET = 180.0      # glissement horizontal : degres de rotation de la camera pour un deplacement egal a la hauteur de la fenetre (la sensibilite ne depend pas de la resolution) ; droite = fleche droite
-CAM_SOURIS_ANGLE = 120.0      # glissement vertical : degres d'inclinaison de la camera pour un deplacement egal a la hauteur de la fenetre ; haut = fleche haut (memes bornes que les fleches). Un peu moins sensible que l'horizontal :
-                              # la plage d'inclinaison est etroite (60 degres) et une main ne glisse jamais parfaitement a l'horizontale
-
-
-class GesteMolette:
-    """Un geste du bouton du milieu : appui, deplacements, relachement. Un clic (relachement avant d'avoir bouge de SEUIL_GLISSE pixels) est « direction » (remet la POSITION de la camera : rotation et inclinaison) ou, avec Ctrl,
-    « tout » (remet la position ET la distance) ; un glissement fait tourner la camera, depuis le point ou le seuil est franchi (pas de saut au debut) ; apres un glissement, le relachement ne remet rien (un clic suivi
-    d'un deplacement n'est pas un clic). La distance seule se remet avec Ctrl + molette (Jeu.on_mouse_scroll)."""
-
-    def __init__(self, seuil=SEUIL_GLISSE):
-        self.seuil = seuil; self.annuler()
-
-    def annuler(self):
-        self.en_cours = False; self.glisse = False; self.ctrl = False; self.origine = None; self.dernier = None
-
-    def appui(self, x, y, ctrl=False):
-        self.en_cours = True; self.glisse = False; self.ctrl = bool(ctrl); self.origine = (x, y); self.dernier = (x, y)
-
-    def deplacer(self, x, y):
-        """Pointeur en (x, y), bouton du milieu enfonce -> (dx, dy) en pixels (y vers le haut) a appliquer a la camera ; (0, 0) tant que le geste reste un clic."""
-        if not self.en_cours: return 0.0, 0.0
-        if not self.glisse:
-            if math.hypot(x - self.origine[0], y - self.origine[1]) < self.seuil: return 0.0, 0.0
-            self.glisse = True; self.dernier = (x, y); return 0.0, 0.0
-        d = (x - self.dernier[0], y - self.dernier[1]); self.dernier = (x, y)
-        return float(d[0]), float(d[1])
-
-    def relacher(self, ctrl=False):
-        """-> 'direction' (clic simple : remet la position de la camera, rotation et inclinaison), 'tout' (Ctrl + clic : remet la position et la distance) ou None (fin d'un glissement, ou pas d'appui)."""
-        etait, glissait, ctrl_appui = self.en_cours, self.glisse, self.ctrl
-        self.annuler()
-        if not etait or glissait: return None
-        return 'tout' if (ctrl or ctrl_appui) else 'direction'
-
-
-def pivoter(lacet, angle, dx, dy, hauteur, a_min, a_max, limite=None, inverser_gd=False, inverser_hb=False):
-    """Glissement de (dx, dy) pixels (y vers le haut) -> (lacet, angle) en degres : memes grandeurs que les fleches de la camera. Le lacet reste entre -180 et 180 (et entre -limite et +limite si le lieu borne la rotation),
-    l'angle entre a_min et a_max. `inverser_gd` / `inverser_hb` (reglages « Inverser gauche / droite » et « Inverser haut / bas ») : le sens du glissement sur cet axe est inverse, l'autre axe ne change pas ;
-    les fleches du clavier ne passent pas par ici."""
-    if inverser_gd: dx = -dx
-    if inverser_hb: dy = -dy
-    k = 1.0 / max(1.0, float(hauteur))
-    lacet += dx * k * CAM_SOURIS_LACET
-    lacet = max(-limite, min(limite, lacet)) if limite is not None else (lacet + 180.0) % 360.0 - 180.0          # (lieu borne : on s'arrete a la limite, on ne fait pas le tour ; sinon le lacet boucle comme celui des fleches)
-    return lacet, min(a_max, max(a_min, angle + dy * k * CAM_SOURIS_ANGLE))
 
 
 # ---- bloc d'infos de F1

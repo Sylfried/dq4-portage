@@ -5,19 +5,16 @@ import pyglet
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
-    'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],
+    'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],      # les fleches : directions dans les menus, messages et combats (elles ne tournaient la camera que sur le terrain ; la camera n'est plus reglable, #264 ; noms d'actions gardes pour les anciens fichiers)
     'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', None], 'R': ['R', None], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
-    'cam_pres': ['PAGEUP', None], 'cam_loin': ['PAGEDOWN', None],      # distance de la camera au clavier (#146) : rapprocher / eloigner en continu, de 50 a 200 % ; Page haut / Page bas (elles servaient aussi de seconde touche a L / R, pages des menus du jeu : une touche ne sert qu'a une action, L / R gardent A / R)
     'vit_combat': ['V', None],        # fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
 }
-ANCIEN_CAM = {'cam_pres': ['NUM_ADD', 'E'], 'cam_loin': ['NUM_SUBTRACT', 'W']}      # defauts des touches de distance de la camera de l'avance #153 (04/11) : remplaces par Page haut / Page bas (#146) quand le fichier les contient encore tels quels
 ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
-           ('cam_haut', 'Caméra (Haut)'), ('cam_bas', 'Caméra (Bas)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
-           ('cam_pres', 'Caméra (Rapprocher)'), ('cam_loin', 'Caméra (Éloigner)'),
+           ('cam_haut', 'Flèche haut (menus)'), ('cam_bas', 'Flèche bas (menus)'), ('cam_gauche', 'Flèche gauche (menus)'), ('cam_droite', 'Flèche droite (menus)'),
            ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
@@ -35,7 +32,6 @@ LARGEUR_COMMANDES = round(510.0 / 459.0, 4)
 
 DEFAUT = {
     'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
-    'distance_camera': 100,       # distance de la camera en pourcentage (50 a 200) : villes, donjons, tours et carte du monde ; 100 = vue habituelle, 50 = deux fois plus pres, 200 = deux fois plus loin ; ne depend pas du shader
     'mode_fenetre': 0,            # fenetre : 0 fenetre, 1 plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas) ; F11 / Alt + Entree passent de l'un a l'autre (ex-booleen « plein_ecran » ; l'ancien plein ecran exclusif, mode 2, est devenu 1)
     'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
     'echelle_rendu': 1.0,         # suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
@@ -47,13 +43,9 @@ DEFAUT = {
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
-    'angle_camera': 0.0,          # degres ajoutes a l'inclinaison de la camera des villes et donjons (0 = comme le jeu) ; se regle avec les fleches haut / bas (Commandes : Camera)
-    'camera_inverser_gd': False,  # camera deplacee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
-    'camera_inverser_hb': False,  # idem haut / bas (non = glisser vers le haut = fleche haut, qui releve l'angle de la camera)
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
-    'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
-    'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
+    'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
     'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
     'historique_favoris_seuls': False,   # fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_historique.py)
     'soin_niveau': False,         # « PV et PM restaurés au niveau supérieur » : quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (le jeu d'origine ne le fait pas) ; desactive = comme le jeu
@@ -96,7 +88,7 @@ def fenetre_defaut(nom):
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
 # 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees ; 'camera_centree' et 'suivi_camera_v' aussi (#47 : la camera est toujours centree sur le heros, sauf quand le jeu la prend). 'ecran_plein' (choix du moniteur du plein ecran, #52) et 'sortie_audio' (choix du peripherique audio, #112) sont retires le 03/11/2026 a la demande de Sylfried : le plein ecran se fait sur l'ecran de la fenetre, le son reste sur la sortie par defaut de Windows.
-CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v', 'ecran_plein', 'sortie_audio')
+CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v', 'ecran_plein', 'sortie_audio', 'distance_camera', 'angle_camera', 'camera_inverser_gd', 'camera_inverser_hb', 'vitesse_camera', 'zoom')
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -119,13 +111,13 @@ def mode_fenetre_valide(v):
     return {0: 0, 1: 1, 2: 1}.get(n, DEFAUT['mode_fenetre'])
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES = {'vitesse_marche': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'camera_inverser_hb', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
-VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera')
+VITESSES_X_CLES = ('vitesse_marche',)
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
 NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
@@ -191,7 +183,6 @@ class Reglages:
             try:
                 with open(chemin, encoding='utf-8') as f: d = json.load(f)
                 if 'mode_fenetre' not in d and 'plein_ecran' in d: d['mode_fenetre'] = d['plein_ecran']      # ancien reglage « Plein écran » (booleen) -> 1 (plein ecran sans bordure, comme avant) ou 0 ; le booleen n'est plus enregistre (voir CLES_OBSOLETES)
-                if 'distance_camera' not in d and isinstance(d.get('zoom'), (int, float)) and d['zoom'] > 0: d['distance_camera'] = min(200, max(50, round(10000.0 / d['zoom'])))      # ancien reglage « Zoom » (40 a 400 %) -> distance de la camera
                 if 'vitesse_accel' not in d and isinstance(d.get('vitesse_course'), (int, float)) and not isinstance(d.get('vitesse_course'), bool): d['vitesse_accel'] = d['vitesse_course']      # ancien « Multiplicateur de la course » -> vitesse de l'accelerateur (l'ancien multiplicateur de la camera, accel_camera, est abandonne : un seul facteur pour les deux)
                 if isinstance(d.get('touches'), dict) and 'accel' not in d['touches']:       # anciennes touches de course et d'acceleration de la camera -> une seule « Touche d'accélérateur » : « Courir (maintenir) », a defaut les trois autres (« appuyer » n'existe plus)
                     for ancien in ('courir', 'courir_bascule', 'cam_accel', 'cam_accel_bascule'):
@@ -226,17 +217,10 @@ class Reglages:
                     if ts['menu'] == ANCIEN_MENU and not any('TAB' in l for a, l in ts.items() if a != 'menu'): ts['menu'] = list(TOUCHES_DEF['menu'])
                 saved = d.get('touches') if isinstance(d.get('touches'), dict) else {}
                 for a in TOUCHES_DEF:                                  # action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise 
-                    if a in saved or a in ('cam_pres', 'cam_loin'): continue                  # (les deux touches de la camera : voir plus bas)
+                    if a in saved: continue
                     ts = self.v['touches']
                     for i, n in enumerate(ts[a]):
                         if n and any(n in l for b, l in ts.items() if b != a): ts[a][i] = None
-                for a, anc in ANCIEN_CAM.items():                       # touches de distance de la camera de l'avance #153 gardees telles quelles -> nouveaux defauts (Page haut / Page bas) ; un choix du joueur est garde
-                    if self.v['touches'][a] == anc: self.v['touches'][a] = list(TOUCHES_DEF[a])
-                for a, l in (('cam_pres', 'L'), ('cam_loin', 'R')):    # Page haut / Page bas etaient la seconde touche par defaut de L / R : un ancien fichier qui les a encore la leur retire pour la camera (une touche ne sert qu'a une action) ; prise par un autre choix du joueur, la camera ne l'a pas
-                    ts = self.v['touches']; n = TOUCHES_DEF[a][0]
-                    if ts[a][0] != n: continue
-                    if ts[l][1] == n: ts[l][1] = None
-                    if any(n in t for b, t in ts.items() if b != a): ts[a][0] = None
                 self.v['touches_v'] = DEFAUT['touches_v']
                 self.v['interface_v'] = DEFAUT['interface_v']
                 for ts in self.v['touches'].values():                   # une touche reservee (F11 : bascule fenetre / plein ecran) ne peut plus etre une touche d'action : retiree d'un ancien fichier

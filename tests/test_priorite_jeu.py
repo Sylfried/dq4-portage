@@ -2,8 +2,7 @@
 
   1. regles pures (priorite_jeu.py) : valeur_effective, facteur_effectif, lettres_par_image, duree_fondu ;
   2. vitesse de marche (`Jeu._facteur_vitesse`, sur un faux objet) : sans effet pendant un evenement (verrou du joueur, dont le fondu de sortie), appliquee en terrain libre et pendant le fondu d'arrivee (#107) ;
-  3. zoom de la camera (`Jeu._camera_ville`, faux objet) : appliquee, sauf camera libre d'une scene (cadrage du jeu) ;
-  4. moteur d'origine (si --apk et --saves sont donnes) : vitesse du texte fixee par le jeu (le mot de vitesse du message est modifie en cours de route) ; fondu lance par une commande de script du jeu
+  3. moteur d'origine (si --apk et --saves sont donnes) : vitesse du texte fixee par le jeu (le mot de vitesse du message est modifie en cours de route) ; fondu lance par une commande de script du jeu
      (la sauvegarde --slot-fondu, par defaut 2 : debut du prologue, commande fade_out de 30 images) non raccourci, fondu du moteur raccourci.
 
     python3 outils/test_priorite_jeu.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4] [--slot-fondu 2]]
@@ -104,32 +103,6 @@ class VitesseDeMarche(unittest.TestCase):
         self.assertEqual(self.facteur(partie=MO.PARTIE_COMBAT), 1.0)
         self.assertEqual(self.facteur(direction=0), 1.0, 'aucune direction tenue')
         self.assertEqual(self.facteur(marche=1.0, accel=1.0), 1.0)
-
-
-class ZoomDeCamera(unittest.TestCase):
-    """Zoom du reglage « distance de la camera » : divise le champ vertical de la camera des villes ; une camera libre de scene (paquet 11, bit 7) garde le cadrage du jeu."""
-    def setUp(self):
-        self.remettre_temps = _chemins.poser_global('time', types.SimpleNamespace(perf_counter=lambda: 0.0, time=lambda: 0.0, sleep=lambda *a: None))
-
-    def tearDown(self): self.remettre_temps()
-
-    def champ(self, zoom, libre):
-        j = types.SimpleNamespace(zoom=zoom, reg={}, cam_jeu=False, cam_saut=True, cam_dec=[0.0, 0.0], cam_res=[0.0, 0.0], cam_centre=False, cam_ref_y=None, t_centre=None, fixe_test=True,
-                                  bornes_x=None, lacet=0.0, angle_cam=0.0, cam_bloquee=False, carte_nom='x', n_boucle=0, _cadre_vue=None)
-        j._rot_camera = lambda e: np.eye(3)
-        cib = np.array([0.0, 0.0, 0.0])
-        e = types.SimpleNamespace(cam_pos=cib + np.array([0.0, 28.94, -27.0]), cam_cible=cib, cam_fov=None, cam_near=None, cam_far=None, cam_yoff=None, cam_bas=None, cam_libre=libre,
-                                  cam_rot=(40.0, 0.0, 0.0) if libre else None, sprites={0: {'pos': (0.0, 0.0, 0.0)}})
-        M, _ = F.Jeu._camera_ville(j, e, 16.0 / 9.0)
-        return M[0, 0] if abs(M[0, 0]) > abs(M[1, 1]) else M[1, 1]
-
-    def test_zoom_applique_en_exploration(self):
-        self.assertAlmostEqual(self.champ(2.0, False) / self.champ(1.0, False), 2.0, places=6, msg='zoom x2 : le champ est deux fois plus etroit')
-        self.assertAlmostEqual(self.champ(0.5, False) / self.champ(1.0, False), 0.5, places=6)
-
-    def test_camera_libre_de_scene_sans_zoom(self):
-        ref = self.champ(1.0, True)
-        for z in (0.5, 2.0): self.assertAlmostEqual(self.champ(z, True), ref, places=9, msg='camera libre : zoom %s sans effet' % z)
 
 
 def images_texte_mot(vitesse, mot_jeu, slot):

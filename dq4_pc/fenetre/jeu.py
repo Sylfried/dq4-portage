@@ -2,7 +2,7 @@
 La classe `Jeu` est le coeur (demarrage, boucle, dessin de la scene) ; le reste est range par theme dans les modules voisins (voir docs/plan_du_code.md)."""
 
 
-import collections, math, os, sys, threading, time
+import collections, os, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import wait as attendre_futures
 import numpy as np
@@ -79,14 +79,14 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.decor_hd = {}; self.decor_arr = {}; self.carte_src = None; self.sprite_vl = {}; self.icone_vl = {}; self.icone_tex = {}; self._menu_tex = None; self._dom_lie = None; self.plans = {}
         self.champ_cle = None; self.champ_tex = None; self.champ_tex_ico = None; self.champ_nearest = None; self.champ_vl = None; self.champ_base = None; self.champ_ico = None
         self.motif_n = 0; self.motif_acc = np.zeros(5, np.int64); self.champ_g = None; self.champ_pat = None; self.champ_acc_vu = None       # eau animee de la carte du monde
-        self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
-        self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_ref_y = None; self.cam_zone_y = None; self.cam_zone_y = None; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
-        self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
+        self._vue_champ = None       # carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
+        self.souris = (0, 0); self.souris_gel = None; self.objets_orient = None       # action sans effet -> discussion ; orientation des panneaux de decor
+        self.garde_souris = EN.GardeSouris()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel)
         self.effet_ancre = {}; self._cadre_vue = None; self._cadre_sprites = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.cur_pas = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
-        self.angle_cam = float(self.reg['angle_camera']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
+        self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
         self.t_demarrage = time.time()
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -244,7 +244,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if not self._pret: return                # (pendant la creation de la fenetre, rien n'existe encore : `_boucle` gele le jeu et met le son en pause des qu'elle tourne)
         try: self.son.perdre_focus(True)
         except Exception as ex: print('Son : pause a la perte du focus impossible (%r)' % (ex,), flush=True)
-        self.molette.annuler(); self.appui = None; self.survol = None; self.hud.croix_lacher(); self.hud.appui = None
+        self.appui = None; self.survol = None; self.hud.croix_lacher(); self.hud.appui = None
 
     def on_activate(self):
         """La fenetre reprend le focus : le son repart la ou il s'etait arrete, le jeu reprend sans rattraper le temps passe (horloge remise a zero, comme a la fermeture du menu) et les touches deja tenues ne comptent pas comme un nouvel appui."""
@@ -252,7 +252,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if not self._pret: return
         try: self.son.perdre_focus(False)
         except Exception as ex: print('Son : reprise au retour du focus impossible (%r)' % (ex,), flush=True)
-        self.acc = 0.0; self.t_boucle = None; self.t_cam = None
+        self.acc = 0.0; self.t_boucle = None
         if self._pret:
             self.pad_prec = self.pad(); self.act_prec = {a: self._tenue(a) for a in ACT_FRONTS}; self.rep = {}
             self.garde_souris.clavier(self.souris)
@@ -287,12 +287,11 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if self.args.options_test: self._options_test()
         if self._focus_perdu:
             if not self.son.hors_focus: self.son.perdre_focus(True)
-            self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return          # fenetre sans focus : le moteur est arrete (le son : Son.perdre_focus), l'image reste celle du dernier pas ; au retour, pas de rattrapage (on_activate)
+            self.acc = 0.0; self.t_boucle = None; self.alpha = 1.0; return          # fenetre sans focus : le moteur est arrete (le son : Son.perdre_focus), l'image reste celle du dernier pas ; au retour, pas de rattrapage (on_activate)
         if os.environ.get('DQ_ATTENDRE_HD') and self.hd_jobs: attendre_futures(list(self.hd_jobs.values()))      # (test) captures reproductibles : attend la fin des calculs HD en tache de fond
         if self.pause.ouvert:
             self.pause.maj(); self._synchroniser_gel()
-            if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.t_cam = None; self.alpha = 1.0; return        # page de PAGES_FIGEES (aucune depuis #178) : le moteur est arrete ; sinon il tourne sans entree (tick)
-        self._maj_camera(); self._maj_distance_clavier()
+            if self.pause.fige_le_jeu(): self.acc = 0.0; self.t_boucle = None; self.alpha = 1.0; return        # page de PAGES_FIGEES (aucune depuis #178) : le moteur est arrete ; sinon il tourne sans entree (tick)
         t = time.perf_counter()
         dt = 0.0 if self.t_boucle is None else t - self.t_boucle
         self.t_boucle = t
@@ -541,14 +540,6 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
             if code == 999: self.pause.ouvrir('quitter')            # MenuPortSendQuit : retour sur le menu de depart = quitter l'application (ApplicationQuit : question Oui / Non)
         mo.ui.systeme = []
         if self.ui_g: self.ui_g.tick()                     # animations des fenetres d'origine, une fois par image du jeu
-        if mo.etat.partie == MO.PARTIE_VILLE:              # TownCamera du jeu : limite negative = rotation interdite dans ce lieu ; verrou = camera tenue par un evenement
-            lg, ld, vr = mo.camera_ville(); self.cam_bloquee = lg < 0 or ld < 0 or vr
-            self.cam_jeu = bool(vr) and self._camera_menee(mo)         # TownCamera verrouillee (+0x3e) ET menee AILLEURS que sur le joueur (travelling, cible = un personnage, retour, plan fixe) : la camera est celle du jeu (le verrou seul ne change rien : l'evenement garde le joueur au centre)
-            if self._coupure_camera(mo.etat): self.cam_saut = True
-            self.cam_limite = min(lg, ld) * 360.0 / 4096.0 if lg > 0 and ld > 0 else None          # rotation bornee (ex. 120 degres de chaque cote) ; 0 = libre
-            if self.cam_limite is not None and abs(self.lacet) > self.cam_limite: self.lacet = math.copysign(self.cam_limite, self.lacet)
-        else: self.cam_bloquee = False; self.cam_limite = None; self.cam_jeu = False
-        self._suivre_scene(mo.etat)          # debut d'une scene ou le jeu tient la camera : le zoom du joueur revient a 100 % par l'animation de la remise a zero (UNI-08)
         if mo.ui.degats:                                   # nombres de degats sur les monstres (HoppingNumber) : un par coup
             for ch, h, dm in mo.ui.degats: self.nb_degats.append(dict(ch=ch, h=h, dm=dm, t0=mo.images))
             mo.ui.degats = []
@@ -653,7 +644,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
             w, h = SPRITE_L * SPRITE_ECHELLE, SPRITE_H * SPRITE_ECHELLE
         up = np.array([0, 0, -h]) if champ else np.array([0, h, 0])       # carte du monde : le haut du sprite est le nord (-Z)
         a_dessiner = []; ombres = []; pp = self.mode == MODE_PP
-        phi = self._lacet_eff() if cam3d is not None else 0.0
+        phi = 0.0                                                          # (plus de rotation de la camera par le joueur : #264)
         corr = self._correction_bords(); C_vue = self._cadre_vue[0] if self._cadre_vue is not None else None          # correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
         incl = self._inclinaison_sprites()                                         # essai #134 : part de l'inclinaison des verticales du monde prise par les sprites
         rang = {}
@@ -774,6 +765,6 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         nom_mode = HD.MODES[self.mode][0] if self.mode < MODE_PP else 'Pixel perfect'
         decor = 'rendu d\'origine lissé' if self.mode in (0, MODE_PP) else nom_mode
         self.etiquette.text = '%s | fenêtre %d x %d%s | moteur : image %d, partie %#x' % (lieu, self.width, self.height, ' (plein écran)' if self.est_plein else '', self.moteur.images, e.partie)
-        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Antialiasing : %s  |  Distance caméra : %d %%  |  Caméra : rotation %d °, angle %+d °\nSon : %s (musique %d %%, bruitages %d %%)' % (
-            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non', round(100.0 / self.zoom), round(self.lacet), round(self.angle_cam),
+        self.etiq_hd.text = 'Sprites : %s  |  Décor : %s\nLissage des textures : %s  |  Antialiasing : %s\nSon : %s (musique %d %%, bruitages %d %%)' % (
+            nom_mode, decor, 'oui' if self.lissage else 'non', 'x%d' % self.post.msaa if self.post.msaa else 'non',
             ('oui' if self.son.actif else 'non') if self.son.ok else 'indisponible', round(self.son.vol_m * 100), round(self.son.vol_b * 100))

@@ -36,12 +36,6 @@ ICONE_RETOUR = (352, 224, 384, 256)               # icone du bouton retour du je
 LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
-# gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; « Ctrl » = la « Touche speciale » des reglages (Ctrl par defaut)
-GESTES_SOURIS = (('Molette', 'Zoom : rapproche ou éloigne la caméra'),
-                 ('Ctrl + molette', 'Retour animé à la distance par défaut (100 %)'),
-                 ('Clic molette + déplacement', 'Tourne et incline la caméra'),
-                 ('Clic molette', 'Position de la caméra par défaut'),
-                 ('Ctrl + clic molette', 'Retour animé à la distance et à la position par défaut'))
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
 NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
@@ -324,7 +318,7 @@ class Pause:
     }
     noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
     noms['Vitesse de combat'] = RG.NOMS_VITESSE_COMBAT                                                    # Manuel, Normal, Rapide, Très rapide (jamais x1, x2, x3)
-    for lib in ('Vitesse de marche', 'Vitesse de caméra'): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
+    for lib in ('Vitesse de marche',): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
     del lib
 
     def _e_affichage(self):
@@ -483,31 +477,21 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Six sections (intertitres) : deplacement (touches), camera (touches), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Sections (intertitres) : deplacement (touches), vitesses (marche, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
         def vit_acc_curs(lib, cle, mini, maxi):
             return self._curs(lib, lambda: R[cle], lambda v: R.__setitem__(cle, v), mini, maxi, 0.05, 0.1, lambda v: 'x%.2f' % v, 1.0, defaut=RG.DEFAUT[cle])
-        modif = T('modif'); modif['aide'] = 'Avec un chiffre : charge un état   Avec une touche de caméra : remet la caméra à zéro   Avec la molette : remet la distance de la caméra à 100 %   Avec un clic molette : remet aussi la position'
-        def inverse(lib, cle, aide):
-            d = self._choix(lib, [False, True], lambda: R[cle], lambda v: R.__setitem__(cle, v), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
-        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche et la caméra (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
+        modif = T('modif'); modif['aide'] = "Avec un chiffre : charge un état   Avec Maj : annule le dernier chargement d'état"
+        accel = T('accel'); accel['aide'] = "Maintenue : accélère la marche (réglage « Multiplicateur de l'accélérateur »)   Sans effet en combat   " + self.AIDE_TOUCHE
         infos = T('infos'); infos['aide'] = "Affiche ou masque, en haut à droite de l'écran, le lieu, les réglages d'affichage, le son et les performances   " + self.AIDE_TOUCHE
-        vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche et de caméra tant que la touche d'accélérateur est tenue   Rencontres aléatoires et arrivée de la nuit : (1 + x) / 2 fois plus vite (x2 : 1,5 fois ; x1,5 : 1,25 fois)   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
+        vit_acc = vit_acc_curs("Multiplicateur de l'accélérateur", 'vitesse_accel', 1.0, 2.0); vit_acc['aide'] = "Multiplie la vitesse de marche tant que la touche d'accélérateur est tenue   Rencontres aléatoires et arrivée de la nuit : (1 + x) / 2 fois plus vite (x2 : 1,5 fois ; x1,5 : 1,25 fois)   Les combats ne l'utilisent pas : ils ont leur propre vitesse"
         tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la section Défilement du texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
-                dict(t='sep', l='Caméra au clavier'),
-                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance (animation)   Ctrl + clic molette : remet les deux (animation)   Ctrl + une touche de la caméra : remet tout (rotation, inclinaison et distance, animation)   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
-                *[dict(T(a), aide='Distance de la caméra, de 50 à 200 % : maintenue, la caméra avance ou recule en continu, à la vitesse de rotation   Même effet que la molette de la souris   Les deux touches ensemble, ou Ctrl + molette : retour animé à 100 %   Ctrl + une touche de la caméra : remet tout (rotation, inclinaison et distance)   Sans effet en combat, dans un menu ou un message   ' + self.AIDE_TOUCHE) for a in ('cam_pres', 'cam_loin')],
-                dict(t='sep', l='Caméra à la souris'),
-                inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
-                inverse('Inverser haut / bas', 'camera_inverser_hb', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens haut / bas   Non : glisser vers le haut incline comme la flèche haut   Les flèches du clavier ne changent pas"),
-                *[dict(t='sep', l=g, v=e) for g, e in GESTES_SOURIS],          # (lecture seule : lignes d'information, ni choisies ni cliquables)
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)   Rencontres aléatoires par seconde et arrivée de la nuit sur la carte du monde : (1 + x) / 2 fois plus (x2 : 1,5 fois, x4 : 2,5 fois)'),
-                vit('Vitesse de caméra', 'vitesse_camera', 'Rotation et inclinaison de la caméra aux flèches, et recentrage : x1 à x4'),
                 accel, vit_acc, tch_cb,
                 *self._defilement_texte(),
                 dict(t='sep', l='Actions du jeu'),

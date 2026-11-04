@@ -77,8 +77,7 @@ class JeuSansFocus(unittest.TestCase):
         def perdre(oui): son.hors_focus = bool(oui); appels.append(bool(oui))
         son.perdre_focus = perdre
         hud = types.SimpleNamespace(croix_on=True, appui='carte', croix_lacher=lambda: setattr(hud, 'croix_on', False))
-        molette = types.SimpleNamespace(en_cours=True, annuler=lambda: setattr(molette, 'en_cours', False))
-        j = types.SimpleNamespace(_pret=True, _focus_perdu=False, son=son, hud=hud, molette=molette, appui=('p', 1, 2), survol=[1], acc=0.7, t_boucle=1.0, t_cam=2.0, alpha=0.4, n_boucle=0,
+        j = types.SimpleNamespace(_pret=True, _focus_perdu=False, son=son, hud=hud, appui=('p', 1, 2), survol=[1], acc=0.7, t_boucle=1.0, alpha=0.4, n_boucle=0,
                                   args=types.SimpleNamespace(touches_test=False, shots_boucle=False, options_test=False), hd_jobs={}, pad_prec=9, act_prec={'x': 1}, rep={'a': 1}, souris=(3, 4),
                                   garde_souris=types.SimpleNamespace(clavier=lambda pos: appels.append(('garde', pos))), pad=lambda: 0, _tenue=lambda a: False)
         j.appels = appels
@@ -87,13 +86,13 @@ class JeuSansFocus(unittest.TestCase):
     def test_perte_du_focus(self):
         j = self.faux_jeu(); self.FE.Jeu.on_deactivate(j)
         self.assertTrue(j._focus_perdu); self.assertEqual(j.appels, [True])
-        self.assertFalse(j.molette.en_cours); self.assertFalse(j.hud.croix_on); self.assertIsNone(j.hud.appui); self.assertIsNone(j.appui); self.assertIsNone(j.survol)      # (boutons de souris tenus : relaches)
+        self.assertFalse(j.hud.croix_on); self.assertIsNone(j.hud.appui); self.assertIsNone(j.appui); self.assertIsNone(j.survol)      # (boutons de souris tenus : relaches)
 
     def test_boucle_gelee_sans_focus(self):
         j = self.faux_jeu(); self.FE.Jeu.on_deactivate(j)
-        j.acc = 0.7; j.alpha = 0.4; j.t_boucle = 1.0; j.t_cam = 2.0; j.n_boucle = 0
+        j.acc = 0.7; j.alpha = 0.4; j.t_boucle = 1.0; j.n_boucle = 0
         self.FE.Jeu._boucle(j, 0.016)                                              # (retourne avant tout pas du moteur : un faux Jeu n'a pas de moteur)
-        self.assertEqual((j.acc, j.alpha, j.t_boucle, j.t_cam), (0.0, 1.0, None, None)); self.assertEqual(j.n_boucle, 1)
+        self.assertEqual((j.acc, j.alpha, j.t_boucle), (0.0, 1.0, None)); self.assertEqual(j.n_boucle, 1)
 
     def test_le_son_est_mis_en_pause_par_la_boucle_si_l_evenement_est_arrive_avant_le_chargement(self):
         j = self.faux_jeu(); j._pret = False; self.FE.Jeu.on_deactivate(j)
@@ -101,9 +100,9 @@ class JeuSansFocus(unittest.TestCase):
         j._pret = True; self.FE.Jeu._boucle(j, 0.016); self.assertEqual(j.appels, [True])
 
     def test_retour_du_focus(self):
-        j = self.faux_jeu(); self.FE.Jeu.on_deactivate(j); j.acc = 0.3; j.t_boucle = 5.0; j.t_cam = 6.0; j.rep = {'a': 1}
+        j = self.faux_jeu(); self.FE.Jeu.on_deactivate(j); j.acc = 0.3; j.t_boucle = 5.0; j.rep = {'a': 1}
         self.FE.Jeu.on_activate(j)
-        self.assertFalse(j._focus_perdu); self.assertEqual(j.appels[-2:], [False, ('garde', (3, 4))]); self.assertEqual((j.acc, j.t_boucle, j.t_cam), (0.0, None, None)); self.assertEqual(j.rep, {})
+        self.assertFalse(j._focus_perdu); self.assertEqual(j.appels[-2:], [False, ('garde', (3, 4))]); self.assertEqual((j.acc, j.t_boucle), (0.0, None)); self.assertEqual(j.rep, {})
         self.assertEqual(j.pad_prec, 0)                                            # (les touches tenues au retour ne sont pas un nouvel appui)
 
     def test_retour_avant_le_chargement(self):

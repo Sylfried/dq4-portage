@@ -22,15 +22,15 @@ class Reglages(unittest.TestCase):
         self.assertTrue(all(r[k] for k in ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active')))
         self.assertEqual((r['vitesse_texte'], r['vitesse_combat']), (4.0, 1.0))      # = le comportement d'avant : Normal (vitesse et messages d'origine)
         self.assertNotIn('defilement_force', r.v); self.assertNotIn('defilement_combat', r.v)
-        self.assertEqual((r['vitesse_marche'], r['vitesse_camera']), (1.0, 1.0))
+        self.assertEqual(r['vitesse_marche'], 1.0)
 
     def test_valeurs_absurdes(self):
         r, _ = charger({'volume_general': 5, 'volume_jingles': -2, 'volume_interface': 'fort', 'musique_active': 'oui', 'interface_active': None, 'vitesse_combat': 'vite',
-                        'vitesse_texte': 3.1, 'vitesse_marche': 'vite', 'vitesse_camera': True})
+                        'vitesse_texte': 3.1, 'vitesse_marche': 'vite'})
         self.assertEqual((r['volume_general'], r['volume_jingles'], r['volume_interface']), (1.0, 0.0, 1.0))
         self.assertIs(r['musique_active'], True); self.assertIs(r['interface_active'], True); self.assertEqual(r['vitesse_combat'], 1.0)
         self.assertEqual(r['vitesse_texte'], 4.0)
-        self.assertEqual((r['vitesse_marche'], r['vitesse_camera']), (1.0, 1.0))      # valeurs absurdes : celles par defaut
+        self.assertEqual(r['vitesse_marche'], 1.0)      # valeurs absurdes : celles par defaut
 
     def test_vitesse_du_texte_ramenee_a_un_cran(self):
         for brut, cran in ((0.1, 0.5), (0.8, 1.0), (1.5, 2.0), (5.0, 4.0), (7.0, 8.0), (100.0, 16.0), (100000, 4000.0)):
@@ -39,11 +39,11 @@ class Reglages(unittest.TestCase):
     def test_aller_retour(self):
         r, f = charger({})
         r['volume_interface'] = 0.35; r['jingles_actifs'] = False; r['vitesse_texte'] = 16.0; r['vitesse_combat'] = 0.0
-        r['vitesse_marche'] = 4.0; r['vitesse_camera'] = 3.0
+        r['vitesse_marche'] = 4.0
         r.enregistrer()
         r2 = RG.Reglages(f)
         self.assertEqual((r2['volume_interface'], r2['jingles_actifs'], r2['vitesse_texte'], r2['vitesse_combat']), (0.35, False, 16.0, 0.0))
-        self.assertEqual((r2['vitesse_marche'], r2['vitesse_camera']), (4.0, 3.0))
+        self.assertEqual(r2['vitesse_marche'], 4.0)
 
     def test_migration_defilement_des_combats(self):
         """Anciens reglages « Defilement automatique » (oui / non) + « Vitesse de defilement » (0 a 3), puis « Messages en combat » (0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) -> « Vitesse de combat » : seul « a la main » (impose) a un equivalent : Manuel."""
@@ -77,8 +77,8 @@ class Reglages(unittest.TestCase):
     def test_migration_des_vitesses_en_x(self):
         """Anciens curseurs (0,5 a 2) -> le cran x1 a x4 le plus proche (a egalite le plus rapide), jamais moins que x1."""
         for ancien, attendu in ((0.5, 1.0), (0.9, 1.0), (1.0, 1.0), (1.25, 1.0), (1.4, 1.0), (1.5, 2.0), (1.75, 2.0), (2.0, 2.0), (2.6, 3.0), (3, 3.0), (4, 4.0), (9, 4.0), (-3, 1.0)):
-            r, _ = charger({'vitesse_marche': ancien, 'vitesse_camera': ancien})
-            self.assertEqual((r['vitesse_marche'], r['vitesse_camera']), (attendu,) * 2, ancien)
+            r, _ = charger({'vitesse_marche': ancien})
+            self.assertEqual(r['vitesse_marche'], attendu, ancien)
             self.assertTrue(all(r[k] in RG.VITESSES_X for k in RG.VITESSES_X_CLES))
         self.assertEqual(RG.DEFAUT['vitesse_accel'], 1.5)                                                      # l'accelerateur garde son curseur (1 a 2)
         r, _ = charger({'vitesse_accel': 1.37}); self.assertEqual(r['vitesse_accel'], 1.37)
