@@ -1941,3 +1941,15 @@ Windows (oreille : B, flèches, ▲ ▼, retour de la carte sans bip ; Entrée, 
 
 ### Non vérifié
 Une occurrence réelle (aucune connue) ; le relancement d'un morceau **en cours** redemandé (`playBgm` / `playStart`, le moteur ne réémet pas `play`) : volontairement non reproduit, un redémarrage à tort serait plus gênant que l'écart ; Windows.
+
+## Avance #232 : repli « menus simples », le canevas du message est lu de façon circulaire (#231, audit CMB-04, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi : dans le repli sans `ui_layout.json`, `Moteur.lire_message` découpait `a[top:top + h]` sans modulo alors que le défilement du moteur croît sans borne et que le canevas de message d'Unity est une texture circulaire de 512 lignes ; après une quinzaine de lignes (cumulées sur plusieurs combats) le texte devenait vide. Avec la vraie interface (`ui_menu.regler`, `y & 0x1ff`) : aucun problème. Atteignable seulement si `ui_layout.json` manque du cache.
+
+### Fait
+- `noyau/moteur.py:lire_message` : `a[(haut + k) % 512]` (même repli que l'interface d'origine, qui lit `(102 + k + (y & 0x1ff)) % 512`) ; le bas du canevas reprend au début au lieu de donner des lignes vides. Défilement négatif et réglages incohérents : inchangés.
+- `tests/test_message_repli.py` (9 tests, dans la CI, moteur factice) ; 2 échouent sur l'ancien code.
+
+### Non vérifié
+Le repli en jeu réel (il faudrait retirer `ui_layout.json` du cache) ; Windows.

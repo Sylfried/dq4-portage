@@ -1076,12 +1076,9 @@ class Moteur:
         lh = i16(self.obj_msg + 0x42)                  # hauteur d'une ligne (pixels du canevas)
         defil = i16(self.obj_msg + 0x4a)               # defilement courant (le moteur l'anime de 8 pixels par image)
         if not (1 <= lignes <= 8 and 8 <= lh <= 64): lignes, lh, defil = 4, 28, -3
+        import numpy as np
         h = lignes * lh; top = max(0, defil + 3)
-        sub = a[top:top + h]
-        if len(sub) < h:
-            import numpy as np
-            sub = np.vstack([sub, np.zeros((h - len(sub), a.shape[1]), np.uint8)])
-        return sub
+        return a[(top + np.arange(h)) % a.shape[0]]                   # le canevas est circulaire (512 lignes, REPEAT) et le defilement du moteur croit sans borne : comme `ui_menu.regler` (y & 0x1ff)
 
     def _finir_anims(self):
         c = self.core
