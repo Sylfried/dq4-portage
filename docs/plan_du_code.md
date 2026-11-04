@@ -69,7 +69,7 @@ La classe `Jeu` (fenêtre pyglet) est assemblée à partir de dix morceaux (« m
 | `effets_capture.py` | effets d'écran du voyage, de la lampe et de Riremito : capture de l'écran, deux textures de flou, dessin du maillage de l'effet (l'interface reste par-dessus) |
 | `options.py` | réglages du joueur appliqués au jeu en cours (son, texte, défilement, vitesse de combat) |
 | `constantes.py`, `shaders.py`, `aides.py` | constantes, programmes GLSL, petites fonctions sans état |
-| `entrees.py`, `ecrans.py` | logique pure (sans fenêtre), testée seule : gestes souris / clavier ; moniteurs |
+| `entrees.py`, `ecrans.py` | logique pure (sans fenêtre), testée seule : gestes souris / clavier, A -> toucher d'écran du don d'expérience (#262) ; moniteurs |
 
 Règles : un module de `fenetre\` n'importe jamais `jeu.py` (pas de cycle) ; il passe par `self`. `from dq4_pc.fenetre import jeu as F` donne aussi accès aux constantes et fonctions (`F.SPRITE_ECHELLE`…), pour les tests et les outils.
 

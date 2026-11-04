@@ -53,6 +53,7 @@ SXTH_W20_W8 = 0x13003d14
 COMBAT_MANUEL = 4                          # OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
 DRAPEAU_FONDU, DRAPEAU_JOUEUR_VERROUILLE = 0x1, 0x4        # Global.Flag (mot d'etat partage, Moteur.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
 HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/PM max venant d'etre recalcules)
+GESTIONNAIRE_MENUS, MENUS_OUVERTS, MENU_DON_EXP, MENU_DON_EXP_ETAT, MENU_DON_EXP_ATTENTE = 0x252078, 8, 0x24c730, 0x30, 2      # MenuManager : pointeur vers le gestionnaire (a +8, jusqu'a 8 menus ouverts, un pointeur chacun) ; gMaterielMenu_EXTRA_PRESENT_EXP (don d'experience) : etat a +0x30, 2 = derniere attente (voir attend_toucher)
 TBZ_W20_0 = 0x36000094
 COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
 STR_W8_X0 = 0xb9000008
@@ -916,6 +917,20 @@ class Moteur:
         """Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite."""
         v = self.core.mem(self.core.LIB_BASE + 0x24a779, 1)[0]
         return v if v in (0, 1, 2) else 1
+
+    def attend_toucher(self):
+        """Vrai quand le menu du don d'experience (`MaterielMenu_EXTRA_PRESENT_EXP`, ajout du mobile : le roi de Burland au chapitre 1) est ouvert et a son dernier etat : une fois les niveaux montres, `menuUpdate` (etat +0x30 = 2)
+        attend un declenchement du pad du jeu (`dss::g_Pad + 2`, rempli par `Global::NativeExec` d'apres le 2e argument de `GameUpdate` : le toucher d'ecran, exactement 0x100, ou les boutons 0x400 a 0x2000), avant de fermer le menu et de
+        rendre la main au scenario. La touche A d'un message (0x10) ne le leve jamais : la fenetre envoie alors le toucher (voir Jeu._entrees). « Ouvert » : le menu est dans le tableau du gestionnaire `MenuManager` (son etat reste a 2 apres
+        la fermeture jusqu'a la creation suivante)."""
+        try:
+            c = self.core; L = self.L
+            ges = int.from_bytes(c.mem(L + GESTIONNAIRE_MENUS, 8), 'little')
+            if not ges: return False
+            menu = L + MENU_DON_EXP
+            if not any(int.from_bytes(c.mem(ges + 8 + 8 * i, 8), 'little') == menu for i in range(MENUS_OUVERTS)): return False
+            return c.mem(menu + MENU_DON_EXP_ETAT, 1)[0] == MENU_DON_EXP_ATTENTE
+        except Exception: return False
 
     def drapeaux(self):
         """Global.Flag : premier mot de la sortie du moteur (bit 3 : manette tactile presente ; 4 verrou du joueur, 0x20 carte autorisee, 0x40 interface verrouillee...)."""

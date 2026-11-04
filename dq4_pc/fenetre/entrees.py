@@ -98,3 +98,11 @@ def zone_infos(largeur, hauteur, colonne, ui_zoom, ui_pos='centre'):
     if colonne and ui_pos == 'gauche': return 'droite', int(max(260, largeur - larg_col - 16))
     if colonne: return 'droite', int(max(260, (largeur - larg_col) / 2 - 16))
     return 'droite', int(max(260, largeur - 20))
+
+
+# ---- touche A pendant une attente de « toucher »
+def toucher_pour_le_moteur(p, decl, bit_a, bit_b, toucher, attend):
+    """(p, decl) envoyes au moteur. `attend` : un menu du jeu attend le toucher d'ecran (Moteur.attend_toucher : le don d'experience du roi) ; `toucher` : la valeur qu'il lit (exactement 0x100). A (touche, clic, Entree, Espace) envoie ce toucher
+    seul, sans A ni B ; le reste du temps rien ne change. Un message ouvert recevrait sinon A (0x10), que ce menu ne lit pas : le jeu restait fige au dernier message de niveau (#261)."""
+    if attend and decl & bit_a: return p & ~(bit_a | bit_b), toucher
+    return p, decl
