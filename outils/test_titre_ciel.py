@@ -7,6 +7,9 @@
   4. bandes : aucun sommet dans la zone portrait (le ciel d'origine y reste intact), raccord continu au bord (u et v du ciel d'origine, a toute position du defilement), memes sommets / couleurs que les rangees,
      meme sens de parcours des triangles que les quadrilateres d'origine, rien a ajouter en portrait, plus de bandes quand la fenetre s'elargit.
 
+  5. essai #130 (ciel agrandi au lieu de bandes) : `zoom_ecran` (1 en portrait, 16/9 : x 3,16, 21/9 : x 4,15, `DQ_CIEL_ZOOM` force une valeur) et `matrice_zoom` (x et y d'ecran multiplies, profondeur intacte) : la fenetre
+     entiere ne montre alors que la largeur de la zone portrait d'origine, donc moins d'un carreau.
+
     python3 outils/test_titre_ciel.py
 """
 import math, os, sys, unittest
@@ -249,6 +252,36 @@ class TestBandes(unittest.TestCase):
         asp = 16 / 9; M = camera_titre(asp)
         a = self.ciel.bandes(M, asp, 0.0); b = self.ciel.bandes(M, asp, 0.0); self.assertTrue(np.array_equal(a[1], b[1]))
         c = self.ciel.bandes(camera_titre(21 / 9), 21 / 9, 0.0); self.assertNotEqual(len(a[0]), len(c[0]))
+
+
+class TestZoomEcran(unittest.TestCase):
+    def test_zoom_selon_le_format(self):
+        self.assertEqual(CT.zoom_ecran(9 / 16), 1.0); self.assertEqual(CT.zoom_ecran(0.4), 1.0)                  # portrait (ou plus etroit) : ciel d'origine, rien a agrandir
+        self.assertAlmostEqual(CT.zoom_ecran(16 / 9), (16 / 9) / CT.ASPECT_PORTRAIT); self.assertAlmostEqual(CT.zoom_ecran(16 / 9), 3.1605, 3)
+        self.assertAlmostEqual(CT.zoom_ecran(21 / 9), 4.148, 3)
+        self.assertLess(CT.zoom_ecran(16 / 10), CT.zoom_ecran(16 / 9))                                              # plus la fenetre est large, plus le zoom est fort
+
+    def test_la_fenetre_entiere_tient_dans_la_zone_portrait(self):
+        for aspect in (16 / 9, 16 / 10, 21 / 9, 32 / 9):
+            z = CT.zoom_ecran(aspect); self.assertAlmostEqual(1.0 / z, CT.demi_zone_ndc(aspect))              # la demi-fenetre agrandie = la demi-zone portrait d'origine : pas de repetition horizontale
+
+    def test_variable_d_essai(self):
+        ancien = os.environ.get('DQ_CIEL_ZOOM')
+        try:
+            os.environ['DQ_CIEL_ZOOM'] = '2.5'; self.assertEqual(CT.zoom_ecran(16 / 9), 2.5)
+            os.environ['DQ_CIEL_ZOOM'] = '0.3'; self.assertEqual(CT.zoom_ecran(16 / 9), 1.0)                  # (jamais un zoom arriere)
+            os.environ['DQ_CIEL_ZOOM'] = 'abc'; self.assertAlmostEqual(CT.zoom_ecran(16 / 9), 3.1605, 3)      # valeur illisible : calcul normal
+        finally:
+            if ancien is None: os.environ.pop('DQ_CIEL_ZOOM', None)
+            else: os.environ['DQ_CIEL_ZOOM'] = ancien
+
+    def test_matrice_zoom(self):
+        M = matrice((3.0, 5.0, -20.0), (3.0, 4.0, 0.0), 40.0, 16 / 9); Mz = CT.matrice_zoom(M, 3.0)
+        p = np.array([2.0, 3.0, 4.0, 1.0]); h, hz = M @ p, Mz @ p
+        self.assertAlmostEqual(hz[0], 3.0 * h[0]); self.assertAlmostEqual(hz[1], 3.0 * h[1])                    # x et y d'ecran multiplies
+        self.assertAlmostEqual(hz[2], h[2]); self.assertAlmostEqual(hz[3], h[3])                                # profondeur et w intacts
+        self.assertTrue(np.allclose(CT.matrice_zoom(M, 1.0), M))
+        self.assertTrue(np.allclose(M, matrice((3.0, 5.0, -20.0), (3.0, 4.0, 0.0), 40.0, 16 / 9)))               # (M n'est pas modifiee)
 
 
 if __name__ == '__main__':

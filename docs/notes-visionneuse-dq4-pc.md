@@ -501,7 +501,7 @@ Impression fondée mais faible, **rien changé**. Mesure à 1280 x 720 : intéri
 Quatre rapports ont été produits (issues et décisions : 128 décisions, 21 contradictions, 161 lacunes ; couverture des fonctionnalités : 529 cartes balayées, 528 sans plantage) ; ils alimentent le rapport « ce qu'il reste à faire », livré à part. Constats les plus graves pour la jouabilité : poker du casino invisible (partie 0xf inconnue de la visionneuse, garde `e.partie == PARTIE_VILLE` à `fenetre.py`), machine à sous injouable au clavier (`_saisie_menu` n'expose que les boutons 0x10), bestiaire (partie 0x10) sans monstre dessiné, paquets 1 / 6 / 16-18 / 27 / 30 / 33 ignorés (le 33 = `map_color_rate`, émis sur 171 cartes), boutiques / banque / église / auberge / arène / bateau / ballon / générique jamais ouverts dans un test.
 
 ### Outils et variables ajoutés (#43)
-`DQ_FBXLOG`, `DQ_FBX_CULL`, `DQ_CIEL_COPIES`, `DQ_CIEL_PARAMS`, `DQ_AUTO_CACHEE`, `DQ_SANS_CREDITS`, `DQ_SANS_LISSAGE`, `DQ_CORRECTION_BORDS`, `DQ_BASCULE_SIMPLE`, `DQ_SIM_ECHEC`, `DQ_CACHE_CARTES`, `DQ_CARTE_SANS_SPR`, `--historique`, `--correction-bords`, harnais `%x%y` / `&x&y` / `*x*y` / `+LCTRL`. Tests : `test_entrees` (37), `test_objets_carte` (15), `test_titre_ciel` (22), `test_plaque_depart` (12), `test_camera_titre` (3), `test_priorite_jeu` (12), `test_vitesse_combat` (39), `test_historique_messages` (61), `test_libelles` (13), `test_mode_fenetre` (28), `test_reglages_interface` (15), `test_pause_pages` (16), `mesure_bascule.py`.
+`DQ_FBXLOG`, `DQ_FBX_CULL`, `DQ_CIEL_COPIES`, `DQ_CIEL_PARAMS`, `DQ_CIEL_BANDES`, `DQ_CIEL_ZOOM`, `DQ_AUTO_CACHEE`, `DQ_SANS_CREDITS`, `DQ_SANS_LISSAGE`, `DQ_CORRECTION_BORDS`, `DQ_BASCULE_SIMPLE`, `DQ_SIM_ECHEC`, `DQ_CACHE_CARTES`, `DQ_CARTE_SANS_SPR`, `--historique`, `--correction-bords`, harnais `%x%y` / `&x&y` / `*x*y` / `+LCTRL`. Tests : `test_entrees` (37), `test_objets_carte` (15), `test_titre_ciel` (22), `test_plaque_depart` (12), `test_camera_titre` (3), `test_priorite_jeu` (12), `test_vitesse_combat` (39), `test_historique_messages` (61), `test_libelles` (13), `test_mode_fenetre` (28), `test_reglages_interface` (15), `test_pause_pages` (16), `mesure_bascule.py`.
 
 ### Non vérifié (honnêtement)
 Tout ce qui dépend de Windows et d'un vrai GPU : disparition du scintillement, F11 / Alt + Entrée sur clavier réel, sensation du glisser molette, fanfare de victoire à x3, perf à x3 sur un PC lent. Aucune capture du téléphone : cap du dragon, gris d'une plaque, position du nom de Ragnar. Messages de jarre, de combat au-delà du premier, de la carte du monde dans l'historique. DQ5 / Nimzo.
@@ -1255,3 +1255,24 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - Pas de 5 % et cadence de répétition : choisis pour coller au curseur du menu (pas de 5 %) ; à ajuster si trop lent ou trop rapide.
 - « Vitesse de transition » est toujours dans Commandes (#101 non faite).
 - Hors périmètre, constaté : `test_vitesse_combat.test_hors_combat_la_marche_garde_ses_reglages` échoue (faux jeu du test sans `pause`, depuis #151).
+
+## Avance #154 : essai de zoom du ciel de l'écran-titre (#130, 04/11/2026)
+
+### Demande (03/11 23 h 08)
+« Pour le fond qui défile de l'écran titre, possible de zoomer l'image pour ne garder que la texture sans effet de répétition ? Au moins pour essayer. »
+
+### Fait (essai, par défaut)
+- `ciel_titre.py` : `zoom_ecran(aspect)` = `aspect / 0,5625` (16/9 : **x 3,16** ; 21/9 : x 4,15 ; 1 en portrait) et `matrice_zoom(M, z)` (x et y d'écran multipliés par z autour du centre, profondeur intacte).
+- `fenetre.py` : au dessin du décor du titre, le groupe du ciel (« kumo », seul dans son groupe de texture : vérifié à l'exécution, sinon repli sur les bandes) est tracé avec `matrice_zoom(M, zoom)` ; les bandes étirées ne sont plus ajoutées. La fenêtre entière montre alors ce que montrait la zone portrait du jeu d'origine : moins d'un carreau de large, donc **aucune répétition horizontale**, et un peu plus d'une rangée de haut.
+- Retour à l'ancien rendu (bandes étirées) : `DQ_CIEL_BANDES=1`. Zoom d'essai : `DQ_CIEL_ZOOM=2.5` (valeur forcée, jamais inférieure à 1).
+- Tests : `outils/test_titre_ciel.py` (26 tests, dont 4 nouveaux : zoom selon le format, fenêtre entière = zone portrait, variable d'essai, matrice).
+
+### Établi (captures sous Xvfb, 1920 x 1080, avant / après)
+- Avant : les mêmes nuages reviennent 3 à 6 fois (en largeur comme en hauteur), atténués par les bandes étirées.
+- Après : un seul grand nuage, aucune répétition visible, mais l'image est **nettement plus floue** (la texture du ciel est petite : x 3,16) ; le dégradé et les couleurs restent ceux du jeu. Le logo, le dragon et l'île ne changent pas.
+
+### À trancher / non vérifié
+- **Sous Windows** : à juger par Sylfried (netteté, vitesse de défilement apparente : le ciel glisse à la même vitesse dans la texture, donc x 3,16 plus vite à l'écran en valeur absolue).
+- Une ou plusieurs valeurs intermédiaires (ex. `DQ_CIEL_ZOOM=2`) gardent un peu de répétition mais restent plus nettes ; non essayées (supposé).
+- Le mode « agrandi » (F2, texture du décor en HD) pourrait adoucir le flou : non essayé sur le titre.
+- Vu aussi en 21/9 (2560 x 1080, zoom x 4,15) : aucune répétition, encore plus flou.

@@ -5,7 +5,10 @@ L'original compose le titre pour un ecran portrait (9:16). Son ciel (objet « ku
 l'une par rapport a l'autre) de 3 carreaux de 11,5 unites ; l'objet glisse de 0,0192 unite par image puis revient (periode 11,5) : la zone portrait en voit moins de un carreau et de largeur. En 16/9, 21/9 ou plus large,
 le meme carreau apparaissait 3 a 6 fois de suite, tel quel (« on voit trop le fait que le pattern soit repetitif »).
 
-Solution (une seule idee) : la zone portrait centrale (largeur = hauteur x 9/16) reste EXACTEMENT le ciel d'origine ; de chaque cote, a partir de son bord, des bandes de meme geometrie que les rangees du ciel
+ESSAI #130 (par defaut) : l'image du ciel est AGRANDIE autour du centre de l'ecran (`zoom_ecran` : x 3,16 en 16/9) de facon que la fenetre entiere ne montre que ce que montrait la zone portrait du jeu d'origine : un seul
+carreau, jamais repete ; plus de bandes. L'ancienne solution (bandes etirees, ci-dessous) reste disponible avec DQ_CIEL_BANDES=1 pour comparer.
+
+Solution precedente (bandes) : la zone portrait centrale (largeur = hauteur x 9/16) reste EXACTEMENT le ciel d'origine ; de chaque cote, a partir de son bord, des bandes de meme geometrie que les rangees du ciel
 (memes y, z, memes couleurs de sommet) reprennent la texture avec une etirure horizontale qui varie en douceur le long de la bande (de 0,52 a 1,48 fois la taille d'origine, moyenne 1 : meme echelle d'ensemble), et un glissement vertical de la texture a l'interieur de chaque rangee (nul sur ses bords : les coutures entre rangees restent celles de l'original), avec des phases differentes a gauche et a droite : la meme forme de nuage n'apparait plus deux fois au meme endroit ni a la meme taille. L'etirure vaut 1 au bord de la zone :
 raccord continu, aucune couture. Les coordonnees de texture suivent le defilement de l'objet (le raccord au bord reste exact a chaque image).
 """
@@ -35,6 +38,21 @@ def zone_portrait(largeur, hauteur):
 def demi_zone_ndc(aspect):
     """Demi-largeur de la zone portrait en coordonnees d'ecran normalisees (-1..1) pour une fenetre de rapport largeur / hauteur `aspect`."""
     return min(1.0, ASPECT_PORTRAIT / float(aspect))
+
+
+def zoom_ecran(aspect):
+    """Zoom (essai #130) du ciel de l'ecran-titre, centre sur l'ecran : 1 pour une fenetre aussi etroite que le portrait (ou plus), sinon `aspect / ASPECT_PORTRAIT` (16/9 : x 3,16 ; 21/9 : x 4,15) : la fenetre entiere
+    montre alors ce que montrait la seule zone portrait du jeu d'origine (moins d'un carreau de nuages de large), donc le meme carreau n'y est jamais repete. `DQ_CIEL_ZOOM` (test) force une valeur."""
+    try:
+        if os.environ.get('DQ_CIEL_ZOOM'): return max(1.0, float(os.environ['DQ_CIEL_ZOOM']))
+    except ValueError: pass
+    return max(1.0, float(aspect) / ASPECT_PORTRAIT)
+
+
+def matrice_zoom(M, z):
+    """Matrice de projection `M` (4 x 4, colonnes d'espace de coordonnees homogenes) suivie d'un agrandissement `z` de l'image autour du centre de l'ecran (x et y d'ecran multiplies par z ; la profondeur ne change pas)."""
+    S = np.diag([float(z), float(z), 1.0, 1.0])
+    return S @ np.asarray(M, float)
 
 
 def _lisse(t):
