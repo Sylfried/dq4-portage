@@ -178,7 +178,7 @@ Onze défauts constatés ou probables. Les trois plus sérieux (n° 2 à 4) peuv
 | # | Bug | Gravité | Ce qu'on sait | Réf. |
 |---|---|---|---|---|
 | 1 | Bruitage de transition perdu (porte, sortie de village) à accélérateur élevé | Moyenne | Atténué (un bruitage tout juste lancé reste 0,4 s), cause ni reproduite ni trouvée | #44 |
-| 2 | `startTown` plante pour les cartes `za3f3` et `ev01` | Moyenne | Pointeur nul dans `FldStage::getCameraLimitL`, données correctes | CAR |
+| 2 | `startTown` plante pour les cartes `za3f3` et `ev01` | Moyenne | **Clos le 04/11/2026 (#76, #216)** : `za3f3` est une carte orpheline (aucun `.stg` dans l'APK) et `ev01` ne plante que lancée par `startTown` (le titre la charge par un autre chemin) ; `demarrer_ville` refuse maintenant un nom sans `.stg` | CAR |
 | 3 | Allocateur de 256 Mo jamais libéré | Haute (latent) | Arrêt `MemoryError` possible sur longue session, aucune mesure | G-044, #11 |
 | 4 | Murs invisibles et escalier de `dbout` | Haute (latent) | Risque de blocage ; l'enquête du 31/10 n'a rien prouvé | G-055 |
 | 5 | Monstre endormi ou paralysé qui pourrait s'effacer | Moyenne | Hypothèse lue dans le code, non reproduite | G-075 |

@@ -817,7 +817,9 @@ class Moteur:
             c.call(self.E('_ZN3cmn13PlayerManager7setLockEb'), 0, label='setLock')
 
     def demarrer_ville(self, nom):
-        """(essai) charge une ville ou un donjon : Global::startTown(nom)."""
+        """(essai) charge une ville ou un donjon : Global::startTown(nom). Refuse un nom sans fichier de carte (`assets/map/<nom>.stg`) : le moteur d'origine ne le teste pas et plante (pointeur nul dans FldStage::getCameraLimitL),
+        par exemple `za3f3`, carte orpheline (`.map` et `.fld` dans le paquet graphique, aucun `.stg`) (#76)."""
+        if self.core.fs is not None and self.core.fs.open('map/%s.stg' % nom) is None: raise ValueError("carte inconnue : pas de fichier assets/map/%s.stg dans les donnees du jeu" % nom)
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(nom.encode()), label='startTown')
 
     # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde (Speed, plus les deux constantes locales 0x27520c et 0x275210 que

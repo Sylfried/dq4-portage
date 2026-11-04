@@ -545,7 +545,7 @@ Tout ce qui dépend de Windows et d'un vrai GPU : disparition du scintillement, 
 - **États enregistrés (.dqs)** : `etats.appliquer` ne rejouait que les vitesses et le bouton Paramètres ; tous les correctifs mémoire sont maintenant rejoués (`Moteur.reappliquer_correctifs`, dont la fenêtre des lieux et `g_isAmazon`).
 - **Constats sans changement** (décisions du jeu d'origine) : coffres, jarres et portes ne gardent aucun état (le moteur renvoie « coffre ouvert » à l'entrée, la jarre cassée réapparaît) ; la visionneuse n'écrit **aucune** variable de scénario ; 73 cartes / 499 sprites sans traversée de mur ; `null01.tim` transparent et `kuro01.tim` noir sont voulus par les données.
 - **Notes moteur** : enregistrement des PNJ à `LIB+0x26a688`, pas 0x1c0, Fix32 (x, y, -z) en +0 et +0x140 ; caps des feuilles de 4 rangées : 0 = +z, 1 = +x, 2 = -z, 3 = -x (feuilles de 8 rangées : 0 N, 2 E, 4 S, 6 W) ; animations de coffre FCAN : 1 fermé, 2 ouverture (10 images), 3 ouvert, 4 fermeture ; téléportation de test : écrire x, y, -z (x 4096) dans `g_cmnPartyInfo` (LIB+0x269810) puis `startTown(carte)`.
-- **Non vérifié** : l'aspect réel en combat des 18 nouveaux décors (4 vus en vue de sol approximative) ; `za3f3` et `ev01` plantent dans `startTown` (pointeur nul dans `FldStage::getCameraLimitL`), données correctes ; effets réels des paquets 16, 17 et 33 des cartes `ml*` (comptés seulement) ; scénarios (PNJ qui apparaissent / disparaissent) ; 7 planches de contrôle sur 15 jamais regardées une à une.
+- **Non vérifié** : l'aspect réel en combat des 18 nouveaux décors (4 vus en vue de sol approximative) ; `za3f3` et `ev01` plantent dans `startTown` (pointeur nul dans `FldStage::getCameraLimitL`) : *rectifié le 04/11/2026 (audit, #76)* : `za3f3` est une carte orpheline (`.map` et `.fld` sans `.stg`, jamais démarrée par le jeu), `ev01` ne plante que lancée par `startTown` (le titre la charge par un autre chemin) ; effets réels des paquets 16, 17 et 33 des cartes `ml*` (comptés seulement) ; scénarios (PNJ qui apparaissent / disparaissent) ; 7 planches de contrôle sur 15 jamais regardées une à une.
 
 ### Services en ville, église, boutiques, banque, véhicules (agent « services »)
 - **Vu dans la fenêtre réelle** (captures GL sous Linux) : église (sauvegarde, résurrection / pénitence), boutiques d'armes, d'armures et d'objets (achat ×3, vente, « Qui va le porter ? », clavier **et** souris), auberge (fondus, Oui / Non, or insuffisant), banque (souris), menu du terrain et Statut, boutique de Torneko, arène (affichage), otage, Nène, bateau, ballon (dessin), chariot. Les véhicules sont **dessinés** (le doc disait « jamais dessinés » : vrai seulement hors scénario).
@@ -1832,4 +1832,16 @@ Rendu de l'original (aucune capture) ; Windows ; que l'ombre passe bien par-dess
 
 ### Non vérifié
 Windows ; un export fait avec un autre jeu (même format ?) : seul le format du jeu est reconnu.
+
+## Avance #216 : un nom de carte sans données est refusé au lieu de planter le moteur (#76, audit ENG-10, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Le ticket #76 (« `startTown` plante pour `za3f3` et `ev01`, les données sont correctes ») était mal posé. Établi : **`za3f3` n'a pas de `.stg`** dans `split_UnityDataAssetPack.apk` (le paquet graphique a bien son `.map` et son `.fld` : carte orpheline, 529 `.stg` pour 530 cartes) ; le moteur ne teste pas l'existence du fichier et déréférence un pointeur nul (`FldStage::getCameraLimitL` + 0x1c, reproduit dans 4 contextes sur 4). **`ev01`** (carte du titre) plante seulement quand on la lance par `startTown` après le chargement d'une sauvegarde (`TownOpeningManager::draw` -> `TownCharacterManager::setRotate`) ; démarrée par le titre elle se charge sans erreur (partie 12, 4 sprites) : artefact du lanceur de test, pas un défaut de données. Les 8 autres cartes d'événement (`ev02` à `ev09`) se chargent. Supposé : qu'aucun déplacement du jeu ne mène à `za3f3` (la table des déplacements n'a pas été balayée en entier).
+
+### Fait
+- `noyau/moteur.py:Moteur.demarrer_ville` (chemin d'essai `DQ_VILLE`) : refuse un nom sans `assets/map/<nom>.stg` avec une erreur claire (`ValueError`) au lieu de laisser le moteur planter ; les 529 cartes de l'APK sont acceptées.
+- `tests/test_carte_inconnue.py` (4 tests, dans la CI). Ticket #76 clos avec explication (aucun défaut du portage à corriger).
+
+### Non vérifié
+Aucun déplacement du jeu vers `za3f3` (supposé).
 
