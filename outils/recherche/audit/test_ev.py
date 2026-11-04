@@ -1,6 +1,6 @@
 import sys, os, time
 sys.path.insert(0, '/home/claude/wt-audit/dq4_pc'); os.chdir('/home/claude/wt-audit/dq4_pc')
-import donnees as DN
+from dq4_pc.monde import donnees as DN
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks/split_UnityDataAssetPack.apk'
 d = DN.Donnees(APK, '/tmp/audit/cache_ev')
 for n in sys.argv[1:]:

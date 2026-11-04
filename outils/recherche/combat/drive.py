@@ -2,7 +2,7 @@
 import sys, os, struct, tempfile, unicorn
 WT = os.environ.get('CB_WT', '/home/claude/wt45-combat')
 sys.path.insert(0, WT + '/dq4_pc'); os.chdir(WT + '/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'; SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 
 def demarrer(slot):

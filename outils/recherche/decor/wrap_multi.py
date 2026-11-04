@@ -3,7 +3,7 @@ Variantes d'essai (jamais dans le depot) : DC_POSER=1 : les decalques plats deco
 import sys, os, json
 import numpy as np
 sys.path.insert(0, os.path.join(os.environ['DC_WT'], 'dq4_pc'))
-import fenetre as F
+from dq4_pc.fenetre import jeu as F
 plan = json.load(open(os.environ.get('DQ_DC_PLAN', '/tmp/dc/plan.json')))
 orig = F.Jeu._dessiner_scene
 def patched(self):

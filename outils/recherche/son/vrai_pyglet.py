@@ -3,7 +3,7 @@ import os, sys, time
 os.environ['PYGLET_AUDIO'] = 'silent'
 sys.path.insert(0, '/home/claude/wt45-son/dq4_pc')
 import pyglet; pyglet.options['shadow_window'] = False
-import son as S
+from dq4_pc import son as S
 D = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks/split_UnityDataAssetPack.apk'
 s = S.Son(D, '/tmp/son45_cache', log=print)
 print('ok', s.ok, 'ogg', s.ogg)

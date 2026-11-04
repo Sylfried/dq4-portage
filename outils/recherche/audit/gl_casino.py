@@ -3,7 +3,7 @@
 Meme ligne de commande que fenetre.py. Aucune modification du depot."""
 import sys, os, struct
 sys.path.insert(0, '/home/claude/wt-audit/dq4_pc'); os.chdir('/home/claude/wt-audit/dq4_pc')
-import fenetre as F
+from dq4_pc.fenetre import jeu as F
 orig = F.Jeu.tick
 def tick(self, dt):
     if self.n == int(os.environ.get('CAS_N', '150')) and not getattr(self, '_cas', False):

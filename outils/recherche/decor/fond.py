@@ -1,6 +1,6 @@
 import os, sys, shutil
 sys.path.insert(0, '/home/claude/wt45-decor/dq4_pc'); os.chdir('/home/claude/wt45-decor/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'; SAVES = '/mnt/user-data/uploads/dq4-portage/dq4_pc/sauvegardes'
 ecr = '/tmp/sv_dc_h3'; shutil.rmtree(ecr, ignore_errors=True); os.makedirs(ecr)
 m = MO.Moteur(APK, SAVES, ecr); m.charger_sauvegarde(1)

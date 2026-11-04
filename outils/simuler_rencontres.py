@@ -14,9 +14,9 @@ Les sauvegardes sont lues sans etre modifiees (ecriture dans /tmp/sv_simrenc_*).
 """
 import os, sys, struct, shutil, random, argparse, math
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'dq4_pc'))
-import moteur as MO
-import rencontres as RE
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc.noyau import moteur as MO
+from dq4_pc.noyau import rencontres as RE
 import unicorn
 
 LIEUX = {'monde': dict(sauvegarde=4, zone=(2300, 2480, 342, 362), va_et_vient=True),          # carte du monde : couloir sans entree (la ville est au sud et au nord de la case de depart)

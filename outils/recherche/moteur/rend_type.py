@@ -5,7 +5,7 @@ sys.path.insert(0, os.environ.get('DQ4_SRC', '/home/claude/wt-audit/dq4_pc'))
 import numpy as np, pyglet
 from pyglet import gl
 from PIL import Image
-import ui_menu as UI
+from dq4_pc.menus import ui_menu as UI
 typ = int(sys.argv[1]); sortie = sys.argv[2]
 codes = [tuple(int(x) for x in a.split('=')) for a in sys.argv[3:] if '=' in a]
 W, H = 450, 800

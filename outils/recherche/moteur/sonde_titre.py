@@ -15,7 +15,7 @@ les images de la visionneuse (xvfb) si fenetre.py est disponible (voir runv.sh).
 """
 import sys, os, struct, shutil, argparse, tempfile, copy
 sys.path.insert(0, '/home/claude/dq4-portage/dq4_pc')
-import moteur as MO
+from dq4_pc.noyau import moteur as MO
 
 APK = '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks'
 SAVES = '/mnt/user-data/uploads/Downloads/DQ Patch/jeux/DQ4/saves/20261007_190735'

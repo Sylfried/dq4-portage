@@ -4,7 +4,7 @@ sys.path.insert(0, os.environ.get('DQ4_SRC', '/home/claude/wt-audit/dq4_pc'))
 import numpy as np, pyglet
 from pyglet import gl
 from PIL import Image
-import ui_menu as UI
+from dq4_pc.menus import ui_menu as UI
 pref = sys.argv[1]
 W, H = 450, 800
 win = pyglet.window.Window(W, H, visible=False)

@@ -1,7 +1,7 @@
 """Duree d'un cycle jour / nuit de la carte du monde, en secondes reelles NOMINALES : le vrai moteur est avance avec la vraie horloge de la visionneuse (vitesse_combat.avancer, 60 images par seconde, facteur de marche f) mais avec une horloge simulee (la charge de la machine ne compte pas)."""
 import sys, struct, random, json
 sys.path.insert(0,'/tmp/sp45'); sys.path.insert(0,'/home/claude/wt45-sprites/dq4_pc')
-import h45, moteur as MO, vitesse_combat as VC
+import h45; from dq4_pc.noyau import moteur as MO; from dq4_pc.combat import vitesse_combat as VC
 def cycle(f, cycles=1.0, graine=1, tag='c'):
     m=h45.nouveau('cyc%s'%tag); m.charger_sauvegarde(4)
     for i in range(700):

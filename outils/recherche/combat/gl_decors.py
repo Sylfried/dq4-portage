@@ -3,8 +3,8 @@ et enregistre une capture de chaque. Variables : ENC_N, CB_WT, DECORS (liste), M
 import sys, os, time
 wt = os.environ.get('CB_WT', '/home/claude/wt45-combat')
 sys.path.insert(0, wt + '/dq4_pc'); os.chdir(wt + '/dq4_pc')
-import fenetre as F
-import moteur as MO
+from dq4_pc.fenetre import jeu as F
+from dq4_pc.noyau import moteur as MO
 import pyglet
 orig = F.Jeu.tick
 st = {'enc': False, 'fait': False}

@@ -1,13 +1,15 @@
 """Extrait la STRUCTURE du code C# du jeu (classes, champs, methodes, adresses) avec Il2CppDumper.
 
 Entrees (tes fichiers, jamais modifies) : libil2cpp.so et global-metadata.dat, pris dans tes APK.
-Sorties : <racine>/dq4_pc/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignore par git (code du jeu).
+Sorties : <racine>/donnees/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignore par git (code du jeu).
 """
 import io, json, os, subprocess, sys, urllib.request, zipfile
 
 RACINE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-APKS = sys.argv[1] if len(sys.argv) > 1 else os.path.abspath(os.path.join(RACINE, '..', 'jeux', 'DQ4', 'patched_apks'))
-SORTIE = os.path.join(RACINE, 'dq4_pc', 'cache', 'il2cpp')
+sys.path.insert(0, RACINE)
+from dq4_pc import chemins as CH
+APKS = sys.argv[1] if len(sys.argv) > 1 else CH.DOSSIERS.apk
+SORTIE = os.path.join(CH.DOSSIERS.cache, 'il2cpp')
 OUTIL = os.path.join(SORTIE, 'Il2CppDumper')
 ENTREES = os.path.join(SORTIE, 'entrees')
 

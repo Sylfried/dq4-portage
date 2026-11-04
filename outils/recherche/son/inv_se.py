@@ -1,6 +1,6 @@
 import sys, zipfile
 sys.path.insert(0, '/home/claude/wt45-son/dq4_pc')
-import son
+from dq4_pc import son
 z = zipfile.ZipFile('/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks/split_UnityDataAssetPack.apk')
 for i in [int(x) for x in sys.argv[1:]]:
     n = 'assets/sound/SE%04d.akb' % i

@@ -25,12 +25,12 @@ Courts, au présent, préfixés : `feat:`, `fix:`, `docs:`, `refactor:`, `chore:
 
 ## Avant de fusionner et après
 1. Avant la fusion : vérification en cloud, sans écran (`PYGLET_HEADLESS=1`, tests ciblés ou `outils/flux_session/lancer_tests.sh` pour toute la suite). Rien de cela ne valide Windows ni un vrai GPU.
-2. Après la fusion : sur le PC de test, `git pull --ff-only origin main`, double-clic sur `dq4_pc\lancer_dq4.bat`, puis marcher, ouvrir une porte, changer de carte, ouvrir et fermer le menu, lire un message : rien ne régresse. Les points qui n'ont pu être vus que sous Linux sont listés dans « Non vérifié » de la pull request.
+2. Après la fusion : sur le PC de test, `git pull --ff-only origin main`, double-clic sur `lancer_dq4.bat` (à la racine), puis marcher, ouvrir une porte, changer de carte, ouvrir et fermer le menu, lire un message : rien ne régresse. Les points qui n'ont pu être vus que sous Linux sont listés dans « Non vérifié » de la pull request.
 
 ## Règles du projet
 - **Aucun contenu Square Enix** dans le dépôt (voir `.gitignore`, ne jamais forcer avec `git add -f`). Les outils lisent les fichiers de l'utilisateur sur son PC. Pas de dump IL2CPP, pas de capture du jeu.
 - Projet séparé du patch FR : ne jamais toucher à ses fichiers (APK patchés, `*.mpt`, Excel, `DQ_Patch_FR.exe`, `build_exe.bat`).
-- Les sauvegardes de l'utilisateur ne sont jamais modifiées (les nouvelles vont dans `dq4_pc\sauvegardes`) ; les tests lisent une copie en lecture seule et écrivent dans `/tmp`.
+- Les sauvegardes de l'utilisateur ne sont jamais modifiées (les nouvelles vont dans `donnees\sauvegardes\portage`) ; les tests lisent une copie en lecture seule et écrivent dans `/tmp`.
 - Le jeu d'origine fait foi : ce que la visionneuse remplace doit coller au comportement du mobile, sauf demande contraire.
 - **Le moteur** : le fichier `libdq4core.so` n'est jamais modifié. En mémoire, seuls existent les correctifs ciblés et les crochets listés dans `docs/notes-technique-portage-dq4.md` (section « Écritures et crochets en mémoire du moteur ») ; **tout nouveau correctif ou crochet s'ajoute à cette liste**, avec sa garde (instruction d'origine vérifiée avant d'écrire) et son rôle. Aucun ne doit toucher un scénario, l'or, l'inventaire ni la position du héros sans accord de Sylfried.
 

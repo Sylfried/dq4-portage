@@ -8,7 +8,7 @@ from PIL import Image
 out = sys.argv[1]; courant = sys.argv[2] if len(sys.argv) > 2 else 'boutons'; haut = sys.argv[3] if len(sys.argv) > 3 else None
 W, H = 1280, 720
 win = pyglet.window.Window(W, H, visible=True)
-import ui_menu as UM, reglages as RG, pause as PA
+from dq4_pc.menus import ui_menu as UM; from dq4_pc.persistance import reglages as RG; from dq4_pc.menus import pause as PA
 CACHE = '/tmp/uicache4'
 ml = UM.MiseEnPage(os.path.join(CACHE, 'ui_layout.json'), os.path.join(CACHE, 'ui_frameData.bin'))
 feuilles = {0: np.array(Image.open(os.path.join(CACHE, 'ui_MenuTexture.png')).convert('RGBA')), 1: np.array(Image.open(os.path.join(CACHE, 'ui_Button.png')).convert('RGBA'))}

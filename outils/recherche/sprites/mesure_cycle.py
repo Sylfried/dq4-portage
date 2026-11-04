@@ -3,7 +3,7 @@ les rencontres sont coupees (Encount +0x18 = 0), on journalise (heure reelle, te
 import sys, os, time, json, struct, atexit
 WT = '/home/claude/wt45-sprites'
 sys.path.insert(0, WT + '/dq4_pc'); os.chdir(WT + '/dq4_pc')
-import fenetre as F, moteur as MO, pyglet
+from dq4_pc.fenetre import jeu as F; from dq4_pc.noyau import moteur as MO; import pyglet
 tag, dmax, cycles = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]); sys.argv = [sys.argv[0]] + sys.argv[4:]
 log = []; etat = {'dir': 0, 'sans': 0, 'fin': False, 'depart': None}
 DIRS = (MO.HAUT, MO.DROITE, MO.BAS, MO.GAUCHE)
