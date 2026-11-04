@@ -1374,3 +1374,23 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 ### À trancher / non vérifié
 - **Sous Windows** : à confirmer par Sylfried (la ligne n'est plus dans Commandes › Vitesses ; les transitions durent la durée du jeu).
 - Le critère « x4 pour les portes » de #101 est abandonné (décision du 04/11) : à fermer quand Sylfried valide.
+
+## Avance #160 : double clic du panneau Interface détecté comme Windows (#145, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 44)
+« Aligne toi sur le fonctionnement de windows pour détecter un double clic car là ça prend un peu de temps pour que la fenêtre agisse s'il s'agit finalement que d'un simple clic. »
+
+### Établi
+- Avant (#145, première version) : un clic simple sur la barre de titre du panneau Interface ne repliait / dépliait qu'après un délai fixe compté **depuis le relâchement**, quoi que fasse la souris ensuite.
+- Windows juge un double clic ainsi : le second appui arrive **moins de `GetDoubleClickTime` (500 ms par défaut) après le DÉBUT du premier** et **dans le rectangle `SM_CXDOUBLECLK` x `SM_CYDOUBLECLK` (4 x 4 px par défaut) centré sur le premier**.
+
+### Fait
+- `pause.py` : `double_clic_systeme()` lit le délai et le rectangle du système sous Windows (ctypes `user32`), sinon 500 ms et 4 x 4 px (`DQ_DOUBLE_CLIC` force le délai) ; `_double_possible(x, y, t)` applique la règle de Windows.
+- Le délai court depuis le **début** de l'appui. Si l'appui a déjà duré plus que le délai, le clic simple agit dès le relâchement.
+- Le clic simple agit **dès que le double clic est impossible**, sans attendre la fin du délai : pointeur sorti du rectangle (`survol`), autre appui hors du rectangle (`clic`), début d'un glisser, ou délai écoulé (`maj`).
+- Un vrai double clic reste neutre : retour à la position d'origine, aucun changement d'état à aucun moment.
+- `test_panneau_interface.py` : 19 tests (6 nouveaux : délai compté depuis le début de l'appui, rectangle, pointeur sorti, appui ailleurs, appui plus long que le délai).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (le délai réel du système et la tolérance de position, qu'il peut régler dans Windows).
+- **Supposé** : le rectangle 4 x 4 px de Windows est étroit ; sur un écran à haute densité de pixels, un tremblement de la main peut sortir du rectangle et le panneau agit alors plus tôt (comportement identique à celui d'une fenêtre Windows).
