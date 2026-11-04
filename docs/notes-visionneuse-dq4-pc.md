@@ -1448,3 +1448,20 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - **Supposé** : « touche les bords » = le pointeur atteint 90 % du rayon de l'anneau ; « double » = le diamètre de base (un réglage enregistré à 100 % donne donc le double sans rien changer dans `reglages.json`).
 - **Sous Windows** : taille de la croix (plus grande qu'avant : elle peut gêner l'image), seuil de la course (si trop tôt ou trop tard : `COURSE_SEUIL`), halo en course.
+
+## Avance #170 : retour animé de la distance de la caméra à 100 % (#167, 04/11/2026)
+
+### Demande (D-227, 04/11 10 h 46 et 10 h 49)
+« Appuyer simultanément sur les 2 touches pour avancer ou reculer la caméra doit la faire revenir au zoom initial » ; puis : « Il doit aussi y avoir un effet de transition quand je remet le zoom par défaut (à la souris comme au clavier) ».
+
+### Fait
+- `Jeu._maj_distance_clavier` (à chaque image, avec `_maj_camera`) : **les deux touches ensemble** (« Caméra (Rapprocher) » + « Caméra (Éloigner) », Page haut + Page bas par défaut) lancent le retour de la distance à 100 % (`RG.DEFAUT['distance_camera']`) par une **animation**, comme les deux flèches opposées pour la rotation : pas par image = max(`CAM_RECENTRE_DIST` = 60 % / s, 5 x l'écart par seconde) x « Vitesse de caméra » (l'accélérateur n'y change rien), arrivée exacte sur 100 % (de 200 % à 100 % : environ 0,6 s ; de 50 % à 100 % : environ 0,5 s). Tant qu'il reste une touche enfoncée après la pression double (le relâchement n'est jamais exactement simultané), rien ne se passe (`dist_bloque`) ; une nouvelle pression seule, ou un cran de molette, interrompt l'animation ; un menu, un message ou un combat l'annule.
+- `Jeu.distance_par_defaut` (Ctrl + molette, Ctrl + clic molette) ne saute plus à 100 % : elle lance la même animation (`dist_retour`). La molette seule et le curseur du menu Échap restent immédiats.
+- Textes d'aide (page Commandes et aide des deux touches) mis à jour.
+- Tests : `outils/test_distance_camera_clavier.py` (27 tests : l'ancien « les deux touches ne font rien » est remplacé par 9 tests : retour progressif et monotone depuis 200, 150, 70 et 50 %, durée, déjà à 100 %, vitesse de caméra et accélérateur, poursuite après le relâchement, touche restée enfoncée, interruption par une touche seule, Ctrl + molette, arrêt hors du terrain) ; `outils/test_entrees.py` : Ctrl + molette et Ctrl + clic molette lancent le retour (`dist_retour`) au lieu de mettre 100 d'un coup, un cran de molette l'interrompt.
+- Capture sur la ville `maout` (distance de départ 200 % ; fond sans décor dans cette scène de test) : le héros grossit image après image, 200, 192, 184, ... 118, ... 100 % en 37 images.
+
+### À trancher / non vérifié
+- **Supposé** : vitesse du retour (60 % / s au minimum, 5 x l'écart par seconde, comme la rotation) ; « les deux touches » = Page haut + Page bas ou leurs remplaçantes réattribuées.
+- **Sous Windows** : le ressenti de l'animation (trop rapide / trop lente : `CAM_RECENTRE_DIST` et le facteur 5) ; la pression double des deux touches du clavier réel.
+

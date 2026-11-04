@@ -243,7 +243,7 @@ class Faux:
         self.hud = types.SimpleNamespace(croix_on=False); self.appui = None; self.molette = EN.GesteMolette(); self.lacet = 0.0; self.angle_cam = 0.0; self.height = 720
         self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.touches = {}; self.reg = {'angle_camera': 0.0, 'distance_camera': 60, 'camera_inverser_gd': False, 'camera_inverser_hb': False,
                                                                                                          'vitesse_camera': 1.0, 'vitesse_accel': 1.5}
-        self.zoom = 100.0 / 60; self.zooms = []; self._pret = True; self.fixe_test = True; self.t_cam = None
+        self.zoom = 100.0 / 60; self.zooms = []; self.dist_retour = False; self._pret = True; self.fixe_test = True; self.t_cam = None
         for k, v in kw.items(): setattr(self, k, v)
         for nom in ('_terrain_libre', '_camera_pilotable', '_zoom_possible', 'recentrer_camera', '_ctrl_actif', '_molette_appui', '_molette_glisse', '_molette_relache', 'distance_par_defaut', 'on_mouse_scroll', '_etat_axe', '_maj_camera'):
             setattr(self, nom, types.MethodType(getattr(FE.Jeu, nom), self))
@@ -266,19 +266,23 @@ class MoletteDansLeJeu(unittest.TestCase):
 
     def test_ctrl_clic_remet_la_position_et_la_distance(self):
         j = Faux(); j.lacet = 50.0; j.clic(ctrl=FE.pyglet.window.key.MOD_CTRL)
-        self.assertEqual(j.zooms, [100]); self.assertTrue(all(a[0] for a in j.cam_axe.values()))        # les deux : distance par defaut + animation de remise de la position
+        self.assertEqual(j.zooms, []); self.assertTrue(j.dist_retour); self.assertTrue(all(a[0] for a in j.cam_axe.values()))        # les deux : retour anime de la distance (#167, plus de saut immediat) + animation de remise de la position
         j = Faux(); j._tenue = lambda a: a == 'modif'; j.clic()                                         # « Touche speciale » des reglages (Ctrl par defaut) enfoncee
-        self.assertEqual(j.zooms, [100]); self.assertTrue(all(a[0] for a in j.cam_axe.values()))
+        self.assertEqual(j.zooms, []); self.assertTrue(j.dist_retour); self.assertTrue(all(a[0] for a in j.cam_axe.values()))
 
     def test_ctrl_molette_haut_ou_bas_remet_la_distance_seulement(self):
         for sy in (1, -1, 2.5, -0.2):
             j = Faux(); j.lacet = 50.0; j.angle_cam = 20.0; j.molette_tournee(sy, ctrl=True)
-            self.assertEqual(j.zooms, [100], sy); self.assertEqual((j.lacet, j.angle_cam), (50.0, 20.0)); self.assertFalse(any(a[0] for a in j.cam_axe.values()))          # la position n'y est pour rien
-        j = Faux(); j.molette_tournee(0, ctrl=True); self.assertEqual(j.zooms, [])                      # (un cran nul ne fait rien)
+            self.assertEqual(j.zooms, [], sy); self.assertTrue(j.dist_retour, sy); self.assertEqual((j.lacet, j.angle_cam), (50.0, 20.0)); self.assertFalse(any(a[0] for a in j.cam_axe.values()))          # la position n'y est pour rien
+        j = Faux(); j.molette_tournee(0, ctrl=True); self.assertEqual(j.zooms, []); self.assertFalse(j.dist_retour)                      # (un cran nul ne fait rien)
 
     def test_molette_seule_zoome_toujours(self):
         j = Faux(); j.molette_tournee(1); j.molette_tournee(-1)
-        self.assertEqual(j.zooms, [round(100.0 / (j.zoom * 1.1)), round(100.0 / (j.zoom / 1.1))]); self.assertEqual(len(j.zooms), 2)       # un cran = x1,1 (avant : pas de remise a 100)
+        self.assertEqual(j.zooms, [round(100.0 / (j.zoom * 1.1)), round(100.0 / (j.zoom / 1.1))]); self.assertEqual(len(j.zooms), 2); self.assertFalse(j.dist_retour)       # un cran = x1,1 (avant : pas de remise a 100)
+
+    def test_un_cran_de_molette_interrompt_le_retour_anime(self):
+        j = Faux(); j.dist_retour = True; j.molette_tournee(1); self.assertFalse(j.dist_retour); self.assertEqual(len(j.zooms), 1)
+        j = Faux(); j.dist_retour = True; j.molette_tournee(1, ctrl=True); self.assertTrue(j.dist_retour); self.assertEqual(j.zooms, [])     # (Ctrl + molette le relance)
 
     def test_ctrl_molette_hors_terrain_ou_dans_un_menu_ne_remet_rien(self):
         j = Faux(); j.pause.ouvert = True; j.pause.molette = lambda sy: None; j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [])
@@ -287,7 +291,7 @@ class MoletteDansLeJeu(unittest.TestCase):
         j = Faux(); j._pret = False; j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [])
 
     def test_ctrl_molette_sur_la_carte_du_monde_remet_la_distance(self):
-        j = Faux(partie=FE.MO.PARTIE_CHAMP); j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [100])
+        j = Faux(partie=FE.MO.PARTIE_CHAMP); j.molette_tournee(1, ctrl=True); self.assertTrue(j.dist_retour); self.assertEqual(j.zooms, [])
 
     COMBOS = ((False, False), (True, False), (False, True), (True, True))
 
@@ -318,7 +322,7 @@ class MoletteDansLeJeu(unittest.TestCase):
     def test_inversion_sans_effet_sur_les_remises_a_zero(self):
         for gd, hb in self.COMBOS:
             j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j.clic(); self.assertTrue(all(a[0] for a in j.cam_axe.values()))
-            j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [100])
+            j = Faux(); j.reg['camera_inverser_gd'] = gd; j.reg['camera_inverser_hb'] = hb; j.molette_tournee(1, ctrl=True); self.assertTrue(j.dist_retour); self.assertEqual(j.zooms, [])
 
     def test_clic_suivi_d_un_deplacement_n_est_pas_un_clic(self):
         K = FE.pyglet.window.key
@@ -326,7 +330,7 @@ class MoletteDansLeJeu(unittest.TestCase):
             j = Faux(); j.lacet = 50.0; j._molette_appui(500, 300, ctrl); j._molette_glisse(530, 300); j._molette_glisse(500, 300); j._molette_relache(ctrl)      # revenu au point de depart : toujours un glissement
             self.assertFalse(any(a[0] for a in j.cam_axe.values())); self.assertEqual(j.zooms, [])
             j = Faux(); j._molette_appui(500, 300, ctrl); j._molette_glisse(502, 301); j._molette_relache(ctrl)                                                 # un simple tremblement reste un clic
-            self.assertTrue(all(a[0] for a in j.cam_axe.values())); self.assertEqual(j.zooms, [100] if ctrl else [])
+            self.assertTrue(all(a[0] for a in j.cam_axe.values())); self.assertEqual((j.zooms, j.dist_retour), ([], bool(ctrl)))
 
     def test_glisser_tourne_comme_les_fleches(self):
         j = Faux(); j._molette_appui(500, 300, 0); j._molette_glisse(520, 300); j._molette_glisse(620, 360)
@@ -341,8 +345,8 @@ class MoletteDansLeJeu(unittest.TestCase):
     def test_lieu_qui_interdit_la_camera(self):
         j = Faux(cam_bloquee=True); j.clic(); self.assertFalse(any(a[0] for a in j.cam_axe.values()))
         j = Faux(cam_bloquee=True); j._molette_appui(1, 1, 0); j._molette_glisse(50, 50); j._molette_glisse(90, 90); self.assertEqual((j.lacet, j.angle_cam), (0.0, 0.0))
-        j = Faux(cam_bloquee=True); j.clic(ctrl=FE.pyglet.window.key.MOD_CTRL); self.assertEqual(j.zooms, [100]); self.assertFalse(any(a[0] for a in j.cam_axe.values()))       # (la distance reste reglable : comme la molette ; la position, non)
-        j = Faux(cam_bloquee=True); j.molette_tournee(1, ctrl=True); self.assertEqual(j.zooms, [100])
+        j = Faux(cam_bloquee=True); j.clic(ctrl=FE.pyglet.window.key.MOD_CTRL); self.assertTrue(j.dist_retour); self.assertFalse(any(a[0] for a in j.cam_axe.values()))       # (la distance reste reglable : comme la molette ; la position, non)
+        j = Faux(cam_bloquee=True); j.molette_tournee(1, ctrl=True); self.assertTrue(j.dist_retour)
 
     def test_limite_de_rotation_du_lieu(self):
         j = Faux(cam_limite=30.0); j._molette_appui(0, 0, 0); j._molette_glisse(10, 0); j._molette_glisse(5000, 0); self.assertEqual(j.lacet, 30.0)
@@ -367,13 +371,13 @@ class MoletteDansLeJeu(unittest.TestCase):
         for nom in ('pause', 'message', 'menu', 'combat', 'titre', 'licence', 'sauvegardes', 'nom', 'carte', 'effet', 'croix', 'bouton'):
             for ctrl in (0, FE.pyglet.window.key.MOD_CTRL):
                 j = faux(nom); j.lacet = 10.0; j.clic(ctrl=ctrl); j._molette_appui(0, 0, ctrl); j._molette_glisse(50, 50); j._molette_glisse(120, 90); j._molette_relache(ctrl)
-                zooms = [100] if (nom == 'effet' and ctrl) else []                                               # (pendant un effet d'ecran la molette zoome encore, comme avant ; les fleches ne tournent pas)
-                self.assertEqual((j.lacet, j.angle_cam, j.zooms), (10.0, 0.0, zooms), '%s ctrl=%s' % (nom, ctrl))
+                retour = bool(nom == 'effet' and ctrl)                                                           # (pendant un effet d'ecran la molette zoome encore, comme avant ; les fleches ne tournent pas)
+                self.assertEqual((j.lacet, j.angle_cam, j.zooms, j.dist_retour), (10.0, 0.0, [], retour), '%s ctrl=%s' % (nom, ctrl))
                 self.assertFalse(any(a[0] for a in j.cam_axe.values()), nom)
 
     def test_carte_du_monde_zoom_oui_direction_non(self):
         j = Faux(partie=FE.MO.PARTIE_CHAMP); j.clic(); self.assertFalse(any(a[0] for a in j.cam_axe.values()))          # pas de rotation sur la carte du monde (comme les fleches)
-        j.clic(ctrl=FE.pyglet.window.key.MOD_CTRL); self.assertEqual(j.zooms, [100])                                    # mais le zoom, oui (comme la molette)
+        j.clic(ctrl=FE.pyglet.window.key.MOD_CTRL); self.assertTrue(j.dist_retour)                                    # mais la distance, oui (comme la molette)
 
     def test_defaut_du_zoom_est_celui_des_reglages(self):
         self.assertEqual(float(FE.RG.DEFAUT['distance_camera']), 100.0)

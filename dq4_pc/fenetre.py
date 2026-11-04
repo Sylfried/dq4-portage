@@ -143,6 +143,7 @@ CAM_Y_TAU = 1.0                                                             # es
 CAM_Y_MAX = 3.0                                                             # ... sans jamais s'ecarter de plus de 3 unites de la hauteur du jeu (etages hauts, tours : le heros reste a moins de ~15 % de la hauteur de l'ecran du centre)
 CAM_Y_RELIEF = 0.6                                                         # (#110, butte du village du prologue : +0,5 u en 8 pas) bande morte du lissage : tant que la hauteur du jeu reste a moins de 0,6 unite de la hauteur de repos de la camera, elle suit le jeu EXACTEMENT, comme le mobile (buttes, rampes, bosses du terrain) ; le lissage ci-dessus ne porte que sur ce qui depasse (escaliers, etages) ; voir `hauteur_camera`
 CAM_RECENTRE_LACET, CAM_RECENTRE_ANGLE = 240.0, 90.0                         # recentrage anime (deux fleches opposees) : vitesse minimale en degres / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde)
+CAM_RECENTRE_DIST = 60.0                                                       # retour anime de la distance a 100 % (#167) : vitesse minimale en pourcents / s (plus vite quand l'ecart est grand : 5 x l'ecart par seconde, comme le recentrage de la rotation)
 DIR_BITS = (MO.HAUT, MO.HAUT | MO.DROITE, MO.DROITE, MO.BAS | MO.DROITE, MO.BAS, MO.BAS | MO.GAUCHE, MO.GAUCHE, MO.HAUT | MO.GAUCHE)     # les 8 directions du moteur (0 = haut, dans le sens des aiguilles d'une montre)
 PAS_MOTEUR = 1.0 / 30.0                                                     # le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
 BUDGET_PAS_RAPIDES = float(os.environ.get('DQ_BUDGET_PAS', '0.030'))                                                   # duree maximale (s) des pas du moteur dans une meme image affichee quand la marche est acceleree (vitesse de marche x2 a x4, accelerateur) : au-dela, le jeu prend du retard au lieu de figer l'image
@@ -636,18 +637,19 @@ class Jeu(pyglet.window.Window):
         return bool(modifiers & pyglet.window.key.MOD_CTRL) or self._tenue('modif')
 
     def distance_par_defaut(self):
-        """Remet la distance de la camera a sa valeur par defaut (reglages.DEFAUT['distance_camera'], 100 %) : Ctrl + molette, Ctrl + clic molette. Immediat comme le zoom de la molette."""
-        self.regler_zoom(100.0 / float(RG.DEFAUT['distance_camera']))
+        """Ramene la distance de la camera a sa valeur par defaut (reglages.DEFAUT['distance_camera'], 100 %) PAR UNE ANIMATION (#167, comme le recentrage de la rotation) : Ctrl + molette, Ctrl + clic molette, les deux touches de distance ensemble.
+        Le mouvement est fait par _maj_distance_clavier (a chaque image) ; une molette ou une touche de distance seule l'interrompt."""
+        self.dist_retour = True
 
     def on_mouse_scroll(self, x, y, sx, sy):
-        """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap ; Ctrl + molette (vers le haut OU vers le bas) = distance par defaut (100 %).
+        """Hors menu et hors combat : molette = zoom (x1,1 par cran, distance de 200 a 50 %), la meme que celle du menu Echap ; Ctrl + molette (vers le haut OU vers le bas) = retour anime a la distance par defaut (100 %).
         pyglet ne donne pas les modificateurs de la molette : Ctrl = la « Touche speciale » des reglages (Ctrl par defaut, voir _ctrl_actif)."""
         if not self._pret: return
         if self.pause.ouvert: self.pause.molette(sy); return
         if self.licence is not None: self.licence.defiler(-sy * 60.0); return
         if not (sy and self._zoom_possible()): return
         if self._ctrl_actif(0): self.distance_par_defaut()
-        else: self.regler_zoom(self.zoom * 1.1 ** sy)
+        else: self.dist_retour = False; self.regler_zoom(self.zoom * 1.1 ** sy)                      # (un cran de molette interrompt le retour anime a 100 %)
 
     def _molette_appui(self, x, y, modifiers):
         """Bouton du milieu enfonce : un clic (remise de la position de la camera ; avec Ctrl, de la position et de la distance) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
@@ -797,18 +799,33 @@ class Jeu(pyglet.window.Window):
         self.regler_zoom(100.0 / max(1.0, float(pourcent)))
 
     _t_dist = None
+    dist_retour = False                                           # retour anime de la distance a 100 % en cours (#167)
+    dist_bloque = False                                           # les deux touches de distance ont ete enfoncees ensemble et il en reste une enfoncee : rien ne se passe (le relachement n'est jamais exactement simultane)
 
     def _maj_distance_clavier(self):
         """Touches « Caméra (Rapprocher) » / « Caméra (Éloigner) » (a chaque image affichee) : tant qu'une touche est tenue, la distance de la camera diminue / augmente EN CONTINU (sans a-coup, selon le temps ecoule), a la
         vitesse de rotation de la camera (CAM_DIST_VIT x reglage « Vitesse de caméra » x accelerateur tenu), entre 50 et 200 %. Memes conditions que la molette (_zoom_possible : terrain, jamais un menu, un message ou un
-        combat) ; les deux touches ensemble ne font rien. Meme valeur que la molette (regler_distance)."""
+        combat). Les DEUX touches ensemble (#167) ramenent la distance a 100 % par une animation (comme les deux fleches opposees pour la rotation) : vitesse minimale CAM_RECENTRE_DIST, 5 x l'ecart par seconde, fois le
+        reglage « Vitesse de caméra » ; tant qu'il en reste une enfoncee apres cette pression double, rien ne se passe ; une nouvelle pression seule, ou un cran de molette, interrompt l'animation (distance_par_defaut la lance aussi : Ctrl + molette,
+        Ctrl + clic molette). Meme valeur que la molette (regler_distance)."""
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self._t_dist is None else min(0.1, t - self._t_dist)); self._t_dist = t
-        sens = (1 if self._tenue('cam_loin') else 0) - (1 if self._tenue('cam_pres') else 0)
-        if not sens or not self._zoom_possible(): return
-        vit = float(self.reg['vitesse_camera']) * (float(self.reg['vitesse_accel']) if self._tenue('accel') else 1.0)
-        lo, hi = RG.BORNES['distance_camera']; actuelle = 100.0 / self.zoom
-        nouvelle = min(hi, max(lo, actuelle + sens * CAM_DIST_VIT * vit * dt))
-        if nouvelle != actuelle: self.regler_distance(nouvelle)
+        pres, loin = self._tenue('cam_pres'), self._tenue('cam_loin')
+        if not (pres or loin): self.dist_bloque = False
+        if not self._zoom_possible(): self.dist_retour = False; return
+        if pres and loin: self.dist_retour = True; self.dist_bloque = True; sens = 0
+        elif self.dist_bloque: sens = 0
+        else:
+            sens = (1 if loin else 0) - (1 if pres else 0)
+            if sens: self.dist_retour = False
+        vit_cam = float(self.reg['vitesse_camera']); lo, hi = RG.BORNES['distance_camera']; actuelle = 100.0 / self.zoom
+        if sens:
+            vit = vit_cam * (float(self.reg['vitesse_accel']) if self._tenue('accel') else 1.0)
+            nouvelle = min(hi, max(lo, actuelle + sens * CAM_DIST_VIT * vit * dt))
+            if nouvelle != actuelle: self.regler_distance(nouvelle)
+        elif self.dist_retour:
+            cible = float(RG.DEFAUT['distance_camera']); err = cible - actuelle; pas = max(CAM_RECENTRE_DIST, abs(err) * 5.0) * vit_cam * dt
+            if abs(err) <= pas: self.regler_distance(cible); self.dist_retour = False
+            else: self.regler_distance(actuelle + math.copysign(pas, err))
 
     @property
     def est_plein(self):
