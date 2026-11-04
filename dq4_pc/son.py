@@ -59,6 +59,14 @@ def decoder_msadpcm(d, canaux, bloc):
     return sortie.reshape(-1, canaux).astype(np.int16)
 
 
+def decoder_ogg(octets):
+    """Ogg Vorbis -> int16 (n, canaux). Lu en flottants puis ECRETE a la pleine echelle : Vorbis depasse parfois +-1,0 apres decodage, et la lecture directe en int16 faisait deborder ces echantillons
+    (un pic devenait un pic de signe oppose : BGM 14, 3 echantillons vers 91 s ; BGM 34, 7 echantillons ; #200)."""
+    import soundfile as sf
+    x, _ = sf.read(io.BytesIO(octets), dtype='float32', always_2d=True)
+    return np.clip(np.rint(x * 32767.0), -32768, 32767).astype(np.int16)
+
+
 def decoder_akb(d):
     """Fichier AKB -> dict (pcm int16 (n, canaux), frequence, debut, fin, volume) ou None."""
     h = lire_entete(d)
@@ -66,8 +74,7 @@ def decoder_akb(d):
     if h['codec'] == 2:
         pcm = decoder_msadpcm(d[DEBUT_DONNEES + 4:], h['canaux'], h['bloc'] or 512)
     elif h['codec'] == 5:
-        import soundfile as sf
-        pcm, _ = sf.read(io.BytesIO(d[DEBUT_DONNEES:]), dtype='int16', always_2d=True)
+        pcm = decoder_ogg(d[DEBUT_DONNEES:])
     else:
         return None
     n = len(pcm)
