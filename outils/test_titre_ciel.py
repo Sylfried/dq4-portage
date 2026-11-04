@@ -8,7 +8,9 @@
      meme sens de parcours des triangles que les quadrilateres d'origine, rien a ajouter en portrait, plus de bandes quand la fenetre s'elargit.
 
   5. essai #130 (ciel agrandi au lieu de bandes) : `zoom_ecran` (1 en portrait, 16/9 : x 3,16, 21/9 : x 4,15, `DQ_CIEL_ZOOM` force une valeur) et `matrice_zoom` (x et y d'ecran multiplies, profondeur intacte) : la fenetre
-     entiere ne montre alors que la largeur de la zone portrait d'origine, donc moins d'un carreau.
+     entiere ne montre alors que la largeur de la zone portrait d'origine, donc moins d'un carreau ;
+  6. rendu a plat par defaut (#174) : la texture a la hauteur de la fenetre (v de 0,998 a 0,002 sur toute la hauteur, a tout format), se repete sur la largeur (u s'etend de `aspect` carreaux), effet de vague (`etirure_plate`,
+     `glissement_plat`) fixe a l'ecran et jamais retourne, defilement = decalage de u seul, degrade de teinte des rangees d'origine (`degrade_ecran`), triangles tous de meme sens, sans trou.
 
     python3 outils/test_titre_ciel.py
 """
@@ -282,6 +284,78 @@ class TestZoomEcran(unittest.TestCase):
         self.assertAlmostEqual(hz[2], h[2]); self.assertAlmostEqual(hz[3], h[3])                                # profondeur et w intacts
         self.assertTrue(np.allclose(CT.matrice_zoom(M, 1.0), M))
         self.assertTrue(np.allclose(M, matrice((3.0, 5.0, -20.0), (3.0, 4.0, 0.0), 40.0, 16 / 9)))               # (M n'est pas modifiee)
+
+
+class TestCielPlat(unittest.TestCase):
+    """Rendu a plat (#174) : texture a la hauteur de la fenetre, repetition sur la largeur, effet de vague."""
+    def test_etirure_plate(self):
+        d = np.linspace(0.0, 12.0, 4801); G = CT.etirure_plate(d)
+        self.assertAlmostEqual(float(G[0]), 0.0)                                                                  # G(0) = 0 : pas de decalage au bord gauche
+        pente = np.diff(G) / np.diff(d)
+        self.assertGreater(pente.min(), 0.51); self.assertLess(pente.max(), 1.49)                                 # comme l'etirure des bandes : jamais de retournement, 0,52 a 1,48
+        self.assertLess(float(np.abs(G - d).max()), 0.75)                                                         # echelle d'ensemble 1 : la vague oscille autour de l'identite, sans derive
+        self.assertAlmostEqual(float(G[-1] - d[-1]), float(G[0] - d[0]), delta=0.75)
+        self.assertFalse(np.allclose(G[400:] - G[400], G[:-400] - G[0], atol=1e-3))                               # le motif ne revient pas identique une tuile plus loin
+        self.assertTrue(np.allclose(CT.etirure_plate(np.array([0.3, 1.7])), CT.etirure_plate(np.array([0.3, 1.7]))))    # deterministe
+
+    def test_glissement_plat(self):
+        d = np.linspace(0.0, 12.0, 1201); g = CT.glissement_plat(d)
+        self.assertLessEqual(float(np.abs(g).max()), sum(a for a, _, _ in CT.GLISSE) + 1e-9)
+        self.assertGreater(float(np.abs(g).max()), 0.01)                                                          # (la vague verticale existe)
+
+    def test_hauteur_de_la_texture_egale_a_celle_de_la_fenetre(self):
+        for aspect in (16 / 9, 16 / 10, 21 / 9, 32 / 9, 4 / 3, 1.0, 9 / 16):
+            P, U, C = CT.ciel_ecran(aspect, 0.0)
+            self.assertAlmostEqual(float(P[:, 1].min()), -1.0); self.assertAlmostEqual(float(P[:, 1].max()), 1.0)    # le ciel couvre toute la hauteur
+            self.assertAlmostEqual(float(U[:, 1].max()), 0.998, 3); self.assertAlmostEqual(float(U[:, 1].min()), 0.002, 3)   # et toute la hauteur de la texture (pas de zoom supplementaire)
+            self.assertGreaterEqual(float(P[:, 0].max()), 1.0 - 1e-6); self.assertAlmostEqual(float(P[:, 0].min()), -1.0)    # toute la largeur
+
+    def test_la_repetition_se_fait_sur_la_largeur(self):
+        for aspect in (16 / 9, 21 / 9, 32 / 9, 4 / 3):
+            P, U, C = CT.ciel_ecran(aspect, 0.0)
+            gauche, droite = U[P[:, 0] < -1.0 + 1e-6, 0], U[(P[:, 0] > 1.0 - 1e-6), 0]
+            etendue = float(droite.max() - gauche.min())
+            self.assertAlmostEqual(etendue, aspect / CT.LARGEUR_TUILE, delta=0.8)                                  # ~ `aspect` tuiles sur la largeur (texture carree), a la vague pres
+            self.assertGreater(etendue, 0.9 * aspect / CT.LARGEUR_TUILE - 0.5)
+        P, U, C = CT.ciel_ecran(21 / 9, 0.0); P2, U2, C2 = CT.ciel_ecran(16 / 9, 0.0)
+        self.assertGreater(float(U[:, 0].max() - U[:, 0].min()), float(U2[:, 0].max() - U2[:, 0].min()))          # plus la fenetre est large, plus la texture se repete (jamais etiree)
+        P, U, C = CT.ciel_ecran(9 / 16, 0.0)
+        self.assertLess(float(U[:, 0].max() - U[:, 0].min()), 1.0)                                                # portrait : moins d'une tuile
+
+    def test_defilement_decale_seulement_u(self):
+        P0, U0, C0 = CT.ciel_ecran(16 / 9, 0.0); P1, U1, C1 = CT.ciel_ecran(16 / 9, 0.37)
+        self.assertTrue(np.array_equal(P0, P1)); self.assertTrue(np.allclose(C0, C1))                              # la vague est fixe a l'ecran
+        self.assertTrue(np.allclose(U0[:, 0] - U1[:, 0], 0.37, atol=1e-5)); self.assertTrue(np.array_equal(U0[:, 1], U1[:, 1]))
+        P2, U2, _ = CT.ciel_ecran(16 / 9, 599.0)                                                                  # periode 1 tuile : (texture en REPEAT) rien a recaler
+        self.assertTrue(np.allclose(U0[:, 0] - U2[:, 0], 599.0, atol=1e-3))
+
+    def test_triangles_sans_trou_et_de_meme_sens(self):
+        for aspect in (16 / 9, 21 / 9, 9 / 16):
+            P, U, C = CT.ciel_ecran(aspect, 0.2)
+            self.assertEqual(len(P) % 6, 0); self.assertEqual(P.shape[1], 3); self.assertEqual(U.shape, (len(P), 2)); self.assertEqual(C.shape, (len(P), 4))
+            aires = np.array([aire(P[i:i + 3]) for i in range(0, len(P), 3)])
+            self.assertTrue((aires > 0).all() or (aires < 0).all())                                                # aucun triangle retourne
+            self.assertAlmostEqual(float(np.abs(aires).sum()) / 2.0, (float(P[:, 0].max()) - float(P[:, 0].min())) * 2.0, places=3)   # l'aire totale = rectangle couvert : pas de trou ni de recouvrement
+            self.assertTrue(np.allclose(P[:, 2], CT.ZFOND))                                                          # au fond
+
+    def test_degrade_de_teinte_des_rangees_d_origine(self):
+        cl = CT.CielLarge(*ciel_synthetique()); M = camera_titre(16 / 9)
+        y, c = CT.degrade_ecran(M, cl.rangees, cl.x_mil)
+        self.assertTrue((np.diff(y) > 0).all()); self.assertEqual(c.shape, (len(y), 4))                            # ordonnees d'ecran strictement croissantes
+        self.assertGreaterEqual(float(c.min()), 0.0); self.assertLessEqual(float(c.max()), 1.0 + 1e-6)
+        vert = c[:, 1]
+        self.assertAlmostEqual(float(vert[0]), 0.8, delta=0.05); self.assertAlmostEqual(float(vert[-1]), 0.8, delta=0.05)    # orange en bas et en haut, comme les rangees d'origine
+        self.assertAlmostEqual(float(vert.max()), 1.0, delta=1e-3)                                                    # blanc au milieu
+        P, U, C = CT.ciel_ecran(16 / 9, 0.0, (y, c))
+        attendu = np.interp(P[:, 1], y, vert)
+        self.assertLess(float(np.abs(C[:, 1] - attendu).max()), 0.03)                                                 # chaque sommet a la couleur du degrade a son ordonnee
+        self.assertAlmostEqual(float(C[:, 1].max()), 1.0, delta=1e-3); self.assertLess(float(C[:, 1].min()), 0.85)    # blanc au milieu, orange en haut de la fenetre
+        _, _, C0 = CT.ciel_ecran(16 / 9, 0.0); self.assertTrue(np.allclose(C0, 1.0))                                  # sans degrade : blanc
+
+    def test_degrade_ignore_ce_qui_est_derriere_la_camera(self):
+        cl = CT.CielLarge(*ciel_synthetique()); M = camera_titre(16 / 9).copy(); M[3] = [0.0, 0.0, 0.0, -1.0]          # w < 0 partout
+        y, c = CT.degrade_ecran(M, cl.rangees, cl.x_mil)
+        self.assertEqual(len(y), 2); self.assertTrue(np.allclose(c, 1.0))                                             # repli : degrade blanc (jamais d'erreur)
 
 
 if __name__ == '__main__':
