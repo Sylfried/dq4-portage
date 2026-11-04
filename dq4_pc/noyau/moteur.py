@@ -1,5 +1,5 @@
 """Le moteur du jeu (libdq4core.so, ARM64) execute dans un emulateur + decodage de ce qu'il demande a Unity."""
-import os, re, struct, zipfile, unicorn
+import os, re, struct, time, zipfile, unicorn
 import numpy as np
 from dq4_pc.noyau import emu_core as T
 from dq4_pc.noyau import priorite_jeu as PJ
@@ -90,11 +90,33 @@ class CoreJeu(T.Core):
                     self.real_files[p] = os.path.join(d, nom); break
         return super().h_fopen(path, mode, *a)
 
+    echecs_ecriture = None                    # fichiers de sauvegarde que le moteur n'a pas pu ecrire (liste de phrases, lue et videe par la fenetre : petit message + journal)
+
+    @staticmethod
+    def ecrire_atomique(chemin, octets, essais=2, pause=0.25):
+        """Ecrit `octets` dans `chemin` : fichier temporaire a cote puis remplacement d'un coup (jamais de fichier a moitie ecrit) ; en cas d'erreur d'E/S (antivirus qui verrouille le fichier, disque plein...), `essais` tentatives
+        espacees de `pause` s. -> None si tout va bien, sinon l'exception de la derniere tentative ; l'ancien fichier reste alors intact."""
+        dernier = None
+        for i in range(max(1, essais)):
+            tmp = chemin + '.tmp'
+            try:
+                os.makedirs(os.path.dirname(chemin), exist_ok=True)
+                with open(tmp, 'wb') as fh: fh.write(octets); fh.flush(); os.fsync(fh.fileno())
+                os.replace(tmp, chemin); return None
+            except OSError as ex:
+                dernier = ex
+                try: os.remove(tmp)
+                except OSError: pass
+                if i + 1 < essais: time.sleep(pause)
+        return dernier
+
     def h_fclose(self, h, *a):
         f = self.files.get(h)
         if f and f.get('persist'):
-            os.makedirs(os.path.dirname(f['persist']), exist_ok=True)
-            with open(f['persist'], 'wb') as fh: fh.write(bytes(f['d']))
+            ex = self.ecrire_atomique(f['persist'], bytes(f['d']))
+            if ex is not None:                # le moteur continue (il croit avoir ecrit, comme avant) : la fenetre previent le joueur
+                if self.echecs_ecriture is None: self.echecs_ecriture = []
+                self.echecs_ecriture.append('%s : %r' % (os.path.basename(f['persist']), ex))
         return super().h_fclose(h, *a)
 
 
