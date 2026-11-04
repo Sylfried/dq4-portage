@@ -146,7 +146,7 @@ class SectionDefilement(unittest.TestCase):
         k = ls.index(('sep', 'Vitesses')); self.assertLess(k, i)
         self.assertEqual([t for t, _ in ls[k + 1:i]].count('sep'), 0, 'aucune section entre « Vitesses » et « Défilement du texte » : elle est juste dessous')
         self.assertEqual(ls[i - 1], ('touche', 'Changer la vitesse en combat'))                                                                          # (derniere ligne des vitesses)
-        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra au clavier', 'Caméra à la souris', 'Molette', 'Ctrl + molette', 'Clic molette + déplacement', 'Clic molette', 'Ctrl + clic molette', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])
+        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])        # (plus de sections Caméra ni de gestes de la molette depuis #264)
 
     def test_plus_de_page_texte(self):
         _, p = menu('racine'); self.assertNotIn('texte', [e['l'] for e in p._entrees()])
@@ -209,7 +209,7 @@ class PageModifications(unittest.TestCase):
 
 
 class PageCommandes(unittest.TestCase):
-    LIBS = ('Vitesse de marche', 'Vitesse de caméra')                                          # (plus de « Vitesse de transition » depuis #101 : fixe a x1)
+    LIBS = ('Vitesse de marche',)                                          # (plus de « Vitesse de transition » depuis #101 : fixe a x1 ; plus de « Vitesse de caméra » depuis #264)
 
     def test_vitesses_en_options(self):
         J, p = menu('commandes')

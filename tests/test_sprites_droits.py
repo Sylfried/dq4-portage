@@ -1,7 +1,7 @@
 """Sprites de ville toujours droits a l'ecran (#134 : « quand mon perso monte ou descend, les sprites des PNJ se penchent », sans fenetre ni moteur : `Jeu._camera_ville` et `Jeu._panneau_ville` sont appelees sur un faux objet) :
 
   1. les 4 coins du panneau d'un PNJ, projetes par la matrice REELLE de la visionneuse, donnent un rectangle a bords gauche / droit verticaux (ecart bas -> haut < 0,01 px) et une proportion largeur / hauteur
-     constante, a toute position de l'ecran (haut, bas, gauche, droite, coins, centre) et dans tous les etats de camera : suivi du heros, decalage `cam_dec`, inclinaison, lacet, zoom, fov, s_yOffset, hauteur
+     constante, a toute position de l'ecran (haut, bas, gauche, droite, coins, centre) et dans tous les etats de camera : fov, s_yOffset, hauteur
      (butte #110 : la camera monte avec le sol), echelle SetScale ;
   2. la correction des bords ne touche NI la profondeur (z-buffer, recouvrements) NI la position et la hauteur a l'ecran : memes profondeurs de coin, meme bas du panneau, meme haut, qu'avec le panneau d'origine ;
      au centre de l'image rien ne change (centre du haut = centre du haut d'origine, largeur moyenne identique) ; ailleurs la LARGEUR change par construction (proportion constante 0,738 au lieu de 0,65 en haut a 0,81
@@ -33,9 +33,7 @@ ASPECT = 16.0 / 9.0
 LARG, HAUT = 1280.0, 720.0
 CIB = np.array([20.0, 0.0, 30.0])
 POSITIONS = list(itertools.product((-9.0, -4.5, 0.0, 4.5, 9.0), (-5.0, -2.0, 0.0, 3.0, 6.0, 9.0)))          # decalage (x, z) du PNJ par rapport au heros, en unites de ville : du coin bas a un coin haut de l'ecran
-ETATS = {'defaut': {}, 'lacet 20': dict(lacet=20.0), 'lacet 45': dict(lacet=45.0), 'lacet -30': dict(lacet=-30.0), 'angle +15': dict(angle=15.0), 'angle -15': dict(angle=-15.0), 'angle +30': dict(angle=30.0),
-         'zoom 0,5': dict(zoom=0.5), 'zoom 4': dict(zoom=4.0), 'yoff 0,05': dict(yoff=0.05), 'fov 10': dict(fov=10.0), 'heros decale (5, -4)': dict(dec=(5.0, -4.0)), 'heros en hauteur': dict(hy=0.5),
-         'lacet 20 + angle 15 + zoom 2': dict(lacet=20.0, angle=15.0, zoom=2.0), 'echelle 0,738': dict(k=0.738)}
+ETATS = {'defaut': {}, 'yoff 0,05': dict(yoff=0.05), 'fov 10': dict(fov=10.0), 'fov 40': dict(fov=40.0), 'heros decale (5, -4)': dict(dec=(5.0, -4.0)), 'heros en hauteur': dict(hy=0.5), 'echelle 0,738': dict(k=0.738)}          # (#264 : plus de lacet, d'angle ni de zoom : la camera est celle du jeu)
 
 
 def px(M, P):
@@ -47,9 +45,15 @@ def angle(bas, haut):
     return math.degrees(math.atan2(haut[0] - bas[0], bas[1] - haut[1]))
 
 
-def faux_jeu(lacet=0.0, angle_cam=0.0, zoom=1.0):
-    j = TC.faux_jeu(); j.lacet = lacet; j.angle_cam = angle_cam; j.zoom = zoom; j.fixe_test = True          # fixe_test : un pas de 1/60 s par appel, sans horloge
+def faux_jeu():
+    j = TC.faux_jeu(); j.fixe_test = True          # fixe_test : un pas de 1/60 s par appel, sans horloge
     return j
+
+
+def profil_butte(haut=0.5, pas_montee=8, plateau=30):
+    """Hauteur du sol sous le heros, pas du moteur par pas : rampe de `haut` unites en `pas_montee` pas, plateau, descente symetrique (la butte du village du prologue, carte mlout1 : +0,5 u en ~8 pas)."""
+    mont = [haut * (i + 1) / pas_montee for i in range(pas_montee)]
+    return [0.0] * 10 + mont + [haut] * plateau + mont[::-1][1:] + [0.0] * 3
 
 
 def panneau(j, e, pied, t, k=1.0, inc=0.0):
@@ -70,7 +74,7 @@ def forme(M, q):
 
 def cas(nom, dx, dz, t, inc=0.0):
     kw = ETATS[nom]; hero = CIB + np.array([kw.get('dec', (0.0, 0.0))[0], kw.get('hy', 0.0), kw.get('dec', (0.0, 0.0))[1]])
-    e = TC.faux_etat(CIB, hero, fov=kw.get('fov'), yoff=kw.get('yoff')); j = faux_jeu(kw.get('lacet', 0.0), kw.get('angle', 0.0), kw.get('zoom', 1.0))
+    e = TC.faux_etat(CIB, hero, fov=kw.get('fov'), yoff=kw.get('yoff')); j = faux_jeu()
     for _ in range(3): F.Jeu._camera_ville(j, e, ASPECT)                       # (le reste du centrage se resorbe : meme etat qu'apres quelques images)
     return panneau(j, e, hero + np.array([dx, 0.0, dz]), t, kw.get('k', 1.0), inc), hero
 
@@ -118,7 +122,7 @@ class TestSpritesDroits(unittest.TestCase):
     def test_butte_montee_et_descente(self):
         """Camera de la butte (#110) : la hauteur de la camera suit le sol (CAM_Y_RELIEF) ou retarde (escalier) ; a chaque image, un PNJ au bord gauche, au bord droit et en haut reste droit."""
         pire = 0.0; j = faux_jeu(); y_prec = None
-        profil = TC.TestCameraVille.profil_butte(0.5) + [0.5 + 0.1 * i for i in range(30)] + [3.5] * 20 + [3.5 - 0.1 * i for i in range(30)]          # butte, puis une montee d'escalier de 3 u et sa descente
+        profil = profil_butte(0.5) + [0.5 + 0.1 * i for i in range(30)] + [3.5] * 20 + [3.5 - 0.1 * i for i in range(30)]          # butte, puis une montee d'escalier de 3 u et sa descente
         for hy in profil:
             h = 0.047 + hy; hero = np.array([20.0, h, 30.0]); e = TC.faux_etat((20.0, h - 0.047, 30.0), hero)
             for dx, dz in ((-9.0, 0.0), (9.0, -4.0), (0.0, 8.0), (-9.0, 9.0)):
@@ -129,7 +133,7 @@ class TestSpritesDroits(unittest.TestCase):
     def test_profondeur_et_centre_inchanges(self):
         """z-buffer (profondeur de chaque coin le long de l'axe de la camera) et hauteur a l'ecran inchanges ; bas du panneau identique ; au centre de l'image, haut identique et largeur moyenne identique."""
         centre = 0
-        for nom, (dx, dz) in itertools.product(('defaut', 'lacet 45', 'angle +15', 'zoom 4', 'echelle 0,738'), POSITIONS):
+        for nom, (dx, dz) in itertools.product(('defaut', 'fov 40', 'heros en hauteur', 'echelle 0,738'), POSITIONS):
             (M, nou, cam3d, C), _ = cas(nom, dx, dz, 1.0); (_, ori, _, _), _ = cas(nom, dx, dz, 0.0)
             f_ = cam3d[2]
             for a, b in zip(nou, ori): self.assertAlmostEqual(float((a - C) @ f_), float((b - C) @ f_), 8, '%s (%s, %s) : profondeur d\'un coin' % (nom, dx, dz))
@@ -140,7 +144,7 @@ class TestSpritesDroits(unittest.TestCase):
                 centre += 1
                 self.assertAlmostEqual(0.5 * (Cn[0] + Dn[0]), 0.5 * (Co[0] + Do[0]), 6, 'centre de l\'image : le haut ne bouge pas')
                 self.assertAlmostEqual(0.5 * ((Bn[0] - An[0]) + (Cn[0] - Dn[0])), 0.5 * ((Bo[0] - Ao[0]) + (Co[0] - Do[0])), delta=0.01 * (Bo[0] - Ao[0]), msg='centre de l\'image : largeur moyenne identique')
-        self.assertEqual(centre, 5, 'un cas central par camera verifiee')
+        self.assertEqual(centre, 4, 'un cas central par camera verifiee')
 
     def test_original_penche_garde_fou(self):
         """Sans la correction (panneau d'origine) le sprite se penche de plus de 8 degres pres des bords gauche / droit du 16/9 : le test 1 mesure donc bien quelque chose ; au centre il reste droit a 1 degre pres."""
@@ -171,7 +175,7 @@ class TestSpritesDroits(unittest.TestCase):
         """Essai #134 : avec `inc`, le bord du sprite penche de atan(inc x tan(angle de la verticale du monde au pied)) (a 0,05 degre pres) ; inc = 1 : parallele aux murs ; le sprite et le mur ne s'ecartent plus que de (1 - inc)
         fois l'ecart initial ; sens : le sprite penche du meme cote que le mur ; au centre de l'image (verticale du monde droite) rien ne change ; les bords gauche et droit restent paralleles."""
         pire = 0.0; lu = 0
-        for nom, (dx, dz), inc in itertools.product(('defaut', 'lacet 20', 'angle +15', 'zoom 4', 'echelle 0,738'), POSITIONS, (0.3, 0.5, 0.7, 1.0)):
+        for nom, (dx, dz), inc in itertools.product(('defaut', 'fov 40', 'heros en hauteur', 'echelle 0,738'), POSITIONS, (0.3, 0.5, 0.7, 1.0)):
             (M, q, cam3d, C), hero = cas(nom, dx, dz, 1.0, inc); (_, q0, _, _), _ = cas(nom, dx, dz, 1.0, 0.0)
             g, d, _, (A, B, Cc, D) = forme(M, q); g0, d0, _, _ = forme(M, q0)
             pied_bas = 0.5 * (np.array(q[0]) + np.array(q[1]))                              # milieu du bas du panneau
@@ -183,11 +187,11 @@ class TestSpritesDroits(unittest.TestCase):
             if abs(mur) > 2.0: self.assertGreater(g * mur, 0.0, '%s (%s, %s) : meme sens que le mur' % (nom, dx, dz))
             if inc == 1.0: self.assertAlmostEqual(g, mur, delta=0.05, msg='inc = 1 : parallele au mur')
             if dx == 0.0 and dz == 0.0 and nom == 'defaut': self.assertLess(abs(g), 0.5, 'au centre de l\'image rien ne change')
-        self.assertLess(pire, 0.05); self.assertEqual(lu, 5 * len(POSITIONS) * 4)
+        self.assertLess(pire, 0.05); self.assertEqual(lu, 4 * len(POSITIONS) * 4)
 
     def test_inclinaison_ne_touche_ni_taille_ni_profondeur(self):
         """Cisaillement pur, pieds fixes : bas du panneau, hauteur et largeur a l'ecran, profondeur de chaque coin (z-buffer) = ceux de `inc` = 0."""
-        for nom, (dx, dz), inc in itertools.product(('defaut', 'lacet 45', 'angle -15', 'zoom 4', 'echelle 0,738'), POSITIONS, (0.5, 1.0)):
+        for nom, (dx, dz), inc in itertools.product(('defaut', 'fov 40', 'heros en hauteur', 'echelle 0,738'), POSITIONS, (0.5, 1.0)):
             (M, a, cam3d, C), _ = cas(nom, dx, dz, 1.0, inc); (_, b, _, _), _ = cas(nom, dx, dz, 1.0, 0.0); f_ = cam3d[2]
             for u, v in zip(a, b): self.assertAlmostEqual(float((u - C) @ f_), float((v - C) @ f_), 8, '%s (%s, %s) inc %s : profondeur d\'un coin' % (nom, dx, dz, inc))
             Pa = [px(M, p) for p in a]; Pb = [px(M, p) for p in b]
@@ -245,57 +249,31 @@ class TestSpritesCommeLeJeu(unittest.TestCase):
     """#184 : le panneau d'un PNJ garde l'inclinaison de la camera DU JEU : monter ou descendre la camera (Haut / Bas) ne le change pas, la rotation autour du heros (Gauche / Droite) le suit."""
 
     def cadres(self, **kw):
-        hero = CIB + np.array([0.0, kw.get('hy', 0.0), 0.0]); e = TC.faux_etat(CIB, hero, fov=kw.get('fov'), yoff=kw.get('yoff')); j = faux_jeu(kw.get('lacet', 0.0), kw.get('angle', 0.0), kw.get('zoom', 1.0))
+        hero = CIB + np.array([0.0, kw.get('hy', 0.0), 0.0]); e = TC.faux_etat(CIB, hero, fov=kw.get('fov'), yoff=kw.get('yoff')); j = faux_jeu()
         for _ in range(3): F.Jeu._camera_ville(j, e, ASPECT)
         return j, e, hero
 
     def test_sans_inclinaison_ni_rotation_repere_du_jeu(self):
-        """Camera du jeu telle quelle : le repere des sprites est celui de la vue ET celui de `_cadre_jeu` (la camera du jeu sans zoom, centrage ni rotation de la visionneuse)."""
+        """Camera du jeu telle quelle : le repere des sprites est celui de la vue ET celui de `_cadre_jeu` (la camera du jeu : depuis #264 la vue n'ajoute plus ni zoom, ni rotation, ni inclinaison)."""
         j, e, _ = self.cadres(); M, cam3d, rep, _ = repere_sprites(j, e)
         _, dr, ha, fw = F.Jeu._cadre_jeu(j, e)
         for a, b in zip(rep, cam3d): self.assertTrue(np.allclose(a, b))
         for a, b in zip(rep, (dr, ha, fw)): self.assertTrue(np.allclose(a, b, atol=1e-9))
 
-    def test_inclinaison_de_la_visionneuse_ne_change_pas_le_panneau(self):
-        """Haut / Bas (+- 15, +- 30 et le plafond 85 degres) : le repere des sprites et les 4 coins du panneau, en monde, sont ceux de la camera du jeu ; seule la vue change (garde-fou : le repere de la vue, lui, tourne)."""
-        j0, e0, hero = self.cadres(); _, v0, r0, _ = repere_sprites(j0, e0)
-        w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zt = 0.185 / 0.48 * w, 0.65 / 0.48 * w
-        p = hero + np.array([5.0, 0.0, -2.0])
-        ref = F.Jeu._panneau_ville(j0, p, *r0, w, h, zb, zt, 0.0, None)
-        for ang in (-15.0, 15.0, 30.0, 80.0, -80.0):
-            j, e, _ = self.cadres(angle=ang); _, v, r, _ = repere_sprites(j, e)
-            self.assertGreater(abs(pitch(v[2]) - pitch(v0[2])), 1.0, 'garde-fou : la vue s\'incline bien (%s)' % ang)
-            for a, b in zip(r, r0): self.assertTrue(np.allclose(a, b, atol=1e-9), 'repere des sprites inchange (%s)' % ang)
-            for a, b in zip(F.Jeu._panneau_ville(j, p, *r, w, h, zb, zt, 0.0, None), ref): self.assertTrue(np.allclose(a, b, atol=1e-9), 'coins du panneau en monde inchanges (%s)' % ang)
-
     def test_inclinaison_du_panneau_dans_le_monde_est_celle_du_jeu(self):
-        """Le panneau d'origine est quasi vertical dans le monde (le haut penche de 36 degres vers la camera) ; cette pente (angle du bord bas -> haut avec la verticale) est la meme a toute inclinaison de la camera."""
+        """Le panneau d'origine est quasi vertical dans le monde (le haut penche de 36 degres vers la camera) ; cette pente (angle du bord bas -> haut avec la verticale) est la meme a toute hauteur du heros."""
         w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zt = 0.185 / 0.48 * w, 0.65 / 0.48 * w; pentes = []
-        for ang in (-20.0, 0.0, 10.0, 30.0):
-            j, e, hero = self.cadres(angle=ang); _, _, r, _ = repere_sprites(j, e)
+        for hy in (0.0, 0.5, 3.0):
+            j, e, hero = self.cadres(hy=hy); _, _, r, _ = repere_sprites(j, e)
             a, b, c, d = F.Jeu._panneau_ville(j, hero, *r, w, h, zb, zt, 0.0, None); mil_bas, mil_haut = 0.5 * (a + b), 0.5 * (c + d); v = mil_haut - mil_bas
             pentes.append(math.degrees(math.atan2(math.hypot(v[0], v[2]), v[1])))
         for x in pentes: self.assertAlmostEqual(x, pentes[0], 6)
         self.assertLess(pentes[0], 40.0)
 
-    def test_rotation_autour_du_heros_suivie_inclinaison_du_jeu(self):
-        """Gauche / Droite : le panneau reste de face (son cap suit la camera) mais garde l'inclinaison du jeu, aussi quand on incline en meme temps ; inclinaison de la vue sans effet sur le repere."""
-        j0, e0, _ = self.cadres(); _, v0, r0, _ = repere_sprites(j0, e0)
-        for lac in (-45.0, 20.0, 90.0):
-            j, e, _ = self.cadres(lacet=lac); _, v, r, _ = repere_sprites(j, e)
-            self.assertAlmostEqual(pitch(r[2]), pitch(r0[2]), 6)
-            self.assertTrue(np.allclose(r[2], v[2], atol=1e-9), 'sans inclinaison, le panneau est de face a la vue')
-            cap = lambda f: math.degrees(math.atan2(f[0], f[2])); d = (cap(r[2]) - cap(r0[2]) + 180.0) % 360.0 - 180.0
-            self.assertAlmostEqual(abs(d), abs(lac), 4, 'le cap du panneau suit la rotation (%s)' % lac)
-            for ang in (-25.0, 35.0):
-                j2, e2, _ = self.cadres(lacet=lac, angle=ang); _, v2, r2, _ = repere_sprites(j2, e2)
-                for a, b in zip(r2, r): self.assertTrue(np.allclose(a, b, atol=1e-9), 'lacet %s + angle %s' % (lac, ang))
-                self.assertGreater(abs(pitch(v2[2]) - pitch(r2[2])), 1.0, 'garde-fou : la vue, elle, est inclinee')
-
     def test_correction_des_bords_et_reglages_gardent_le_repere_de_la_vue(self):
         """Correction des bords > 0 (essai #134) : le repere de la vue (la reconstruction a l'ecran en a besoin) ; DQ_SPRITES_SUR_VUE : l'ancien alignement ; sans camera : rien."""
-        j, e, _ = self.cadres(angle=30.0); _, v, r0, _ = repere_sprites(j, e, 0.0); _, _, r1, _ = repere_sprites(j, e, 0.5)
-        self.assertFalse(np.allclose(r0[2], v[2], atol=1e-3)); [self.assertTrue(np.allclose(a, b)) for a, b in zip(r1, v)]
+        j, e, _ = self.cadres(); _, v, r0, _ = repere_sprites(j, e, 0.0); _, _, r1, _ = repere_sprites(j, e, 0.5)
+        [self.assertTrue(np.allclose(a, b, atol=1e-9)) for a, b in zip(r0, v)]; [self.assertTrue(np.allclose(a, b)) for a, b in zip(r1, v)]          # (la vue est la camera du jeu : meme repere avec ou sans correction)
         ancien = os.environ.get('DQ_SPRITES_SUR_VUE'); os.environ['DQ_SPRITES_SUR_VUE'] = '1'
         try: [self.assertTrue(np.allclose(a, b)) for a, b in zip(F.Jeu._repere_sprites(j, v, 0.0), v)]
         finally:
@@ -304,8 +282,8 @@ class TestSpritesCommeLeJeu(unittest.TestCase):
         self.assertIsNone(F.Jeu._repere_sprites(j, None, 0.0))
 
     def test_camera_libre_d_une_scene_et_mini_jeu_inchanges(self):
-        """Camera libre (position et angles fixes par le script) : pas de rotation ni d'inclinaison de la visionneuse, le repere des sprites est celui de la vue ; sans appel de la camera, repli sur la vue."""
-        j = faux_jeu(angle_cam=30.0); j._rot_camera = lambda e: F.Jeu._rot_camera(j, e)
+        """Camera libre (position et angles fixes par le script) : le repere des sprites est celui de la vue ; sans appel de la camera, repli sur la vue."""
+        j = faux_jeu(); j._rot_camera = lambda e: F.Jeu._rot_camera(j, e)
         e = TC.faux_etat(CIB, CIB, libre=True); e.cam_rot = (45.0, 0.0, 0.0)
         M, cam3d = F.Jeu._camera_ville(j, e, ASPECT); rep = F.Jeu._repere_sprites(j, cam3d, 0.0)
         for a, b in zip(rep, cam3d): self.assertTrue(np.allclose(a, b))

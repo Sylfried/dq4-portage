@@ -4,7 +4,7 @@
      (Field.SetFloatingObject : le ballon, emplacement 12) ; sans doublon ; valeurs aberrantes (0, negatives, NaN, infini, absente) ignorees, valeurs extremes bornees ;
   2. rechargement : le chargement de carte (paquet 0) remet l'echelle a 1 et vide les objets flottants ; le chargement de la carte du monde (paquet 27) aussi (le moteur reenregistre le ballon juste apres) ;
   3. un etat enregistre avant ce correctif (sans ces attributs) se comporte comme neuf : echelle 1, aucun objet flottant ;
-  4. camera de la carte du monde : la hauteur visible est multipliee par l'echelle du jeu, par-dessus le zoom du joueur (ignore sans pyglet).
+  4. camera de la carte du monde : la hauteur visible est multipliee par l'echelle du jeu (plus de zoom du joueur depuis #264 ; ignore sans pyglet).
 
     python3 tests/test_ballon_echelle.py
 """
@@ -67,24 +67,22 @@ class Paquet30(unittest.TestCase):
 
 @unittest.skipIf(CAM is None, 'pas de pyglet')
 class CameraMonde(unittest.TestCase):
-    def vue(self, zoom, echelle):
-        faux = types.SimpleNamespace(zoom=zoom, mode=0)
+    def vue(self, echelle):
+        faux = types.SimpleNamespace(mode=0)
         e = MO.Etat(); e.champ_echelle = echelle; e.champ = {'x0': 0, 'y0': 0, 'cols': 25, 'tuiles': [], 'cam': (160.0, 320.0)}
         CAM.CameraMixin._camera_champ(faux, e, 16 / 9)
         return faux._vue_champ
 
     def test_hauteur_visible(self):
-        cx, cz, dl, dh = self.vue(1.0, 1.0)
+        cx, cz, dl, dh = self.vue(1.0)
         self.assertAlmostEqual(dh, CH_VUE_HAUT / 2); self.assertAlmostEqual(dl, dh * 16 / 9)
-        self.assertAlmostEqual(self.vue(1.0, 1.25)[3], dh * 1.25)             # 25 % de terrain en plus
-        self.assertAlmostEqual(self.vue(2.0, 1.0)[3], dh / 2)                 # zoom du joueur seul
-        self.assertAlmostEqual(self.vue(2.0, 1.25)[3], dh / 2 * 1.25)         # les deux se multiplient : le jeu l'emporte sans effacer le zoom du joueur
+        self.assertAlmostEqual(self.vue(1.25)[3], dh * 1.25)             # 25 % de terrain en plus
 
     def test_centre_inchange(self):
-        cx, cz, dl, dh = self.vue(1.0, 1.25); self.assertAlmostEqual(cx, 10.0); self.assertAlmostEqual(cz, 20.0)
+        cx, cz, dl, dh = self.vue(1.25); self.assertAlmostEqual(cx, 10.0); self.assertAlmostEqual(cz, 20.0)
 
     def test_etat_sans_echelle(self):
-        faux = types.SimpleNamespace(zoom=1.0, mode=0); e = types.SimpleNamespace(champ=None)        # objet sans l'attribut (autre type d'etat) : echelle 1
+        faux = types.SimpleNamespace(mode=0); e = types.SimpleNamespace(champ=None)        # objet sans l'attribut (autre type d'etat) : echelle 1
         CAM.CameraMixin._camera_champ(faux, e, 16 / 9); self.assertAlmostEqual(faux._vue_champ[3], CH_VUE_HAUT / 2)
 
 

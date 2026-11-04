@@ -15,7 +15,7 @@ from dq4_pc.noyau import suivi_charge as SV
 from dq4_pc.rendu import ciel_titre as CT
 from dq4_pc.rendu import postfx as PF
 from dq4_pc.fenetre.constantes import (CH_ATLAS, CH_CASE, CIELS_ETENDUS, CH_GOUT, CH_ICONES, CH_MOTIF_FIN, CH_MOTIF_LIM, CH_MOTIF_NUM, CH_MOTIF_PAS,
-    CH_MOTIF_PERIODE, CH_PX, DECOR_BIAIS, DIR_BITS, GOUT_ORIG, HD_GOUTTIERE, HD_NIVEAUX, MODE_PP, SPRITE_H, SPRITE_L)
+    CH_MOTIF_PERIODE, CH_PX, DECOR_BIAIS, GOUT_ORIG, HD_GOUTTIERE, HD_NIVEAUX, MODE_PP, SPRITE_H, SPRITE_L)
 
 
 class ChampMixin:
@@ -567,7 +567,7 @@ class ChampMixin:
     def _orienter_decor(self, cam3d):
         """Panneaux de decor tournes vers la camera ; les sommets modifies sont renvoyes a la carte graphique seulement si l'orientation a change."""
         fw = cam3d[2]
-        if not self.objets.orienter(math.atan2(fw[0], fw[2]), cam3d, 0.0 if self.cam_bloquee else self.angle_cam): return
+        if not self.objets.orienter(math.atan2(fw[0], fw[2]), cam3d, 0.0): return
         sales, self.objets.sale = self.objets.sale, set()
         for tex, vl, key in self.carte_vl:
             if key in sales: vl.position[:] = self.objets.cur[key].ravel()
@@ -582,22 +582,9 @@ class ChampMixin:
         return any(k[c] and c not in av for c in self.reg.codes(action))
 
     def _terrain_libre(self):
-        """Terrain sans fenetre : ni menu d'Echap, ni message, ni menu ou carte du jeu, ni combat, ni effet d'ecran. Les fleches pilotent alors la camera ; sinon elles naviguent dans les fenetres."""
+        """Terrain sans fenetre : ni menu d'Echap, ni message, ni menu ou carte du jeu, ni combat, ni effet d'ecran. Sinon les fleches naviguent dans les fenetres (elles ne font rien sur le terrain : plus de camera a la main, #264)."""
         mo = self.moteur; e = mo.etat
         return (not self.pause.ouvert and self.titre is None and e.partie in (MO.PARTIE_VILLE, MO.PARTIE_CHAMP) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte and e.effet is None and getattr(e, 'effet_ecran', None) is None)
-
-    def _lacet_eff(self):
-        """Rotation de la camera (degres) qui s'applique a la scene : villes, donjons et tours seulement, et pas pendant une camera libre des scenes."""
-        e = self.moteur.etat
-        if self.lacet and e.partie == MO.PARTIE_VILLE and not self.cam_bloquee and not (e.cam_libre and e.cam_rot is not None): return self.lacet
-        return 0.0
-
-    def _tourner_dir(self, bits, k):
-        """Direction demandee a l'ecran (bits haut / bas / gauche / droite) -> direction du monde quand la camera a tourne de k x 45 degres (8 directions du moteur)."""
-        dx = (1 if bits & MO.DROITE else 0) - (1 if bits & MO.GAUCHE else 0); dy = (1 if bits & MO.HAUT else 0) - (1 if bits & MO.BAS else 0)
-        if not (dx or dy): return bits
-        i = {(0, 1): 0, (1, 1): 1, (1, 0): 2, (1, -1): 3, (0, -1): 4, (-1, -1): 5, (-1, 0): 6, (-1, 1): 7}[(dx, dy)]
-        return DIR_BITS[(i + k) % 8]
 
     # ombre des personnages : Chara.s_shadowMesh (carre +-1 en XZ, Y = 0,00625), echelle s_shadowDefScale (0,347 ; 10 ; 0,206), texture CharaTex/common (32 x 32 : ellipse noire d'alpha 96 / 255, filtre point),
     # shader Custom/CharaShadow (SrcAlpha / OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, file 2999 = avant les personnages), position Chara.SetShadowPosition = pos + rotation du panneau x (0 ; 0 ; 0,25)

@@ -2201,3 +2201,22 @@ Signalé par Sylfried le 04/11/2026 (21 h 15) : au chapitre 1, quand le roi de B
 - Vérifié sur le vrai moteur (sa sauvegarde automatique, ses réglages) : `attend_toucher` faux, vrai à 2300 images, faux dès l'appui ; la scène enchaîne « Faites attention à vous, McRyan. », la fin du chapitre 1, la proposition de journal puis le chapitre 2.
 - `tests/test_don_exp_toucher.py` (13 tests : détection du menu avec une mémoire simulée, conversion, modèle de `NativeExec`, branchement) ; ajouté à la CI.
 - Non vérifié : l'accélération des gains du casino par un appui (G-217).
+
+## Avance #264 : Caméra du jeu, telle quelle : plus de zoom, de rotation ni d'inclinaison du joueur
+
+### Demande
+Sylfried (04/11/2026, 22 h 14), après avoir signalé un problème au début de la cinématique où les compagnons le rejoignent : « Reviens au fonctionnement de base de la caméra. Supprime le zoom / dézoom, le fait de changer d'angle [...] tu reviens au comportement EXACT du jeu. »
+
+### Fait
+- La caméra des villes, donjons et tours est celle du jeu telle quelle : `SceneCamera.Update` (position, cible, `LookAt`, tangage - lookDownAdjust, avance de distanceAdjust, décalage vertical, rotation libre des scènes) avec le champ horizontal fov x 4/3 et la hauteur de champ de l'écran portrait d'origine (donc plus de décor sur les côtés en 16/9). Plus de centrage sur le héros (la cible bornée du jeu fait foi aux bords de la carte), de lissage de hauteur (escaliers), de reste qui glisse au changement de régime, de mélange scène / joueur ni de taille du héros imposée (« zoom commun »).
+- Retirés : zoom / distance (molette, touches, menu, `--carte-zoom`), rotation et inclinaison (flèches, clic molette), recentrage animé, remises à zéro (Ctrl), inversions de la souris, « Vitesse de caméra ». Les flèches ne servent plus que dans les menus ; la molette sert au menu Échap et à la licence.
+- Carte du monde : la hauteur visible est celle du jeu (échelle du ballon comprise), sans zoom du joueur.
+- Réglages : clés retirées placées dans `CLES_OBSOLETES` (un ancien `reglages.json` se lit, les clés ne sont pas réécrites).
+- Tests : `test_camera_ville.py` réécrit, trois fichiers supprimés (`test_camera_ctrl_tout`, `test_distance_camera_clavier`, `test_zoom_scene`), dix adaptés (`test_camera_titre`, `test_ballon_echelle`, `test_entrees`, `test_ecrans`, `test_pause_pages`, `test_perte_focus`, `test_priorite_jeu`, `test_reglages_interface`, `test_reglages_son_texte`, `test_sprites_droits`).
+
+### Établi
+- Rendu avant / après du départ de la carte `cbout` (toits de Burland) : 29 pixels sur 921 600 diffèrent.
+- La caméra ne dépend plus que de l'état envoyé par le moteur (test : même image quel que soit le héros ou l'historique).
+
+### Non vérifié
+- La scène des compagnons au début du chapitre 2 et le comportement aux bords de carte sous Windows. Barre de rotation de la caméra du mobile (G-103) : toujours non reproduite, et plus de rotation à la main.

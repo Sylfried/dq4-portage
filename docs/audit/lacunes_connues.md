@@ -84,7 +84,7 @@ Les classements sont des hypothèses de lecture : seuls les messages de Sylfried
 | G-059 | **Dragon de l'écran titre** : deux orientations, placement 1 pour 1 du mobile, logo non centré, fond répétitif ; `TITRE_DRAGON_HAUT = 0` supposé **03/11** : « le dragon du titre il est bon ». | message 02:12 ; PR #42 ; NV:439 | **clos (03/11)** | [bug] | D-33, D-11, C-7 |
 | G-060 | **Bulle « ! »** : cas exact des tonneaux non reproduit, seule la dérive avec la caméra corrigée **03/11** : « les bulles aussi ». | PR #42 ; NV:448 | **clos (03/11)** | [à vérifier] | D-29c |
 | G-061 | **Caméra du père** (`mlb1a`) : symptôme non reproduit, correction du défaut mesuré (traînée à la course) **03/11** : « tout est OK ». | PR #42 ; NV:443 | **clos (03/11)** | [à vérifier] | D-29g |
-| G-062 | Caméra : sous verrou (`cam_bloquee`) la rotation / l'inclinaison choisies par l'utilisateur sont coupées d'un coup | NV §Caméra (#42), l.441-445 | ouvert | [à vérifier] | |
+| G-062 | Caméra : sous verrou (`cam_bloquee`) la rotation / l'inclinaison choisies par l'utilisateur sont coupées d'un coup | NV §Caméra (#42), l.441-445 | sans objet depuis D-226 (#264) : plus de rotation ni d'inclinaison choisies par le joueur | [décision] | D-226 |
 | G-063 | `angle_camera` (flèches haut/bas) est **sauvegardé** : un appui accidentel décale le tangage en permanence **03/11** : ne plus enregistrer l'angle ; option de distance supprimée ; deux touches avancer / reculer. | NV §Caméra (#42), l.441-445 | [décision] retenue (03/11, D-172 ; #83) | [bug] latent |  |
 | G-064 | Caméra du monde et du combat : angle non revérifié par l'équivalence numérique de #42 | NV:441-445 | ouvert | [à vérifier] | D-29f |
 | G-065 | Caméra bornée à 120 ° non rencontrée ; **signe de l'inclinaison des sprites 2D** (`SENS_TANGAGE`) à vérifier à l'écran ; scène à caméra visible avec héros près d'un bord, chutes, sorts de retour non jouées ; billboards non vérifiés sur tous les types d'objets | PR #28 ; NV:216, NV:238, NV:366 | ouvert | [à vérifier] | |
@@ -139,7 +139,7 @@ Les classements sont des hypothèses de lecture : seuls les messages de Sylfried
 | G-111 | **Le jeu doit l'emporter sur le réglage du joueur « pour tout »** (script qui change la valeur, ex. Nimzo/DQ5) ; `defilement_force` n'existe que pour les combats ; dialogues du terrain : crochet distinct, jamais automatiques **03/11** : dialogues du terrain pour DQ5 : D-186, #88. | message 02:12 ; `reglages.py:42-43` ; NV:390 ; `moteur.py:382-407` | traité (#43) | [oubli] | D-14, C-10 |
 | G-112 | Mapping « Moyen = 2, Lent = 3 », libellés « Masqué / Masquée » demandés à validation **« Masqué / Masquée » : validés par Sylfried le 03/11 à 14 h 19** (D-154). | PR #42 | **clos (03/11)** : libellés validés ; mapping sans objet depuis #44 | [validé] | D-88, D-89 |
 | G-113 | Ordre des pages / bouton « Paramètres » → Pause : le patch du moteur est réappliqué après chargement d'un état | NT:242 | traité | [à vérifier] | D-76 |
-| G-114 | Souris / molette : clic molette + déplacement (rotation), clic molette (direction), Ctrl + clic molette (zoom) : **aucune occurrence de `MIDDLE`** dans le code | message 02:12 ; `fenetre.py:560` | traité (#43), vu OK le 03/11 | [décision] (nouvelle demande) | D-34 |
+| G-114 | Souris / molette : clic molette + déplacement (rotation), clic molette (direction), Ctrl + clic molette (zoom) : **aucune occurrence de `MIDDLE`** dans le code | message 02:12 ; `fenetre.py:560` | traité (#43), **retiré le 04/11 (D-226, #264)** : la caméra est celle du jeu | [décision] (nouvelle demande) | D-34 |
 | G-115 | Nom de Ragnar « trop bas » : ancrage « middle » supposé ~1 px plus bas **03/11** : « Non c'est bon ». | message 02:12 ; NV:407 | **clos (03/11, D-185)** | [bug] possible | D-43 |
 | G-116 | F1 en haut à droite par défaut | message 02:14 | traité (#43) | [décision] | D-45 |
 | G-117 | Plein écran : interrupteur simple, Alt+Entrée / F11 **03/11** : F11 / Alt + Entrée OK. | message 02:12 | **clos (03/11)** | [décision] | D-30 |
@@ -203,7 +203,7 @@ Les classements sont des hypothèses de lecture : seuls les messages de Sylfried
 |---|---|---|---|---|
 | G-200 | Dragon à une seule orientation, composition 1 pour 1 du mobile (zone portrait au centre), logo centré, fond moins répétitif (02:12) **03/11** : dragon bon (D-190). | titre2 | **clos (03/11)** | D-33, D-11 |  |
 | G-201 | Plaque « Sauvegarde automatique » toujours présente, grisée si pas de sauvegarde auto ; choix laissé à Claude (02:12, 02:13) | titre2 | traité (#43) | D-32 |  |
-| G-202 | Molette cliquée : rotation ; clic simple : direction ; Ctrl + clic : zoom (02:12) | entrées | traité (#43), vu OK le 03/11 | D-34 |  |
+| G-202 | Molette cliquée : rotation ; clic simple : direction ; Ctrl + clic : zoom (02:12) | entrées | traité (#43), **retiré le 04/11 (D-226, #264)** | D-34 |  |
 | G-203 | Le jeu prend le dessus sur le réglage (vitesse du texte et « tout ») (02:12) | options | traité (#43) | D-14 |  |
 | G-204 | Correction des bords : suppression de l'option, toujours active (02:12) | fenêtre2 | traité (#43) | D-31 |  |
 | G-205 | Coffres : animation dans le bon sens, orientés vers le joueur (02:12) **03/11 16 h 47** : sens d'ouverture OK (D-192). | coffres | **clos (03/11, 16 h 47)** | D-42 |  |

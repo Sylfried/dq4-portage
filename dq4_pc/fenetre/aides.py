@@ -3,7 +3,7 @@ import math, sys
 import numpy as np
 import pyglet
 from dq4_pc.noyau import moteur as MO
-from dq4_pc.fenetre.constantes import CAM_Y_MAX, CAM_Y_RELIEF, CAM_Y_TAU, EMPLACEMENTS_GROUPE, MARGE_FENETRE
+from dq4_pc.fenetre.constantes import EMPLACEMENTS_GROUPE, MARGE_FENETRE
 
 
 def zone_utile():
@@ -51,19 +51,6 @@ def degrade_fond(haut, bas):
     """Le fond de la ville est-il un vrai degrade (paquet 8 : couleurs du haut et du bas de l'image, `Etat.fond_haut` / `fond_bas`) ? Faux sans paquet 8 (None) ou si les deux couleurs sont egales : l'effacement
     de l'image, de cette couleur, suffit (aucune difference avec avant #111)."""
     return haut is not None and bas is not None and max(abs(float(a) - float(b)) for a, b in zip(haut, bas)) > 1e-6
-
-
-def hauteur_camera(zone, ref, cible, dt):
-    """Hauteur des villes : -> (zone, ref, dy), `dy` = decalage a ajouter a la camera et a sa cible (la camera du jeu est rigide sur la hauteur du heros : TownCamera::execute, SceneCamera.Update, aucun lissage en Y).
-    `cible` = hauteur de la cible du jeu ; `zone` = hauteur de repos (operateur « jeu » : elle ne bouge que si la cible s'en ecarte de plus de CAM_Y_RELIEF, et la suit alors a CAM_Y_RELIEF pres) ; `ref` = hauteur de reference
-    qui rejoint `zone` en exp(-dt / CAM_Y_TAU), a CAM_Y_MAX pres ; dy = ref - zone. Une butte, une rampe douce, une bosse (denivele < CAM_Y_RELIEF) : zone et ref ne bougent pas, dy = 0 : la camera suit le jeu exactement
-    (#110). Un escalier, un etage (denivele plus grand) : au-dela de CAM_Y_RELIEF, la camera retarde comme avant (#47), le heros s'eleve a l'ecran puis est recentre a l'arret. dy est continu, et sa vitesse ne depasse jamais celle de la cible
-    (la zone est une contraction de la cible) : aucun a-coup, a la montee comme a la descente. `zone` ou `ref` None (coupure du jeu, premiere image) : la camera est celle du jeu."""
-    if zone is None or ref is None: return cible, cible, 0.0
-    zone = min(cible + CAM_Y_RELIEF, max(cible - CAM_Y_RELIEF, zone))
-    ref += (zone - ref) * (1.0 - math.exp(-dt / CAM_Y_TAU))
-    ref = min(zone + CAM_Y_MAX, max(zone - CAM_Y_MAX, ref))
-    return zone, ref, ref - zone
 
 
 def sans_validation(mo, ui_g, port):

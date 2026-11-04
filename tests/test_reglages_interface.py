@@ -13,11 +13,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from dq4_pc.persistance import reglages as RG
 
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
-HORS_INTERFACE = {'mode_sprites', 'distance_camera', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
+HORS_INTERFACE = {'mode_sprites', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
-                  'resolution', 'angle_camera', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
+                  'resolution', 'vignette', 'vitesse_marche', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'camera_inverser_gd', 'camera_inverser_hb', 'interface_v'}          # sens de la camera deplacee a la souris (#45, agent camera) ; version des tailles par defaut des fenetres (#47)
+HORS_INTERFACE |= {'interface_v'}          # version des tailles par defaut des fenetres (#47)
 HORS_INTERFACE |= {'historique_favoris_seuls'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
@@ -32,7 +32,7 @@ def reglages_modifies():
     """Reglages de test : toutes les cles d'interface et quelques autres a des valeurs non par defaut."""
     r = RG.Reglages(None)
     for k, x in AUTRES.items(): r[k] = copy.deepcopy(x)
-    r['vignette'] = 0.8; r['msaa'] = 8; r['volume_musique'] = 0.2; r['distance_camera'] = 150; r['touches']['carte'] = ['K', None]
+    r['vignette'] = 0.8; r['msaa'] = 8; r['volume_musique'] = 0.2; r['touches']['carte'] = ['K', None]
     return r
 
 
@@ -183,10 +183,10 @@ class CameraToujoursCentree(unittest.TestCase):
             self.assertNotIn(k, RG.DEFAUT); self.assertIn(k, RG.CLES_OBSOLETES); self.assertNotIn(k, RG.Reglages(None).v)
 
     def test_ancien_fichier_charge_sans_erreur(self):
-        for d in ({'camera_centree': False}, {'camera_centree': True, 'suivi_camera_v': 1}, {'camera_centree': False, 'suivi_camera_v': 1, 'distance_camera': 150, 'msaa': 8}):
+        for d in ({'camera_centree': False}, {'camera_centree': True, 'suivi_camera_v': 1}, {'camera_centree': False, 'suivi_camera_v': 1, 'msaa': 8}):
             r, c = self.charger(d)
             for k in ('camera_centree', 'suivi_camera_v'): self.assertNotIn(k, r.v)
-            self.assertEqual(r['distance_camera'], d.get('distance_camera', RG.DEFAUT['distance_camera'])); self.assertEqual(r['msaa'], d.get('msaa', RG.DEFAUT['msaa']))        # (les autres reglages du fichier sont gardes)
+            self.assertEqual(r['msaa'], d.get('msaa', RG.DEFAUT['msaa']))        # (les autres reglages du fichier sont gardes)
             r.enregistrer()
             with open(c, encoding='utf-8') as f: brut = json.load(f)
             for k in ('camera_centree', 'suivi_camera_v'): self.assertNotIn(k, brut, 'la cle disparait du fichier a la prochaine sauvegarde')

@@ -24,7 +24,7 @@ Relecture de tout le jeu d'origine contre le portage (moteur, cartes, sprites, s
 
 **Décisions du sondage du 04/11/2026** (tes réponses, chacune devient une issue et une PR) :
 - Perte de focus (UNI-02, SND-07) : **pause à chaque perte de focus** (jeu gelé, son en pause, reprise sans rattrapage).
-- Zoom des scènes (UNI-08) : **le jeu l'emporte dans ses scènes**, avec **une transition en début de scène qui remet le zoom par défaut**, comme la réinitialisation actuelle au clavier ou à la souris.
+- Zoom des scènes (UNI-08) : **le jeu l'emporte dans ses scènes**, avec **une transition en début de scène qui remet le zoom par défaut**, comme la réinitialisation actuelle au clavier ou à la souris. **Devenu sans objet le 04/11/2026 (D-226, #264)** : il n'y a plus de zoom ni de rotation du joueur, la caméra est celle du jeu.
 - Ballon (MAP-02, UNI-05, SPR-06) : **reproduire l'original** (échelle ×1,00 à ×1,25 multipliée par ton zoom).
 - Ciel des bords (MAP-05) : **prolonger le ciel** (`ev09`, `dpout`).
 - Volumes (SND-01) : **aligner sur l'original** (lecture de `snd_vol.dat`).
