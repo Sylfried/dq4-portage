@@ -9,7 +9,7 @@ void main() { gl_Position = mvp * vec4(position, 1.0); v_uv = tex_coords; v_col 
 
 FRAG = '''#version 330 core
 centroid in vec2 v_uv; in vec4 v_col; out vec4 fragColor;
-uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c; uniform vec3 teinte;      // teinte : paquet 33 (decor seulement), 1, 1, 1 = neutre
+uniform sampler2D tex; uniform float cutoff; uniform vec2 tsize; uniform float net; uniform float amul; uniform float a2c; uniform vec3 teinte; uniform float sepia;      // teinte : paquet 33 (decor seulement), 1, 1, 1 = neutre ; sepia : paquet 1 (decor des villes seulement), 0 = couleurs d'origine
 void main() {
     vec2 uv = v_uv; float lod = 0.0;
     if (net > 0.5) { vec2 p0 = uv * tsize; vec2 dx = dFdx(p0), dy = dFdy(p0); lod = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1e-8))); }      // mipmaps choisies sur l'uv d'origine (l'uv decalee saute d'un texel a l'autre)
@@ -19,7 +19,9 @@ void main() {
         uv = (b + clamp((p - b) / w, -0.5, 0.5)) / tsize;
     }
     vec4 c = (net > 0.5 ? textureLod(tex, uv, lod) : texture(tex, uv)) * clamp(v_col, 0.0, 1.0);
-    c.rgb = clamp(c.rgb * teinte, 0.0, 1.0);      // texture x couleur de sommet x _Color (fld_*.frag) : _Color = _OrgColor (blanc, alpha d'origine : FldObject.save_org_color) x teinte du paquet 33, qui peut depasser 1 (1,25 en rouge) : saturation a l'ecriture, comme le tampon d'image
+    vec3 m = c.rgb * teinte;
+    if (sepia > 0.5) m = vec3(dot(vec3(0.299, 0.587, 0.114), m)) + vec3(0.109375, -0.0546875, 0.0);      // Custom/fld_*_sepia (retours en arriere, cmd_map_effect_sepia) : gris (0,299 ; 0,587 ; 0,114) de texture x couleur de sommet x _Color, plus (0,109375 ; -0,0546875 ; 0), alpha inchange
+    c.rgb = clamp(m, 0.0, 1.0);      // texture x couleur de sommet x _Color (fld_*.frag) : _Color = _OrgColor (blanc, alpha d'origine : FldObject.save_org_color) x teinte du paquet 33, qui peut depasser 1 (1,25 en rouge) : saturation a l'ecriture, comme le tampon d'image
     if (a2c > 0.5) { c.a = clamp((c.a - cutoff) / max(fwidth(c.a), 1e-4) + 0.5, 0.0, 1.0); if (c.a <= 0.0) discard; }      // decor decoupe (fleurs, feuillages, grilles) : la silhouette devient une couverture de 0 a 4 echantillons (MSAA), pas un bord dur qui scintille
     else if (c.a < cutoff) discard;
     c.a *= amul; fragColor = c; }'''

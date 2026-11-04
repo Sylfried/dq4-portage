@@ -57,7 +57,7 @@ Lecture rapide : **traités** 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 19, 20
 | Type | Nom Unity (`cmd_*`) | Émetteurs moteur | Traitement visionneuse | Statut | Balayage / remarque |
 |---|---|---|---|---|---|
 | 0 | `fld_load` | `FldStage::load`, `BattleStage::initialize` | `moteur.py:100` (remise à zéro de l'état, nom de carte) ; carte chargée par `fenetre.py:925` | Traité | 529/529 |
-| 1 | `fld_color` | aucun émetteur trouvé (scan statique) | aucun | Non géré | 0/529. Supposé inutilisé. |
+| 1 | `fld_color` | `cmd_map_effect_sepia` (5 scripts : `ccf2 ceout cmf3b ev07 srout`) | `Etat.sepia` depuis #254 | **Traité** | décor des villes en sépia jusqu'au chargement de carte suivant (shaders `Custom/fld_*_sepia` : gris pondéré + décalage, lus dans le paquet de données) ; les personnages gardent leurs couleurs. **Non vérifié** : un retour en arrière joué en vrai (fin de l'effet, matériaux `fld_transz` sans variante sépia). |
 | 2 | `fld_alpha` | `FLDObject::SetMapObjAlpha` | `moteur.py:138` → `objets_cmd` → `fenetre.py:2244` | Traité | 6 cartes (`mnf1n1`, `mnf2n1`, `mrout`, `teout2`, `teout3`, `za1f1`) |
 | 3 | `fld_pos` | `FLDObject::SetMapObjPosFX32`, `CasinoPoker::initialize` | `moteur.py:140` | Traité | 8 cartes ; en poker, positions des cartes |
 | 4 | `fld_rot` | `FldStage::setRotObjectUid`, `CasinoPoker::initialize` | `moteur.py:142` | Traité | 2 cartes ; la machine à sous en envoie 684 par partie (rouleaux), observé en sonde |

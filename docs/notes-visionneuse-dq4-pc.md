@@ -2115,3 +2115,20 @@ Désassemblage : `cmd_field_scale` (D12794) : entier ≥ 0 = `Field.SetFloatingO
 
 ### Non vérifié
 Un vol réel (la montée, la descente, l'échelle qui varie d'une image à l'autre) : les sauvegardes sont au chapitre 1. Le comportement exact de `Field.Init` sur la liste des objets flottants (la liste est vidée ici à chaque chargement de la carte du monde ; le moteur réenregistre le ballon juste après). Le comportement en pixel perfect (la caméra reste calée sur les pixels de la carte, l'échelle 1,25 n'est pas entière).
+
+## Avance #254 : effet sépia des retours en arrière (paquet 1) sur le décor des villes
+
+### Demande
+Audit du 04/11/2026, UNI-04 / MAP-04 : le paquet 1 (effet sépia des retours en arrière) était ignoré.
+
+### Établi
+`cmd_map_effect_sepia` (5 scripts : `ccf2 ceout cmf3b ev07 srout`) envoie le paquet 1 sans argument ; `FldObject.calculateExecSepia` (CDD9E0) remplace, pour chaque matériau du décor, le shader par `<nom>_sepia` (jamais retiré avant le prochain chargement de carte) ; les personnages et les menus ne sont pas touchés. Shader `Custom/fld_normal_sepia` (GLSL ES du paquet de données) : `gris = dot((0,299 ; 0,587 ; 0,114), texture × couleur de sommet × _Color)`, sortie `gris + (0,109375 ; -0,0546875 ; 0)`, alpha inchangé (la teinte rosée en découle : le décalage ajoute du rouge et retire du vert).
+
+### Fait
+- `Etat.sepia` (attribut de classe : un état instantané enregistré avant #254 reste valide) : vrai au paquet 1, faux au paquet 0.
+- Shader du décor : uniforme `sepia` (formule du jeu, avant l'écriture bornée) ; `_tracer_decor` le règle pour tout le décor et le remet à 0 ensuite. `DQ_SANS_SEPIA=1` : (débogage) jamais de sépia.
+- Vérifié à l'écran (moteur réel, 1280 x 720, `ceout` et `ccf2`, drapeau forcé, avant puis après) : décor entièrement en gris rosé, ciel de fond (BackColor), fenêtre de message et sprites inchangés.
+- `tests/test_sepia_decor.py` (6 tests).
+
+### Non vérifié
+Un vrai retour en arrière joué par le script (quand l'effet commence et finit) ; les matériaux `fld_transz` (le jeu n'a pas de variante sépia : le port les passe en sépia comme le reste) ; la carte du monde (pas de FldObject : non concernée).
