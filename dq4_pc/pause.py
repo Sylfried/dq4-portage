@@ -38,10 +38,10 @@ TAILLE_JEU = 1.0                                  # echelle des textes en police
 MSAA_CHOIX = (0, 2, 4, 8)
 # gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; « Ctrl » = la « Touche speciale » des reglages (Ctrl par defaut)
 GESTES_SOURIS = (('Molette', 'Zoom : rapproche ou éloigne la caméra'),
-                 ('Ctrl + molette', 'Distance de la caméra par défaut (100 %)'),
+                 ('Ctrl + molette', 'Retour animé à la distance par défaut (100 %)'),
                  ('Clic molette + déplacement', 'Tourne et incline la caméra'),
                  ('Clic molette', 'Position de la caméra par défaut'),
-                 ('Ctrl + clic molette', 'Distance et position par défaut'))
+                 ('Ctrl + clic molette', 'Retour animé à la distance et à la position par défaut'))
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
 NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
@@ -497,8 +497,8 @@ class Pause:
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
                 dict(t='sep', l='Caméra au clavier'),
-                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance   Ctrl + clic molette : remet les deux   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
-                *[dict(T(a), aide='Distance de la caméra, de 50 à 200 % : maintenue, la caméra avance ou recule en continu, à la vitesse de rotation   Même effet que la molette de la souris   Ctrl + molette : remet 100 %   Sans effet en combat, dans un menu ou un message   ' + self.AIDE_TOUCHE) for a in ('cam_pres', 'cam_loin')],
+                *[dict(T(a), aide='Souris : clic molette maintenu + déplacement = tourne et incline la caméra   Clic molette : remet la position (rotation et inclinaison)   Ctrl + molette : remet la distance (animation)   Ctrl + clic molette : remet les deux (animation)   ' + self.AIDE_TOUCHE) for a in ('cam_haut', 'cam_bas', 'cam_gauche', 'cam_droite')],
+                *[dict(T(a), aide='Distance de la caméra, de 50 à 200 % : maintenue, la caméra avance ou recule en continu, à la vitesse de rotation   Même effet que la molette de la souris   Les deux touches ensemble, ou Ctrl + molette : retour animé à 100 %   Sans effet en combat, dans un menu ou un message   ' + self.AIDE_TOUCHE) for a in ('cam_pres', 'cam_loin')],
                 dict(t='sep', l='Caméra à la souris'),
                 inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
                 inverse('Inverser haut / bas', 'camera_inverser_hb', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens haut / bas   Non : glisser vers le haut incline comme la flèche haut   Les flèches du clavier ne changent pas"),
