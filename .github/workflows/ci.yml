@@ -55,3 +55,4 @@ jobs:
           python tests/test_bruitage_clavier.py
           python tests/test_son_musique_limites.py
           python tests/test_message_repli.py
+          python tests/test_perte_focus.py

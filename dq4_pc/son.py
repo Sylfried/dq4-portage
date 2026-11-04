@@ -167,6 +167,7 @@ class Son:
         self.se = []                                                       # [_SE]
         self.bgm_propre = 1.0; self.bgm_cat = 'musique'; self.t_pause = None   # volume propre a la musique en cours et sa categorie ; heure du debut de la pause (menu Echap)
         self.suspendu = False; self.ecoute = False                         # menu Echap ouvert ; page Son du menu (les sons jouent pendant que le moteur est arrete)
+        self.hors_focus = False                                            # la fenetre n'a plus le focus (Alt + Tab, minimisee) : tout est en pause, meme pendant l'ecoute de la page Son (#235)
         self.verrou = threading.Lock(); self.zip = None; self.ogg = False
         try:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
@@ -474,16 +475,25 @@ class Son:
         """Compatibilite : volume de la musique et des bruitages (0 a 1)."""
         self.regler_mixage(volumes={k: v for k, v in (('musique', musique), ('effets', bruitages)) if v is not None})
 
+    def _doit_pauser(self):
+        """Les lecteurs doivent-ils etre en pause ? Oui sans focus (toujours), ou menu suspendu hors ecoute de la page Son."""
+        return self.hors_focus or (self.suspendu and not self.ecoute)
+
     def mettre_en_pause(self, oui):
         """Menu Echap ouvert (oui) ou ferme : musique et bruitages en pause, sauf pendant l'ecoute (page Son du menu : on entend les reglages)."""
         self.suspendu = bool(oui)
         if not oui: self.ecoute = False
-        self._pause_physique(self.suspendu and not self.ecoute)
+        self._pause_physique(self._doit_pauser())
+
+    def perdre_focus(self, oui):
+        """Fenetre sans focus (oui) ou de retour (non) : comme Sound.SystemPause de l'original, musique et bruitages en pause ; au retour, ils reprennent la ou ils s'etaient arretes (les echeances sont decalees de la duree de la pause, `_pause_physique`)."""
+        self.hors_focus = bool(oui)
+        self._pause_physique(self._doit_pauser())
 
     def ecouter(self, oui):
         """Page Son du menu Echap : les sons reprennent (la musique en cours, les bruitages d'essai) pour entendre les volumes qu'on regle ; a la sortie de la page, ils se remettent en pause."""
         self.ecoute = bool(oui)
-        if self.suspendu: self._pause_physique(not self.ecoute)
+        if self.suspendu or self.hors_focus: self._pause_physique(self._doit_pauser())
 
     def _pause_physique(self, oui):
         """Pause reelle des lecteurs ; a la reprise, les echeances (fin d'un jingle, d'un bruitage) sont decalees de la duree de la pause."""
