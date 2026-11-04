@@ -156,6 +156,12 @@ class Boite:
         """Distance de la ligne de base de la ligne `rang` (0, 1, 2...) au haut du cadre, unites."""
         return self.BASE_1 + rang * self.PAS
 
+    BASE_MSG = 35.0                            # idem avec la police des messages du jeu (celle du canevas du moteur) : le canevas commence 15 unites sous le haut du cadre, la cellule d'une ligne a 20 rangees au-dessus de la ligne de base
+
+    def base_msg(self, rang):
+        """Comme `base`, pour le texte dessine avec la police des messages du jeu."""
+        return self.BASE_MSG + rang * self.PAS
+
     def haut_pour(self, lignes):
         """Hauteur du cadre (unites) pour `lignes` lignes de texte : celle de la boite du jeu jusqu'a 3 lignes, puis une ligne (PAS) de plus par ligne."""
         return self.HAUT + max(0, int(lignes) - self.LIGNES) * self.PAS
@@ -186,12 +192,21 @@ def paginer(rangees, avec_entete, lignes=3):
         if i >= len(rangees): return pages
 
 
-def rangees_de(e, mesure, largeur):
+def couper_comme_le_jeu(police, texte):
+    """Lignes de `texte` coupees comme le moteur coupe un message (PoliceMessages.couper : les retours a la ligne du texte gardes, sans espace en fin de ligne ni ligne vide a la fin ; au moins une ligne)."""
+    lignes = [l.rstrip(' ') for l in police.couper(texte)]
+    while lignes and not lignes[-1]: lignes.pop()
+    return lignes or ['']
+
+
+def rangees_de(e, mesure, largeur, police=None):
     """Rangees de texte d'un element, coupees a `largeur` (mesure(chaine) -> largeur dans la meme unite) : le texte d'un dialogue (ses retours a la ligne gardes) ; pour un combat une rangee par espece d'ennemis (avec le
-    sort de chacun), puis l'or et l'experience, puis les objets (HI.lignes_combat) ; une ligne trop large pour la boite continue sur la rangee suivante. L'issue et l'heure sont dans l'entete."""
-    if e.type != HI.TYPE_COMBAT: return HI.envelopper(e.texte, largeur, mesure)
+    sort de chacun), puis l'or et l'experience, puis les objets (HI.lignes_combat) ; une ligne trop large pour la boite continue sur la rangee suivante. L'issue et l'heure sont dans l'entete.
+    Avec `police` (la police des messages du jeu, PoliceMessages) les lignes sont coupees exactement comme le moteur coupe les siennes et `mesure`, `largeur` ne servent pas."""
+    coupe = (lambda t: couper_comme_le_jeu(police, t)) if police is not None else (lambda t: HI.envelopper(t, largeur, mesure))
+    if e.type != HI.TYPE_COMBAT: return coupe(e.texte)
     out = []
-    for l in HI.lignes_combat(e): out.extend(HI.envelopper(l, largeur, mesure))
+    for l in HI.lignes_combat(e): out.extend(coupe(l))
     return out
 
 
@@ -413,6 +428,11 @@ class VueHistorique:
         r = getattr(self.J, 'ui_rendu', None)
         return r.textes.bitmap if r is not None and getattr(r, 'textes', None) is not None else None
 
+    def _bmm(self):
+        """Police des messages du jeu (celle du canevas de texte du moteur : tous les glyphes du jeu, avec ses regles de placement et de coupure) pour le texte des boites ; None si elle n'a pas ete extraite (on garde SE-GARRIR)."""
+        r = getattr(self.J, 'ui_rendu', None); t = getattr(r, 'textes', None) if r is not None else None
+        return getattr(t, 'messages', None)
+
     def _larg(self, bm, texte, sc, taille):
         if bm: return bm.largeur(texte) * sc
         return self.P._et(texte, taille).content_width
@@ -445,7 +465,7 @@ class VueHistorique:
             if bm: mes = lambda t: bm.largeur(t) * B.texte_ech
             else: mes = lambda t: self.P._et(t, taille).content_width * 0.9 / s
             combat = e.type == HI.TYPE_COMBAT
-            r = self._lignes[cle] = paginer(rangees_de(e, mes, B.largeur_texte()), combat, MAX_LIGNES_COMBAT if combat else B.LIGNES)
+            r = self._lignes[cle] = paginer(rangees_de(e, mes, B.largeur_texte(), self._bmm()), combat, MAX_LIGNES_COMBAT if combat else B.LIGNES)
         return r
 
     def _etoile(self, cx, cy, rayon, pleine):
@@ -526,7 +546,7 @@ class VueHistorique:
         de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `aller`, borne la position et garde les bords des elements (debuts, fins) pour la navigation
         au clavier. -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu."""
         els = self.elements; n = len(els)
-        cle = (id(els), n, int(s * 100), int(k * 100), bm is not None)
+        cle = (id(els), n, int(s * 100), int(k * 100), bm is not None, self._bmm() is not None)
         if self._mise is None or self._mise[0] != cle:
             pages = [self._pages_de(bm, e, B, s, taille) for e in els]
             ent = [(len(pg), e.type == HI.TYPE_DIALOGUE and bool(e.nom), [B.haut_pour(lignes_de_boite(page, j == 0, e.type == HI.TYPE_COMBAT)) * s for j, page in enumerate(pg)]) for pg, e in zip(pages, els)]
@@ -567,6 +587,9 @@ class VueHistorique:
         bm = self._bm(); B = self._boite_jeu(); s = B.echelle(H, W, k)                      # s : pixels par unite d'interface = ceux d'une boite de dialogue du jeu
         su = max(0.8, min(2.4, H / 700.0)) if bm else 1.0; taille = 17 * k                  # su : un pixel de police du jeu = su pixels d'ecran (titre, onglets, aide) ; taille : police du systeme (repli)
         sc = s * B.texte_ech if bm else 1.0; taille_b = 20 * s                               # idem pour le texte des boites : comme dans le jeu (1,105 unite par pixel de police)
+        fm = self._bmm()                                                                       # texte des boites : la police des messages du jeu quand elle est la (un pixel de son canevas = une unite d'interface), sinon SE-GARRIR
+        if fm is not None: sc = s * fm.ECH; base_texte = B.base_msg
+        else: fm = bm; base_texte = B.base
         asc = (bm.ascent * su) if bm else 18 * k
         kb = 1.1 * k; bw, bh = 64 * kb, 55.5 * kb
         lgs = [self._larg(bm, nom, su, taille) + 44 * k for nom, _ in ONGLETS]; tw = max(lgs + [120 * k]); gap = 10 * k
@@ -630,10 +653,10 @@ class VueHistorique:
                     if i == self.sel and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))      # le message choisi (clavier ou souris) : la petite fleche, et rien d'autre
                     rang = 0
                     if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite
-                        base = yb + hb - B.base(0) * s; self._ligne(bm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
-                        ht = heure_jeu(e.t); self._ligne(bm, ht, lx0 + (B.LARG - 14) * s - self._larg(bm, ht, sc * 0.8, taille_b * 0.8), base, sc * 0.8, AIDE, taille_b * 0.8); rang = 1
+                        base = yb + hb - base_texte(0) * s; self._ligne(fm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
+                        ht = heure_jeu(e.t); self._ligne(fm, ht, lx0 + (B.LARG - 14) * s - self._larg(fm, ht, sc * 0.8, taille_b * 0.8), base, sc * 0.8, AIDE, taille_b * 0.8); rang = 1
                     for l in rangees:
-                        self._ligne(bm, l, lx0 + B.TEXTE_X * s, yb + hb - B.base(rang) * s, sc, BLANC, taille_b); rang += 1
+                        self._ligne(fm, l, lx0 + B.TEXTE_X * s, yb + hb - base_texte(rang) * s, sc, BLANC, taille_b); rang += 1
                     rs = 11 * k; ex = lx0 + B.LARG * s + 22 * k; ey = yb + hb - (B.BASE_1 - 7) * s     # etoile dans la colonne a droite de la boite, a la hauteur de la 1re ligne
                     z = (ex - rs * 1.3, max(ey - rs * 1.3, ly0), ex + rs * 1.3, min(ey + rs * 1.3, ly1))
                     if z[1] < z[3]: self.zones_etoile.append(z + (i,))
