@@ -1579,3 +1579,23 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : le sens des faces est celui des triangles du cache (aucun objet de carte à échelle négative sur les 670 cartes : 0 sur 18 374, donc pas d'inversion à corriger) ; une échelle négative dans le modèle lui-même (Transform local, absente du cache) n'a pas été cherchée.
 - Pas regardé : les fonds de combat (`btl_*`, même chemin de dessin, mêmes shaders) et les donjons.
 - **Sous Windows** : intérieurs (église, château, maisons), donjons, fonds de combat : rien de manquant dans la vue normale, murs de devant invisibles caméra tournée.
+
+## Avance #185 : PNJ au panneau brut du jeu, sans s'aligner sur la caméra inclinée (#184, 04/11/2026)
+
+### Demande (D-231, 04/11 13 h 25)
+« Reviens à la position brute des PNJ pour le moment, exactement comme dans le jeu, ils doivent garder aussi le même comportement et avec le nouveau système de caméra ils ne doivent pas s'aligner si on monte ou descend la caméra »
+
+### Établi
+- Après #181 (cisaillement retiré), les PNJ restaient reconstruits à l'écran par la correction des bords (#134 : bords verticaux, proportion 0,738, `Jeu._panneau_ville(t = 1)`) : ce n'est pas le panneau du jeu (`Chara.normalBillboard` : rectangle 0,48 x 0,64 qui prend la rotation de la caméra, sommets décalés en profondeur de 0,185 au bas et 0,65 au haut vers la caméra).
+- Le panneau d'origine, avec la rotation de la caméra de la VUE, se redresse face à la caméra à chaque inclinaison (Haut / Bas) : le personnage « s'aligne » sur la vue (en vue de dessus, il reste de face comme un autocollant).
+
+### Fait
+- `CORRECTION_BORDS_DEF = 0.0` : `Jeu._correction_bords()` vaut 0 par défaut (panneau d'origine, `_panneau_ville` renvoie les sommets du jeu) ; `DQ_CORRECTION_BORDS=100` ou `--correction-bords 100` redonnent la correction complète.
+- `Jeu._camera_ville` calcule aussi `self._cadre_sprites` : le repère (droite, haut, avant) de la caméra DU JEU avec la rotation autour du héros (lacet) mais SANS l'inclinaison de la visionneuse (même formule que `_cadre_jeu` : tangage du jeu - `lookDownAdjust`). `Jeu._repere_sprites(cam3d, corr)` le donne à la boucle des sprites quand la correction est nulle ; correction > 0 : repère de la vue (la reconstruction à l'écran en a besoin) ; pose couchée, ombres, bulles : inchangés. `DQ_SPRITES_SUR_VUE=1` redonne l'alignement sur la vue (essai).
+- Effet : au cadrage du jeu (aucune inclinaison) le rendu est exactement celui du mobile (PNJ qui penchent vers l'extérieur près des bords : défaut connu de l'original, accepté « pour le moment ») ; Haut / Bas ne changent plus le panneau (4 coins identiques en monde) ; Gauche / Droite le font tourner de face avec l'inclinaison du jeu.
+- Rendu (Maout, 1920 x 1080) : cadrage du jeu normal ; inclinaison forte : les PNJ se couchent (ils sont debout dans le monde, vus d'en haut) au lieu de rester de face.
+- Tests : `outils/test_sprites_droits.py` (18) : défaut = panneau d'origine, correction complète toujours droite, repère des sprites = repère du jeu, inchangé par Haut / Bas (+- 15, 30, 80 degrés), suit le lacet, caméra libre et mini-jeux.
+
+### À trancher / non vérifié
+- **Supposé** : « ne doivent pas s'aligner si on monte ou descend la caméra » = le personnage ne se redresse plus face à la caméra quand on l'incline. Conséquence : à forte inclinaison (vue de dessus) les PNJ et le héros paraissent couchés, comme des objets debout. Si tu préfères qu'ils restent de face à la caméra : `DQ_SPRITES_SUR_VUE=1` (ancien alignement), à passer en réglage ou en comportement par défaut.
+- Non vérifié : le rendu sous Windows ; les donjons, tours et la pose couchée (inchangée) n'ont pas été regardés un par un.

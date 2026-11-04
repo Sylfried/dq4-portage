@@ -110,6 +110,7 @@ FOV_VILLE_DEF = 9.5           # fov nominal du mode 0 (terrain) tant que le mote
 VILLE_NEAR, VILLE_FAR = 5.0, 100.0
 DIST_ADJ_VILLE = 4.0          # SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
 BAS_DEF = 0.2                 # SceneCamera.s_lookDownAdjust (.cctor) : la camera releve son tangage de 0,2 degre
+CORRECTION_BORDS_DEF = 0.0     # correction des bords des sprites (voir Jeu._correction_bords) : 0 = panneau d'origine du jeu (defaut depuis #184), 1 = reconstruit a l'ecran (bords verticaux, #134)
 SPRITE_L, SPRITE_H, SPRITE_ECHELLE = 24, 32, 0.045
 UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portrait d'origine remplit exactement la hauteur de la fenetre) ; reduit a 1 si un groupe de fenetres ne tient plus a l'ecran
 CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas du cadre principal des menus de commandes (Combattre / Attaquer...)
@@ -268,7 +269,7 @@ class Jeu(pyglet.window.Window):
         self.zoom = self._zoom_valide(args.carte_zoom if args.carte_zoom is not None else 100.0 / self.reg['distance_camera']); self._vue_champ = None       # zoom = 100 / distance de la camera (menu Echap, molette) ; carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
         self.lacet = (float(os.environ.get('DQ_LACET', '0')) + 180.0) % 360.0 - 180.0; self.t_cam = None; self.cam_axe = {'lacet': [False, False], 'angle': [False, False]}; self.cam_dec = [0.0, 0.0]; self.cam_res = [0.0, 0.0]; self.cam_centre = False; self.cam_ref_y = None; self.cam_zone_y = None; self.cam_zone_y = None; self.cam_jeu = False; self.cam_saut = True; self.t_centre = None; self.souris = (0, 0); self.souris_gel = None; self.cam_bloquee = False; self.cam_limite = None; self.objets_orient = None       # camera : rotation autour du heros (degres, non enregistree), derniere image, retours a zero ; action sans effet -> discussion ; orientation des panneaux de decor
         self.garde_souris = EN.GardeSouris(); self.molette = EN.GesteMolette()          # entrees : qui a la main (clavier ou souris, voir entrees.py ; remplace souris_gel) ; geste du bouton du milieu (clic, Ctrl + clic, glisser = camera)
-        self.effet_ancre = {}; self._cadre_vue = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
+        self.effet_ancre = {}; self._cadre_vue = None; self._cadre_sprites = None          # effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.cur_pas = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
@@ -1299,6 +1300,7 @@ class Jeu(pyglet.window.Window):
         if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible (le cap avance vers +X quand le lacet est positif)
             c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
             pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
+        pos_lacet = np.array(pos, float)                                 # camera apres la rotation (lacet) mais avant l'inclinaison de la visionneuse : sert au repere des sprites (voir _cadre_sprites)
         if angle_a and not (libre and e.cam_rot is not None):       # fleches haut / bas : la camera tourne autour de la cible, en hauteur (0 = comme le jeu)
             dist = float(np.linalg.norm(cib - pos)); f0 = (cib - pos) / (dist or 1.0)
             la = math.atan2(f0[0], f0[2]); tg = min(math.radians(85.0), max(math.radians(5.0), math.asin(-f0[1]) + math.radians(angle_a)))
@@ -1315,6 +1317,14 @@ class Jeu(pyglet.window.Window):
         if yoff:
             Ty = np.eye(4); Ty[1, 3] = yoff; M = Ty @ M              # SceneCamera.s_yOffset
         self._cadre_vue = (np.array(pos, float), droite, np.cross(fw, droite), fw)
+        # Repere des sprites (#184) : le panneau d'un personnage prend la rotation de la camera DU JEU (Chara.normalBillboard), donc son inclinaison est celle du jeu (la visionneuse ne la change pas : un personnage reste debout
+        # dans le monde quand on monte ou descend la camera avec Haut / Bas, il ne « s'aligne » pas sur la nouvelle vue) ; la rotation autour du heros (lacet) est suivie (le panneau reste de face, comme dans le jeu a cette orientation)
+        self._cadre_sprites = (droite, np.cross(fw, droite), fw)
+        if angle_a and not (libre and e.cam_rot is not None):
+            fj = cib - pos_lacet; fj /= np.linalg.norm(fj)
+            lj = math.atan2(fj[0], fj[2]); tj = math.asin(-fj[1]) - math.radians(e.cam_bas if e.cam_bas is not None else BAS_DEF)
+            fj = np.array([math.sin(lj) * math.cos(tj), -math.sin(tj), math.cos(lj) * math.cos(tj)]); dj = np.cross([0.0, 1.0, 0.0], fj); dj /= np.linalg.norm(dj)
+            self._cadre_sprites = (dj, np.cross(fj, dj), fj)
         return M, (droite, np.cross(fw, droite), fw)
 
     def _cadre_jeu(self, e):
@@ -3218,13 +3228,21 @@ class Jeu(pyglet.window.Window):
         print('PROJ n=%d' % self.n_boucle, out, flush=True)
 
     def _correction_bords(self):
-        """Intensite (0 a 1) de la correction des bords des sprites (villes, donjons, tours ; voir _panneau_ville) : toujours 1 (correction complete), ce n'est plus un reglage du joueur (l'ancienne option « Correction des bords
-        des sprites » est retiree). (Debogage, pour comparer avec le panneau d'origine, penche vers l'exterieur pres des bords) : option --correction-bords ou variable d'environnement DQ_CORRECTION_BORDS, de 0 (aucune) a 100 (complete)."""
+        """Intensite (0 a 1) de la correction des bords des sprites (villes, donjons, tours ; voir _panneau_ville) : 0 par defaut depuis #184 (« reviens a la position brute des PNJ, exactement comme dans le jeu » : panneau
+        d'origine, sans reconstruction a l'ecran) ; l'ancienne correction complete (bords verticaux, proportion constante, #134) s'obtient avec l'option --correction-bords ou la variable d'environnement DQ_CORRECTION_BORDS,
+        de 0 (aucune, defaut) a 100 (complete). Ce n'est pas un reglage du joueur (l'ancienne option « Correction des bords des sprites » est retiree)."""
         v = getattr(self.args, 'correction_bords', None)
         if v is None and os.environ.get('DQ_CORRECTION_BORDS'):
             try: v = float(os.environ['DQ_CORRECTION_BORDS'])
             except ValueError: v = None
-        return 1.0 if v is None else min(1.0, max(0.0, float(v) / 100.0))
+        return CORRECTION_BORDS_DEF if v is None else min(1.0, max(0.0, float(v) / 100.0))
+
+    def _repere_sprites(self, cam3d, corr):
+        """(droite, haut, avant) qui oriente le panneau d'un personnage de ville. Panneau d'origine (correction des bords nulle, defaut depuis #184) : le repere de la camera DU JEU (Chara.normalBillboard prend la rotation de la camera
+        du jeu) : meme inclinaison que sur le mobile, rotation autour du heros (lacet) suivie ; l'inclinaison que la visionneuse ajoute avec Haut / Bas ne change plus le panneau : un personnage ne « s'aligne » pas sur la vue quand on monte
+        ou descend la camera. Correction des bords active (essai #134) : le repere de la vue, dont elle a besoin (reconstruction a l'ecran). DQ_SPRITES_SUR_VUE : l'ancien alignement du panneau d'origine sur la vue."""
+        if cam3d is None or corr > 0.0 or os.environ.get('DQ_SPRITES_SUR_VUE'): return cam3d
+        return getattr(self, '_cadre_sprites', None) or cam3d
 
     INCLINAISON_SPRITES_DEF = 0.0                                       # part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux (defaut depuis #180 : l'essai #134 a 0,5 deformait les sprites pres des bords), 1 = parallele aux murs
 
@@ -3454,10 +3472,10 @@ class Jeu(pyglet.window.Window):
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
                 k = 1.0 if os.environ.get('DQ_SANS_ECHELLE') else min(max(float(s.get('ech', 1.0)), 0.0), 8.0)          # paquet 13, bit 11 : Chara.SetScale (Transform.localScale du panneau, pieds fixes) ; 1,0 presque partout, 0,738 pour le heros et son equipier dans mlb1a, 0,952 dans ev07 (le reste : valeurs de depart d'une image)
                 wk, hk = w * k, h * k
-                r_, u_, f_ = cam3d; zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
-                # Correction des bords (toujours appliquee, voir _correction_bords et _panneau_ville) : sans elle le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite « se penche » vers l'exterieur pres des bords
-                # gauche / droit (jusqu'a 15 a 20 degres en 16/9) et se deforme selon sa hauteur a l'ecran ; avec : bords verticaux et proportions constantes, taille et profondeur inchangees
-                # (essai #134, coupe par defaut depuis #180 : le panneau etait ensuite cisaille a moitie vers la verticale du monde, voir _inclinaison_sprites ; DQ_SPRITE_INCLINAISON le remet)
+                r_, u_, f_ = self._repere_sprites(cam3d, corr); zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
+                # Panneau d'origine par defaut depuis #184 (« exactement comme dans le jeu » : voir _correction_bords, _repere_sprites et _panneau_ville) : le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite
+                # « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a 20 degres en 16/9), comme sur le mobile mais plus visible avec le champ du 16/9 ; la correction des bords (bords verticaux, proportions
+                # constantes, taille et profondeur inchangees, #134) reste disponible (DQ_CORRECTION_BORDS=100), de meme que le cisaillement (DQ_SPRITE_INCLINAISON, voir _inclinaison_sprites)
                 if dort and C_vue is not None:
                     # Pose couchee (paquets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep ; voir pose_couchee.py) : le panneau n'est PAS debout, la correction des bords (qui redresse un panneau debout) ne lui
                     # est jamais appliquee ; vu de dessus, a pleine taille, tourne selon la direction du sommeil, avec la profondeur du corps a plat (z-buffer, recouvrements par un lit, un mur...)
