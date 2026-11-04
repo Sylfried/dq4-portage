@@ -217,6 +217,8 @@ class VueHistorique:
         self.onglet = onglet if 0 <= onglet < len(ONGLETS) else O_DIALOGUES
         self.glisse_barre = None; self.drag = None; self._lignes.clear()
         self.favoris_seuls = self._lire_filtre()
+        h = getattr(self.J, 'historique', None)
+        if h is not None and hasattr(h, 'actualiser'): h.actualiser()          # (les favoris ranges par la cle : leur texte est redemande au jeu, voir Historique.actualiser)
         self.recharger()
 
     def recharger(self, garder=False):

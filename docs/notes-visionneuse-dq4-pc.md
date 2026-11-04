@@ -2220,3 +2220,24 @@ Sylfried (04/11/2026, 22 h 14), après avoir signalé un problème au début de 
 
 ### Non vérifié
 - La scène des compagnons au début du chapitre 2 et le comportement aux bords de carte sous Windows. Barre de rotation de la caméra du mobile (G-103) : toujours non reproduite, et plus de rotation à la main.
+
+## Avance #266 : Historique : un favori de dialogue garde la clé du message, plus son texte
+
+### Demande
+Sylfried (04/11/2026, 22 h 14) : « Dans l'historique des textes, est-ce que c'est le contenu du texte qui est sauvegardé ou la clé ? Si ce n'est pas le cas, il vaudrait mieux que ça soit la clé qui va chercher le contenu directement dans les fichiers du jeu [...] ça évitera de stocker l'ancien texte en cas de mise en favori. »
+
+### Établi
+- Avant : le **texte** (nettoyé) et le nom du locuteur étaient enregistrés ; aucune clé n'était captée.
+- Le numéro du message est le premier argument de `ui_MsgAdd` ; `TextBuffer::cat` en est appelée directement (pile relevée sur le vrai moteur). Numéro 802199 = `b0802000#199`.
+- `TextAPI::extractText(tampon, (1 << 24) | numero)` donne le texte des fichiers du jeu (0,13 ms) : sauts de page « ㈡ » et variables « [NONE 1,0] » conservés ; le moteur choisit seul les variantes selon la partie (sexe du héros).
+- Sur le vrai moteur (prologue, 10 messages dont 3 injectés avec pages et variables) : étoile -> fichier sans texte ; relu dans un second moteur : même texte ; réponse du moteur modifiée : le favori suit.
+
+### Fait
+- Crochet `ui_MsgAdd`, `Capteur.modele`, fonctions `cle_message`, `valeurs`, `liaison`, `texte_lie`, favoris `lie` / `attente`, `Historique._lier`, `_resoudre`, `actualiser` (appelée à l'ouverture de l'historique).
+- Garde-fou : la clé n'est utilisée que si le texte des fichiers redonne exactement le texte lu ; sinon le favori garde son texte. Message disparu : ligne « Message introuvable... » avec la clé.
+- Anciens favoris lus comme avant (fichier de Sylfried : 0 favori).
+
+### Supposé / non vérifié
+- Messages à variables lus en vrai pendant le jeu : seulement avec un faux moteur (injectés, les variables restent « [NONE 1,0] »).
+- Variantes selon le sexe du héros : elles suivent la partie en cours à l'ouverture de l'historique.
+- Le nom du locuteur reste enregistré.

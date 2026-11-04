@@ -8,6 +8,11 @@ Trois morceaux :
   conserve : fichier JSON a cote de la visionneuse, jusqu'a ce que le joueur retire l'etoile).
 - des fonctions pures : nettoyage du texte, coupure des lignes, mise en forme des combats.
 
+Les favoris de dialogue gardent la CLE du message (son numero dans les fichiers du jeu, « b0802000#199 » : fichier = numero // 1000 x 1000, rang = reste), pas son texte : le texte est redemande au moteur du jeu au
+lancement (TextAPI::extractText, voir `Capteur.modele`), donc un message modifie dans le patch change aussi dans les favoris. Le numero est connu au crochet de ui_MsgAdd (le texte, lui, passe par TextBuffer::cat). La
+liaison n'est faite que si le texte donne par les fichiers du jeu redonne EXACTEMENT ce que le joueur a lu (voir `liaison` : page du message, variables du jeu « [NONE 1,0] » remplacees par les valeurs vues) ;
+sinon (texte construit par le programme, pages decoupees autrement...) le favori garde son texte, comme avant.
+
 Un dialogue est montre comme dans le jeu : une fenetre de message, avec le nom du locuteur dans un cartouche SEULEMENT si le jeu l'affichait au moment ou le dialogue a ete dit ; sinon le texte seul, tel que le jeu
 l'ecrit (les paroles d'un personnage sans nom commencent par « *: » dans le patch FR : ce debut est garde). Aucun « qui a dit cela » ni « ou » n'est deduit.
 """
@@ -18,6 +23,11 @@ MAX_DIALOGUES = 1000               # de la session : les plus anciens sortent
 MAX_COMBATS = 200
 MAX_FAVORIS = 500
 MAX_TEXTE = 1500                   # caracteres gardes d'un message
+PAGE = '\u3221'                    # « ㈡ » : saut de page (nouvelle bulle) dans le texte d'un message des fichiers du jeu
+RE_JETON = re.compile(r'\[[A-Z]+ [0-9, -]*\]')       # variable du jeu non resolue dans le texte d'un message des fichiers : « [NONE 1,0] » (le nom du heros, un nombre, un objet...)
+MSG_ID_MAX = 1 << 24               # le genre du texte est range dans les bits 24 et plus de l'identifiant que prend TextAPI::extractText
+SYM_UI_MSGADD = '_Z9ui_MsgAddib'   # ui_MsgAdd(int numero, bool) : le moteur ajoute un message (numero = cle dans les fichiers du jeu) ; il appelle TextBuffer::cat
+SYM_EXTRACT = '_ZN7TextAPI11extractTextEPci'
 ATTENTE_FENETRE = 180              # images : une page en attente est notee si la fenetre de message ne s'est jamais ouverte au bout de ce delai (3 s)
 MARGE_T = 120                      # 2 s de jeu (1/60 s) : deux messages identiques plus proches que cela sont un doublon
 DELAI_ENREGISTREMENT = 5.0         # secondes : les ecritures sont groupees (les favoris ne changent qu'a la main : on ecrit tout de suite, voir basculer_favori)
@@ -26,6 +36,7 @@ PARTIE_VILLE, PARTIE_COMBAT, PARTIE_CHAMP = 0xc, 0xd, 0xe
 GENRE_NOM, GENRE_GENERAL = 'n', 'g'                    # message avec un nom que le jeu affiche / sans nom
 CAT_TERRAIN, CAT_COMBAT = 't', 'c'                      # message hors combat / de combat (jamais range dans les dialogues)
 TYPE_DIALOGUE, TYPE_COMBAT = 'd', 'c'
+INTROUVABLE = '(Message introuvable dans les fichiers du jeu : %s)'
 
 TYPE_DE_LISTE = {'dialogues': TYPE_DIALOGUE, 'combats': TYPE_COMBAT}              # liste de l'historique -> type de ses elements (Historique.liste, filtre « Favoris seulement »)
 ISSUES = ('victoire', 'fuite', 'defaite')
@@ -36,12 +47,15 @@ LIBELLE_ISSUE = {'victoire': 'Victoire', 'fuite': 'Fuite', 'defaite': 'Défaite'
 class Element:
     """Un element de l'historique : dialogue (type 'd' : nom affiche ou None, texte) ou combat (type 'c' : ennemis [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}], or, xp, issue, objets [{'nom'}]).
     `n` : numero d'ordre (cle d'affichage), `t` : heure de jeu (1/60 s), `fav` : numero du favori correspondant (None : pas en favori)."""
-    __slots__ = ('n', 'type', 't', 'nom', 'texte', 'ennemis', 'or_', 'xp', 'issue', 'fav', 'objets')
+    __slots__ = ('n', 'type', 't', 'nom', 'texte', 'ennemis', 'or_', 'xp', 'issue', 'fav', 'objets', 'mid', 'seg', 'val', 'lie', 'attente')
 
-    def __init__(self, n, type_, t, nom=None, texte='', ennemis=None, or_=0, xp=0, issue='victoire', fav=None, objets=None):
+    def __init__(self, n, type_, t, nom=None, texte='', ennemis=None, or_=0, xp=0, issue='victoire', fav=None, objets=None, mid=None, seg=None, val=None):
         self.n, self.type, self.t, self.nom, self.texte = n, type_, t, nom, texte
         self.ennemis, self.or_, self.xp, self.issue, self.fav = ennemis or [], or_, xp, issue, fav
         self.objets = objets or []
+        self.mid, self.seg, self.val = mid, seg, val or {}      # dialogue : numero du message dans les fichiers du jeu (None : inconnu), page du message (None : message entier), valeurs des variables [NONE a,b]
+        self.lie = False                                         # favori de dialogue range par la cle (le fichier ne garde pas le texte)
+        self.attente = False                                     # ... et dont le texte n'a pas encore ete redemande au moteur (voir Historique._resoudre)
 
     def cle(self):
         """Ce qui fait l'identite d'un element (pour reconnaitre un doublon, ou un element deja en favori) : le contenu, pas le numero."""
@@ -50,7 +64,12 @@ class Element:
                 tuple(o['nom'] for o in self.objets))
 
     def vers_dict(self):
-        if self.type == TYPE_DIALOGUE: return {'k': TYPE_DIALOGUE, 'id': self.fav, 't': self.t, 'nom': self.nom, 'texte': self.texte}
+        if self.type == TYPE_DIALOGUE:
+            if not self.lie: return {'k': TYPE_DIALOGUE, 'id': self.fav, 't': self.t, 'nom': self.nom, 'texte': self.texte}
+            d = {'k': TYPE_DIALOGUE, 'id': self.fav, 't': self.t, 'nom': self.nom, 'mid': self.mid}          # (aucun texte : il vient des fichiers du jeu)
+            if self.seg is not None: d['s'] = self.seg
+            if self.val: d['v'] = dict(self.val)
+            return d
         return {'k': TYPE_COMBAT, 'id': self.fav, 't': self.t, 'ennemis': [dict(e) for e in self.ennemis], 'or': self.or_, 'xp': self.xp, 'issue': self.issue, 'objets': [dict(o) for o in self.objets]}
 
     @staticmethod
@@ -60,9 +79,18 @@ class Element:
             ident, t = d['id'], d['t']
             if isinstance(ident, bool) or not isinstance(ident, int) or ident < 1 or isinstance(t, bool) or not isinstance(t, int) or t < 0: return None
             if d['k'] == TYPE_DIALOGUE:
-                nom, texte = d.get('nom'), d['texte']
-                if not isinstance(texte, str) or not texte.strip() or not (nom is None or isinstance(nom, str)): return None
-                return Element(n, TYPE_DIALOGUE, t, (sans_marques(nom).strip()[:60] or None) if nom else None, sans_marques(texte)[:MAX_TEXTE], fav=ident)
+                nom = d.get('nom')
+                if not (nom is None or isinstance(nom, str)): return None
+                nom = (sans_marques(nom).strip()[:60] or None) if nom else None
+                if 'texte' in d:                                                               # favori qui garde son texte (avant #265, ou message que les fichiers du jeu ne redonnent pas tel quel)
+                    texte = d['texte']
+                    if not isinstance(texte, str) or not texte.strip(): return None
+                    return Element(n, TYPE_DIALOGUE, t, nom, sans_marques(texte)[:MAX_TEXTE], fav=ident)
+                mid, seg, val = d.get('mid'), d.get('s'), d.get('v', {})                      # favori range par la cle : le texte sera redemande au moteur
+                if not _entier(mid) or mid < 1 or mid >= MSG_ID_MAX or not (seg is None or (_entier(seg) and 0 <= seg < 1000)): return None
+                if not isinstance(val, dict) or len(val) > 20 or any(not isinstance(k, str) or not isinstance(v, str) or len(k) > 40 or len(v) > 200 for k, v in val.items()): return None
+                e = Element(n, TYPE_DIALOGUE, t, nom, '', fav=ident, mid=mid, seg=seg, val=dict(val)); e.lie = e.attente = True
+                return e
             if d['k'] == TYPE_COMBAT:
                 issue, ennemis = d['issue'], d['ennemis']
                 if issue not in ISSUES or not isinstance(ennemis, list): return None
@@ -77,6 +105,9 @@ class Element:
         return None
 
     def __repr__(self): return 'Element(%r)' % (self.vers_dict(),)
+
+
+def _entier(x): return isinstance(x, int) and not isinstance(x, bool)
 
 
 def ennemis_valides(ennemis):
@@ -117,6 +148,48 @@ def nettoyer(texte):
     t = '\n'.join(l.rstrip() for l in t.split('\n'))
     t = re.sub(r'\n{3,}', '\n\n', t).strip('\n ')
     return t[:MAX_TEXTE]
+
+
+def cle_message(mid):
+    """La cle d'un message comme on la cite pour le patch : fichier (numero // 1000 x 1000, 7 chiffres) # rang : 802199 -> « b0802000#199 »."""
+    return 'b%07d#%d' % (mid // 1000 * 1000, mid % 1000)
+
+
+def valeurs(modele, texte):
+    """Valeurs des variables du jeu (« [NONE 1,0] ») qui font du texte des fichiers `modele` le texte lu `texte` : {} si le modele n'a pas de variable (ou si le texte les montre telles quelles, comme les fichiers) et que
+    les deux sont identiques ; {variable: valeur} si le texte se retrouve en remplacant chaque variable ; None si le modele ne redonne pas ce texte."""
+    mod = nettoyer(modele)
+    if mod == texte: return {}
+    jetons = RE_JETON.findall(mod)
+    if not jetons: return None
+    r = re.match('^' + '(.*?)'.join(re.escape(m) for m in RE_JETON.split(mod)) + '$', texte, re.S)
+    if r is None: return None
+    vals = {}
+    for j, v in zip(jetons, r.groups()):
+        if vals.setdefault(j, v) != v: return None                                  # (la meme variable a deux valeurs : pas le meme message)
+    return vals
+
+
+def liaison(brut, texte):
+    """Comment retrouver `texte` (ce que le joueur a lu, nettoye) dans le texte des fichiers du jeu `brut` : (page, valeurs des variables), `page` = rang de la page du message (separees par ㈡) ou None pour le message
+    entier ; None si aucune page ni le message entier ne redonne EXACTEMENT ce texte (alors on garde le texte du favori)."""
+    essais = [(None, brut)] + ([(i, p) for i, p in enumerate(brut.split(PAGE))] if PAGE in brut else [])
+    for page, mod in essais:
+        v = valeurs(mod, texte)
+        if v is not None: return page, v
+    return None
+
+
+def texte_lie(brut, seg, val):
+    """Texte d'un favori range par la cle : la page `seg` (None : tout le message) du texte des fichiers du jeu `brut`, variables remplacees par les valeurs gardees (une variable inconnue reste telle quelle). '' si `brut` manque
+    ou n'a pas cette page."""
+    if not brut: return ''
+    if seg is not None:
+        pages = brut.split(PAGE)
+        if seg >= len(pages): return ''
+        brut = pages[seg]
+    t = RE_JETON.sub(lambda m: val.get(m.group(0), m.group(0)), nettoyer(brut))
+    return t.strip('\n ')[:MAX_TEXTE]
 
 
 def envelopper(texte, largeur, mesure):
@@ -194,6 +267,7 @@ class Historique:
         self._feed = False; self._a_vu = False; self._n_att = 0       # curseur de fin de page de l'image precedente ; fenetre de message vue ouverte depuis la rafale ; images d'attente
         self._sale = False; self._t_ecr = 0.0
         self.erreur = None
+        self._cap = None; self._modeles = {}                # Capteur du moteur (une fois qu'il existe) ; texte des fichiers du jeu deja demande, par numero de message
         self.charger()
 
     def _num(self):
@@ -252,10 +326,45 @@ class Historique:
         if e.fav is not None:
             self.retirer_favori(e.fav); return False
         if len(self.favoris) >= MAX_FAVORIS: del self.favoris[0]
-        copie = Element(self._num(), e.type, e.t, e.nom, e.texte, [dict(x) for x in e.ennemis], e.or_, e.xp, e.issue, fav=self.suivant, objets=[dict(o) for o in e.objets])
+        copie = Element(self._num(), e.type, e.t, e.nom, e.texte, [dict(x) for x in e.ennemis], e.or_, e.xp, e.issue, fav=self.suivant, objets=[dict(o) for o in e.objets], mid=e.mid)
+        self._lier(copie)
         e.fav = self.suivant; self.suivant += 1
         self.favoris.append(copie); self._sale = True; self.enregistrer(True)
         return True
+
+    def _modele(self, mid):
+        """Texte du message `mid` dans les fichiers du jeu (demande au moteur ; garde), ou None (pas de moteur, message inconnu)."""
+        if mid in self._modeles: return self._modeles[mid]
+        cap = self._cap
+        if cap is None or not hasattr(cap, 'modele'): return None
+        try: brut = cap.modele(mid)
+        except Exception: brut = None
+        self._modeles[mid] = brut
+        return brut
+
+    def _lier(self, f):
+        """Un favori de dialogue dont on connait la cle : si le texte des fichiers du jeu redonne EXACTEMENT le texte lu, le favori est range par la cle (le fichier ne gardera pas le texte) ; sinon il garde son texte."""
+        if f.type != TYPE_DIALOGUE or not f.mid: return
+        brut = self._modele(f.mid)
+        l = liaison(brut, f.texte) if brut else None
+        if l is not None: f.seg, f.val = l; f.lie = True; f.attente = False
+
+    def _resoudre(self):
+        """Redemande au moteur le texte des favoris ranges par la cle (0,13 ms l'appel : les 500 favoris du fichier en 65 ms). Un message qui n'existe plus ou n'a plus cette page : une ligne le dit, avec la cle."""
+        if self._cap is None: return
+        for f in self.favoris:
+            if not f.attente: continue
+            f.texte = texte_lie(self._modele(f.mid), f.seg, f.val) or INTROUVABLE % cle_message(f.mid)
+            f.attente = False; f.n = self._num()                                   # (nouveau numero : la mise en page gardee par la fenetre ne vaut plus)
+
+    def actualiser(self):
+        """A l'ouverture de l'historique : les textes des favoris ranges par la cle sont redemandes au moteur. Les fichiers du jeu ne changent pas pendant que la visionneuse tourne, mais le moteur choisit certaines
+        variantes d'un texte selon la partie en cours (le sexe du heros : « ma mignonne » / « mon chou ») : un favori montre donc le texte tel que la partie actuelle le donnerait."""
+        self._modeles.clear()
+        for f in self.favoris:
+            if f.lie: f.attente = True
+        try: self._resoudre()
+        except Exception as ex: self.erreur = repr(ex); print('Historique : texte des favoris non redemande (%r)' % (ex,), flush=True)
 
     def retirer_favori(self, ident):
         self.favoris = [f for f in self.favoris if f.fav != ident]
@@ -264,12 +373,12 @@ class Historique:
         self._sale = True; self.enregistrer(True)
 
     # ---- ajout
-    def ajouter(self, texte, nom, t):
-        """Ajoute un dialogue de la session (texte brut du moteur, nom affiche par le jeu ou None) ; -> l'Element, ou None (vide, doublon)."""
+    def ajouter(self, texte, nom, t, mid=None):
+        """Ajoute un dialogue de la session (texte brut du moteur, nom affiche par le jeu ou None, numero du message dans les fichiers du jeu ou None) ; -> l'Element, ou None (vide, doublon)."""
         texte = nettoyer(texte)
         if not texte: return None
         nom = (sans_marques(str(nom)).strip()[:60] or None) if nom else None
-        e = Element(self._num(), TYPE_DIALOGUE, int(t), nom, texte)
+        e = Element(self._num(), TYPE_DIALOGUE, int(t), nom, texte, mid=mid if _entier(mid) and 0 < mid < MSG_ID_MAX else None)
         if self.dialogues:
             d = self.dialogues[-1]
             if d.cle() == e.cle() and abs(e.t - d.t) <= MARGE_T: return None             # le moteur a reaffiche le message (page revenue, question reposee)
@@ -291,6 +400,7 @@ class Historique:
         try:
             cap = getattr(moteur, 'capteur', None)
             if cap is not None and cap.actif:
+                self._cap = cap
                 jeu = moteur.etat.partie in (PARTIE_VILLE, PARTIE_COMBAT, PARTIE_CHAMP)
                 recus = cap.vider()
                 if not jeu: self._attente = []
@@ -298,6 +408,7 @@ class Historique:
             cc = getattr(moteur, 'capteur_combat', None)
             if cc is not None:
                 for c in cc.maj(moteur): self.ajouter_combat(c)
+            self._resoudre()
             self.enregistrer()
         except Exception as ex:                                              # l'historique ne doit jamais arreter le jeu
             if self.erreur is None: print('Historique : erreur (%r)' % (ex,), flush=True)
@@ -305,7 +416,7 @@ class Historique:
 
     def _ranger(self, r):
         if r['cat'] == CAT_COMBAT: return                                    # les messages de combat n'entrent pas dans les dialogues
-        self.ajouter(r['texte'], r['val'] if r['genre'] == GENRE_NOM else None, r['t'])
+        self.ajouter(r['texte'], r['val'] if r['genre'] == GENRE_NOM else None, r['t'], r.get('mid'))
 
     def _liberer(self, n):
         """Range les `n` premieres pages en attente (toutes si n est None)."""
@@ -341,10 +452,11 @@ class Historique:
 # ---------------------------------------------------------------------------------------------------------------------------------- crochets dans le moteur
 class Capteur:
     """Crochet sur le moteur (Unicorn) : TextBuffer::cat, appelee une fois par page de message. Les messages notes attendent dans `sortie` jusqu'a ce que Historique.maj les prenne (chacun : texte, genre, val = nom que le
-    jeu affiche ou None, cat, carte, t). Une erreur dans le crochet ne doit jamais arreter le moteur."""
+    jeu affiche ou None, cat, carte, t, mid = numero du message dans les fichiers du jeu ou None). Le numero vient d'un second crochet, sur ui_MsgAdd(numero, bool) : TextBuffer::cat y est appelee (la pile le montre) ;
+    une page qui n'en vient pas (texte construit par le programme) n'a pas de numero. Une erreur dans un crochet ne doit jamais arreter le moteur."""
 
     def __init__(self, moteur):
-        self.actif = False; self.sortie = []
+        self.actif = False; self.sortie = []; self._mid = None; self._tampon = None
         self.m = moteur; c = self.c = moteur.core
         try:
             import unicorn
@@ -354,6 +466,31 @@ class Capteur:
             self.actif = True
         except Exception as ex:
             print('Historique : crochets non installes (%r)' % (ex,), flush=True)
+            return
+        try:
+            add = c.export(SYM_UI_MSGADD)
+            if add: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._add, None, add, add)
+        except Exception as ex:
+            print('Historique : numeros de message non captes (%r)' % (ex,), flush=True)
+
+    def _add(self, uc, adr, taille, _):
+        """Entree de ui_MsgAdd : le numero du message (1er argument) que TextBuffer::cat va recevoir."""
+        try: self._mid = uc.reg_read(self.c.XREG[0]) & 0xffffffff
+        except Exception: self._mid = None
+
+    def modele(self, mid):
+        """Texte du message `mid` tel que le moteur le tire des fichiers du jeu (TextAPI::extractText, genre 1 = message) : brut, avec les sauts de page « ㈡ » et les variables « [NONE 1,0] » ; None si le moteur n'en a pas.
+        A appeler entre deux images (jamais depuis un crochet), comme les noms de historique_combat."""
+        try:
+            c = self.c; f = c.export(SYM_EXTRACT)
+            if not f or not isinstance(mid, int) or not 0 < mid < MSG_ID_MAX: return None
+            if self._tampon is None: self._tampon = c.malloc(8192)
+            c.mem_w(self._tampon, b'\0' * 16)
+            c.call(f, self._tampon, (1 << 24) | mid, label='texte du message', timeout_s=10)
+            t = c.read_cstr(self._tampon).decode('utf-8', 'replace')
+            return t if t.strip() and not t.startswith('<ERR') else None
+        except Exception:
+            return None
 
     def temps_et_cle(self):
         """-> (temps de jeu en 1/60 s, identifiant de la partie) lus dans status::g_Game."""
@@ -384,10 +521,12 @@ class Capteur:
             if not texte.strip(): return
             nom = c.read_cstr(x2).decode('utf-8', 'replace').strip() if x2 else ''           # le nom que le jeu affiche sur la fenetre de message (vide : aucun)
             e = self.m.etat
-            combat = e.partie == PARTIE_COMBAT or any('Battle' in s for s in self._pile(uc))
+            pile = self._pile(uc)
+            combat = e.partie == PARTIE_COMBAT or any('Battle' in s for s in pile)
             t, _u = self.temps_et_cle()
+            mid = getattr(self, '_mid', None) if pile and pile[0] == SYM_UI_MSGADD else None            # (l'appelante immediate de TextBuffer::cat est ui_MsgAdd : le numero vient de cet appel)
             self.sortie.append({'texte': texte, 'genre': GENRE_NOM if nom else GENRE_GENERAL, 'val': nom or None, 'cat': CAT_COMBAT if combat else CAT_TERRAIN,
-                                'carte': 'monde' if e.partie == PARTIE_CHAMP else e.carte, 't': t or 0})
+                                'carte': 'monde' if e.partie == PARTIE_CHAMP else e.carte, 't': t or 0, 'mid': mid})
             if len(self.sortie) > 500: del self.sortie[:250]                      # (jamais vide faute de Historique.maj : on ne grossit pas sans fin)
         except Exception:
             pass
