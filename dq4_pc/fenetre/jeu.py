@@ -641,7 +641,10 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
             if s.get('ombre', True) and not (dort and not s.get('ombre_sep')):       # paquet 15 : le moteur peut masquer l'ombre d'un personnage (bateaux de la carte du monde...) ; couche, l'ombre part 64 sous le sol (Chara.lieBillboard) sauf si elle est separee
                 al = float(s['col'][3]) * float(s.get('ombre_a', 1.0))
                 if cam3d is not None: ombres.append((slot, np.array(s['ombre_pos'], float) if s.get('ombre_sep') and s.get('ombre_pos') else p, al))
-                elif champ: ombres.append((slot, p, al))
+                elif champ:
+                    oc = s.get('ombre_champ')                      # paquet 15, bit 14 : le moteur donne la position de l'ombre sur la carte du monde (le ballon : plus au sud que ses pieds) ; sinon l'ombre est sous les pieds
+                    po = np.array([(round(oc[0]) if pp else oc[0]) / CH_PX, p[1], (round(oc[1]) if pp else oc[1]) / CH_PX]) if oc is not None and len(oc) >= 2 else p
+                    ombres.append((slot, po, al))
         icones = self._icones(e, champ, bataille, dh, cam3d)
         if os.environ.get('DQ_PROJ') and self.n_boucle % int(os.environ['DQ_PROJ']) == 0: self._dbg_proj(M, e, cam3d, a_dessiner, icones)
         self._dom_lie = None

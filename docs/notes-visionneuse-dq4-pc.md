@@ -1806,3 +1806,16 @@ La feuille `h193` (bateau, 512 × 512) était découpée comme une feuille de pe
 ### Non vérifié
 Rendu de l'original (aucune capture) ; Windows ; le bateau en situation réelle (mouvement, rotation de la direction, accostage : seule la feuille a été vérifiée par sprites injectés) ; poids de l'atlas HD (52 Mo de mémoire vidéo, avec mipmaps).
 
+## Avance #213 : l'ombre du ballon à sa place sur la carte du monde (#212, audit SPR-02, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`cmd_chara_shadow` (paquet 15) : bit 12 = position de l'ombre (3 flottants), bit 13 = opacité (1 flottant), **bit 14 = `SetFieldShadowPosition` (3 flottants)**. `Etat.appliquer` ne lisait pas le bit 14 (et ne retirait pas le flottant du bit 13). Établi (scénario du chapitre 5, drapeau 344 = 1) : le ballon envoie `0x440c` + `[2495,97 ; 383,97 ; -1]` à chaque image pour un sprite en `(2496 ; 352 ; 20)` : l'ombre doit être 32 pixels de carte (2 tuiles) plus au sud ; elle était collée sous la nacelle.
+
+### Fait
+- `noyau/moteur.py` : le flottant d'opacité est retiré, puis `s['ombre_champ'] = (x, y, hauteur)` si le bit 14 est présent. `fenetre/jeu.py` (boucle des sprites, carte du monde) : l'ombre du sprite est posée à cette position (arrondie en pixel perfect) ; sans `ombre_champ`, comme avant.
+- Capture de la visionneuse réelle (scénario du ballon) avant / après : l'ombre sous la nacelle disparaît et revient 32 pixels de carte plus bas (68 pixels d'écran à 1280 × 720), par-dessus la maison de la carte.
+- `tests/test_ombre_ballon.py` (5 tests, dans la CI : le paquet 0x440c réel, ordre des flottants des bits 12 / 13 / 14, paquets sans bit 14 inchangés, paquet tronqué).
+
+### Non vérifié
+Rendu de l'original (aucune capture) ; Windows ; que l'ombre passe bien par-dessus les bâtiments de la carte (supposé) ; le vol complet du ballon (seul le départ au sol a été rejoué).
+
