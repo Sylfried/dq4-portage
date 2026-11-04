@@ -268,7 +268,7 @@ class ListeInterface(unittest.TestCase):
 
     def test_page_du_bouton_de_vitesse(self):
         J, p = menu('interface'); p.cible = RG.CIBLE_VITESSE; libs = [e['l'] for e in p._entrees()]
-        self.assertIn('Taille du bouton', libs); self.assertIn('Replacer sous la boîte de combat', libs); self.assertIn("Afficher cette interface à l'écran", libs)
+        self.assertIn('Taille du bouton', libs); self.assertIn('Replacer sur le bord gauche', libs); self.assertIn("Afficher cette interface à l'écran", libs)
         for autre in ('Taille des boutons', 'Afficher la croix', 'Taille de la croix', 'Position horizontale'): self.assertNotIn(autre, libs)
         p.cible = RG.CIBLE_ECRAN; libs = [e['l'] for e in p._entrees()]
         self.assertIn('Taille des boutons', libs); self.assertIn('Afficher la croix', libs); self.assertNotIn('Taille du bouton', libs)
@@ -278,7 +278,7 @@ class ListeInterface(unittest.TestCase):
         p._poser_visible(RG.CIBLE_VITESSE, False); self.assertEqual((R['bouton_vitesse'], R['boutons']), (False, True)); self.assertFalse(p._visible(RG.CIBLE_VITESSE)); self.assertTrue(p._visible(RG.CIBLE_ECRAN))
         p._poser_visible(RG.CIBLE_ECRAN, False); p._poser_visible(RG.CIBLE_VITESSE, True); self.assertEqual((R['bouton_vitesse'], R['boutons']), (True, False))
         e = par_libelle(p, 'Taille du bouton'); e['plus'](); e['plus'](); self.assertAlmostEqual(R['bouton_vitesse_taille'], 1.2); self.assertEqual(R['boutons_taille'], 1.0); e['defaut'](); self.assertEqual(R['bouton_vitesse_taille'], 1.0)
-        R['bouton_vitesse_pos'] = [3.0, 4.0]; par_libelle(p, 'Replacer sous la boîte de combat')['ok'](); self.assertEqual(R['bouton_vitesse_pos'], [])
+        R['bouton_vitesse_pos'] = [3.0, 4.0]; par_libelle(p, 'Replacer sur le bord gauche')['ok'](); self.assertEqual(R['bouton_vitesse_pos'], [])
         R['bouton_vitesse_pos'] = [3.0, 4.0]; R['boutons_pos'] = {'carte': [1, 1]}; par_libelle(p, 'Rétablir cette interface')['ok']()
         self.assertEqual((R['bouton_vitesse_pos'], R['bouton_vitesse_taille'], R['bouton_vitesse'], R['boutons_pos']), ([], 1.0, True, {'carte': [1, 1]}))      # la remise ne touche que le bouton
 
