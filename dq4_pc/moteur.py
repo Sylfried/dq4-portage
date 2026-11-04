@@ -52,6 +52,8 @@ HAVESTATUS_LEVELUP_FIN = 0x3f8             # status::HaveStatus::levelup(bool) +
 TBZ_W20_0 = 0x36000094
 COUNTDOWN_EXEC_ECRITURE = 0xc               # CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
 STR_W8_X0 = 0xb9000008
+DOKU_CHANGETIME_B, DOKU_RET, DOKU_CHANGETIME_STUB = 0x38, 0x44, 0x2246b0      # FieldPlayerDoku::checkDokuDamage + 0x38 : `b FieldStage::ChangeTime` (saut terminal, via le stub PLT 0x2246b0 ; w1 = 0, le temps du monde avance de 2), + 0x44 : le `ret` de la fonction
+RET_A64 = 0xd65f03c0
 MAGIE_CHARSELECT_BL, MAGIE_SANS_CIBLE_BL, MAGIE_EXECUSE_STUB = 0x428, 0x188, 0x2269c0      # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
 MAGIE_PM, MAGIE_RESULTAT, MAGIE_ACTION = 0x7e, 0x210, 0x1d8        # PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
 MAGIE_SON_SOIN, SUB_W8_W8_C4 = 0x100, 0x51031108          # TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x100 : `sub w8, w8, #0xc4` (w8 = numero de l'action ; si le resultat est <= 2, c'est un sort de soin et le moteur joue le bruitage 501, `playSe(0x1f5)`, quel que soit son effet)
@@ -489,6 +491,7 @@ class Moteur:
         self._crochets_fondu()
         self._crochets_niveau()
         self._crochets_rencontres()
+        self._crochets_horloge_jour()
         self._crochets_magie()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
@@ -560,6 +563,27 @@ class Moteur:
             try: c.uc.ctl_flush_tb()
             except Exception: pass
         except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
+
+    def _crochets_horloge_jour(self):
+        """Arrivee de la nuit et marche acceleree (voir rencontres.py, #163). Le temps du monde n'avance que par le saut terminal `FieldStage::ChangeTime(0)` de `FieldPlayerDoku::checkDokuDamage` (+ 0x38, carte du monde,
+        a chaque image du moteur ou le heros a avance). `vitesse_marche` > 1 : ce saut n'a lieu que pour la fraction (1 + a) / (2 a) des appels (`Passeur`) ; pour les autres, le crochet va directement au `ret` de la
+        fonction (la pile est deja depilee a cet endroit), de sorte que la nuit arrive (1 + a) / 2 fois plus vite par seconde reelle et non a fois. A 1 (ou moins) : le jeu d'origine, a l'identique."""
+        c = self.core; self.horloge_jour = RE.Passeur()
+        try:
+            f = c.export('_ZN15FieldPlayerDoku15checkDokuDamageERN3dss12Fix32Vector3ES2_')
+            u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]
+            w = u32(f + DOKU_CHANGETIME_B) if f else 0
+            if not f or w & 0xfc000000 != 0x14000000 or f + DOKU_CHANGETIME_B + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) != c.LIB_BASE + DOKU_CHANGETIME_STUB or u32(f + DOKU_RET) != RET_A64:
+                print("horloge jour / nuit : checkDokuDamage inattendu, la vitesse de marche change la vitesse d'arrivee de la nuit", flush=True); return
+            def _hj(uc, ad, sz, u):
+                v = self.vitesse_marche
+                if v <= 1.0: return                                                          # x1 : le jeu tel quel
+                p = self.horloge_jour; p.facteur = RE.facteur_par_pas(v)
+                if not p.passe(): uc.reg_write(unicorn.arm64_const.UC_ARM64_REG_PC, f + DOKU_RET)        # appel saute : retour direct (la pile est deja rendue, x30 = adresse de retour de l'appelant)
+            c.uc.hook_add(unicorn.UC_HOOK_CODE, _hj, None, f + DOKU_CHANGETIME_B, f + DOKU_CHANGETIME_B)
+            try: c.uc.ctl_flush_tb()
+            except Exception: pass
+        except Exception as ex: print('horloge jour / nuit : crochet non installe :', ex, flush=True)
 
     def _crochets_magie(self):
         """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message

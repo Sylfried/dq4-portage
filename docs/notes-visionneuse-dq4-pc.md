@@ -1414,3 +1414,23 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - **Sous Windows** : à confirmer par Sylfried sur son écran (capture du dialogue d'origine).
 - **Supposé** : le jeu d'origine dessine la même espace de 11 px ; la correction s'écarte donc peut-être du mobile, dans le sens demandé. Si une espace plus fine que 5 px est préférée avant « ! », elle se règle dans `PoliceBitmap._glyphe`.
+
+## Avance #164 : la nuit arrive (1 + x) / 2 fois plus vite en course (#163, 04/11/2026)
+
+### Demande (D-226, 04/11 09 h 44)
+« Je veux que la course ait le même effet accélératif que pour les combats, au lieu de faire venir 2x plus vite la nuit si l'accélérateur est en x2 je veux qu'elle vienne juste 1,5x plus vite, si l'accélérateur est en 1,5 alors elle doit venir en 1,25x plus vite, etc. »
+
+### Établi
+- Carte du monde : le temps du monde (`status::g_Stage + 0xcc`, cycle 0xd40) avance de 2 par image du moteur où le héros a changé de position (`FieldStage::ChangeTime(0)` appelé à la fin de `FieldPlayerDoku::checkDokuDamage`). La marche accélérée fait tourner le moteur a fois plus vite, donc la nuit arrivait a fois plus vite par seconde.
+- La règle demandée est celle des rencontres aléatoires (#45, « Vitesse de marche » dans Commandes › Vitesses) : (1 + a) / 2.
+
+### Fait
+- `moteur.py` : `_crochets_horloge_jour` (crochet sur le saut terminal de `checkDokuDamage`, + 0x38) ; `rencontres.py` : `Passeur` (fraction (1 + a) / (2 a) des appels, fractions cumulées). Les appels sautés vont directement au `ret` de la fonction. A x1 (ou plus lent) : le jeu d'origine, à l'identique. Vérification du code attendu au démarrage (message et aucun crochet si le désassemblage ne correspond plus).
+- `pause.py` : les aides de « Vitesse de marche » et « Multiplicateur de l'accélérateur » citent maintenant l'arrivée de la nuit.
+- Test : `outils/test_horloge_jour.py` (4 tests de formule, 2 sur le vrai moteur avec `DQ_APK` / `DQ_SAVES`).
+- Mesure sur le vrai moteur (carte du monde, sauvegarde 4, 491 pas dans le couloir de `simuler_rencontres.py`, combats coupés) : temps du monde par pas 2,000 à x1 ; 1,666 à x1,5 ; 1,499 à x2 ; 1,332 à x3 ; 1,246 à x4, soit **par seconde 1,25 ; 1,50 ; 2,00 ; 2,49 fois** celle de x1. Le héros marche exactement de la même façon (positions identiques image par image à x1 et à x4).
+
+### À trancher / non vérifié
+- **Supposé** : « le même effet accélératif que pour les combats » désigne la règle des rencontres (1 + x) / 2 ; la vitesse de combat (Rapide, Très rapide) ne touche pas l'horloge du monde.
+- **Sous Windows** : à confirmer par Sylfried (marche longue sur la carte du monde avec l'accélérateur).
+- **Établi** : seule la carte du monde fait avancer l'horloge (`ChangeTime(0)` n'est appelé que par `checkDokuDamage`) ; villes et donjons ne sont pas concernés.
