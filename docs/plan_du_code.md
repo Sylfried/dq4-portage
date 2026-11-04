@@ -93,7 +93,7 @@ Tout est défini dans `dq4_pc\chemins.py`. Variables d'environnement : `DQ4_DONN
 ## 3. Correspondance ancien nom → nouveau
 | Avant | Maintenant |
 |---|---|
-| `dq4_pc\lancer_dq4.bat` | `lancer_dq4.bat` (racine ; un petit fichier de transfert reste dans `dq4_pc\` pour les anciens raccourcis) |
+| `dq4_pc\lancer_dq4.bat` | `lancer_dq4.bat` (racine ; l'ancien fichier est supprimé, depuis #258 : un raccourci qui pointait dessus est à refaire vers la racine) |
 | `dq4_pc\fenetre.py` | dossier `dq4_pc\fenetre\` (voir plus haut) ; `main()` → `dq4_pc\principal.py` ; `trouver_defauts()` → `dq4_pc\chemins.py` |
 | `dq4_pc\emu_core.py`, `moteur.py`, `pktlog.py`, `rencontres.py`, `priorite_jeu.py`, `suivi_charge.py`, `pose_couchee.py`, `historique.py` | `dq4_pc\noyau\…` (même nom) |
 | `dq4_pc\effet_combat.py`, `vitesse_combat.py`, `historique_combat.py` | `dq4_pc\combat\…` |

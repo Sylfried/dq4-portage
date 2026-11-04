@@ -2150,3 +2150,18 @@ Trois coroutines de la classe `Capture` (`<Tabi>d__49`, `<DarkLamp>d__47`, `<Rir
 
 ### Non vérifié
 L'aspect exact face à l'original (aucune capture de référence) ; le contenu initial des textures de flou (noir supposé) ; l'interface dessinée par-dessus l'effet (supposé) ; le tourbillon du voyage, elliptique en 16/9 (le maillage est en coordonnées d'écran normalisées) ; 28 et 14 rangées gardées comme sur mobile (le jeu en calcule moins en 16/9) ; la cadence de 30 Hz ; la capture contient la vignette et le fondu du fond ; la durée réelle de l'effet de début de combat (57 images dans le port, non revérifiée).
+
+## Avance #258 : un seul lancer_dq4.bat (celui de dq4_pc supprimé)
+
+### Demande
+Remarque de Sylfried (04/11/2026, 20 h 31) : deux fichiers `lancer_dq4.bat` dans le dépôt.
+
+### Établi
+La PR #197 avait laissé `dq4_pc\lancer_dq4.bat`, un fichier de deux lignes qui appelle le vrai lanceur de la racine (pour d'éventuels anciens raccourcis). Le sondage D-237 demandait pourtant « un seul `lancer_dq4.bat` à la racine ; `dq4_pc\` ne contient plus que du code », et le README comme `docs/plan_du_code.md` annonçaient « le seul lanceur » : c'était le seul fichier non code de `dq4_pc\` suivi par git. Écart avec ton choix, laissé par moi.
+
+### Fait
+- `dq4_pc\lancer_dq4.bat` supprimé ; table « ancien nom → nouveau » de `docs/plan_du_code.md` corrigée. Le vrai lanceur (racine), les tests et la CI ne l'utilisaient pas.
+- Vérifié : aucun autre fichier non code suivi dans `dq4_pc\` ; plus qu'un `lancer_dq4.bat` suivi par git.
+
+### À savoir
+Un raccourci Windows qui pointait vers `dq4_pc\lancer_dq4.bat` est à refaire vers `lancer_dq4.bat` à la racine. Sur le PC de test, la suppression passe par `git pull` (tracé par git).
