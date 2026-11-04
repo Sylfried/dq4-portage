@@ -329,6 +329,8 @@ class ChampMixin:
         opaques = [x for x in self.carte_vl if not est_tr(x[2])]
         transp = sorted((x for x in self.carte_vl if est_tr(x[2])), key=lambda x: x[2][1])         # file de rendu 3000 + priorite (FldObject.set_priority)
         cutoff0 = self.prog['cutoff']; a2c = self.post.a2c
+        sepia = bool(getattr(self.moteur.etat, 'sepia', False)) and not os.environ.get('DQ_SANS_SEPIA')          # paquet 1 : retour en arriere, decor en sepia (les personnages, bulles et menus gardent leurs couleurs)
+        if sepia: self.prog['sepia'] = 1.0
         tint = self._teinte_decor(); ids_tz = self.tz.ids() if tint is not None else None; neutre = (1.0, 1.0, 1.0)      # paquet 33 : teinte de tout le decor, sauf les groupes dont la texture a « tz_ » dans son nom (lampes, bougies, vagues)
         if a2c: self.prog['a2c'] = 1.0; gl.glEnable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glDisable(gl.GL_BLEND)      # decor opaque decoupe : alpha -> couverture MSAA, sans melange (le melange doublerait l'alpha)
         for pas, liste in ((0, opaques), (1, transp)):
@@ -358,6 +360,7 @@ class ChampMixin:
                 if self.ciel_ext is not None: self._tracer_ciel(r, net_o)
         if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
         if tint is not None: self._regler_teinte(neutre)
+        if sepia: self.prog['sepia'] = 0.0
         self.prog['net'] = 0.0; self.prog['tsize'] = (1.0, 1.0)
 
     def _fbx_pret(self, no):
