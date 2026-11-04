@@ -2063,3 +2063,20 @@ Audit du 04/11/2026, ENG-01 : le tas du moteur n'est jamais libéré ; choix par
 
 ### Non vérifié
 Un tas réellement proche de 200 Mo (heures de jeu) ; le message tel qu'il s'affiche à l'écran.
+
+## Avance #248 : poker : « Abandonner » tient dans ses boutons (police réduite)
+
+### Demande
+Audit du 04/11/2026, SVC-03 : « Abandonner » dépasse de son bouton au poker ; décision de Sylfried (sondage antérieur) : **police réduite**.
+
+### Établi
+Scénario de l'audit relancé sur le code actuel (touches simulées jusqu'au choix des cartes à garder) : cinq plaques de 72 unités sous les cartes, « Abandonner » plus large (chevauchement avant correction). `_texte` comprimait un texte trop large seulement avec la police de repli ou si le nœud portait `fit_x`.
+
+### Fait
+- `comprimer_etiquette(police_origine, fit_x, type_fenetre)` (fonction pure) et `TYPES_COMPRESSION_BOUTONS = (48,)` : les étiquettes de la fenêtre du poker sont comprimées en largeur pour tenir dans leur plaque (marge 7 unités de chaque côté, compression minimale 0,7).
+- Vérifié à l'écran avant / après (800 x 450) : les cinq étiquettes tiennent, « DONNER » aussi.
+- Inchangé : les autres fenêtres gardent leurs débordements (décision UI-05).
+- `tests/test_poker_police.py` (4 tests).
+
+### Non vérifié
+Rendu à d'autres tailles de fenêtre (la compression est proportionnelle) ; le poker en jeu réel côté Windows.

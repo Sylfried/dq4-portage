@@ -155,3 +155,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #242 | un état .dqs venu d'ailleurs n'exécute plus de code à l'ouverture : liste blanche de classes, refus en français (#241, audit ENG-05, sondage du 04/11) |
 | 04/11 | #244 | zoom des scènes (audit UNI-08) : le champ du jeu s'applique quand il tient la caméra, ton zoom revient à 100 % au début de la scène, molette et touches sans effet pendant la scène |
 | 04/11 | #247 | alerte de la mémoire du moteur (audit ENG-01) : message à 200 Mo puis à 240 Mo sur 256, une fois par palier ; rien d'écrit par l'alerte |
+| 04/11 | #248 | poker du casino (audit SVC-03) : les étiquettes des boutons sont comprimées pour tenir dans leur plaque (« Abandonner » ne chevauche plus ses voisins) ; les autres débordements du français sont inchangés |
