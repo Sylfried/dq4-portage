@@ -158,14 +158,17 @@ class DansLeJeu(unittest.TestCase):
             sens = 1 if depart > 100 else -1
             pas = [abs(b - a) for a, b in zip([float(depart)] + d, d)]
             self.assertTrue(all((b - a) * sens <= 1e-9 for a, b in zip([float(depart)] + d, d)), depart)        # monotone : jamais de depassement ni de retour en arriere
-            self.assertGreater(max(1, sum(1 for x in d if x != 100.0)), 8, depart)                               # plusieurs images (pas un saut)
-            self.assertLessEqual(max(pas), max(60.0, 5.0 * abs(depart - 100.0)) / 60.0 + 1e-9, depart)          # (l'ecart maximal d'une image : 5 x l'ecart / 60, plus de 8 % de la course a la fois, jamais plus)
+            self.assertGreater(sum(1 for x in d if x != 100.0), 4, depart)                               # plusieurs images (pas un saut)
+            self.assertLessEqual(max(pas), max(FE.CAM_RECENTRE_DIST, 5.0 * abs(depart - 100.0)) / 60.0 + 1e-9, depart)          # (l'ecart maximal d'une image : 5 x l'ecart / 60, plus de 8 % de la course a la fois, jamais plus)
             self.assertFalse(j.dist_retour)                                                                      # l'animation se termine d'elle-meme
 
     def test_duree_du_retour(self):
         j = Faux(distance=200); d = j.images(120, 'cam_loin', 'cam_pres'); n = next(i for i, x in enumerate(d) if x == 100.0) + 1
-        self.assertTrue(20 <= n <= 60, n)                                                                       # de 200 % a 100 % : une demi-seconde environ (ni un saut, ni une longue attente)
-        j = Faux(distance=50); d = j.images(120, 'cam_loin', 'cam_pres'); n = next(i for i, x in enumerate(d) if x == 100.0) + 1; self.assertTrue(15 <= n <= 60, n)
+        self.assertTrue(10 <= n <= 40, n)                                                                       # de 200 % a 100 % : un tiers de seconde environ, comme 100 degres de rotation (ni un saut, ni une longue attente)
+        j = Faux(distance=50); d = j.images(120, 'cam_loin', 'cam_pres'); n = next(i for i, x in enumerate(d) if x == 100.0) + 1; self.assertTrue(8 <= n <= 40, n)
+
+    def test_meme_vitesse_que_le_recentrage_de_la_rotation(self):
+        self.assertEqual(FE.CAM_RECENTRE_DIST, FE.CAM_RECENTRE_LACET)                                          # #173 : memes nombres (240 par seconde au minimum, 5 x l'ecart), memes unites de vitesse
 
     def test_deja_a_100_rien_ne_bouge(self):
         j = Faux(); d = j.images(30, 'cam_loin', 'cam_pres'); self.assertEqual(set(d), {100.0}); self.assertFalse(j.dist_retour)

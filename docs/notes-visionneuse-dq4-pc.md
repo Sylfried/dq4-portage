@@ -1495,3 +1495,16 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « de 25 % » = 25 % de moins que la taille par défaut actuelle (et non 25 % de moins que le mobile) ; un `reglages.json` à 100 % prend la nouvelle taille sans rien changer.
 - **Sous Windows** : la taille ressentie.
 
+## Avance #176 : le retour du zoom va à la vitesse du recentrage des directions (#173, 04/11/2026)
+
+### Demande (D-228, 04/11 11 h 30)
+« La transition pour remettre le niveau de zoom par défaut doit aller à la même vitesse que pour les directions »
+
+### Fait
+- `fenetre.CAM_RECENTRE_DIST` = `CAM_RECENTRE_LACET` (240 par seconde au minimum, au lieu de 60 % par seconde en #170) ; la loi reste « au moins ce minimum, ou 5 x l'écart par seconde, fois « Vitesse de caméra » » comme pour la rotation. Un écart de X % se résorbe donc comme un écart de X degrés : au clavier (les deux touches, Ctrl + touche de caméra) comme à la souris (Ctrl + molette, Ctrl + clic molette), et rotation, inclinaison et distance arrivent ensemble à l'origine pour Ctrl + touche. De 200 % à 100 % : environ 21 images (0,35 s) au lieu de 37 (0,6 s).
+- Tests : `outils/test_camera_ctrl_tout.py` (16) : rotation et distance arrivent à la même image (à une image près) pour sept paires d'écarts égaux, et suivent la même part de l'écart restant en route ; `test_distance_camera_clavier.py` (28) : constante égale à celle de la rotation, durées et pas maximal d'une image.
+
+### À trancher / non vérifié
+- **Supposé** : « la même vitesse » = les mêmes nombres que la rotation (240 par seconde) appliqués aux pourcents ; l'inclinaison garde son minimum propre (90 degrés par seconde, plage plus étroite).
+- **Sous Windows** : le ressenti du retour du zoom et des directions ensemble.
+
