@@ -37,7 +37,7 @@ jobs:
       - name: "Installation des modules (numpy, unicorn, soundfile)"
         run: python -m pip install --disable-pip-version-check numpy unicorn soundfile
 
-      - name: "Tests sans fenêtre ni jeu (dossiers, migration, états, rencontres, écriture des sauvegardes, décodage du son, priorité des décors, ordre de chargement des états, découpage des feuilles de sprites, ombre du ballon, import des sauvegardes, nom de carte sans données, réglages du moteur non installés, échecs de lecture du son, effet plein écran en 16/9, règle du bruitage des boutons)"
+      - name: "Tests sans fenêtre ni jeu (dossiers, migration, états, rencontres, écriture des sauvegardes, décodage du son, priorité des décors, ordre de chargement des états, découpage des feuilles de sprites, ombre du ballon, import des sauvegardes, nom de carte sans données, réglages du moteur non installés, échecs de lecture du son, effet plein écran en 16/9, règle du bruitage des boutons, arrêt de la musique pendant un jingle)"
         run: |
           python tests/test_chemins.py
           python tests/test_rencontres.py
@@ -53,3 +53,4 @@ jobs:
           python tests/test_son_echecs.py
           python tests/test_effets_plein_ecran.py
           python tests/test_bruitage_clavier.py
+          python tests/test_son_musique_limites.py

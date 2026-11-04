@@ -146,3 +146,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #224 | la teinte plein écran de l'effet 35 couvre toute la largeur de l'écran 16/9 en combat (avant : deux bandes latérales sans teinte) (#223, audit CMB-02) |
 | 04/11 | #226 | une texture de monstre absente des données (25 numéros) n'arrête plus le jeu : texture transparente à la place (#225, audit CMB-03) |
 | 04/11 | #228 | le bruitage 300 des boutons suit la règle du jeu d'origine, au clavier comme au doigt : A et action seuls ; Entrée, Espace, M et les lettres du nom le jouent (#227, audit SND-08 / SND-09 / UI-01, règle de #60) |
+| 04/11 | #230 | un arrêt de la musique pendant un jingle à reprise fait repartir la musique d'avant ; un morceau sans boucle fini, redemandé, repart (#229, audit SND-05 / SND-06) |

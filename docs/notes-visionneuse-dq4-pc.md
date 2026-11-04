@@ -1928,3 +1928,16 @@ Un usage scénarisé de ces numéros ; Windows.
 
 ### Non vérifié
 Windows (oreille : B, flèches, ▲ ▼, retour de la carte sans bip ; Entrée, Espace, M et lettres du nom avec bip). Si le moteur joue lui-même un bruitage d'annulation à la fermeture de la carte (paquet 35), il reste audible ; si le jeu d'origine joue un bruitage à la frappe d'une lettre au toucher (3 sites `PlaySE(300)` de `InputName.Update`, correspondance exacte non lue) : Supposé.
+
+## Avance #230 : arrêt de la musique pendant un jingle, morceau sans boucle redemandé (#229, audit SND-05 / SND-06, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi par lecture du code d'origine (`SoundControl`, pas par une trace du jeu) : `StopBGM` ne remet pas l'état du jingle à zéro, donc un arrêt reçu pendant un jingle lancé avec reprise (`0x1000 | n`) fait **repartir la musique d'avant** ; redemander un morceau en cours le relance. La visionneuse effaçait la reprise (silence) et ignorait toute redemande du morceau en cours, y compris d'un morceau sans boucle (BGM 1, 34) déjà terminé. Aucune occurrence dans les traces (le moteur arrête puis lance la nouvelle musique ; seul `playRestart(48)`, coffre / médaille, utilise la reprise) : Non vérifié en jeu.
+
+### Fait
+- `son.py:jouer_bgm` : l'ordre d'arrêt garde le numéro de la musique à reprendre et la relance après l'arrêt (sans jingle, ou jingle déjà fini et reprise déjà faite : arrêt normal).
+- `son.py:_bgm_finie` + `jouer_bgm` : un morceau sans boucle dont l'heure de fin est passée (pas en pause) n'est plus « en cours » : le redemander le relance. Un morceau qui joue encore, en boucle ou non, n'est pas relancé (inchangé).
+- `tests/test_son_musique_limites.py` (11 tests, dans la CI, faux lecteurs) ; 2 échouent sur l'ancien code. Voisins relancés : échecs du son, mixage, décodage, bruitage de transition, réglages du son, retour au titre, sauvegarde automatique.
+
+### Non vérifié
+Une occurrence réelle (aucune connue) ; le relancement d'un morceau **en cours** redemandé (`playBgm` / `playStart`, le moteur ne réémet pas `play`) : volontairement non reproduit, un redémarrage à tort serait plus gênant que l'écart ; Windows.
