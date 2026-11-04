@@ -374,14 +374,20 @@ class Son:
 
     def jouer_bgm(self, v, decalage=0.0):
         if v >= BGM_ARRET:                                         # cmd_bgm : >= 0x4000 = Sound.StopBGM
-            self.reprise = None; self.e_req = None; self.arreter_bgm(); return
+            n, self.reprise, self.e_req = self.reprise, None, None; self.arreter_bgm()
+            if n is not None: self.jouer_bgm(n)                  # arret pendant un jingle a reprise : StopBGM d'Unity ne remet pas son etat a zero, la musique d'avant repart (audit SND-05)
+            return
         if not self.ogg: return
         reprise = None; relance = v >= BGM_RELANCE
         if relance: v -= BGM_RELANCE; reprise = self.bgm_id                 # Sound.PlayBGM avec reprise : jingle, puis retour a la musique en cours
-        elif v == self.bgm_id and self.bgm is not None: self.reprise = None; return       # deja en cours
+        elif v == self.bgm_id and self.bgm is not None and not self._bgm_finie(): self.reprise = None; return       # deja en cours (un morceau sans boucle arrive a sa fin n'est plus « en cours » : le redemander le relance, audit SND-06)
         else: self.reprise = None
         self.arreter_bgm(); self.bgm_id = v; self.bgm_demande = v; self.reprise = reprise; self.bgm_fin = None; self.bgm_decalage = decalage; self.e_req = None
         self._obtenir('BGM%02d' % v, lambda r, i=v, rl=relance: self._lancer_bgm(i, r, rl))
+
+    def _bgm_finie(self):
+        """Vrai si le morceau sans boucle en cours est arrive a sa fin (le lecteur reste en place, `bgm_id` aussi : seule l'heure de fin le dit)."""
+        return self.bgm_fin is not None and self.t_pause is None and time.time() >= self.bgm_fin
 
     def _lancer_bgm(self, ident, r, relance=False):
         if self.bgm_demande != ident: return                        # une autre musique a ete demandee entre-temps
