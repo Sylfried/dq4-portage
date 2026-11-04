@@ -1845,3 +1845,17 @@ Le ticket #76 (« `startTown` plante pour `za3f3` et `ev01`, les données sont c
 ### Non vérifié
 Aucun déplacement du jeu vers `za3f3` (supposé).
 
+
+## Avance #218 : les réglages du moteur qui ne s'installent pas sont signalés au joueur (#217, audit ENG-08, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Chaque réglage posé dans le moteur d'origine (vitesse du texte, défilement des combats, PV/PM au niveau supérieur, rencontres, horloge jour / nuit, sorts sans effet, fondus de script, fenêtre des lieux, bouton « Paramètres », historiques) vérifie l'instruction qu'il remplace ; sur un autre APK le réglage n'est pas installé et seule la console le disait (invisible sur Windows). `_elargir_symboles` et `patcher_parametres` se taisaient même complètement. Établi : avec l'APK étudié, aucun point n'est manqué.
+
+### Fait
+- `noyau/moteur.py` : `Moteur.crochets_manques` + `Moteur._manque(texte)` (console, liste sans doublon : `reappliquer_correctifs` repasse après le chargement d'un état) remplacent les `print` des 8 installateurs ; messages ajoutés pour la fenêtre des lieux (instruction différente ; « déjà élargie » reste silencieux), le bouton « Paramètres » (ni d'origine ni déjà patché) et les deux historiques inactifs.
+- `fenetre/jeu.py:Jeu._signaler_crochets_manques` (modèle : `_signaler_echecs_ecriture`) : une ligne par point dans `erreurs_fenetre.log` et un message à l'écran de 8 s ; les points trouvés plus tard (après le chargement d'un état) sont annoncés à leur tour, jamais deux fois.
+- `tests/test_crochets_manques.py` (7 tests, dans la CI : faux moteur avec instruction d'origine / différente / déjà patchée, doublons, chaque installateur sans fonction ; journal et message ; moteur réel : liste vide et les deux historiques actifs).
+- Non touché : `ctl_flush_tb` avalé dans `CapteurCombat` (le capteur est créé avant la première image : aucun bloc déjà traduit à vider ; ne sert qu'à un capteur créé plus tard par les outils d'essai).
+
+### Non vérifié
+Un autre APK (aucun disponible : le message n'a été vu que sur faux moteur) ; Windows.
