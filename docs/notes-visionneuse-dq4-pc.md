@@ -1899,3 +1899,15 @@ Un vrai changement ou retrait de périphérique audio (Windows) ; la durée rée
 
 ### Non vérifié
 Windows ; les autres effets d'écran (3, 5, 6 : #68).
+
+## Avance #226 : une texture de monstre absente n'arrête plus le jeu (#225, audit CMB-03, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi : `_texture_monstre` lisait `donnees.texture('m%03d')` dans un `try` qui ne couvrait que les exceptions ; quand la fonction renvoie `None` (25 numéros de monstre sans texture `m<id>` dans les données), `self._tex(None, ...)` plantait et le processus s'arrêtait (reproduit avec le monstre 199 forcé). Aucun de ces numéros n'est dans les 255 formations : pas atteignable par un combat normal. Non vérifié : un usage scénarisé.
+
+### Fait
+- `fenetre/scene_combat.py:_texture_monstre` : `None` = même repli que l'exception (texture transparente 16 × 16, monstre non dessiné) avec une ligne de console ; vérifié avec la visionneuse complète (monstre 199 forcé : le combat se déroule).
+- `tests/test_texture_monstre_absente.py` (3 tests, à la main : pyglet, donc pas dans la CI).
+
+### Non vérifié
+Un usage scénarisé de ces numéros ; Windows.

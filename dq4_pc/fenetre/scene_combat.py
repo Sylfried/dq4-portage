@@ -108,7 +108,10 @@ class CombatMixin:
         if orig is None:
             try: arr = self.donnees.texture('m%03d' % mid)
             except Exception as ex:
-                print('texture de monstre introuvable :', mid, ex, flush=True); arr = np.zeros((16, 16, 4), np.uint8)
+                print('texture de monstre introuvable :', mid, ex, flush=True); arr = None
+            else:
+                if arr is None: print('texture de monstre absente des donnees :', mid, flush=True)          # 25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
+            if arr is None: arr = np.zeros((16, 16, 4), np.uint8)               # monstre non dessine (texture transparente) plutot qu'un arret du jeu
             t = self._tex(arr, False, 0)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
             orig = self.cb_tex[(mid, 0)] = dict(t=t, tw=arr.shape[1], th=arr.shape[0], hd=False, arr=arr)
