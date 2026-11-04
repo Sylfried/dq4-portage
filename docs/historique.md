@@ -106,3 +106,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #152 | historique des combats complet : quels monstres étaient là, lesquels sont vaincus, enfuis, disparus ou restés, l'issue, l'or, l'expérience et les objets gagnés ; la boîte grandit en hauteur pour tout contenir (#141, D-224) |
 | 04/11 | #153 | deux touches réattribuables pour rapprocher / éloigner la caméra au clavier (« Caméra (Rapprocher) » et « Caméra (Éloigner) » dans Commandes, pavé + / − ou E / W, pas de 5 % entre 50 et 200 %) (#146, D-225) |
 | 04/11 | #154 | essai : le ciel de l'écran-titre est agrandi (x 3,16 en 16/9) pour ne montrer qu'un carreau de nuages, sans répétition, au lieu des bandes étirées ; plus flou ; les bandes restent avec `DQ_CIEL_BANDES=1` (#130) |
+| 04/11 | #155 | un clic sur une bulle d'icône (personnage, coffre...) et un toucher du rond central de la croix donnent la touche d'action ; la boule orange clignote quand le jeu le demande (#131) |

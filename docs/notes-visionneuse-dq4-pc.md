@@ -1276,3 +1276,25 @@ Le jeu est en plein écran, il branche un écran externe, le passage en fenêtre
 - Une ou plusieurs valeurs intermédiaires (ex. `DQ_CIEL_ZOOM=2`) gardent un peu de répétition mais restent plus nettes ; non essayées (supposé).
 - Le mode « agrandi » (F2, texture du décor en HD) pourrait adoucir le flou : non essayé sur le titre.
 - Vu aussi en 21/9 (2560 x 1080, zoom x 4,15) : aucune répétition, encore plus flou.
+
+## Avance #155 : bulles cliquables et rond central de la croix (#131, 04/11/2026)
+
+### Demande (D-225, 03/11 23 h 19)
+« Il faudrait faire en sorte qu'en cliquant sur une bulle (au-dessus d'un PNJ, d'un coffre...) je puisse valider l'action et faire ce qui est prévu, comme si j'appuyais sur la touche espace. Sinon, dans la version mobile, le cercle au centre de la croix directionnelle sert aussi de touche d'action : il faudrait reproduire l'exact même comportement pour cette touche, ainsi que son affichage lorsqu'on clique ou qu'on peut cliquer. »
+
+### Établi
+- Une bulle est le carré de 0,96 du paquet 19 / 20 (`Moteur.icones`, emplacements 0 à 15) ; le paquet 19 avec un emplacement **>= 16** n'est pas une bulle mais le clignotement de la croix (`TouchPad.SetPadBlink`) : il était ignoré, il est désormais lu (`Etat.pad_clignote`, numéro d'icône < 0 = arrêt).
+- Un toucher de la croix (relâchement sans glissement) donne au moteur le bit de la touche d'action (analyse de `TouchPad.internalUpdate`, déjà relevée avant cette avance) ; que le « glissement » commence au seuil de la zone morte (`c_MoveThreshold` 10 unités, 0,124 du rayon) est une **déduction** (supposé).
+- Mesuré au vrai moteur et à la vraie fenêtre (Xvfb, sauvegarde 2, bulle forcée au-dessus du héros) : le carré de la bulle est projeté avec la matrice de la ville (même formule que `DQ_PROJ`) ; un clic au centre donne `clic_a`, un clic à 5 pixels du coin de l'écran rien ; un toucher du rond central donne `clic_a`, un appui à 0,3 du diamètre (glissement vers la droite) pas d'action au relâchement ; `pad_clignote` vrai dessine la boule orange et son halo.
+
+### Fait
+- `bulles.py` (fonctions pures : `projeter`, `dans_quadrilatere`) ; `fenetre.py` : `_icones` garde les 4 coins monde de chaque bulle (`icone_quads`), `_bulle_sous` les projette (matrice de la dernière image) et `on_mouse_press` donne `clic_a` (la touche A, comme l'espace) sur le terrain libre uniquement ; clic droit inchangé (annuler).
+- `hud_mobile.py` : `croix_glisse` (sorti du rond central), `croix_relacher()` (True = toucher du rond central) ; `fenetre.on_mouse_release` donne `clic_a` sur le terrain libre ; le rond central s'éclaire (boule orange + halo, morceaux `CurLight` et `CurBS` de la feuille `Button`) pendant un toucher et **clignote** (période de 1 s) quand le jeu le demande ; les directions ne changent pas.
+- Tests : `outils/test_bulles_et_croix.py` (27 tests : projection, quadrilatère, paquets 19, toucher / glissement de la croix, clic sur la bulle, terrain libre seulement, emplacement 0).
+
+### À trancher / non vérifié
+- **Sous Windows** : à confirmer par Sylfried (clic sur une bulle réelle, toucher de la croix).
+- **Supposé** : la zone du toucher est le seuil de glissement du jeu (0,124 du rayon : environ 14 pixels de rayon en 1080p, plus petit que la boule dessinée) ; si c'est trop petit à la souris, l'agrandir (par exemple au rayon de la boule, 0,25) est un réglage d'une constante.
+- **Supposé** : l'éclairage pendant le toucher et la période de clignotement (1 s) sont des choix du portage (les constantes du jeu, `MOVE_WAIT_TIME` / `MOVE_LIMIT_ALPHA`, sont inutilisées) ; quand le jeu envoie ce clignotement (tutoriel seulement ? à chaque action possible ?) n'a pas été relevé.
+- La bulle n'a pas été vue dessinée à côté de son carré projeté (la sauvegarde de ce poste est sur l'écran noir du chapitre 1) : la projection est celle de `DQ_PROJ`, mais l'alignement visuel reste à confirmer.
+- Une bulle cachée derrière un personnage ou un décor reste cliquable (pas de test de profondeur).
