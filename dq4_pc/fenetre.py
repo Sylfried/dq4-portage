@@ -271,7 +271,7 @@ class Jeu(pyglet.window.Window):
         self.n_combat = 0; self.cb_tex = {}; self.cb_vl = {}
         self.ui_tf = {}; self.ui_k = 1.0; self.cur_local = {}; self.cur_pas = {}; self.appui = None; self.appui_nd = None; self.survol = None; self.survol_nd = None; self.clic_a = self.clic_b = False; self.ui_dz = 0.0; self.ui_dzp = {}; self.ui_suit = set()       # souris : bouton appuye (port, numero, manette), clics en attente
         self.cb_mx = CB_MIROIR_X; self.cb_ordre = int(os.environ.get('DQ_ORDRE', '0'))                 # combat : textures de monstres (m<id>) et maillages
-        self.angle_cam = float(self.reg['angle_camera']); MO.Etat.vitesse_fondu = float(self.reg['vitesse_fondu']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
+        self.angle_cam = float(self.reg['angle_camera']); self.etat_annul = None; self.toasts = []; self.sauve_rapide = None; self.combo = [False, False]
         self.aide = bool(self.reg['infos']); self.aide_larg = 0.0; self.aide_cle = None; self.cadre_aide = pyglet.shapes.Rectangle(0, 0, 1, 1, color=(0, 0, 0, 150))      # F1 : lignes d'information en haut a droite + cadre noir translucide
         self.t_demarrage = time.time()
         self.stats = True; self.ecarts = collections.deque(maxlen=120); self.t_prec = None; self.dt_dessin = 0.0
@@ -809,8 +809,6 @@ class Jeu(pyglet.window.Window):
         lo, hi = RG.BORNES['distance_camera']; actuelle = 100.0 / self.zoom
         nouvelle = min(hi, max(lo, actuelle + sens * CAM_DIST_VIT * vit * dt))
         if nouvelle != actuelle: self.regler_distance(nouvelle)
-
-    def regler_fondu(self, v): MO.Etat.vitesse_fondu = float(v)
 
     @property
     def est_plein(self):

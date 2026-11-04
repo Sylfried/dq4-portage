@@ -53,8 +53,6 @@ DEFAUT = {
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
     'vitesse_camera': 1.0,        # vitesse de rotation / d'inclinaison de la camera aux fleches et du recentrage : x1 a x4
-    'vitesse_fondu': 1.0,         # transitions : les fondus au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) et la cascade qui ouvre un combat durent 1 / ce facteur de leur duree d'origine (x1 = comme le jeu, defaut depuis #48 ; x1 a x4)
-    'vitesse_fondu_v': 2,         # version du defaut de 'vitesse_fondu' : v1 (avant #48) = x2 ; v2 = x1. Un fichier enregistre avant (sans cette cle) dont la vitesse est encore l'ancien defaut x2 passe a x1 une seule fois (ensuite la cle est enregistree et le choix du joueur fait foi, x2 compris)
     'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) et de la rotation / inclinaison de la camera aux fleches tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
     'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
     'historique_favoris_seuls': False,   # fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_historique.py)
@@ -121,13 +119,13 @@ def mode_fenetre_valide(v):
     return {0: 0, 1: 1, 2: 1}.get(n, DEFAUT['mode_fenetre'])
 
 
-BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_fondu': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES = {'distance_camera': (50, 200), 'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
 BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'camera_inverser_hb', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
-VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera', 'vitesse_fondu')
+VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera')
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
 NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
@@ -239,10 +237,8 @@ class Reglages:
                     if ts[a][0] != n: continue
                     if ts[l][1] == n: ts[l][1] = None
                     if any(n in t for b, t in ts.items() if b != a): ts[a][0] = None
-                if d.get('vitesse_fondu_v') != DEFAUT['vitesse_fondu_v'] and self.v['vitesse_fondu'] == 2.0: self.v['vitesse_fondu'] = DEFAUT['vitesse_fondu']      # ancien defaut x2 -> nouveau defaut x1, une seule fois (#48)
                 self.v['touches_v'] = DEFAUT['touches_v']
                 self.v['interface_v'] = DEFAUT['interface_v']
-                self.v['vitesse_fondu_v'] = DEFAUT['vitesse_fondu_v']
                 for ts in self.v['touches'].values():                   # une touche reservee (F11 : bascule fenetre / plein ecran) ne peut plus etre une touche d'action : retiree d'un ancien fichier
                     for i in range(2):
                         if ts[i] in RESERVEES: ts[i] = None
