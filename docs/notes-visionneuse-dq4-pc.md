@@ -1560,3 +1560,22 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « comme sur la version mobile, de l'exact même façon » = sprites droits aux proportions constantes, comme sur le portrait du mobile (le panneau d'origine n'y penche que de 4 à 6 degrés), donc l'état (2). Le panneau brut (3) n'est PAS remis : il reproduirait en 16/9 l'inclinaison et l'élargissement que la correction des bords (« exactement la correction que j'attendais », #43) retire. Si Sylfried voulait le brut : `DQ_CORRECTION_BORDS=0` (ou changer `_correction_bords`).
 - L'impression d'optique de #134 (le sprite paraît pencher par rapport aux murs quand le héros monte ou descend) revient : c'est le prix du retour à l'état d'avant (cause établie : les verticales du monde penchent à l'écran, le sprite reste droit).
 - **Sous Windows** : PNJ près des bords gauche et droit, droits et sans étirement.
+
+## Avance #183 : murs des intérieurs, faces arrière cachées (#182, 04/11/2026)
+
+### Demande (D-230, 04/11 13 h 25)
+« En intérieur les murs doivent devenir transparents, je crois que le comportement exact c'est que les faces externes n'ont pas de textures et donc si on tourne la caméra alors on doit automatiquement pouvoir voir à travers les murs (regarde comment c'est fait dans le jeu et refais le pareil) »
+
+### Établi
+- Lu dans le paquet de données (ShaderLab `culling` de chaque `Shader` « Custom/... ») : `fld_normal`, `fld_atest`, `fld_trans`, `fld_transz`, `fld_normal_sepia`, `fld_atest_sepia`, `fld_trans_sepia` = **culling 2 (Cull Back)** ; `Custom/Field` (carte du monde) = 0 (sans culling) ; `Custom/ImdChara` = 2 (déjà géré pour les modèles 3D) ; `CharaShadow` = 2 ; `Chara`, `DssaChara`, `DssaMonster*`, `Effect0` = 0.
+- La visionneuse dessinait le décor sans culling : les faces externes des murs, normalement invisibles, bouchaient la vue quand la caméra tournait. Pas de texture transparente dans les données : ce sont les faces arrière qui sont supprimées par le shader.
+
+### Fait
+- `Jeu._culling_decor(actif)` : culling des faces arrière, face avant = sens horaire à l'écran (Unity est en main gauche ; `GL_CW`, comme les modèles 3D). `_tracer_decor` le règle groupe par groupe (opaques puis transparents), sauf le ciel du titre (ses propres sommets, `ciel_plat` / `ciel_zoom`), et le coupe après les groupes (bandes / copies du ciel, ombres, sprites, effets inchangés). `DQ_DECOR_CULL` : 0 = ancien rendu, 2 = sens inverse (essai : il cache les sols et montre les faces externes, donc faux).
+- Mesure (même image) : église `mak1f1` caméra tournée de 150 degrés : le mur de devant disparaît et la salle, le tapis et le héros se voient ; caméra de base : 0 pixel de différence dans `mak1f1` et `mlb1a`, 58 à 235 pixels dans `chf1b` et `caf1`, 1 347 sur 576 000 dans le village de Maout (arêtes des clôtures, vues de leur face avant : rien de manquant) ; titre : 53 pixels.
+- Tests : `outils/test_decor_culling.py` (5) : réglages GL par défaut, coupé, variable d'essai, groupe par groupe sauf le ciel, autres réglages GL inchangés.
+
+### À trancher / non vérifié
+- **Supposé** : le sens des faces est celui des triangles du cache (aucun objet de carte à échelle négative sur les 670 cartes : 0 sur 18 374, donc pas d'inversion à corriger) ; une échelle négative dans le modèle lui-même (Transform local, absente du cache) n'a pas été cherchée.
+- Pas regardé : les fonds de combat (`btl_*`, même chemin de dessin, mêmes shaders) et les donjons.
+- **Sous Windows** : intérieurs (église, château, maisons), donjons, fonds de combat : rien de manquant dans la vue normale, murs de devant invisibles caméra tournée.

@@ -1684,6 +1684,16 @@ class Jeu(pyglet.window.Window):
         t = (float(t[0]), float(t[1]), float(t[2]))
         if t != self._teinte_gl: self._teinte_gl = t; self.prog['teinte'] = t
 
+    @staticmethod
+    def _culling_decor(actif):
+        """Faces cachees du decor (#182) : les shaders du decor de carte du jeu (Custom/fld_normal, fld_atest, fld_trans, fld_transz et leurs variantes sepia) sont en « Cull Back » (lu dans le paquet de donnees :
+        ShaderLab culling = 2) : un mur, un toit, un plafond n'a de texture que sur sa face avant ; vu de derriere (camera tournee, de l'exterieur d'une piece) il est invisible, d'ou la vue a travers les murs d'un interieur.
+        Unity : face avant = triangle dans le sens horaire a l'ecran (main gauche), comme les modeles 3D (DQ_FBX_CULL) ; DQ_DECOR_CULL : 0 = sans culling (l'ancien rendu), 1 = defaut, 2 = sens inverse (essai)."""
+        mode = os.environ.get('DQ_DECOR_CULL', '1')
+        if actif and mode != '0':
+            gl.glEnable(gl.GL_CULL_FACE); gl.glCullFace(gl.GL_BACK); gl.glFrontFace(gl.GL_CCW if mode == '2' else gl.GL_CW)
+        else: gl.glDisable(gl.GL_CULL_FACE); gl.glFrontFace(gl.GL_CCW)
+
     def _tracer_decor(self, net=False):
         """Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
         lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; le mode agrandi (EPX) lui applique l'algorithme HD choisi."""
@@ -1700,7 +1710,9 @@ class Jeu(pyglet.window.Window):
                 if a2c: self.prog['a2c'] = 0.0; gl.glDisable(PF.SAMPLE_ALPHA_TO_COVERAGE); gl.glEnable(gl.GL_BLEND)
                 gl.glDepthMask(gl.GL_FALSE); gl.glDepthFunc(gl.GL_LEQUAL); self.prog['cutoff'] = 0.0      # Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
             gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+            cle_ciel = self.ciel_plat['key'] if self.ciel_plat is not None else (self.ciel_zoom['key'] if self.ciel_zoom is not None else None)          # (le ciel du titre a ses propres sommets : jamais de culling)
             for i, (tex, vl, key) in enumerate(liste):
+                self._culling_decor(key != cle_ciel)
                 gl.glPolygonOffset(0.0, -DECOR_BIAIS * (i + (len(opaques) if pas else 0)))         # decors a plat superposes a la meme hauteur (deux massifs de fleurs, chemin et pelouse...) : sans cela leur profondeur est egale a l'arrondi pres et l'un ou l'autre gagne pixel par pixel, ce qui change a chaque mouvement de la camera (scintillement) ; le groupe dessine en dernier l'emporte, toujours
                 pg = self.pam_gl.get(key)
                 t = pg[self.palettes.image(key)] if pg else (r.get(key, tex) if r else tex)          # palette animee : image courante (sans agrandissement HD)
@@ -1712,7 +1724,7 @@ class Jeu(pyglet.window.Window):
                 if not (self.ciel_plat is not None and key == self.ciel_plat['key'] and self._tracer_ciel_plat(t)): self._tracer(t, vl)
                 if zoom > 1.0 + 1e-6: self.prog['mvp'] = tuple(float(x) for x in self._M_ville.T.ravel())
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
-            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL); self._culling_decor(False)
             if pas == 0:
                 if tint is not None: self._regler_teinte(tint)
                 for tex, vl, key, deb, n, dx in self.carte_ext:
