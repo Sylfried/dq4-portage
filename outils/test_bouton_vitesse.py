@@ -5,7 +5,7 @@ d'action remplace le menu de commandes au debut d'un tour (cadre des commandes a
     DQ_APK=<APK patches> DQ_SAVES=<sauvegardes> outils/flux_session/moteur_slot.sh python3 -W ignore outils/test_bouton_vitesse.py
         (ajoute le vrai combat : une rencontre forcee sur la carte du monde, position du bouton a CHAQUE image dessinee du debut du combat, en fenetre 1280 x 720 sans ecran (PYGLET_HEADLESS=1))
 Les sauvegardes ne sont ouvertes qu'en lecture. La « sonde » (--sonde journal.jsonl) est le programme que le test lance : une session complete de la visionneuse qui note le rectangle du bouton a chaque dessin."""
-import json, os, subprocess, sys, tempfile, types, unittest
+import contextlib, json, os, subprocess, sys, tempfile, types, unittest
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ICI, '..', 'dq4_pc'))
@@ -143,19 +143,87 @@ class Ancre(unittest.TestCase):
         j = self.faux(MO.PARTIE_CHAMP); j.ancre_combat = {'x': 1.0, 'y': 2.0, 'w': None, 'h': None}; j.appel([], False, 0.0); self.assertIsNone(j.ancre_combat)
 
     def test_bouton_cache_tant_qu_il_n_a_pas_de_place(self):
+        """Mode rattache a la boite du bas (DQ_VITESSE_ANCRE=1, defaut de #47) : le bouton n'est montre que s'il a une place."""
         J = types.SimpleNamespace(reg={'bouton_vitesse_pos': [], 'bouton_vitesse': True}, ui_msg=object(), ancre_combat=None)
         b = HM.Boutons.__new__(HM.Boutons); b.J = J
-        self.assertFalse(b._ancre_prete()); J.ancre_combat = {'x': 0.0, 'y': 0.0}; self.assertTrue(b._ancre_prete())
-        J.ancre_combat = None; J.reg['bouton_vitesse_pos'] = [4.0, 6.0]; self.assertTrue(b._ancre_prete())           # place choisie par le joueur
-        J.reg['bouton_vitesse_pos'] = []; J.ui_msg = None; self.assertTrue(b._ancre_prete())                       # menus simples : position de la grille
+        with env_ancrage('1'):
+            self.assertFalse(b._ancre_prete()); J.ancre_combat = {'x': 0.0, 'y': 0.0}; self.assertTrue(b._ancre_prete())
+            J.ancre_combat = None; J.reg['bouton_vitesse_pos'] = [4.0, 6.0]; self.assertTrue(b._ancre_prete())           # place choisie par le joueur
+            J.reg['bouton_vitesse_pos'] = []; J.ui_msg = None; self.assertTrue(b._ancre_prete())                       # menus simples : position de la grille
+
+
+@contextlib.contextmanager
+def env_ancrage(valeur):
+    """DQ_VITESSE_ANCRE fixee (ou retiree : None) le temps d'un bloc."""
+    ancien = os.environ.get('DQ_VITESSE_ANCRE')
+    if valeur is None: os.environ.pop('DQ_VITESSE_ANCRE', None)
+    else: os.environ['DQ_VITESSE_ANCRE'] = valeur
+    try: yield
+    finally:
+        if ancien is None: os.environ.pop('DQ_VITESSE_ANCRE', None)
+        else: os.environ['DQ_VITESSE_ANCRE'] = ancien
+
+
+def faux_boutons(largeur=1280, hauteur=720, pos=None, ancre=None):
+    """Boutons sur une fenetre factice (seuls comptent la taille de la fenetre, les reglages du bouton de vitesse et l'ancre eventuelle)."""
+    J = types.SimpleNamespace(width=largeur, height=hauteur, ui_msg=object(), ancre_combat=ancre, moteur=types.SimpleNamespace(etat=types.SimpleNamespace(partie=MO.PARTIE_COMBAT)),
+                              reg={'bouton_vitesse_pos': pos or [], 'bouton_vitesse': True, 'bouton_vitesse_taille': 1.0, 'boutons_pos': {}, 'boutons_taille': 1.0})
+    b = HM.Boutons.__new__(HM.Boutons); b.J = J; b.edition = False; return b, J
+
+
+class BordGauche(unittest.TestCase):
+    """#188 (« pour le bouton d'acceleration du combat remets-le sur le bord gauche pour le moment ») : par defaut le bouton de vitesse de combat est a sa case de la grille, sur le bord gauche de l'ecran, jamais rattache a la boite
+    du bas (DQ_VITESSE_ANCRE=1 redonne le rattachement de #47)."""
+    ANCRE = {'x': 430.0, 'y': 30.0, 'w': 85.0, 'h': 40.0}
+
+    def test_defaut_pas_d_ancrage(self):
+        self.assertFalse(HM.ANCRAGE_VITESSE_DEF)
+        with env_ancrage(None): self.assertFalse(HM.ancrage_vitesse())
+        for v in ('', '  ', 'x?'):
+            with env_ancrage(v): self.assertFalse(HM.ancrage_vitesse(), repr(v))                    # absente, vide ou illisible : le defaut
+        for v in ('1', 'oui', 'True'):
+            with env_ancrage(v): self.assertTrue(HM.ancrage_vitesse(), v)
+        for v in ('0', 'non', 'False', 'FAUX'):
+            with env_ancrage(v): self.assertFalse(HM.ancrage_vitesse(), v)
+
+    def test_bord_gauche_meme_avec_une_ancre_connue(self):
+        b, J = faux_boutons(ancre=self.ANCRE)
+        with env_ancrage(None):
+            self.assertIsNone(b.ancre()); self.assertTrue(b._ancre_prete())
+            x, y, w, h = b.rect(HM.COMBAT)
+            self.assertAlmostEqual(x, 0.4 * 1280 / HM.COLS, places=6); self.assertAlmostEqual(y, 720 - 8 * 720 / HM.LIGNES - h, places=6)           # case (0,4 ; 8) de la grille : bord gauche
+            self.assertLess(x, 0.02 * 1280)                                                                                                       # (jamais sous la boite du bas : x ~ 380 a 460)
+            self.assertEqual((w, h), (HM.PLAQUE_DQ[HM.COMBAT][0] * 720 / 800.0, HM.PLAQUE_DQ[HM.COMBAT][1] * 720 / 800.0))                       # plaque d'origine du bouton, pas celle de « Fuir »
+
+    def test_visible_des_la_premiere_image_sans_ancre(self):
+        b, J = faux_boutons(ancre=None)
+        with env_ancrage(None): self.assertTrue(b._ancre_prete())
+        with env_ancrage('1'): self.assertFalse(b._ancre_prete())
+
+    def test_position_du_joueur_gardee(self):
+        b, J = faux_boutons(pos=[10.0, 4.0], ancre=self.ANCRE)
+        for v in (None, '1'):
+            with env_ancrage(v): x, y, w, h = b.rect(HM.COMBAT); self.assertAlmostEqual(x, 10.0 * 1280 / HM.COLS, places=6)
+
+    def test_ancrage_demande_redonne_le_rattachement(self):
+        b, J = faux_boutons(ancre=self.ANCRE)
+        with env_ancrage('1'):
+            self.assertEqual(b.ancre(), self.ANCRE); x, y, w, h = b.rect(HM.COMBAT); self.assertAlmostEqual(x, 430.0); self.assertGreater(w, 0)
+
+    def test_aucun_changement_hors_combat(self):
+        b, J = faux_boutons(ancre=self.ANCRE); J.moteur.etat.partie = MO.PARTIE_CHAMP
+        for v in (None, '1'):
+            with env_ancrage(v): self.assertIsNone(b.ancre())
 
 
 @unittest.skipUnless(APK and SAVES and F is not None, 'moteur reel : DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes>')
 class CombatReel(unittest.TestCase):
+    ENV = {'DQ_VITESSE_ANCRE': '1'}                                    # mode rattache a la boite du bas (defaut de #47) ; le defaut depuis #188 (bord gauche) : CombatReelBordGauche
     @classmethod
     def setUpClass(cls):
         cls.journal = os.path.join(tempfile.mkdtemp(prefix='bouton_'), 'journal.jsonl')
-        r = subprocess.run([sys.executable, '-W', 'ignore', os.path.abspath(__file__), '--sonde', cls.journal], capture_output=True, text=True, timeout=900, env=dict(os.environ, PYGLET_HEADLESS='1', PYGLET_AUDIO='silent'))
+        env = {k: v for k, v in os.environ.items() if k != 'DQ_VITESSE_ANCRE'}; env.update(PYGLET_HEADLESS='1', PYGLET_AUDIO='silent', **cls.ENV)
+        r = subprocess.run([sys.executable, '-W', 'ignore', os.path.abspath(__file__), '--sonde', cls.journal], capture_output=True, text=True, timeout=900, env=env)
         if not os.path.exists(cls.journal): raise RuntimeError('sonde sans journal : ' + r.stdout[-600:] + r.stderr[-600:])
         cls.lignes = [json.loads(l) for l in open(cls.journal)]
         cls.vues = [l for l in cls.lignes if l['visible']]
@@ -176,6 +244,21 @@ class CombatReel(unittest.TestCase):
         menus = [l['rect'][0] for l in self.vues if l['menu'] is not None and not l['msg']]; actions = [l['rect'][0] for l in self.vues if l['msg'] and l['type_msg'] in (2, 3)]
         self.assertTrue(menus and actions)
         for x in menus + actions: self.assertAlmostEqual(x, menus[0], delta=1.0)
+
+
+@unittest.skipUnless(APK and SAVES and F is not None, 'moteur reel : DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes>')
+class CombatReelBordGauche(CombatReel):
+    """Defaut depuis #188 (aucune variable) : a CHAQUE image dessinee du combat le bouton est sur le bord gauche de l'ecran, a sa case de la grille, et ne bouge jamais."""
+    ENV = {}
+
+    def test_a_chaque_image_le_bouton_est_sous_la_boite_du_bas_a_gauche(self):
+        for l in self.vues: x, y, w, h = l['rect']; self.assertAlmostEqual(x, 0.4 * L / HM.COLS, delta=0.5, msg=l); self.assertAlmostEqual(y, H - 8 * H / HM.LIGNES - h, delta=0.5, msg=l)
+
+    def test_premiere_image_deja_au_bon_endroit(self):
+        x, y, w, h = self.vues[0]['rect']; self.assertAlmostEqual(x, 0.4 * L / HM.COLS, delta=0.5); self.assertAlmostEqual(y, H - 8 * H / HM.LIGNES - h, delta=0.5)
+
+    def test_pas_de_decalage_au_debut_d_un_tour(self):
+        xs = {round(l['rect'][0], 2) for l in self.vues}; ys = {round(l['rect'][1], 2) for l in self.vues}; self.assertEqual((len(xs), len(ys)), (1, 1))
 
 
 if __name__ == '__main__':

@@ -401,7 +401,8 @@ class Pause:
             e.append(self._curs('Taille de la croix', lambda: R['croix_taille'], lambda v: R.__setitem__('croix_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['croix_taille']))
         elif c == RG.CIBLE_VITESSE:                                                   # bouton de vitesse de combat : sa taille ; sa position se regle en le glissant (ou « Replacer sous la boîte »)
             e.append(self._curs('Taille du bouton', lambda: R['bouton_vitesse_taille'], lambda v: R.__setitem__('bouton_vitesse_taille', v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['bouton_vitesse_taille']))
-            e.append(dict(t='act', l='Replacer sous la boîte de combat', ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient collé au coin bas gauche de la boîte du bas (position d'origine) ; glisse-le pour le placer ailleurs"))
+            if HM.ancrage_vitesse(): e.append(dict(t='act', l='Replacer sous la boîte de combat', ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient collé au coin bas gauche de la boîte du bas (position d'origine) ; glisse-le pour le placer ailleurs"))
+            else: e.append(dict(t='act', l="Replacer sur le bord gauche", ok=lambda: R.__setitem__('bouton_vitesse_pos', []), aide="Le bouton revient sur le bord gauche de l'écran (position d'origine) ; glisse-le pour le placer ailleurs"))
         else:
             e += [self._curs('Taille', lambda: self._ov()[0], lambda v: self._poser_ov(0, v), 0.5, 2.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.fenetre_defaut(self.cible)[0]),
                   self._curs('Position horizontale', lambda: self._ov()[1], lambda v: self._poser_ov(1, v), -0.5, 0.5, 0.01, 0.05, lambda v: '%+d %%' % round(v * 100), 100.0, defaut=RG.fenetre_defaut(self.cible)[1]),

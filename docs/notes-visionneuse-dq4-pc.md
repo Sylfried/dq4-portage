@@ -1619,3 +1619,21 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - **Supposé** : le menu du jeu ouvert (commandes, Divers, boutique) compte comme « le jeu a la main » : en passant par « Paramètres » du menu Divers, la ligne Historique est grisée ; la touche H reste utilisable après avoir fermé ce menu.
 - **Non vérifié sous Windows** : H en ville, pendant un dialogue, une scène, un combat ; fermeture automatique quand un événement reprend la main (cas rare : le jeu ne reçoit aucune entrée derrière le menu).
+
+## Avance #189 : bouton de vitesse de combat sur le bord gauche (#188, 04/11/2026)
+
+### Demande (D-233, 04/11 13 h 30)
+« … et pour le bouton d'accélération du combat remets-le sur le bord gauche pour le moment »
+
+### Établi
+- Depuis #47 le bouton était rattaché au coin bas gauche de la boîte du bas (commandes ou message) à la taille de la plaque « Fuir » (`Jeu._ancrer_vitesse_combat`, `Boutons.ancre`) ; sa case de la grille (colonne 0,4, ligne 8 sur 18 : le bord gauche de l'écran) ne servait plus qu'une fois déplacé par le joueur.
+
+### Fait
+- `hud_mobile.ANCRAGE_VITESSE_DEF = False` et `hud_mobile.ancrage_vitesse()` : par défaut `Boutons.ancre()` est vide et `Boutons._ancre_prete()` toujours vrai : le bouton est à sa case de la grille, sur le bord gauche, à la taille de sa plaque d'origine (118 x 60), dès la première image du combat. Une position choisie par le joueur (`bouton_vitesse_pos`) est gardée. `DQ_VITESSE_ANCRE=1` redonne le rattachement de #47 (le calcul de l'ancre de la fenêtre est conservé).
+- Interface « Combat : bouton de vitesse » : la ligne « Replacer sous la boîte de combat » devient « Replacer sur le bord gauche » (même effet : position d'origine) tant que le rattachement est coupé.
+- Mesure sur le vrai moteur (combat forcé sur la carte du monde, 1280 x 720, position à CHAQUE image dessinée) : x = 16 px et y = 346 px à toutes les images, aucun décalage au début d'un tour ni à la première image.
+- Tests : `outils/test_bouton_vitesse.py` (25 dont 8 avec le moteur) : variable d'environnement, bord gauche même avec une ancre connue, visible dès la première image, position du joueur gardée, rattachement redemandé, rien hors combat, vrai combat (`CombatReelBordGauche`, rattachement `CombatReel` avec `DQ_VITESSE_ANCRE=1`).
+
+### À trancher / non vérifié
+- « pour le moment » : le rattachement sous la boîte reste prêt (`DQ_VITESSE_ANCRE=1`) ; à reprendre quand tu voudras en refaire le défaut.
+- **Sous Windows** : le bouton sur le bord gauche à chaque image d'un combat, y compris en 16/9 large (écran 2560 x 1440) ; le clic change toujours la vitesse.
