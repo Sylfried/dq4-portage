@@ -1,6 +1,7 @@
 """Clavier, souris et manette : evenements de la fenetre et lecture des touches."""
 import os
 import pyglet
+from dq4_pc.fenetre import entrees as EN
 from dq4_pc.menus import hud_mobile as HM
 from dq4_pc.noyau import moteur as MO
 from dq4_pc.fenetre.constantes import ACT_FRONTS, BTN_CARTE, BTN_DISCUSSION, BTN_MENU, BTN_PAROLE, BTN_SAUVEGARDES, SE_BOUTON, bruit_bouton
@@ -286,4 +287,5 @@ class ClavierSourisMixin:
             elif fr['discussion']: decl = BTN_DISCUSSION; self._bruit_hud('discussion')
             elif fr['carte']: decl = BTN_CARTE; self._bruit_hud('carte')
             p &= ~(MO.A | MO.B)
+        elif decl & MO.A: p, decl = EN.toucher_pour_le_moteur(p, decl, MO.A, MO.B, BTN_PAROLE, mo.attend_toucher())          # message ouvert : A tourne la page (0x10) ; le menu du don d'experience, a son dernier etat, attend le toucher d'ecran (0x100 seul)
         return p, decl

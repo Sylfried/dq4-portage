@@ -2183,3 +2183,21 @@ Sylfried (04/11/2026, 20 h 57 et 20 h 58) : supprimer `jeux\`, les deux fichiers
 
 ### Non vérifié
 Que le jeu démarre jusqu'au bout sous Windows avec le nouveau lanceur (le premier lancement du 04/11 à 19 h 58 a bien repris les fichiers, mais je n'ai pas vu la suite) ; `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`, `dq4_pc\historique_*.json` et `dq4_pc\erreurs_fenetre.log` (anciens doublons) laissés en place.
+
+## Avance #262 : le don d'expérience du roi ne fige plus le jeu (toucher d'écran 0x100)
+
+### Demande
+Signalé par Sylfried le 04/11/2026 (21 h 15) : au chapitre 1, quand le roi de Burland donne de l'expérience à Ragnar, le jeu se fige au dernier message de statistiques (niveau 15) ; plus rien ne répond (ni clic, ni toucher, ni Espace), seul Échap ouvre « Paramètres ». Recharger la sauvegarde automatique reproduit le blocage. Il a demandé de corriger pour tout le jeu.
+
+### Établi
+- Reproduit sans fenêtre avec sa sauvegarde automatique et ses réglages (carte `caf1`) : bloqué indéfiniment, avec ou sans ses réglages ; une version d'avant #232 bloque aussi (cadre vide).
+- Le moteur ne s'est pas arrêté : le message est fini (`ui_MsgLoop` à l'état 6), c'est le menu `MaterielMenu_EXTRA_PRESENT_EXP` (don d'expérience, ajout du mobile) qui attend, à son dernier état (`+0x30` = 2), que `dss::g_Pad + 2` soit non nul. `Global::NativeExec` remplit cette valeur d'après le 2e argument de `GameUpdate` : bits 10 à 13 -> 0x20 / 0x40 / 0x80 / 0x400, et 0x10 seulement quand l'argument vaut **exactement** 0x100 (le toucher d'écran). La touche A pendant un message envoie 0x10 (utile à `ui_MsgLoop`), jamais lu par ce menu.
+- Essai sur le moteur bloqué : 0x100 ou 0x400 le libère aussitôt (le menu se ferme, le dialogue du roi suit), 0x110 non.
+- Revue de tout le jeu : 17 fonctions lisent `g_Pad + 2`, 8 lisent le 2e argument tel quel (« non nul »). Seul ce menu bloquait : casino (machine à sous, poker, arène) = accélération des gains seulement, fenêtres de ville et de carte = boutons du portage, crédits, compteurs et messages = « non nul ».
+
+### Fait
+- `Moteur.attend_toucher` : vrai quand le menu est dans le tableau de `MenuManager` ET à son dernier état (l'état reste à 2 après la fermeture, d'où le test du tableau).
+- `entrees.toucher_pour_le_moteur` (logique pure) et un branchement dans `Jeu._entrees` : message ouvert + menu en attente + A (touche, clic, Entrée, Espace) -> 0x100 seul (ni A ni B). Rien ne change le reste du temps.
+- Vérifié sur le vrai moteur (sa sauvegarde automatique, ses réglages) : `attend_toucher` faux, vrai à 2300 images, faux dès l'appui ; la scène enchaîne « Faites attention à vous, McRyan. », la fin du chapitre 1, la proposition de journal puis le chapitre 2.
+- `tests/test_don_exp_toucher.py` (13 tests : détection du menu avec une mémoire simulée, conversion, modèle de `NativeExec`, branchement) ; ajouté à la CI.
+- Non vérifié : l'accélération des gains du casino par un appui (G-217).
