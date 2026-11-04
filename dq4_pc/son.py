@@ -92,6 +92,9 @@ BGM_RELANCE = 0x1000        # cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur 
 BGM_ARRET = 0x4000           # valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
 SE_GRACE = 0.4               # secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
 SE_BOUCLE_MAX = 120.0        # secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
+ECHECS_MAX = 3               # echecs de lecture consecutifs (bruitage ou musique) avant de couper le son un moment (peripherique retire ou change, pilote : #221, audit SND-10)
+DELAIS_REESSAI = (2.0, 10.0, 30.0)   # secondes avant le nouvel essai, selon le nombre de coupures deja subies (le dernier delai se repete)
+NOTES_MAX = 40               # lignes de journal au plus par session (une panne qui dure ne remplit pas le fichier)
 IMAGES_MOTEUR_PAR_S = 30.0   # images du moteur par seconde a vitesse normale (un pas du moteur = 1/30 s)
 # Musiques decodees d'avance (tache de fond, un fil a part, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache ; 59 Mo en tout) : le decodage d'une musique longue prend du temps
 # (BGM 23, 113 s : 0,6 a 1,2 s ici, plus sur un PC lent ; les jingles : 0,01 a 0,14 s), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 a 3,9 s apres l'avoir lancee (x3) : sans cela, la musique
@@ -146,8 +149,11 @@ class _SE:
 
 class Son:
     """Lecture : une musique a la fois (avec boucle), des bruitages en parallele. Le decodage se fait en tache de fond."""
-    def __init__(self, apk, cache, log=print, volume_musique=1.0, volume_bruitages=1.0, actif=True):
+    def __init__(self, apk, cache, log=print, volume_musique=1.0, volume_bruitages=1.0, actif=True, journal=None, alerte=None):
         self.apk, self.cache, self.log = apk, cache, log
+        self.journal, self.alerte = journal, alerte                        # journal(texte) : ligne ajoutee au journal des erreurs ; alerte(texte) : petit message a l'ecran (coupure et retour du son)
+        self.echecs = 0; self.pannes = 0; self.reessai = None; self.bgm_perdue = None      # echecs de lecture consecutifs ; coupures subies ; heure du nouvel essai (None = pas de coupure en cours) ; musique a relancer au retour du son
+        self._notes = 0; self._vus = set(); self._en_panne = False
         self.mix = Mixage(musique=volume_musique, effets=volume_bruitages)
         self.actif = actif; self.ok = False
         self.pool = ThreadPoolExecutor(max_workers=1)
@@ -174,6 +180,47 @@ class Son:
             self.ok = True
         except Exception as e:
             self.log('Son indisponible (%r)' % (e,))
+
+    # ---- echecs de lecture (#221, audit SND-10 et SND-12)
+    def _noter(self, texte, alerte=None):
+        """Une ligne dans la console et dans le journal des erreurs (au plus NOTES_MAX par session) ; `alerte` : le meme fait, en bref, a l'ecran."""
+        self.log('Son : ' + texte)
+        if self._notes < NOTES_MAX:
+            self._notes += 1
+            if self.journal is not None:
+                try: self.journal(texte)
+                except Exception: pass
+        if alerte and self.alerte is not None:
+            try: self.alerte(alerte)
+            except Exception: pass
+
+    def _une_fois(self, cle, e):
+        """Erreur sans consequence immediate (volume, reprise apres pause) : notee une seule fois par session."""
+        if cle not in self._vus: self._vus.add(cle); self._noter('%s impossible (%r), note une seule fois' % (cle, e))
+
+    def _echec(self, quoi, e):
+        """Un bruitage ou une musique n'a pas pu etre lance : ECHECS_MAX echecs de suite coupent le son un moment (nouvel essai tout seul, voir tick) au lieu de le couper jusqu'a la fermeture du jeu."""
+        self.echecs += 1; self._noter('%s impossible (%r), echec %d' % (quoi, e, self.echecs))
+        if self.echecs >= ECHECS_MAX:
+            d = DELAIS_REESSAI[min(self.pannes, len(DELAIS_REESSAI) - 1)]; self.pannes += 1
+            self.ok = False; self.reessai = time.time() + d; self._en_panne = True
+            self._noter('son interrompu, nouvel essai dans %d s' % d, alerte='Son interrompu : nouvel essai automatique')
+
+    def _succes(self):
+        """Un son vient de partir : la serie d'echecs est finie (et, apres une coupure, le son est retabli)."""
+        if self._en_panne: self._en_panne = False; self._noter('son retabli', alerte='Son rétabli')
+        self.echecs = 0
+
+    def _reessayer(self):
+        """Fin de la coupure : le son est rouvert ; un seul echec de plus le recoupe aussitot (delai plus long). La musique demandee pendant la coupure est relancee."""
+        self.ok = True; self.reessai = None; self.echecs = ECHECS_MAX - 1
+        v, self.bgm_perdue = self.bgm_perdue, None
+        if v is not None and self.bgm is None: self.jouer_bgm(v)
+
+    def _suivre_pendant_la_panne(self, evts):
+        """Pendant la coupure les ordres du moteur sont perdus, sauf la musique de fond : la derniere demandee est relancee au retour du son (un arret la supprime ; un jingle a reprise est ignore)."""
+        for t, v in evts:
+            if t == 37: self.bgm_perdue = None if v >= BGM_ARRET else (v if v < BGM_RELANCE else self.bgm_perdue)
 
     # ---- lecture des fichiers
     def _octets(self, nom):
@@ -231,7 +278,9 @@ class Son:
 
     # ---- appele a chaque image
     def tick(self):
-        if not self.ok: return
+        if not self.ok:
+            if self.reessai is not None and time.time() >= self.reessai: self._reessayer()
+            return
         for nom, (fut, rappels) in list(self.jobs.items()):
             if not fut.done(): continue
             r = fut.result(); del self.jobs[nom]
@@ -258,7 +307,9 @@ class Son:
     def evenements(self, evts, image_moteur=None):
         """evts : [(type de paquet, valeur)] de l'image : 35 bruitage, 36 arret de bruitage, 37 musique. image_moteur : numero de la derniere image du moteur (30 par seconde a vitesse normale) :
         sert a ne pas couper un jingle quand le jeu tourne plus vite que la normale (voir _jingle_protege)."""
-        if not (self.ok and self.actif): return
+        if not (self.ok and self.actif):
+            if self.reessai is not None and self.actif: self._suivre_pendant_la_panne(evts)
+            return
         if os.environ.get('DQ_SON'): self.log('Son : image %s ordres %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
         for t, v in evts:
             if t == 35: self.jouer_se(v)
@@ -297,6 +348,7 @@ class Son:
         self._obtenir(nom, lambda r, i=ident: self._lancer_se(i, r))
 
     def _lancer_se(self, ident, r):
+        if not self.ok: return                                                         # son coupe (panne en cours, ou pas de pilote audio) : rien n'est tente, les echecs ne s'accumulent pas
         try:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             boucle = r['boucle']                                                            # bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
@@ -309,8 +361,9 @@ class Son:
                 try: self.se[0].p.delete()
                 except Exception: pass
                 del self.se[0]
+            self._succes()
         except Exception as e:
-            self.log('Son : lecture impossible (%r)' % (e,)); self.ok = False
+            self._echec('bruitage %d' % ident, e)
 
     def arreter_se(self, ident):
         for x in list(self.se):
@@ -332,6 +385,9 @@ class Son:
 
     def _lancer_bgm(self, ident, r, relance=False):
         if self.bgm_demande != ident: return                        # une autre musique a ete demandee entre-temps
+        if not self.ok:
+            if not relance: self.bgm_perdue = ident                  # son coupe : a relancer au retour
+            return
         try:
             fmt = self.AudioFormat(channels=r['pcm'].shape[1], sample_size=16, sample_rate=r['frequence'])
             src = SourceBoucle(self.media, self.AudioData, fmt, r['pcm'], r['debut'], r['fin'] if r['boucle'] else 0)
@@ -344,8 +400,10 @@ class Son:
             self.bgm_t0 = self.t_pause if self.t_pause is not None else time.time(); self.bgm_pos0 = depart
             if self.t_pause is not None: p.pause()
             self.bgm_fin = None if r['boucle'] else self.bgm_t0 + len(r['pcm']) / r['frequence'] - depart       # jingle sans boucle : heure de la reprise de la musique d'avant
+            self._succes()
         except Exception as e:
-            self.log('Son : musique impossible (%r)' % (e,)); self.ok = False
+            if not relance: self.bgm_perdue = ident                          # a relancer au retour du son (un jingle rate n'a plus d'objet)
+            self._echec('musique %d' % ident, e)
 
     def position_bgm(self):
         """Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue."""
@@ -401,10 +459,10 @@ class Son:
     def _appliquer_volumes(self):
         if self.bgm is not None:
             try: self.bgm.volume = self.mix.gain(self.bgm_cat, self.bgm_propre)
-            except Exception: pass
+            except Exception as e: self._une_fois('volume de la musique', e)
         for x in self.se:
             try: x.p.volume = self.mix.gain(x.cat, x.propre, 'effets')
-            except Exception: pass
+            except Exception as e: self._une_fois('volume des bruitages', e)
 
     def regler_volumes(self, musique=None, bruitages=None):
         """Compatibilite : volume de la musique et des bruitages (0 a 1)."""
@@ -438,7 +496,7 @@ class Son:
             for p in [self.bgm] + [x.p for x in self.se]:
                 try:
                     if p is not None: p.play()
-                except Exception: pass
+                except Exception as e: self._une_fois('reprise apres la pause', e)
 
     def basculer(self):
         """Touche : son active / coupe."""
