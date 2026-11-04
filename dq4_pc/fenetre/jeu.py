@@ -112,7 +112,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                 if e.carte: self._charger_carte(e.carte)      # les chargements lourds se font ici, pas pendant le jeu
                 for sp in list(e.sprites.values()): self._feuille(sp['id'], self.mode)
                 e.sons = [x for x in e.sons if x[0] == 37][-1:]      # les bruitages du chargement sont perdus, la musique de la carte reste
-        self.n = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}; self.act_prec = {}
+        self.n = 0; self._crochets_signales = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}; self.act_prec = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
         self.ui_rendu = None; self.ui_g = None; self.ui_msg = None; self.canevas_cle = None
@@ -455,6 +455,17 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         except Exception as ex: print('Echec de sauvegarde non note (%r)' % (ex,), flush=True)
         self.toast('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', duree=6.0)
 
+    def _signaler_crochets_manques(self, mo):
+        """Reglages du moteur que l'apk utilise n'a pas laisses s'installer (Moteur._manque : autre version du moteur que celle etudiee) : le jeu tourne avec le comportement d'origine pour ces points. Une ligne par point dans le journal
+        des erreurs et un message a l'ecran, une seule fois (les points trouves plus tard, apres le chargement d'un etat, sont annonces a leur tour)."""
+        nouveaux = mo.crochets_manques[self._crochets_signales:]; self._crochets_signales = len(mo.crochets_manques)
+        texte = ''.join('--- %s : reglage du moteur non applique : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in nouveaux)
+        try:
+            chemin = CH.DOSSIERS.journal_erreurs(); os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
+            with open(chemin, 'a', encoding='utf-8') as f: f.write(texte)
+        except Exception as ex: print('Reglages non appliques non notes (%r)' % (ex,), flush=True)
+        self.toast('Certains réglages du moteur ne sont pas appliqués (autre version du jeu ?) : détails dans erreurs_fenetre.log', duree=8.0)
+
     def tick(self, dt, muet=False):
         """Un pas du moteur (30 par seconde d'horloge de jeu). `muet` : pas supplementaire d'un combat accelere pendant que le moteur attend le joueur (menu, message qui attend une touche) : le moteur avance (animations des monstres,
         fenetres, minuteries) sans aucune touche ni clic, ceux-ci restant lus au rythme normal (voir _faire_pas_combat)."""
@@ -478,6 +489,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        if len(mo.crochets_manques) > self._crochets_signales: self._signaler_crochets_manques(mo)
         if mo.core.echecs_ecriture: self._signaler_echecs_ecriture(mo.core)          # une sauvegarde n'a pas pu etre ecrite (#198) : le jeu continue, le joueur est prevenu
         self.historique.maj(mo)          # dialogues et combats de ce pas -> historique (voir historique.py)
         if mo.demande_pause: mo.demande_pause = False; self.pause.ouvrir()          # bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Moteur._detourner_parametres)

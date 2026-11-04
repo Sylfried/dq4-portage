@@ -453,6 +453,7 @@ class Interface:
 class Moteur:
     def __init__(self, dossier_apk, dossier_lecture, dossier_ecriture, langue=1):
         self.log = Silencieux()
+        self.crochets_manques = []               # reglages / crochets que le moteur de CET apk n'a pas laisse installer (voir _manque) ; la fenetre les annonce une fois (Jeu._signaler_crochets_manques)
         lib = zipfile.ZipFile(os.path.join(dossier_apk, 'split_config.arm64_v8a.apk')).read(LIB_APK)
         pack = os.path.join(dossier_apk, 'split_UnityDataAssetPack.apk')
         self.apk_donnees = pack
@@ -503,8 +504,16 @@ class Moteur:
         self._crochets_magie()
         self.capteur = Capteur(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.capteur_combat = CapteurCombat.pour(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir historique_combat.py)
+        if not self.capteur.actif: self._manque("historique des dialogues : crochet non installe, l'historique restera vide")
+        if not self.capteur_combat.actif: self._manque("historique des combats : crochets non installes, l'historique des combats restera vide")
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._creer_canevas()
+
+    def _manque(self, texte):
+        """Un reglage ou un crochet n'a pas pu etre installe (instruction du moteur differente : autre version de l'apk). Le jeu continue avec le comportement d'origine ; la ligne va dans la console et dans `crochets_manques`
+        (sans doublon : reappliquer_correctifs repasse ici apres le chargement d'un etat), d'ou la fenetre la note dans erreurs_fenetre.log et prévient le joueur par un message a l'ecran."""
+        print(texte, flush=True)
+        if texte not in self.crochets_manques: self.crochets_manques.append(texte)
 
     def _crochets_texte(self):
         """Vitesse du texte des dialogues et defilement des combats (reglages du joueur, menu Echap).
@@ -526,15 +535,15 @@ class Moteur:
                     self._acc_texte += v; n = int(self._acc_texte); self._acc_texte -= n
                     uc.reg_write(c.XREG[8], min(n, 4000))
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _vt, None, a + UI_MSGLOOP_ECRITURE, a + UI_MSGLOOP_ECRITURE)
-            else: print('vitesse du texte : ui_MsgLoop inattendu, reglage sans effet', flush=True)
-        except Exception as ex: print('vitesse du texte non installee :', ex, flush=True)
+            else: self._manque('vitesse du texte : ui_MsgLoop inattendu, reglage sans effet')
+        except Exception as ex: self._manque('vitesse du texte non installee : %s' % (ex,))
         try:
             sb = c.export('_ZN6status12OptionStatus14setBattleSpeedEc'); mu = c.export('_ZN26TownMenu_OPERATION_SETTING10menuUpdateEv')
             if sb and mu:
                 def _sb(uc, ad, sz, u):
                     if self.defilement is not None and self.rappel_defilement is not None and mu <= uc.reg_read(c.XREG[30]) < mu + 0x400: self.rappel_defilement(uc.reg_read(c.XREG[1]) & 0xff)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _sb, None, sb, sb)
-        except Exception as ex: print('defilement des combats : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('defilement des combats : crochet non installe : %s' % (ex,))
 
     def _crochets_niveau(self):
         """Option « PV et PM restaures au niveau superieur » (`soin_niveau`, faux = comme le jeu). Toute montee de niveau passe par `HaveStatus::levelup(bool)` : elle recalcule les caracteristiques, puis, si l'argument est vrai
@@ -543,13 +552,13 @@ class Moteur:
         try:
             a = c.export('_ZN6status10HaveStatus7levelupEb')
             if not a or struct.unpack('<I', c.mem(a + HAVESTATUS_LEVELUP_FIN, 4))[0] != TBZ_W20_0:
-                print('PV/PM au niveau superieur : HaveStatus::levelup inattendu, option sans effet', flush=True); return
+                self._manque('PV/PM au niveau superieur : HaveStatus::levelup inattendu, option sans effet'); return
             def _soin(uc, ad, sz, u):
                 if self.soin_niveau: uc.reg_write(c.XREG[20], uc.reg_read(c.XREG[20]) | 1)
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _soin, None, a + HAVESTATUS_LEVELUP_FIN, a + HAVESTATUS_LEVELUP_FIN)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: print('PV/PM au niveau superieur : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('PV/PM au niveau superieur : crochet non installe : %s' % (ex,))
 
     def _crochets_rencontres(self):
         """Rencontres aleatoires et marche acceleree (voir rencontres.py). `vitesse_marche` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
@@ -559,7 +568,7 @@ class Moteur:
         try:
             a = c.export('_ZN9CountDown4execEv')
             if not a or struct.unpack('<I', c.mem(a + COUNTDOWN_EXEC_ECRITURE, 4))[0] != STR_W8_X0:
-                print('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres', flush=True); return
+                self._manque('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres'); return
             def _cd(uc, ad, sz, u):
                 v = self.vitesse_marche
                 if v <= 1.0: return                                                          # x1 : le jeu tel quel
@@ -570,7 +579,7 @@ class Moteur:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _cd, None, a + COUNTDOWN_EXEC_ECRITURE, a + COUNTDOWN_EXEC_ECRITURE)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: print('rencontres : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('rencontres : crochet non installe : %s' % (ex,))
 
     def _crochets_horloge_jour(self):
         """Arrivee de la nuit et marche acceleree (voir rencontres.py, #163). Le temps du monde n'avance que par le saut terminal `FieldStage::ChangeTime(0)` de `FieldPlayerDoku::checkDokuDamage` (+ 0x38, carte du monde,
@@ -582,7 +591,7 @@ class Moteur:
             u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]
             w = u32(f + DOKU_CHANGETIME_B) if f else 0
             if not f or w & 0xfc000000 != 0x14000000 or f + DOKU_CHANGETIME_B + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) != c.LIB_BASE + DOKU_CHANGETIME_STUB or u32(f + DOKU_RET) != RET_A64:
-                print("horloge jour / nuit : checkDokuDamage inattendu, la vitesse de marche change la vitesse d'arrivee de la nuit", flush=True); return
+                self._manque("horloge jour / nuit : checkDokuDamage inattendu, la vitesse de marche change la vitesse d'arrivee de la nuit"); return
             def _hj(uc, ad, sz, u):
                 v = self.vitesse_marche
                 if v <= 1.0: return                                                          # x1 : le jeu tel quel
@@ -591,7 +600,7 @@ class Moteur:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _hj, None, f + DOKU_CHANGETIME_B, f + DOKU_CHANGETIME_B)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: print('horloge jour / nuit : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('horloge jour / nuit : crochet non installe : %s' % (ex,))
 
     def _crochets_magie(self):
         """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
@@ -610,7 +619,7 @@ class Moteur:
                 w = u32(a); return w & 0xfc000000 == 0x94000000 and a + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) == c.LIB_BASE + MAGIE_EXECUSE_STUB
             sites = [(cs + MAGIE_CHARSELECT_BL, False), (nt + MAGIE_SANS_CIBLE_BL, True)] if cs and nt and msg and exc else []
             if not sites or not all(est_execuse(a) for a, _ in sites) or u32(u64(msg) + 0x48 * 201 + 0x14) != MSG_RIEN_NE_SE_PASSE:
-                print('sorts sans effet : menu Magie inattendu, le message de succes est garde', flush=True); return
+                self._manque('sorts sans effet : menu Magie inattendu, le message de succes est garde'); return
             def _avant(uc, ad, sz, u):
                 p = uc.reg_read(c.XREG[0]) & 0xffffffffffff; lanceur = u64(p); action = u32(p + MAGIE_ACTION)
                 cout = c.mem(u64(exc + 0x70) + 0x48 * action + 0x3a, 1)[0]                  # UseAction::getUseMp
@@ -636,10 +645,10 @@ class Moteur:
                 def _son(uc, ad, sz, u):                                                   # avant `sub w8, w8, #0xc4` : le sort n'a eu aucun effet -> w8 = 0xc7 (resultat 3 > 2) : pas de bruitage de soin
                     if self._magie_sans_effet: self._magie_sans_effet = False; uc.reg_write(c.XREG[8], 0xc7)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _son, None, cs + MAGIE_SON_SOIN, cs + MAGIE_SON_SOIN)
-            else: print('sorts sans effet : bruitage de soin inattendu, il est garde', flush=True)
+            else: self._manque('sorts sans effet : bruitage de soin inattendu, il est garde')
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: print('sorts sans effet : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('sorts sans effet : crochet non installe : %s' % (ex,))
 
     def _crochets_fondu(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
@@ -648,14 +657,14 @@ class Moteur:
         c = self.core; self._fondu_script = False
         try:
             ini = [c.export('_ZN13__cmd_fade_in10initializeEPc'), c.export('_ZN14__cmd_fade_out10initializeEPc')]; usf = c.export('_Z12UnitySetFadei')
-            if not all(ini) or not usf: print('fondus de script : fonctions du moteur introuvables, reglage applique a tous les fondus', flush=True); return
+            if not all(ini) or not usf: self._manque('fondus de script : fonctions du moteur introuvables, reglage applique a tous les fondus'); return
             def fin_de(a):                                                       # adresse apres le `ret` de la fonction
                 for k in range(80):
                     if struct.unpack('<I', c.mem(a + 4 * k, 4))[0] == 0xd65f03c0: return a + 4 * (k + 1)
                 return None
             fins = [fin_de(a) for a in ini]
             if None in fins or struct.unpack('<I', c.mem(usf + 8, 4))[0] != 0x5280012a:        # UnitySetFade : `mov w10, #9` (type du paquet) a +8 ; autre version du moteur : on ne touche a rien
-                print('fondus de script : UnitySetFade inattendu, reglage applique a tous les fondus', flush=True); return
+                self._manque('fondus de script : UnitySetFade inattendu, reglage applique a tous les fondus'); return
             def _entree(uc, ad, sz, u): self._fondu_script = True
             def _sortie(uc, ad, sz, u): self._fondu_script = False
             def _paquet(uc, ad, sz, u):
@@ -667,7 +676,7 @@ class Moteur:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _paquet, None, usf, usf)
             try: c.uc.ctl_flush_tb()                                             # (blocs deja traduits avant les crochets)
             except Exception: pass
-        except Exception as ex: print('fondus de script : crochet non installe :', ex, flush=True)
+        except Exception as ex: self._manque('fondus de script : crochet non installe : %s' % (ex,))
 
     def _option(self, decalage):
         """Adresse d'un octet de status::g_Option (OptionStatus : +1 volume de la musique, +2 volume des bruitages (0 a 4), +5 vitesse des messages de combat)."""
@@ -716,14 +725,16 @@ class Moteur:
         c = self.core
         try:
             a = c.export('_ZN9FieldData10drawSymbolEv')
-            for dec, imm in ((0x44, 0xc0), (0x48, 0x1c0), (0x4c, 0x314)):
-                w = struct.unpack('<I', c.mem(a + dec, 4))[0]
-                if w & 0xffc003e0 != 0x11000120 or (w >> 10) & 0xfff != imm: return        # autre version du moteur : on ne touche a rien
+            mots = [struct.unpack('<I', c.mem(a + dec, 4))[0] for dec in (0x44, 0x48, 0x4c)]
+            if all(w & 0xffc003e0 == 0x11000120 and (w >> 10) & 0xfff == 1600 for w in mots): return        # deja elargie (reappliquer_correctifs)
+            for w, imm in zip(mots, (0xc0, 0x1c0, 0x314)):
+                if w & 0xffc003e0 != 0x11000120 or (w >> 10) & 0xfff != imm:
+                    self._manque('fenetre des lieux non elargie : FieldData::drawSymbol inattendu, les lieux de la carte du monde n\'apparaissent que dans la fenetre d\'origine'); return        # autre version du moteur : on ne touche a rien
             for dec in (0x44, 0x48, 0x4c):
                 w = struct.unpack('<I', c.mem(a + dec, 4))[0]
                 c.mem_w(a + dec, struct.pack('<I', (w & ~(0xfff << 10)) | (1600 << 10)))
         except Exception as ex:
-            print('fenetre des lieux non elargie :', ex, flush=True)
+            self._manque('fenetre des lieux non elargie : %s' % (ex,))
 
     # TownMenu_OPERATION_ROOT::menuUpdate (liste du menu Divers) : « cmp w8, #7 » (0x16ef28) suivi de « b.ne » vers la sortie « bouton inconnu » ; le bouton 7 (« Paramètres ») ferme le menu et ouvre TownMenu_OPERATION_SETTING
     CMP_PARAMETRES = 0x16ef28
@@ -734,6 +745,7 @@ class Moteur:
         version. Rappelee apres le chargement d'un etat (etats.appliquer remet l'image d'origine de la bibliotheque)."""
         c = self.core; ad = c.LIB_BASE + self.CMP_PARAMETRES; w = struct.unpack('<I', c.mem(ad, 4))[0]
         if w == 0x71001d1f: c.mem_w(ad, struct.pack('<I', (w & ~(0xfff << 10)) | (0xfff << 10)))       # « cmp w8, #7 » -> « cmp w8, #4095 »
+        elif w != 0x713ffd1f: self._manque("bouton Paramètres : comparaison du menu Divers inattendue, le bouton ouvre les reglages d'origine du jeu et non le menu Pause")        # (0x713ffd1f = deja patche)
 
     def _detourner_parametres(self):
         """Patch du bouton « Paramètres » (patcher_parametres) et crochet sur la comparaison : il leve `demande_pause` quand le bouton choisi est le 7 ; la visionneuse n'a plus qu'a ouvrir son menu Pause (Jeu.tick)."""
@@ -744,7 +756,7 @@ class Moteur:
                 if uc.reg_read(c.XREG[8]) & 0xffffffff == 7: self.demande_pause = True
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _p, None, ad, ad)
         except Exception as ex:
-            print('bouton Paramètres non detourne :', ex, flush=True)
+            self._manque('bouton Paramètres non detourne : %s' % (ex,))
 
     def _creer_canevas(self):
         c = self.core
