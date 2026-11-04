@@ -15,9 +15,9 @@ from dq4_pc.persistance import reglages as RG
 # cles de DEFAUT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
 HORS_INTERFACE = {'mode_sprites', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nettete', 'luminosite', 'infos', 'son', 'volume_musique', 'volume_bruitages',
                   'volume_general', 'volume_jingles', 'volume_interface', 'musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'vitesse_texte',
-                  'resolution', 'vignette', 'vitesse_marche', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
+                  'resolution', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
-HORS_INTERFACE |= {'interface_v'}          # version des tailles par defaut des fenetres (#47)
+HORS_INTERFACE |= {'camera_inverser_gd', 'interface_v'}          # sens de la camera deplacee a la souris (#45, D-233) ; version des tailles par defaut des fenetres (#47)
 HORS_INTERFACE |= {'historique_favoris_seuls'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface

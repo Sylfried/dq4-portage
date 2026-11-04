@@ -5,7 +5,7 @@ import pyglet
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
     'gauche': ['Q', None], 'droite': ['D', None], 'haut': ['Z', None], 'bas': ['S', None],
-    'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],      # les fleches : directions dans les menus, messages et combats (elles ne tournaient la camera que sur le terrain ; la camera n'est plus reglable, #264 ; noms d'actions gardes pour les anciens fichiers)
+    'cam_gauche': ['LEFT', None], 'cam_droite': ['RIGHT', None], 'cam_haut': ['UP', None], 'cam_bas': ['DOWN', None],      # les fleches : sur le terrain gauche / droite tournent la camera des villes (D-233 ; les deux ensemble la recentrent), partout ailleurs (menus, messages, combats) les quatre sont des directions ; haut / bas ne servent que dans les menus (l'inclinaison a ete retiree en #264)
     'menu': ['RETURN', 'TAB'], 'discussion': ['LALT', 'RALT'], 'carte': ['M', None], 'historique': ['H', None],
     'A': ['SPACE', None], 'B': ['BACKSPACE', None], 'accel': ['LSHIFT', 'RSHIFT'],
     'L': ['A', None], 'R': ['R', None], 'infos': ['F1', None], 'modif': ['LCTRL', 'RCTRL'],
@@ -14,7 +14,7 @@ TOUCHES_DEF = {
 ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
 ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
-           ('cam_haut', 'Flèche haut (menus)'), ('cam_bas', 'Flèche bas (menus)'), ('cam_gauche', 'Flèche gauche (menus)'), ('cam_droite', 'Flèche droite (menus)'),
+           ('cam_haut', 'Flèche haut (menus)'), ('cam_bas', 'Flèche bas (menus)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
            ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
            ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
            ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
@@ -43,8 +43,10 @@ DEFAUT = {
     'musique_active': True, 'jingles_actifs': True, 'bruitages_actifs': True, 'interface_active': True,       # interrupteurs par categorie
     'vitesse_texte': 4.0,         # dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir VITESSES_TEXTE)
     'resolution': [1920, 1080],   # fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
+    'camera_inverser_gd': False,  # camera tournee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
     'vignette': 0.3,              # assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
     'vitesse_marche': 1.0,        # facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (VITESSES_X)
+    'vitesse_camera': 1.0,        # vitesse de rotation de la camera aux fleches et du recentrage : x1 a x4 (la touche d'accelerateur ne l'accelere pas)
     'vitesse_accel': 1.5,         # « Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir vitesse_combat)
     'vitesse_combat': 1.0,        # « Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (VITESSES_COMBAT) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir vitesse_combat.py)
     'historique_favoris_seuls': False,   # fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_historique.py)
@@ -88,7 +90,7 @@ def fenetre_defaut(nom):
 
 # Cles d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAUT), donc absentes du fichier a la prochaine sauvegarde. 'plein_ecran' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
 # 'mode_fenetre_retour' (dernier mode non exclusif, #42), 'correction_bords' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees ; 'camera_centree' et 'suivi_camera_v' aussi (#47 : la camera est toujours centree sur le heros, sauf quand le jeu la prend). 'ecran_plein' (choix du moniteur du plein ecran, #52) et 'sortie_audio' (choix du peripherique audio, #112) sont retires le 03/11/2026 a la demande de Sylfried : le plein ecran se fait sur l'ecran de la fenetre, le son reste sur la sortie par defaut de Windows.
-CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v', 'ecran_plein', 'sortie_audio', 'distance_camera', 'angle_camera', 'camera_inverser_gd', 'camera_inverser_hb', 'vitesse_camera', 'zoom')
+CLES_OBSOLETES = ('plein_ecran', 'mode_fenetre_retour', 'correction_bords', 'lissage', 'defilement_force', 'defilement_combat', 'camera_centree', 'suivi_camera_v', 'ecran_plein', 'sortie_audio', 'distance_camera', 'angle_camera', 'camera_inverser_hb', 'zoom')
 MODES_SPRITES = (0, 1, 4)      # valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
 MSAA_VALEURS = (0, 2, 4, 8)
 
@@ -111,13 +113,13 @@ def mode_fenetre_valide(v):
     return {0: 0, 1: 1, 2: 1}.get(n, DEFAUT['mode_fenetre'])
 
 
-BORNES = {'vitesse_marche': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
+BORNES = {'vitesse_marche': (1.0, 4.0), 'vitesse_camera': (1.0, 4.0), 'vitesse_accel': (1.0, 2.0), 'vignette': (0.0, 1.0), 'croix_taille': (0.5, 2.0)}      # bornes des curseurs du menu Echap
 BORNES.update({'echelle_rendu': (1.0, 2.0), 'nettete': (0.0, 1.0), 'luminosite': (0.5, 1.5)})
 BORNES.update({'volume_musique': (0.0, 1.0), 'volume_bruitages': (0.0, 1.0), 'volume_general': (0.0, 1.0), 'volume_jingles': (0.0, 1.0), 'volume_interface': (0.0, 1.0), 'vitesse_texte': (0.25, 4000.0)})
-BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
+BOOLEENS_SON_TEXTE = ('musique_active', 'jingles_actifs', 'bruitages_actifs', 'interface_active', 'soin_niveau', 'camera_inverser_gd', 'historique_favoris_seuls')      # (reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
 VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
-VITESSES_X_CLES = ('vitesse_marche',)
+VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera')
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
 NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
