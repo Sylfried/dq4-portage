@@ -1509,7 +1509,7 @@ class Jeu(pyglet.window.Window):
         for vl in self.carte_vl: vl[1].delete()
         for x in self.carte_ext: x[1].delete()
         if self.ciel_ext and self.ciel_ext['vl'] is not None: self.ciel_ext['vl'].delete()
-        self.ciel_ext = None; self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
+        self.ciel_ext = None; self.ciel_zoom = None; self.carte_ext = []; self.carte_vl = []; self.carte_pos = {}; self.plages = {}; self.noms = {}; self.objets = None; self.palettes = None; self.pam_gl = {}
         src = (os.environ.get('DQ_DECOR') or nom) if nom.startswith('btl_') else nom       # DQ_DECOR : (test) force un autre decor de combat
         c = erreur = None
         for cand in [src] + (DO.decors_de_secours(src) if nom.startswith('btl') else []):         # decor de combat sans la variante demandee (heure) : la plus proche, plutot qu'un decor vide
@@ -1563,6 +1563,7 @@ class Jeu(pyglet.window.Window):
                 if not os.environ.get('DQ_CIEL_COPIES'):
                     try:
                         cl = CT.CielLarge(self.carte_pos[key][deb:deb + n], self.objets.uv(key)[deb:deb + n], self.objets.col(key)[deb:deb + n])
+                        if not os.environ.get('DQ_CIEL_BANDES') and deb == 0 and n == len(self.carte_pos[key]): self.ciel_zoom = {'key': key}; continue          # essai #130 : ciel agrandi (le ciel est seul dans son groupe de texture), sans bandes
                         self.ciel_ext = {'ciel': cl, 'tex': self.tex_gl[(src, key)], 'key': key, 'deb': deb, 'vl': None, 'nv': 0}
                         continue
                     except Exception as ex: print('Ciel du titre : %s (copies decalees a la place)' % ex, flush=True)
@@ -1659,7 +1660,10 @@ class Jeu(pyglet.window.Window):
                 self.prog['net'] = net_o if (r is None or key not in r) else 0.0
                 self.prog['tsize'] = (float(t.width), float(t.height))
                 if tint is not None: self._regler_teinte(neutre if TC.groupe_tz(key, ids_tz) else tint)
+                zoom = CT.zoom_ecran(self._aspect_ville) if (self.ciel_zoom is not None and key == self.ciel_zoom['key'] and self._M_ville is not None) else 1.0
+                if zoom > 1.0 + 1e-6: self.prog['mvp'] = tuple(float(x) for x in CT.matrice_zoom(self._M_ville, zoom).T.ravel())          # ciel du titre agrandi autour du centre de l'ecran (#130)
                 self._tracer(t, vl)
+                if zoom > 1.0 + 1e-6: self.prog['mvp'] = tuple(float(x) for x in self._M_ville.T.ravel())
             if pas == 1 and liste: gl.glDepthMask(gl.GL_TRUE); gl.glDepthFunc(gl.GL_LESS); self.prog['cutoff'] = cutoff0
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
             if pas == 0:
@@ -2780,6 +2784,8 @@ class Jeu(pyglet.window.Window):
         return r
 
     _se_images = None                                                  # bruitages deja lances pendant l'image affichee en cours quand le combat est accelere (None : pas de filtre ; voir _boucle et vitesse_combat.sons_a_jouer)
+
+    ciel_zoom = None                                                   # essai #130 : {'key': groupe du ciel du titre} quand le ciel est agrandi (ciel_titre.zoom_ecran) au lieu d'etre prolonge par des bandes
 
     _jeu_fige = False                                                  # le moteur et le son sont-ils arretes derriere le menu ? (voir _synchroniser_gel)
 
