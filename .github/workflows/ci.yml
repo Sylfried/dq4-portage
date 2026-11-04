@@ -69,3 +69,4 @@ jobs:
           python tests/test_historique_cle.py
           python tests/test_police_messages.py
           python tests/test_notifications_sauvegardes.py
+          python tests/test_oui_non_empile.py

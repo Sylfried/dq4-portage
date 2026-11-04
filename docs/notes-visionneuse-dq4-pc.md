@@ -2293,3 +2293,19 @@ Sylfried (04/11/2026, 23 h 02) : « Remets les notifications pour les sauvegarde
 ### Non vérifié
 - À regarder sur Windows : chiffre (enregistrer), Ctrl + chiffre (charger), Ctrl + Maj (annuler), import de sauvegardes ; la touche de vitesse de combat hors combat n'affiche rien.
 - Choix de Claude : les avertissements de mémoire du moteur (qui préviennent d'un arrêt possible du jeu) sont restés retirés, car ils ne concernent pas une sauvegarde ; à rétablir sur demande.
+
+## Avance #274 : Oui / Non empilés en haut à droite de la boîte de dialogue
+
+### Demande
+Sylfried (04/11/2026, 23 h 02, capture d'écran) : « Les options OUI/NON apparaissent par-dessus le nom du locuteur, je propose une variante qui copie le fonctionnement sur DS : tu les mets l'un sur l'autre posé sur le coin en haut à droite de la boîte de dialogue avec les bords droits alignés. »
+
+### Fait (D-231)
+- **Empilement** : `Fenetre._empiler_oui_non` (type 1, `Make_YesNo`, à la création) met la plaque « Non » sous « Oui » : même colonne (celle de gauche, x de -134,5 à -0,5), une unité entre les deux (l'espace qui séparait les plaques côte à côte). Le panneau droit du cadre, la plaque de droite et son texte sont déplacés d'un bloc ; les zones de clic et la sélection suivent les nœuds déplacés. Étendue de la fenêtre : de -10 à 87 (avant : de 39 à 87). Autre mise en page (pas deux plaques sœurs) : rien n'est touché. Le curseur du moteur rangeait déjà Oui / Non en une colonne (haut = Oui, bas = Non) : le clavier et la manette n'ont pas changé.
+- **Pose** : la pile est posée sur le coin haut droit de la boîte de dialogue, **bord droit visible aligné** sur celui de la boîte, et **1 unité visible** au-dessus de son bord haut (avant : 4 unités entre les mailles, 8,5 visibles ; `OUINON_ECART` = 1). Elle suit toujours la boîte, à sa place d'origine ou descendue (avant : seulement quand la boîte était descendue).
+- **Bords visibles, pas bords des mailles** : les cadres ont des marges transparentes différentes (6 unités à droite et 4,5 en haut pour la boîte, presque rien pour Oui / Non) ; `bords_visibles` les mesure dans la feuille du jeu (opacité > 127, `ALPHA_FEUILLES` posé par `Rendu` avant la dilatation), `Fenetre.etendue_visible` et `FenetreMessage.etendue_visible` donnent le dessin visible, `MenusMixin._ouinon_sur_message` en tire le décalage vertical et les deux bords droits. Mesuré sur une capture headless 1280 x 720 : bords droits de la boîte, de « Oui » et de « Non » tous à x = 862.
+- **Éditeur d'interface** : les réglages de « Oui / Non » (taille, décalage) restent relatifs à la boîte de dialogue ; la taille se change autour du bord bas et du bord droit de la pile, de sorte que le coin ne bouge pas. L'aperçu montre la nouvelle disposition (cadre jaune = la pile). Sans boîte de dialogue, la pile garde sa place d'origine avec les réglages du joueur.
+- `tests/test_oui_non_empile.py` (19 tests, dont 2 exécutés sans pyglet en CI, les autres passés s'il manque) : empilement sur une mise en page synthétique et sur la vraie (cache d'interface), étendues, zones de clic, autre mise en page intacte, `bords_visibles` (seuil, plusieurs cases, rien de visible), pose (bas et droite à toutes les échelles, réglage de position relatif, mesure manquante), branchement dans le code. Six mutations vérifiées (écart, déplacement vertical, déplacement du texte, signe de l'alignement, écart de pose, appel à la création).
+
+### Non vérifié
+- À regarder sur Windows : retour au titre, achat, suppression d'un état, tout dialogue à Oui / Non ; la pile est en haut à droite, ne cache pas le nom du locuteur ; flèches haut / bas, clic et manette choisissent Oui ou Non au bon endroit.
+- Suppose (non vu en jeu) : les dialogues Oui / Non du combat se posent de la même façon (même chemin de code, boîte de combat descendue) ; les réglages déjà enregistrés pour « Oui / Non » dans l'éditeur s'appliquent maintenant au coin de la pile (valeurs relatives inchangées).

@@ -24,7 +24,7 @@ UI_ZOOM = 1.12            # agrandissement des fenetres du jeu (la colonne portr
 CB_MSG_BAS = -338.0         # combat : bord bas du cadre de message = bord bas du cadre principal des menus de commandes (Combattre / Attaquer...)
 CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
-OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
+OUINON_ECART = 1.0        # Oui/Non (type 1) : espace VISIBLE entre le bord bas de la pile Oui / Non et le bord haut de la boite de dialogue (D-231 : la pile est posee sur son coin haut droit ; 1 unite, comme entre Oui et Non ; avant : 4 unites entre les mailles, soit 8,5 visibles)
 CARTE_TITRE = MO.CARTE_TITRE         # carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros dont le jeu fixe seul la camera ; voir _camera_ville)
 CIELS_ETENDUS = {'dpout': ('dpoutenk',), 'ev09': ('e9km1',)}         # cartes dont le plan de ciel (objets dont le nom contient ces mots) est prolonge de part et d'autre par symetrie (MAP-05, choix du joueur : « prolonger le ciel ») : plans concus pour l'ecran portrait, laissaient un grand coin noir a gauche (ev09) ou deux (dpout, sortie de donjon) en 16/9
 FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran

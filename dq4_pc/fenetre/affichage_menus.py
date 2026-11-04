@@ -344,11 +344,20 @@ class MenusMixin:
         ms = self.reg['interface_masquees']
         return bool(ms) and self._nom_de_type(typ) in ms
 
-    def _ui_ouinon(self, base, D, e0, v):
+    def _ouinon_sur_message(self, msg, fe):
+        """Pile Oui / Non (D-231) posee sur le coin haut droit de la boite de dialogue : -> (decalage vertical en unites qui pose le bord bas VISIBLE de la pile OUINON_ECART au-dessus du bord haut visible de la boite,
+        (bord droit visible de la boite, bord droit visible de la pile)). Les cadres ont des marges transparentes differentes (6 unites a droite pour la boite) : on aligne ce qu'on voit, pas les mailles. None si une mesure manque."""
+        mv = msg.etendue_visible() if msg is not None else None; ev = fe.etendue_visible()
+        if not mv or not ev: return None
+        return float(mv[3] + OUINON_ECART - ev[2]), (float(mv[1]), float(ev[1]))
+
+    def _ui_ouinon(self, base, D, e0, v, bords=None):
         """Oui / Non (type 1) regle par le joueur : il suit la fenetre de message comme d'habitude (base = (cx, cy, s) de celle-ci, D = decalage vertical d'unites qui l'y colle, e0 = son bord bas en unites),
-        puis sa taille v[0] se change autour de son bord bas et il se decale de v[1], v[2] (fractions de l'ecran). -> (cx, cy, s) de dessin."""
+        puis sa taille v[0] se change autour de son bord bas et de son bord droit, et il se decale de v[1], v[2] (fractions de l'ecran).
+        bords = (bord droit de la fenetre de message, bord droit du Oui / Non) en unites : la pile de Oui / Non a son bord droit sur celui de la boite de dialogue (D-231). -> (cx, cy, s) de dessin."""
         bx, by, bs = base; s2 = bs * float(v[0]); y_bas = by + (D + e0) * bs + float(v[2]) * self.height
-        return bx + float(v[1]) * self.width, y_bas - e0 * s2, s2
+        x = bx + float(v[1]) * self.width + ((bords[0] * bs - bords[1] * s2) if bords else 0.0)
+        return x, y_bas - e0 * s2, s2
 
     def _ui_perso(self, mode, s, v):
         """Repere (cx, cy, s) d'une fenetre modifiee par le joueur (editeur d'interface) : taille v[0] autour du bord de son groupe (bas, haut ou milieu de l'ecran), puis decalage v[1], v[2] en fraction de l'ecran."""
@@ -399,18 +408,18 @@ class MenusMixin:
         return x0, y0, x1, y1
 
     def _apercu_ouinon(self, fe, e):
-        """Apercu de Oui / Non : comme dans le jeu, il est colle au-dessus de la fenetre de message (montree a sa place, avec ses reglages) ; son cadre jaune est celui de l'element regle."""
+        """Apercu de Oui / Non : comme dans le jeu, la pile (Oui au-dessus de Non) est posee sur le coin haut droit de la fenetre de message (montree a sa place, avec ses reglages), bords droits alignes ; son cadre jaune est celui de l'element regle."""
         fm = self._fenetre_apercu('msg'); self._canevas_apercu_maj(fm); em = fm.etendue()
         if not em: return None
-        dzm = MSG_BAS - fm.bas(); D = dzm + (em[1] + OUINON_ECART - e[0])
+        pose = self._ouinon_sur_message(fm, fe); dzm = MSG_BAS - fm.bas(); D = dzm + (pose[0] if pose else em[1] + OUINON_ECART - e[0])
         k, gr, modes = self._ui_echelle([(em[0] + dzm, em[1] + dzm), (e[0] + D, e[1] + D)]); s = self.height / 800.0 * k
         mode = modes[0] if modes else 'bas'; ov = self.reg['interface_fenetres']
         cxm, cym, sm = self._ui_perso(mode, s, ov.get('msg') or RG.FENETRE_DEFAUT)
         fm.sel = None; fm.sel_nd = None; fe.sel = None; fe.sel_nd = None
         self.ui_rendu.dessiner([fm], cxm, cym + dzm * sm, sm, (self.width, self.height))
-        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or RG.FENETRE_DEFAUT)
+        cx, cy, s2 = self._ui_ouinon((cxm, cym, sm), D, e[0], ov.get('YesNo') or RG.FENETRE_DEFAUT, pose[1] if pose else None)
         self.ui_rendu.dessiner([fe], cx, cy, s2, (self.width, self.height))
-        x0, x1 = cx - 225 * s2, cx + 225 * s2; y0, y1 = cy + e[0] * s2, cy + e[1] * s2
+        ex = fe.etendue_x(); x0, x1 = (cx + ex[0] * s2, cx + ex[1] * s2) if ex else (cx - 225 * s2, cx + 225 * s2); y0, y1 = cy + e[0] * s2, cy + e[1] * s2          # (cadre jaune : la pile Oui / Non)
         pyglet.shapes.Box(x0, y0, x1 - x0, y1 - y0, thickness=2, color=(255, 235, 130)).draw()
         return x0, y0, x1, y1
 
@@ -468,12 +477,11 @@ class MenusMixin:
             cacher = self._boite_fin_combat()
             msg = bool(self.ui_msg and mo.msg_visible and 'msg' in self.ui_rendu.tex and not cacher)
             dz = self._dz_message([p for _, p in liste]) if msg else 0.0
-            self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if dz else set()      # le Oui/Non (type 1) suit la fenetre de message
-            em = self.ui_msg.etendue() if msg else None
-            self.ui_dzp = {}                                  # decalage vertical de chaque fenetre qui suit le message : le meme que lui, plus de quoi coller le Oui/Non au bord haut du message
+            self.ui_dz = dz; self.ui_suit = {p for _, p in liste if self.ui_g.f[p].typ == 1} if msg else set()      # le Oui/Non (type 1) suit la fenetre de message (D-231 : toujours, a sa place d'origine ou descendue)
+            self.ui_dzp = {}; ui_bords = {}                   # decalage vertical de chaque fenetre qui suit le message : le meme que lui, plus de quoi poser la pile Oui/Non sur le bord haut du message ; bords droits a aligner (D-231)
             for p in self.ui_suit:
-                e = self.ui_g.f[p].etendue()
-                self.ui_dzp[p] = dz + ((em[1] + OUINON_ECART - e[0]) if (em and e) else 0.0)
+                pose = self._ouinon_sur_message(self.ui_msg, self.ui_g.f[p]) if msg else None
+                self.ui_dzp[p] = dz + (pose[0] if pose else 0.0); ui_bords[p] = pose[1] if pose else None
             ivs = {}
             for _, p in liste:
                 e = self.ui_g.f[p].etendue()
@@ -492,20 +500,23 @@ class MenusMixin:
             self.ui_tf = {p: (cx,) + repere(p) for _, p in liste}
             ov = self.reg['interface_fenetres']; tf_msg = None; perso = {}; ouinon = {}           # fenetres modifiees par le joueur (taille, position) : dessinees a part, avec leur propre repere (les zones tactiles le suivent)
             masque = set(self.reg['interface_masquees'])                                  # interfaces masquees (« Afficher cette interface a l'ecran » = Non) : calculees comme les autres (la mise en page ne bouge pas), seul leur dessin est omis
+            if ov and msg and ov.get('msg'): tf_msg = self._ui_perso(mode_de('msg'), s, ov['msg'])
+            for _, p in liste:
+                fe1 = self.ui_g.f[p]
+                if fe1.typ != 1: continue
+                nom = self._nom_de_type(1) or ''; v = ov.get(nom) if (ov and nom not in RG.FENETRES_RETIREES) else None
+                e1 = fe1.etendue()
+                if not e1: continue
+                if p in self.ui_suit:                                                        # Oui / Non : pose sur le coin haut droit de la boite de dialogue (reglages du joueur relatifs a celle-ci)
+                    D = self.ui_dzp.get(p, 0.0); base = tf_msg or (cx, repere('msg')[0], s)
+                    t2 = self._ui_ouinon(base, D, e1[0], v or RG.FENETRE_DEFAUT, ui_bords.get(p))
+                    self.ui_tf[p] = (t2[0], t2[1] - D * t2[2], t2[2]); ouinon[p] = t2
+                elif v:                                                                      # sans boite de dialogue : a sa place, avec les reglages du joueur
+                    t2 = self._ui_ouinon((cx,) + repere(p), 0.0, e1[0], v); self.ui_tf[p] = (t2[0], t2[1], t2[2]); perso[p] = t2
             if ov:
-                if msg and ov.get('msg'): tf_msg = self._ui_perso(mode_de('msg'), s, ov['msg'])
                 for _, p in liste:
+                    if self.ui_g.f[p].typ == 1 or p in self.ui_suit: continue
                     nom = self._nom_de_type(self.ui_g.f[p].typ) or ''; v = ov.get(nom) if nom not in RG.FENETRES_RETIREES else None
-                    e1 = self.ui_g.f[p].etendue() if (v and self.ui_g.f[p].typ == 1) else None
-                    if e1:                                                                  # Oui / Non : reglages relatifs a la fenetre de message qu'il suit
-                        D = self.ui_dzp.get(p, 0.0); base = (tf_msg or (cx, repere('msg')[0], s)) if p in self.ui_suit else ((cx,) + repere(p)); t2 = self._ui_ouinon(base, D, e1[0], v)
-                        self.ui_tf[p] = (t2[0], t2[1] - D * t2[2], t2[2])
-                        if p in self.ui_suit: ouinon[p] = t2
-                        else: perso[p] = t2
-                        continue
-                    if p in self.ui_suit:
-                        if tf_msg: self.ui_tf[p] = tf_msg
-                        continue
                     if v: perso[p] = self.ui_tf[p] = self._ui_perso(mode_de(p), s, v)
             for _, p in liste:
                 if self.ui_g.f[p].typ in FENETRES_CENTREES and p not in perso:         # liste des journaux, choix du sexe : centrees a l'ecran dans un cadre noir (les boites de dialogue, elles, restent a leur place)
