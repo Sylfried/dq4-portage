@@ -5,6 +5,12 @@ Auteur : agent « couverture » (lot d'audit PR #43). Autre agent en parallèle 
 
 ## Synthèse (à lire en premier)
 
+> **Mise à jour du 04/11/2026 (audit complet du jeu, domaines cartes, sprites, services, combat).** Ce document est un instantané du 02/11/2026 ; ce qui suit y est **périmé** (Établi, état de `main` au 04/11) :
+> - §1 : les paquets 13 (échelle des sprites), 15 (ombres), 16, 17, 18 (poses couchées) et 33 (teinte de carte) sont **traités** par `Etat.appliquer`. Restent non traités : 1 (effet sépia des retours en arrière, 5 scripts), 6 (animations d'événement FEAN), 30 (zoom du terrain du ballon) ; 27 est contourné ; 34 est partiel (3, 5 et 6 non rejoués).
+> - §3.1 : le **poker** (table et cartes dessinées), la **machine à sous au clavier** (colonnes ▲ ▼, A lance) et le **bestiaire** (monstre dessiné) fonctionnent : poker, machine à sous et bestiaire sont jouables et dessinés au clavier. Les parties 0xf et 0x10 sont gérées. Les constats de §3.1 et les lignes correspondantes de §2, §3.2 et §3.3 décrivent l'état du 02/11.
+> - Véhicules : le bateau est découpé comme dans le jeu depuis #211 (cases de 40 × 40) ; le ballon en vol reste non vérifié.
+> - Le palmarès complet de l'audit du 04/11 est dans `docs/audit/rapport_reste_a_faire.md` (section « Audit complet du 04/11/2026 »).
+
 **Établi** (preuve citée dans le corps du document) :
 - Sur 529 cartes chargées par le moteur seul (90 images chacune, 123 s en tout) : **528 sans plantage**, 0 sprite sans feuille de sprites, 0 PNJ hors de la carte (507 cartes analysables), 0 fondu bloqué. Le moteur parle donc bien à la visionneuse. Les trous sont ailleurs.
 - **Quatre trous de jouabilité prouvés par une capture ou une trace** : (1) **poker** : table et cartes invisibles (`gl_poker_b330.png`) ; la cause est une garde de dessin réservée à la ville (`fenetre.py:2913`), preuve par contournement (`gl_pokerv_b330.png` montre les 5 cartes) ; (2) **machine à sous** injouable au clavier, jouable à la souris (`gl_slotkb_b420.png` contre `gl_slotms_b350.png`) ; (3) **bestiaire** : le monstre n'est pas dessiné et l'église apparaît dans son cadre (`gl_booksel_b330.png`) ; (4) **paquet 33 (teinte de carte) ignoré sur 171 cartes sur 529**.
@@ -46,7 +52,7 @@ Auteur : agent « couverture » (lot d'audit PR #43). Autre agent en parallèle 
 
 Le moteur écrit un flux `[état, paquet…]` + un flux de flottants ; `Etat.appliquer` (`moteur.py:97-196`) le décode. Le type = l'indice de `NativeManager.m_cmd_tbl` (38 entrées, `docs/notes-technique-portage-dq4.md:78`). Les émetteurs viennent de `paquets_raw.txt` (scan des appels `UnityGetPacket` / `UnitySetPacket` / `UnitySetFade`…) complétés par le graphe d'appels. « Balayage » = nombre de cartes (sur 529, 90 images chacune après `Global::startTown(nom)`) où le paquet est apparu.
 
-Lecture rapide : **traités** 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 19, 20, 21-26, 28, 29, 31, 32, 35, 36, 37 ; **partiels** 13, 34 ; **ignorés sans trace** 1, 6, 16, 17, 18, 27, 30, 33.
+Lecture rapide : **traités** 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 19, 20, 21-26, 28, 29, 31, 32, 35, 36, 37 ; **partiels** 13, 34 ; **ignorés sans trace** 1, 6, 16, 17, 18, 27, 30, 33. *(Mise à jour du 04/11/2026 : 13, 15, 16, 17, 18 et 33 sont traités ; restent 1, 6, 30, 27 contourné, 34 partiel.)*
 
 | Type | Nom Unity (`cmd_*`) | Émetteurs moteur | Traitement visionneuse | Statut | Balayage / remarque |
 |---|---|---|---|---|---|
@@ -63,12 +69,12 @@ Lecture rapide : **traités** 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 19, 20
 | 10 | `camera` | `dss::Camera::send_unity` | `moteur.py:144` (valeurs : 1 position, 2 cible, 4 rotation) | Traité | 528 cartes avec la valeur 3 ; valeurs 1 et 2 une fois |
 | 11 | `camera_sub` | `BookCamera::initialize`, `TownEndrollManager::setup`, `TownMapEffect::setup`, `TownOpeningManager::setupCamera` | `moteur.py:174` : bits 0, 1, 2, 4, 5, 7 | Traité ; **bits 3 et 6 non décodés** (jamais vus) | valeurs vues : 32, 2, 33, 34, 38 (toutes dans les bits décodés) |
 | 12 | `chara_load` | `DisplayCharacter/SpriteCharacter::setup/cleanup` | `moteur.py:113` | Traité | 529/529 |
-| 13 | `chara` | `DisplayCharacter::draw`, `SpriteCharacter::draw` | `moteur.py:190` : couleur 0x1000, position 0x2000/0x8000, pose/direction 0x4000 | **Partiel : le bit 0x800 (échelle du sprite) est lu puis jeté** (`fl = fl[1:]`) | 528/529 cartes envoient le bit 0x800 ; valeurs de 0,022 à 1,435 ; la visionneuse dessine tout à `SPRITE_ECHELLE` = 0,045 (`fenetre.py:106`). Voir §1.2. |
+| 13 | `chara` | `DisplayCharacter::draw`, `SpriteCharacter::draw` | `moteur.py:190` : couleur 0x1000, position 0x2000/0x8000, pose/direction 0x4000 | **Traité depuis (mise à jour du 04/11/2026)** ; constat du 02/11 : bit 0x800 (échelle du sprite) lu puis jeté (`fl = fl[1:]`) | 528/529 cartes envoient le bit 0x800 ; valeurs de 0,022 à 1,435 ; la visionneuse dessine tout à `SPRITE_ECHELLE` = 0,045 (`fenetre.py:106`). Voir §1.2. |
 | 14 | `chara_on_off` | `BillboardCharacter/SpriteCharacter::setDisplayEnable` | `moteur.py:116` | Traité | 5 paquets sur 3 cartes |
 | 15 | `chara_shadow` | `SpriteCharacter::setShadowFlag`, `FieldBalloonDraw::draw`, `DisplayCharacter::draw` | `moteur.py:118` | Traité | **0/529** au chargement : ombres affichées par défaut (`fenetre.py:2876`), le moteur n'envoie rien en 90 images |
-| 16 | `chara_sleep_pose` | `DisplayCharacter::draw`, `setSleepFlag` | **aucune branche** | **Non géré** | 3 cartes : `mlb1a` (valeurs 1280, 1281, 0x0c000100, 0x08000101), `mlm2f1` (1289), `taf1` (0x0c000208). Poses « couché » des personnages qui dorment. |
-| 17 | `chara_sleep_near` | `cmd_set_sleep_near` | **aucune branche** | **Non géré** | `taf1` [1040, 1863] |
-| 18 | `chara_pose` | `TownCharacterDraw::changePose` | **aucune branche** | **Non géré** | 0/529 (scripts) |
+| 16 | `chara_sleep_pose` | `DisplayCharacter::draw`, `setSleepFlag` | **aucune branche** | **Traité depuis #45 (mise à jour du 04/11/2026)** ; constat du 02/11 : non géré | 3 cartes : `mlb1a` (valeurs 1280, 1281, 0x0c000100, 0x08000101), `mlm2f1` (1289), `taf1` (0x0c000208). Poses « couché » des personnages qui dorment. |
+| 17 | `chara_sleep_near` | `cmd_set_sleep_near` | **aucune branche** | **Traité depuis #45 (mise à jour du 04/11/2026)** ; constat du 02/11 : non géré | `taf1` [1040, 1863] |
+| 18 | `chara_pose` | `TownCharacterDraw::changePose` | **aucune branche** | **Traité depuis #45 (mise à jour du 04/11/2026)** ; constat du 02/11 : non géré | 0/529 (scripts) |
 | 19 | `rise_icon_load` | `BillboardItem::draw/cleanup`, `FieldSystem::draw`, `TownPlayerEtc::draw` | `moteur.py:126` | Traité | 14 cartes |
 | 20 | `rise_icon` | `BillboardItem::draw`, `TownPlayerEtc::talk_icon_set_pos` | `moteur.py:129` | Traité | 7 cartes |
 | 21 | `mesh_load` | `DSSAObject::send_unity_load` (monstres, effets, logo, générique, poker) | `moteur.py:149` | Traité | 7 cartes ; poker : 5 modèles |
@@ -76,11 +82,11 @@ Lecture rapide : **traités** 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 14, 15, 19, 20
 | 23-26 | `mesh_on_off`, `mesh_shader`, `mesh_color`, `mesh_tex_offset` | `DSSACharacter::SetShader`, `BattleEffectTransform`, `CommonEffectFlat` ; 23 : émetteur non trouvé | `moteur.py:166-172` | Traité | 0/529 (combat) |
 | 27 | `field_load` | `FieldData::setup/cleanup` | aucune branche | **Contourné** : la carte du monde est lue directement dans la mémoire du moteur (`_lire_monde`) | pas de paquet en ville |
 | 28 | `field` | `FieldData::drawBlock` | `moteur.py:104` | Traité | carte du monde seule |
-| 29 | `field_symbol` | `FieldData::draw_symbol` | `moteur.py:106` ; patch de la fenêtre des lieux `moteur.py:508-` (§4) | Traité | carte du monde seule ; genres 18/19/20 non dessinés (`notes-visionneuse:44`) |
+| 29 | `field_symbol` | `FieldData::draw_symbol` | `moteur.py:106` ; patch de la fenêtre des lieux `moteur.py:508-` (§4) | Traité | carte du monde seule ; genres 19 et 20 dessinés, 18 = case vide voulue par le jeu (mise à jour du 04/11/2026 ; constat du 02/11 : non dessinés) |
 | 30 | `field_scale` | `FieldData::setOffset` ← `FieldPlayerManager::balloonExec/downBalloon/rideBalloon/setScriptBalloon` ; `SpriteCharacter::setup` | **aucune branche** | **Non géré** | carte du monde en ballon : le zoom du terrain n'est pas rejoué. **Supposé** (émetteur lu dans le graphe d'appels, jamais essayé en ballon). |
 | 31 | `fbx_load` | `ModelObject::setup/cleanup`, `TownMapEffect::setup/cleanup` | `moteur.py:154` + `fenetre.py:1317` | Traité (**uniquement `SkinnedMeshRenderer` + shader `Custom/ImdChara`, animation non comprimée** : `donnees.py:328,340,355` lèvent une erreur et l'appelant ignore le modèle) | 4 cartes : `caf1`, `ev02`, `ev08` (libération), `ev07` (modèle 1017) |
 | 32 | `fbx` | `ModelObject::draw`, `TownMapEffect::execute`, `TownModelDraw::setDisplay` | `moteur.py:157` | Traité | 3 cartes, 37 paquets |
-| 33 | `map_color_rate` | `FLDObject::SetRGBRate` ← `TownStageManager::loadStage/SetRGBRate` ← `cmd_set_timezone`, `__cmd_map_blend_init/color`, `CommonEffectLocation` ; `FieldData::setPaletteRate` ← `FieldStage::ChangeTime`, `FieldPlayerDoku::checkDokuDamage` | **aucune branche** | **Non géré (ignoré en silence)** | **171 cartes sur 529 au chargement** (voir §1.1) |
+| 33 | `map_color_rate` | `FLDObject::SetRGBRate` ← `TownStageManager::loadStage/SetRGBRate` ← `cmd_set_timezone`, `__cmd_map_blend_init/color`, `CommonEffectLocation` ; `FieldData::setPaletteRate` ← `FieldStage::ChangeTime`, `FieldPlayerDoku::checkDokuDamage` | **aucune branche** | **Traité (mise à jour du 04/11/2026)** ; constat du 02/11 : non géré (ignoré en silence) | **171 cartes sur 529 au chargement** (voir §1.1) |
 | 34 | `screen_effect` | `Global::SetScreenEffect` ← `NonBattleActionManager::execute` ← `FieldSystem/TownSystem::execute` | `moteur.py:607` : seulement valeur & 0xf = 4 (début de combat) | **Partiel** : 3 (voyage), 5 (lampe), 6 (Riremito) non rejoués (`notes-technique:63`, `notes-visionneuse:83`) | 0/529 (déclenché en jeu) |
 | 35 | `se_play` | `Sound::sePlayDirect`, `SoundManager::playSe` | `moteur.py:187` → `son.py` | Traité | 5 cartes, SE 305, 308, 309, 1156 |
 | 36 | `se_stop` | `SoundManager::stopSeWithIndex` | `moteur.py:187` | Traité | 0/529 |
@@ -150,7 +156,7 @@ Colonne « Niveau » :
 | 25 | CityMap | `FieldImageMap`, `TownImageMap` | plan de la ville / carte réduite | `ICityMap` `ui_menu.py:201, 849` ; `moteur.py:314` | Vu (doc, nombreux) |
 | 26 | WorldLargeMap | `FieldImageMap` | grande carte du monde | `fenetre.py:2165` | Vu (doc V327) |
 | 27 | Config | `TownMenu_OPERATION_SETTING` (7) | paramètres du jeu d'origine | **contourné** : le bouton ouvre le menu Pause de la visionneuse (patch `moteur.py:465`) ; la fenêtre d'origine n'est jamais ouverte | Contourné (volontaire, `notes-technique:242`) |
-| 28 | MonsterEncyclopedia | `MaterielMenu_PICTUREBOOK_ROOT/DETAIL` | **Bestiaire** (partie 0x10) | **partie 0x10 non gérée** (§3, §6) | **Partiel** (liste et fiche affichées, monstre non dessiné : §3.1 point 5) |
+| 28 | MonsterEncyclopedia | `MaterielMenu_PICTUREBOOK_ROOT/DETAIL` | **Bestiaire** (partie 0x10) | partie 0x10 gérée (mise à jour du 04/11/2026 ; constat du 02/11 : non gérée) | **Présent** (liste, fiche et monstre dessinés, jouable au clavier : audit services SVC-04 ; constat du 02/11 : monstre non dessiné, §3.1 point 5) |
 | 29 | BattleUpStatus | `BattleMenuSub_HISTORY` | bandeau d'état des personnages (combat) | `BattleBar` `ui_menu.py:204, 250`, secousse `347` | Vu (doc T85) |
 | 30 | BattleRoot | `BattleMenu_ROOT` | Combattre / Fuir | générique | Vu (doc T90) |
 | 31 | MonsterName | `BattleMenu_*` | plaques des monstres | `moteur.py:286`, marques `ui_menu.py:407` | Vu (doc V61, T93) ; tri / évitement des plaques non reproduits |
@@ -163,8 +169,8 @@ Colonne « Niveau » :
 | 43 | BattleHoppingNumber | `BattleMenu_setHoppingNumber` | nombres de dégâts | `moteur.py:273`, `fenetre.py:2004` | Vu (doc V148) |
 | 44 | Casino_CoinShop | `MaterielMenu_COINSALEROOM_ROOT` | échange d'argent contre des jetons | générique | **Inconnu** |
 | 45-46 | Casino_GiftList, GiftTarget | `MaterielMenu_CHANGEGIFT_*` | prix contre jetons | générique | **Inconnu** |
-| 47 | Casino_Slot | `MaterielMenu_SLOT` | machine à sous | générique ; **mise non réglable au clavier** (§3) | **Vu (moi)** : moteur + capture GL |
-| 48 | Casino_Poker | `MaterielMenuPoker{Betcoin,Changecard,Selectcard}` | poker | idem ; **cartes et table non dessinées** (§3) | **Vu (moi)** : moteur + capture GL |
+| 47 | Casino_Slot | `MaterielMenu_SLOT` | machine à sous | générique ; mise réglable au clavier (mise à jour du 04/11/2026 ; constat du 02/11 : non réglable, §3) | **Vu (moi)** : moteur + capture GL ; jouable au clavier : SVC-04 |
+| 48 | Casino_Poker | `MaterielMenuPoker{Betcoin,Changecard,Selectcard}` | poker | idem ; table et cartes dessinées (mise à jour du 04/11/2026 ; constat du 02/11 : non dessinées, §3) | **Vu (moi)** : moteur + capture GL ; jouable et dessiné au clavier : SVC-04 |
 | 49-51 | Casino_FightStadium{Bet, Select, Coin} | `MaterielMenu_FIGHT_STADIUM` | arène des monstres (casino) | générique | **Inconnu** |
 | 52 | StartMenuFirst | `TownPlayerManager` | 1er menu de départ | `avant_partie.py` | Vu (doc V334) |
 | 53 | StartMenuSecond | `MaterielMenu_LOAD` | menu de départ | `fenetre.py:2116, 2186` | Vu (doc V334, T197) |
@@ -221,17 +227,17 @@ Ce que j'ai observé (Établi : moteur sous Unicorn avec 500 jetons écrits dans
 | Église : prêtre (type 66) | **Partiel** | liste de l'église vue dans le prologue (`mak1f1`, doc V7) | Parler au prêtre de `mak1f1` : Sauvegarder, Revenir à la vie, Prière |
 | Église : résurrection / pénitence (type 67) | **Inconnu** | aucune trace | Avoir un personnage mort, parler au prêtre |
 | Sauvegarde à l'église (`cmd_menu_save`, type 56) | **Inconnu en jeu** | écriture dans `--saves-ecriture` lue dans le code (`moteur.py:41, 53`) ; jamais confirmée sous Windows (G-120) | Sauvegarder, quitter, relancer, « Continuer » ; comparer `data1.dat` |
-| Auberge (sommeil, fondus) | **Partiel** | menus Oui / Non + or génériques ; **poses couché non gérées** (paquets 16, 17, 18 : §1) ; vus au chargement dans 3 cartes (`mlb1a`, `mlm2f1`, `taf1`) ; G-069 | Dormir à l'auberge, regarder les personnages et la teinte |
+| Auberge (sommeil, fondus) | **Partiel** | menus Oui / Non + or génériques ; poses couché gérées depuis #45 (paquets 16, 17, 18 : §1 ; constat du 02/11 : non gérées) ; vus au chargement dans 3 cartes (`mlb1a`, `mlm2f1`, `taf1`) ; G-069 | Dormir à l'auberge, regarder les personnages et la teinte |
 | Banque (types 57, 64, 65) | **Inconnu** | aucune trace | Chapitre où la banque existe : dépôt, retrait |
-| Casino : machine à sous (47) | **Partiel** : souris oui, clavier non (§3.1) | `gl_slot_b330.png`, `gl_slotms_b350.png`, `gl_slotkb_b420.png` | Casino : lancer au clavier uniquement |
-| Casino : poker (48) | **Partiel / Absent à l'écran** : cartes et table invisibles (§3.1) | `gl_poker_b330.png` contre `gl_pokerv_b330.png` | Idem avec le poker |
+| Casino : machine à sous (47) | **Présent** : clavier et souris (mise à jour du 04/11/2026, SVC-04) ; constat du 02/11 : souris oui, clavier non (§3.1) | `gl_slot_b330.png`, `gl_slotms_b350.png`, `gl_slotkb_b420.png` | Casino : lancer au clavier uniquement |
+| Casino : poker (48) | **Présent** : table et cartes dessinées (mise à jour du 04/11/2026, SVC-04) ; constat du 02/11 : cartes et table invisibles (§3.1) | `gl_poker_b330.png` contre `gl_pokerv_b330.png` | Idem avec le poker |
 | Casino : jetons (44), cadeaux (45, 46) | **Inconnu** | types exportés seulement | Casino : comptoir d'échange |
 | Arène des monstres (49-51, 71), colisée (68) | **Inconnu** | `cmd_mini_game` a une branche à part quand son premier paramètre vaut 2 (début de la fonction, 0x21d6d8 : ne passe pas par `startCasino`) ; non explorée | Casino, arène : parier, regarder un combat |
 | Mini-jeux et menus de scénario : `cmd_menu_nene` (70), `cmd_menu_extra_shop` (69), `cmd_menu_hostage` (types 4, 21), `cmd_menu_present_exp`, `cmd_menu_event_imuru` | **Inconnu** | commandes de script recensées par le graphe d'appels ; fenêtres exportées | Jouer les chapitres concernés ; N2 avec sauvegardes de ces chapitres |
-| Bestiaire (type 28, partie 0x10) | **Partiel** (§3.1 point 5) | `gl_book_b230.png` | Menu du terrain → bestiaire → choisir un monstre |
-| Véhicules : bateau, ballon, sifflet, Rura, henge | **Inconnu** | émetteurs recensés (`FieldPlayerManager::shipExec`, `balloonExec`, `ballonWhistle`, `ruraUp/DownExec`, `hengeStartExec`) ; **paquet 30 (zoom du ballon) non géré** ; `notes-visionneuse:44` : « pas de marche sur l'eau / bateau testée » ; G-031 | Carte du monde : monter sur le bateau, voler en ballon ; voir si le décor et les sprites suivent |
+| Bestiaire (type 28, partie 0x10) | **Présent** : liste, fiche et monstre dessinés (mise à jour du 04/11/2026, SVC-04) ; constat du 02/11 : monstre non dessiné (§3.1 point 5) | `gl_book_b230.png` | Menu du terrain → bestiaire → choisir un monstre |
+| Véhicules : bateau, ballon, sifflet, Rura, henge | **Partiel** (mise à jour du 04/11/2026 : bateau et chariot dessinés, bateau découpé comme dans le jeu depuis #211 ; ballon en vol, sifflet, Rura, henge non vérifiés) ; constat du 02/11 : **Inconnu** | émetteurs recensés (`FieldPlayerManager::shipExec`, `balloonExec`, `ballonWhistle`, `ruraUp/DownExec`, `hengeStartExec`) ; **paquet 30 (zoom du ballon) non géré** ; `notes-visionneuse:44` : « pas de marche sur l'eau / bateau testée » ; G-031 | Carte du monde : monter sur le bateau, voler en ballon ; voir si le décor et les sprites suivent |
 | Équipe et chariot | **Partiel** | équipiers suivent le héros (tests documentés) ; chariot (`FieldPlayerManager::getCarrierPos`, `setCarrierDepth`) : aucune trace | Chapitre 5 : chariot à l'arrière |
-| Cartes de villes / donjons (529) | **Présent, avec trous** | N1 : 528 / 529 chargées sans plantage, 0 sprite sans feuille, 0 PNJ hors carte, 0 fondu bloqué (§5.4) ; trous : teinte (171 cartes), échelle des sprites, poses couchées | N3 (capture de toutes les cartes) |
+| Cartes de villes / donjons (529) | **Présent, avec trous** | N1 : 528 / 529 chargées sans plantage, 0 sprite sans feuille, 0 PNJ hors carte, 0 fondu bloqué (§5.4) ; trous du 02/11 : teinte (171 cartes), échelle des sprites, poses couchées, **depuis traités** (mise à jour du 04/11/2026) ; restent FSRA / FEAN / FEMV non rejoués (audit cartes, MAP-03) | N3 (capture de toutes les cartes) |
 | Carte du monde | **Présent** (doc : sol, icônes, caméra, marche) | `notes-visionneuse` « Carte du monde » ; reste : jour / nuit et marais (paquet 33), ballon (30), voyage / lampe (34) | Jouer la carte du monde sur une journée de jeu |
 | Sac / objets (9, 10, 18) | **Présent** (affichage) | `ItemNumCTRL` porté, doc T186 | Ouvrir le sac, utiliser un objet |
 | Sorts (7, `TownMenu_MAGIC_*`) | **Partiel** | fenêtres exportées ; effets de sorts en combat : G-070, G-071 | Lancer chaque sort du menu |
@@ -248,6 +254,8 @@ Ce que j'ai observé (Établi : moteur sous Unicorn avec 500 jetons écrits dans
 | Pêche / plongée | **Sans objet** | aucun symbole `fish` / `dive` dans le moteur (`symbols_all.txt`) | |
 
 ### 3.3 Les lacunes les plus graves pour la jouabilité, classées
+
+*Mise à jour du 04/11/2026 : les points 1 (poker), 2 (machine à sous au clavier), 4 (teinte), 5 (poses couchées), 6 (bestiaire) et 8 (échelle des sprites) sont traités ; le point 9 (sons) l'est en partie (échecs de lecture notés dans le journal, #222). Restent : 5 (animations d'événement, paquet 6), 7 (ballon, effets d'écran 3, 5, 6), 3 (blocs de progression jamais joués : à valider sur Windows).*
 
 1. **Poker invisible** (cartes et table) : Établi, GL + cause + preuve par contournement (§3.1.4).
 2. **Machine à sous injouable au clavier** (mise réglable à la souris seulement) : Établi, GL (§3.1.2).

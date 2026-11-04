@@ -1953,3 +1953,17 @@ Une occurrence réelle (aucune connue) ; le relancement d'un morceau **en cours*
 
 ### Non vérifié
 Le repli en jeu réel (il faudrait retirer `ui_layout.json` du cache) ; Windows.
+
+## Avance #234 : bilan de l'audit complet, documents d'audit mis à jour, décisions du sondage (#233, 04/11/2026)
+
+### Demande (14 h 52)
+Relire tout le jeu d'origine contre le portage, corriger ce qui est mal fait ou inachevé, ajouter ce qui manque, poser un sondage pour ce qui touche à tes choix.
+
+### Fait
+- Neuf domaines relus (moteur, cartes, sprites, services, interface, son, Unity, combat) ; chaque écart net a eu son issue et sa PR (`docs/audit/rapport_reste_a_faire.md`, section « Audit complet du 04/11/2026 »).
+- `docs/audit/lacunes_connues.md`, `couverture.md`, notes techniques : statuts périmés mis à jour (poker, machine à sous au clavier, bestiaire, teinte, poses couchées, véhicules, générique de fin = groupe 8).
+- Tes réponses au sondage (4 séries) sont dans la section « Décisions du sondage du 04/11/2026 » du rapport ; elles décident des prochaines issues (focus, zoom des scènes, ballon, ciel, volumes, temps de jeu, générique, `.dqs`).
+
+### Non vérifié
+Rien de nouveau côté code ; documents seulement.
+

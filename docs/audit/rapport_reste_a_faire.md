@@ -12,6 +12,32 @@ Le portage fonctionne sur tout ce que j'ai pu essayer sous Linux, mais **rien n'
 
 Lecture : **décision** = c'est à toi de trancher ; **oubli** = c'est à moi de le faire ; **bug** = défaut constaté ou probable ; **non vérifié** = codé ou lu dans le moteur, jamais vu fonctionner pour de vrai. Sources : l'audit du 02/11 (lacunes, couverture, décisions, issues GitHub) et les cinq agents de la PR #44. Les références G-xxx, D-xx, PAQ, CAR, SRV, CAS renvoient à ces fichiers d'audit.
 
+## Audit complet du 04/11/2026 (demande de Sylfried, 14 h 52) : où on en est
+
+Relecture de tout le jeu d'origine contre le portage (moteur, cartes, sprites, services, interface, son, Unity, combat : neuf domaines). Chaque écart net est corrigé par une issue et une PR, laissées ouvertes jusqu'à ta validation sur Windows ; ce qui touche à tes choix passe par un sondage. Les marques sont celles du reste du dossier : Établi, Supposé, Non vérifié.
+
+**Corrigé** (issue puis PR) : ENG-02 (#198, #199), SND-02 (#200, #202), SND-03 (#201, #204), MAP-01 (#203, #205), ENG-06 (#206, #207), UI-03 (#208, #209), SPR-01 et SPR-05 (#210, #211), SPR-02 (#212, #213), ENG-07 (#214, #215), ENG-10 (#76, #216), ENG-08 (#217, #218), UI-04 (#219, #220), SND-10 et SND-12 (#221, #222), CMB-02 (#223, #224), CMB-03 (#225, #226), SND-08, SND-09 et UI-01 (#227, #228), SND-05 et SND-06 (#229, #230), CMB-04 (#231, #232).
+
+**Laissé sans changement par discernement** (dis-le-moi si tu veux autre chose) : UI-02 (priorité du contact entre deux boutons qui se recouvrent : seul le type 8 est concerné) ; CMB-05 (textures de monstres en Clamp : rendu plus propre que l'original supposé, rendu réel de l'original non vérifié) ; Q1 (retour au titre depuis un combat : absent de l'original, fonction du portage, conservée) ; MAP-06 (décors sombres `_dk` : repli sur `_n`, rien à faire) ; SPR-07 et SPR-08 (décisions déjà prises).
+
+**Sans objet ou réfuté** : G-034 clos (genre 18 = case vide voulue), G-072 périmé (fond lu dans FETC), G-075 réfuté (#79 close), #68 (le paquet 34 n'est jamais émis en combat), UNI-02 en partie (une touche restée enfoncée quand la fenêtre perd le focus : le `KeyStateHandler` de pyglet 2.1.19 les relâche tout seul sur `on_deactivate`, Établi par lecture de sa source ; reste le gel du jeu et la pause du son, dans le sondage).
+
+**Décisions du sondage du 04/11/2026** (tes réponses, chacune devient une issue et une PR) :
+- Perte de focus (UNI-02, SND-07) : **pause à chaque perte de focus** (jeu gelé, son en pause, reprise sans rattrapage).
+- Zoom des scènes (UNI-08) : **le jeu l'emporte dans ses scènes**, avec **une transition en début de scène qui remet le zoom par défaut**, comme la réinitialisation actuelle au clavier ou à la souris.
+- Ballon (MAP-02, UNI-05, SPR-06) : **reproduire l'original** (échelle ×1,00 à ×1,25 multipliée par ton zoom).
+- Ciel des bords (MAP-05) : **prolonger le ciel** (`ev09`, `dpout`).
+- Volumes (SND-01) : **aligner sur l'original** (lecture de `snd_vol.dat`).
+- Temps de jeu (ENG-04) : **recaler sur l'heure réelle**.
+- Générique de fin (UNI-01, SVC-02) : **reproduction fidèle** (textures du moteur, quads à décalage d'UV).
+- Fichiers `.dqs` (ENG-05) : **liste blanche de classes** au chargement.
+- « ERROR 3080 » (SVC-01) : **laissé tel quel** (comportement du jeu de base ; à voir avec le projet de traduction si c'est un souci de textes).
+- Débordements du français (UI-05) : **rien à changer** tant qu'ils dépassent comme sur mobile (traités dans l'autre projet, les APK seront changés ensuite).
+- Plaque « Sauvegarde automatique » grisée : **gardée** ; écriture à la fermeture : **non** (comme l'original) ; proportions d'interface (×1,12, commandes 510 / 459) : **gardées** ; `pause.py` et `ui_menu.py` : **non découpés**.
+- Poker « Abandonner » (SVC-03) : **police réduite** (décidé plus tôt). Mémoire du moteur (ENG-01) : alerte à 200 Mo + sauvegarde automatique (par discernement).
+
+**Reste à faire sans décision à prendre** : FSRA, FEAN et FEMV non rejoués (UNI-03, MAP-03, taille M à L), paquets 1, 6, 30 et 34 partiel (SVC-06), phase 23 à rejouer avec le vrai PNJ (SVC-08), préchargement de la musique de la carte suivante (SND-11), entrée de la position de la caméra (UNI-07).
+
 ## Décisions de Sylfried
 
 Dix-huit points où je ne peux pas trancher à ta place. Pour chacun, ma recommandation : si tu ne dis rien, je la suis.
