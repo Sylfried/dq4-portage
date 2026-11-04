@@ -85,7 +85,7 @@ class TestEntrees(unittest.TestCase):
     def faux_facteur(self, ouvert, dirs):
         mo = types.SimpleNamespace(etat=types.SimpleNamespace(effet=None, garde_trans=0, partie=MO.PARTIE_CHAMP, attente_charge=None), msg_visible=False, menu_actif=lambda: None, drapeaux=lambda: 0)
         J = types.SimpleNamespace(reg={'vitesse_marche': 3.0, 'vitesse_accel': 2.0, 'vitesse_combat': 0}, moteur=mo, pause=types.SimpleNamespace(ouvert=ouvert),
-                                  pad=lambda: dirs, _tenue=lambda a: False)
+                                  pad=lambda: dirs, _tenue=lambda a: False, hud=types.SimpleNamespace(croix_course=lambda: False))
         J._horloge_combat = lambda: F.Jeu._horloge_combat(J)
         return F.Jeu._facteur_vitesse(J)
 

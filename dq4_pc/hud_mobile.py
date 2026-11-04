@@ -9,7 +9,8 @@ joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige e
 
 La croix est celle de TouchPad (feuille « Button » : anneau, huit pastilles de direction avec leur fleche, boule) ; dans le code d'origine l'anneau ne bouge pas (seule la boule suit le doigt) et il est toujours opaque. Sur PC
 elle est fixe (en bas a droite par defaut, a deplacer dans l'editeur d'interface) : un appui dans sa zone de prise (1,178 rayon) la prend, la boule suit la souris (limitee a 0,4526 rayon), la direction est l'un des huit secteurs de
-45 degres, comme les touches du clavier (elle suit donc la camera). Le bouton « mode de la carte » n'est plus ici : c'est celui de la fenetre de la carte (type 22)."""
+45 degres, comme les touches du clavier (elle suit donc la camera). Son diametre est le DOUBLE de celui du mobile (DIAM_CROIX ; le reglage « Taille de la croix » a 50 % redonne la taille d'origine). Tenue au BORD de l'anneau
+(`croix_course` : COURSE_SEUIL du rayon ou plus), elle fait courir le heros comme la touche d'accelerateur ; plus pres du centre il marche normalement. Le bouton « mode de la carte » n'est plus ici : c'est celui de la fenetre de la carte (type 22)."""
 import math, os, time
 import numpy as np
 import pyglet
@@ -41,11 +42,13 @@ COIN_PLAQUE = 16.0                           # coins de la plaque 9 tranches (fe
 # ---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
 ART_CROIX = {'anneau': (256, 256, 256, 256), 'pastille': (384, 192, 128, 64), 'pastille_on': (256, 192, 128, 64), 'boule': (448, 128, 64, 64), 'boule_on': (384, 128, 64, 64), 'halo': (320, 128, 64, 64)}      # (CurLight 384, 128 et CurBS 320, 128 : boule orange et halo du clignotement de la croix, TouchPad.SetPadBlink ; #131)
 # Valeurs d'origine (TouchPad, libil2cpp.so, RVA ; audit de fidelite du 01/11/2026) : c_PadScaleTBL, MPad 256 x 0,63, Dirs a 104 unites du centre, c_MoveThreshold 10, c_moveNakaLimit 36,5, c_padColRad 95 pour un rayon de 80,64
-DIAM_CROIX = 161.28                           # diametre de l'anneau (256 x c_PadBaseScaleXY 0,63 ; unites de l'interface d'origine, 800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage
+DIAM_CROIX = 2 * 161.28                       # diametre de l'anneau en unites de l'interface d'origine (800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage : le DOUBLE de celui du mobile (256 x c_PadBaseScaleXY 0,63 = 161,28), demande de Sylfried le 04/11/2026 (la croix, petite sur un ecran de PC, se manie a la souris) ; le reglage « Taille de la croix » a 50 % redonne la taille du mobile
 ECHELLE_CROIX = (1.225, 1.0, 0.775)           # option « Taille de la croix » du jeu (g_pad_size : 0 Grande, 1 Moyenne (defaut), 2 Petite) -> facteur (c_PadScaleTBL)
 RAYON_PASTILLE = 104.0 / 256.0                # distance du centre de l'anneau au centre d'une pastille (fraction du diametre ; le quad de 128 x 64 va de 72 a 136 unites)
 COURSE_BOULE = 0.4526                         # deplacement maximal de la boule (fraction du rayon de l'anneau : 36,5 / 80,64)
 ZONE_MORTE = 0.124                            # en dessous (fraction du rayon : 10 / 80,64), aucune direction
+LARGEUR_CROIX_MAX = 0.75                     # diametre maximal de la croix (fraction de la largeur de la fenetre) : au portrait 9:16 le double du mobile en prend 0,72 ; une fenetre plus etroite la reduit pour qu'elle tienne
+COURSE_SEUIL = 0.9                            # course a la croix : le pointeur atteint le bord de l'anneau (fraction du rayon, 1 = le bord dessine ; la prise va jusqu'a 1,178) ; en dessous, le heros marche. Valeur choisie (suppose : « quand le joystick touche les bords »)
 PERIODE_CLIGNOTE = 1.0                        # clignotement du rond central (secondes par cycle) : valeur choisie par le portage (les constantes du jeu, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA, sont inutilisees ; supposé)
 PRISE_CROIX = 1.178                           # rayon de la zone de prise (fraction du rayon de l'anneau : collider de 95 / 80,64, un peu plus large que l'anneau dessine)
 
@@ -192,7 +195,8 @@ class Boutons:
 
     def diametre_croix(self):
         """Diametre de l'anneau de la croix en pixels : echelle de l'interface d'origine, option « Taille de la croix » du jeu, reglage du portage."""
-        return self.J.height / 800.0 * DIAM_CROIX * ECHELLE_CROIX[self.J.moteur.taille_croix()] * float(self.J.reg['croix_taille'])
+        d = self.J.height / 800.0 * DIAM_CROIX * ECHELLE_CROIX[self.J.moteur.taille_croix()] * float(self.J.reg['croix_taille'])
+        return min(d, LARGEUR_CROIX_MAX * self.J.width)          # fenetre plus etroite que le portrait du mobile (9:16) : la croix doublee ne doit pas depasser de l'ecran
 
     def case(self, nom):
         p = self.J.reg['bouton_vitesse_pos'] if nom == COMBAT else self.J.reg['boutons_pos'].get(nom)
@@ -286,6 +290,10 @@ class Boutons:
         vx, vy = self.cv
         if math.hypot(vx, vy) < ZONE_MORTE: return None
         return int(((math.degrees(math.atan2(vx, vy)) + 22.5) % 360.0) // 45.0)
+
+    def croix_course(self):
+        """La croix est-elle tenue au BORD de l'anneau (a COURSE_SEUIL du rayon ou plus, dans une direction) ? Le heros court alors (comme avec la touche d'accelerateur) ; plus pres du centre, il marche normalement."""
+        return self.croix_on and self.croix_secteur() is not None and math.hypot(*self.cv) >= COURSE_SEUIL
 
     def croix_bits(self):
         """Direction de la croix en bits de la manette du jeu (haut / bas / gauche / droite), comme celle des touches de deplacement."""
@@ -385,7 +393,7 @@ class Boutons:
         vx, vy = self.cv if self.croix_on else (0.0, 0.0); n = math.hypot(vx, vy)
         if n > COURSE_BOULE: vx, vy = vx * COURSE_BOULE / n, vy * COURSE_BOULE / n
         bx, by = cx + vx * c / 2, cy + vy * c / 2
-        if self.croix_on and not self.croix_glisse: poser('halo', bx, by); poser('boule_on', bx, by)                 # toucher en cours : boule eclairee
+        if self.croix_on and (not self.croix_glisse or self.croix_course()): poser('halo', bx, by); poser('boule_on', bx, by)                 # toucher en cours, ou course (pointeur au bord de l'anneau) : boule eclairee
         elif self.action_possible() and not edition:                                                                  # une action est possible (bulle affichee) ou le jeu fait clignoter le rond central : la boule orange et son halo apparaissent et disparaissent doucement
             ph = 0.5 - 0.5 * math.cos(2.0 * math.pi * (time.perf_counter() % PERIODE_CLIGNOTE) / PERIODE_CLIGNOTE)
             poser('boule', bx, by); poser('halo', bx, by, 0.0, ph); poser('boule_on', bx, by, 0.0, ph)

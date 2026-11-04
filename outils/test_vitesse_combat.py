@@ -224,7 +224,7 @@ class IndependanceAccelerateur(unittest.TestCase):
         etat = MO.Etat(); etat.partie = partie; etat.effet = effet; etat.attente_charge = attente           # (l'Etat reel : transition_combat() decide de l'horloge de la cascade et des fondus)
         j.moteur = types.SimpleNamespace(etat=etat, msg_visible=msg, menu_actif=lambda: menu, drapeaux=lambda: 0x28, ui=types.SimpleNamespace(msg={'feed': feed}))
         j.pad = lambda: MO.HAUT if direction else 0
-        j._tenue = lambda a: accel_tenue and a == 'accel'
+        j._tenue = lambda a: accel_tenue and a == 'accel'; j.hud = types.SimpleNamespace(croix_course=lambda: False)
         for nom in ('_horloge_combat', '_attend_joueur'): setattr(j, nom, types.MethodType(getattr(F.Jeu, nom), j))
         j.facteur = lambda: F.Jeu._facteur_vitesse(j)
         return j
