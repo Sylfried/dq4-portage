@@ -364,6 +364,12 @@ class Core:
             a += len(b)
         return bytes(out)
 
+    TAS_ALERTE, TAS_CRITIQUE = 200 << 20, 240 << 20            # ENG-01 : le tas n'est jamais libere (h_free ne fait rien) et fait 256 Mo ; la fenetre previent le joueur a 200 Mo (78 %) puis a 240 Mo (94 %) : voir Jeu._surveiller_tas
+
+    def tas_utilise(self):
+        """Octets du tas deja alloues (le pointeur ne recule jamais, sauf au chargement d'un etat instantane)."""
+        return self.heap_ptr - self.HEAP_BASE
+
     def malloc(self, n):
         n = (max(int(n), 1) + 15) & ~15
         p = self.heap_ptr

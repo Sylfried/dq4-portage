@@ -2045,3 +2045,21 @@ Avant : le zoom commun (`HEROS_FRAC`) annulait les travellings / gros plans de s
 
 ### Non vérifié
 Une vraie scène à l'écran (ton jeu sur Windows) ; les scènes où le jeu change seulement le fov sans verrouiller la caméra restent au zoom commun (à mesurer).
+
+## Avance #247 : alerte de la mémoire du moteur (tas de 256 Mo, 200 Mo puis 240 Mo)
+
+### Demande
+Audit du 04/11/2026, ENG-01 : le tas du moteur n'est jamais libéré ; choix par discernement (le sondage ne portait pas dessus).
+
+### Établi
+`Core.malloc` avance un pointeur dans un tas de 256 Mo, `h_free` et `h__ZdaPv` ne font rien. Mesures de l'audit : 0 octet par pas au repos, 36 Ko par chargement de carte, 0,53 Mo par combat ; extrapolé : 480 combats environ avant l'arrêt.
+
+### Fait
+- `Core.tas_utilise()`, `TAS_ALERTE` = 200 Mo, `TAS_CRITIQUE` = 240 Mo.
+- `Jeu._surveiller_tas` (à chaque pas du moteur) : à 200 Mo « Mémoire du moteur à 78 % : pense à fermer puis relancer le jeu », à 240 Mo « Mémoire du moteur presque pleine (94 %) : sauvegarde et relance le jeu maintenant » ; une fois par palier, ligne dans `erreurs_fenetre.log`, réarmé si le tas redescend (chargement d'un état).
+- Pas de sauvegarde écrite par l'alerte : `data5` (sauvegarde automatique du jeu) est écrite à chaque arrivée sur une carte ; un état `.dqs` rechargerait le même tas plein.
+- Non fait : allocateur à listes libres (taille M, change le moteur d'origine).
+- `tests/test_alerte_tas.py` (6 tests).
+
+### Non vérifié
+Un tas réellement proche de 200 Mo (heures de jeu) ; le message tel qu'il s'affiche à l'écran.
