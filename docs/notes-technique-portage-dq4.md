@@ -388,7 +388,7 @@ Demande de Sylfried (04/11, 13 h 33) : lire le code du jeu pour savoir comment l
 | Réf | Site | Rôle | Fichier:ligne |
 |---|---|---|---|
 | E1 | `etats.appliquer` : image de la bibliothèque, tas, données, TLS | chargement d'un état instantané demandé par le joueur (la version du fichier est vérifiée) ; suivi de `reappliquer_correctifs` (S1 à S4) | `etats.py:46-50` ; `moteur.py:603-609` |
-| F1 | `CoreJeu.h_fopen` / `h_fclose` | les fichiers `dataN.dat` ouverts en écriture par le moteur sont redirigés vers le dossier d'écriture (`--saves-ecriture`) ; les originaux ne sont ouverts qu'en lecture (Établi par la lecture du code ; non vérifié par somme de contrôle) | `moteur.py:65-84` |
+| F1 | `CoreJeu.h_fopen` / `h_fclose` | les fichiers `dataN.dat` ouverts en écriture par le moteur sont redirigés vers le dossier d'écriture (`--saves-ecriture`) ; les originaux ne sont ouverts qu'en lecture (Établi par la lecture du code ; non vérifié par somme de contrôle) ; depuis #199 l'écriture passe par `CoreJeu.ecrire_atomique` (`.tmp` + `os.replace`, deux essais) et une erreur d'E/S n'arrête plus le moteur (`echecs_ecriture`, signalée par la fenêtre) | `noyau/moteur.py` (`CoreJeu`) |
 
 ### Appels de fonctions du moteur (pas d'écriture directe)
 - **A1** retour à l'écran titre (`Moteur.retour_titre`, menu Pause > « Revenir à l'écran titre » après confirmation) : `profile::SaveLoad::killbank(4, 0)` (efface la banque 4, la sauvegarde automatique ; les fichiers que le moteur écrit vont dans le dossier d'écriture, F1), `PlayerManager::setLock(1)`, `Global::startTitle()` : ce que fait le bouton d'origine des Paramètres du jeu. `moteur.py:664-671`.

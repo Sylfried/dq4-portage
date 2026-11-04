@@ -1712,3 +1712,17 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - Cache : les fichiers du cache sont des dictionnaires et des tableaux numpy sans référence aux modules du code (supposé, non vérifié sur son PC) ; en cas de doute, supprimer `donnees\cache` (il est refait).
 - Les anciens dossiers (`jeux\`, `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`…) ne sont pas supprimés : à effacer à la main après vérification.
 - Sous Windows : non vu (double-clic sur `lancer_dq4.bat` à la racine, premier démarrage avec reprise des fichiers).
+
+## Avance #199 : écriture des sauvegardes atomique, sans plantage (#198, audit ENG-02, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`CoreJeu.h_fclose` écrivait `data*.dat` directement ; une erreur d'E/S (antivirus qui verrouille le fichier, disque plein) levait une exception dans le crochet, le moteur s'arrêtait et la fenêtre se fermait (`Jeu.tick` sans `try`). Établi par lecture et par essai sur le moteur réel ; fichier tronqué après un arrêt brutal : supposé ; Windows : non vérifié.
+
+### Fait
+- `CoreJeu.ecrire_atomique(chemin, octets)` : fichier `.tmp` à côté, `fsync`, puis `os.replace` (remplacement d'un coup) ; deux essais espacés de 0,25 s ; en cas d'échec l'ancien fichier reste intact, le `.tmp` est retiré.
+- `CoreJeu.h_fclose` : une erreur n'est plus fatale. Le moteur continue (il croit avoir écrit, comme avant), l'échec est mis dans `CoreJeu.echecs_ecriture`.
+- `Jeu._signaler_echecs_ecriture` (appelée par `tick`) : ligne dans `donnees\journaux\erreurs_fenetre.log` et petit message « Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log) ». Rien ne change quand tout va bien.
+- `tests/test_ecriture_sauvegarde.py` (6 tests, dans la CI) ; `test_sauvegarde_auto` (moteur réel) inchangé et vert.
+
+### Non vérifié
+Windows (antivirus, OneDrive) : le cas réel d'un verrou n'a pas été reproduit, seulement simulé.

@@ -444,6 +444,17 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                      fondu='%.2f/%d' % (e.fondu['a'], e.fondu['n']), fond='%.2f/%d' % (e.fondu_fond['a'], e.fondu_fond['n']), retenu=getattr(e, 'chargement', None) is not None, ms=round(1000 * (time.perf_counter() - t0), 1))
         self._suivi_n = n + 1
 
+    def _signaler_echecs_ecriture(self, core):
+        """Sauvegarde que le moteur n'a pas pu ecrire (CoreJeu.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; petit message a l'ecran et ligne dans le journal des erreurs."""
+        lignes, core.echecs_ecriture = core.echecs_ecriture, None
+        texte = ''.join('--- %s : sauvegarde impossible : %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lignes)
+        print(texte, end='', flush=True)
+        try:
+            chemin = CH.DOSSIERS.journal_erreurs(); os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
+            with open(chemin, 'a', encoding='utf-8') as f: f.write(texte)
+        except Exception as ex: print('Echec de sauvegarde non note (%r)' % (ex,), flush=True)
+        self.toast('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', duree=6.0)
+
     def tick(self, dt, muet=False):
         """Un pas du moteur (30 par seconde d'horloge de jeu). `muet` : pas supplementaire d'un combat accelere pendant que le moteur attend le joueur (menu, message qui attend une touche) : le moteur avance (animations des monstres,
         fenetres, minuteries) sans aucune touche ni clic, ceux-ci restant lus au rythme normal (voir _faire_pas_combat)."""
@@ -467,6 +478,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(mo)
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
+        if mo.core.echecs_ecriture: self._signaler_echecs_ecriture(mo.core)          # une sauvegarde n'a pas pu etre ecrite (#198) : le jeu continue, le joueur est prevenu
         self.historique.maj(mo)          # dialogues et combats de ce pas -> historique (voir historique.py)
         if mo.demande_pause: mo.demande_pause = False; self.pause.ouvrir()          # bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Moteur._detourner_parametres)
         self._maj_titre()
