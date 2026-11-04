@@ -2080,3 +2080,20 @@ Scénario de l'audit relancé sur le code actuel (touches simulées jusqu'au cho
 
 ### Non vérifié
 Rendu à d'autres tailles de fenêtre (la compression est proportionnelle) ; le poker en jeu réel côté Windows.
+
+## Avance #250 : ciel prolongé sur dpout et ev09 (plus de coins noirs en 16/9)
+
+### Demande
+Audit du 04/11/2026, MAP-05 : les plans de ciel de `dpout` et `ev09` s'arrêtent avant les bords de la fenêtre en 16/9 ; décision de Sylfried (sondage) : **prolonger le ciel**.
+
+### Établi
+Rendu du moteur réel (1280 x 720) avant correction : `ev09` a un grand coin noir à gauche, `dpout` deux coins noirs. Plans concernés : objet `002_dpoutenk` (groupe 11768, 72 sommets, x de -20 à 20, plan plat z = 40) et `000_e9km1` (groupe 14511, 180 sommets, x de -9,1 à 17,9). `ev02` : pas de coin noir, non concernée.
+
+### Fait
+- `CIELS_ETENDUS` (constantes) : cartes et mots-clés des plans ; `TitreMixin._ciel_etendu` : pour chaque plage du plan, deux copies symétriques (par rapport à `xmin` et à `xmax`), mêmes coordonnées de texture et couleurs, ajoutées à `carte_ext` ; `champ.py` les met à jour comme les copies du titre.
+- `ciel_titre.positions_copie(cur, dx)` : décalage (titre) ou `('miroir', xe)`.
+- Vérifié à l'écran avant / après : plus de coin noir sur `ev09` ; `dpout` prolongé des deux côtés.
+- `tests/test_ciel_etendu.py` (6 tests).
+
+### Non vérifié
+Rendu à d'autres tailles de fenêtre / formats (21:9) ; l'aspect du miroir en pleine partie sur Windows ; scènes qui déplacent la caméra sur ces cartes.

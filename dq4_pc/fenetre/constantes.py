@@ -26,6 +26,7 @@ CB_ZONE_MENUS = (-402.0, -144.0)       # combat : zone prise par les menus de co
 MSG_BAS = -362.0           # fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
 OUINON_ECART = 4.0        # Oui/Non (type 1) : espace entre son bord bas et le bord haut de la fenetre de message (l'original les separe de 78 unites : ici ils sont colles l'un a l'autre)
 CARTE_TITRE = MO.CARTE_TITRE         # carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros dont le jeu fixe seul la camera ; voir _camera_ville)
+CIELS_ETENDUS = {'dpout': ('dpoutenk',), 'ev09': ('e9km1',)}         # cartes dont le plan de ciel (objets dont le nom contient ces mots) est prolonge de part et d'autre par symetrie (MAP-05, choix du joueur : « prolonger le ciel ») : plans concus pour l'ecran portrait, laissaient un grand coin noir a gauche (ev09) ou deux (dpout, sortie de donjon) en 16/9
 FENETRES_CENTREES = (54, 55)      # types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
 CH_PX, CH_ATLAS = 16.0, 64                                                  # carte du monde : pixels par tuile, tuiles par ligne d'atlas
 # animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images

@@ -282,3 +282,12 @@ class CielLarge:
         g, d = a[:-1], a[1:]
         bg, hg, hd, bd = g[:, :-1], g[:, 1:], d[:, 1:], d[:, :-1]
         return np.stack([bg, hg, hd, bg, hd, bd], axis=2).reshape(-1, a.shape[2])
+
+
+def positions_copie(cur, dx):
+    """Positions des sommets d'une copie d'un plan de ciel (`carte_ext`) : `dx` nombre = copie DECALEE de dx sur x (ciel du titre) ; `('miroir', xe)` = copie SYMETRIQUE par rapport au plan x = xe (x -> 2 xe - x : les points du bord xe ne bougent pas,
+    l'image se prolonge sans couture ; plans de ciel de dpout et ev09, MAP-05). Tableau de sommets (n, 3), float32 ; `cur` n'est pas modifie."""
+    p = np.array(cur, np.float32)
+    if isinstance(dx, tuple) and dx and dx[0] == 'miroir': p[:, 0] = np.float32(2.0 * dx[1]) - p[:, 0]
+    else: p[:, 0] += np.float32(dx)
+    return p
