@@ -24,13 +24,29 @@ ANCIENS_MODULES = {
 }
 
 
+# Liste blanche des classes lisibles dans un etat (#241, audit ENG-05) : un `.dqs` recu d'une autre personne ne doit pas pouvoir executer de code au chargement. Un pickle peut appeler n'importe quelle fonction
+# d'un module importable (os.system, eval...) ; on n'accepte que les types de donnees qu'ecrit `instantane` / `ecrire` : les deux classes du portage (`Etat`, `Interface`), les conteneurs de base,
+# les tableaux numpy (les deux espaces de noms, `numpy.core` avant numpy 2 et `numpy._core` depuis) et trois conteneurs de `collections`. Releve fait sur de vrais etats (monde, ville, combat) : rien d'autre.
+CLASSES_AUTORISEES = {
+    'dq4_pc.noyau.moteur': {'Etat', 'Interface'},
+    'builtins': {'bool', 'bytearray', 'bytes', 'complex', 'dict', 'float', 'frozenset', 'int', 'list', 'range', 'set', 'slice', 'str', 'tuple'},
+    'collections': {'OrderedDict', 'defaultdict', 'deque'},
+    'numpy': {'dtype', 'ndarray'},
+    'numpy.core.multiarray': {'_reconstruct', 'scalar'}, 'numpy._core.multiarray': {'_reconstruct', 'scalar'},
+    'numpy.core.numeric': {'_frombuffer'}, 'numpy._core.numeric': {'_frombuffer'},
+}
+
+
 class _Depickler(pickle.Unpickler):
     def find_class(self, module, name):
-        return super().find_class(ANCIENS_MODULES.get(module, module), name)
+        module = ANCIENS_MODULES.get(module, module)
+        if name not in CLASSES_AUTORISEES.get(module, ()):
+            raise pickle.UnpicklingError("fichier d'état refusé : il demande « %s.%s », ce qu'un état du portage ne contient pas (fichier venu d'ailleurs ou abîmé ; il n'a pas été exécuté)" % (module, name))
+        return super().find_class(module, name)
 
 
 def _charger(octets):
-    """pickle.loads qui reconnait aussi les anciens noms de modules."""
+    """pickle.loads qui reconnait aussi les anciens noms de modules et refuse toute classe hors de CLASSES_AUTORISEES (rien n'est execute : un fichier piege est rejete avant)."""
     return _Depickler(io.BytesIO(octets)).load()
 
 MAGIE = b'DQ4ETAT1'
