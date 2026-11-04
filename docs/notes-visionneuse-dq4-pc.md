@@ -2241,3 +2241,17 @@ Sylfried (04/11/2026, 22 h 14) : « Dans l'historique des textes, est-ce que c'e
 - Messages à variables lus en vrai pendant le jeu : seulement avec un faux moteur (injectés, les variables restent « [NONE 1,0] »).
 - Variantes selon le sexe du héros : elles suivent la partie en cours à l'ouverture de l'historique.
 - Le nom du locuteur reste enregistré.
+
+## Avance #268 : plus aucune notification en haut de l'écran (D-228)
+
+### Demande
+Sylfried (04/11/2026, 22 h 14) : « Enlève le message de notification en haut de l'écran pour le changement de vitesse quand on est hors combat, toutes les notifications tout court finalement, celles qui apparaissent en haut de l'écran. »
+
+### Fait (D-228)
+- `Jeu.toast`, `Jeu.toasts` et le dessin du bandeau noir en haut de l'écran n'existent plus. Les appels supprimés : changement de vitesse de combat hors combat (touche), états instantanés (enregistré, chargé, vide, annulé, échecs), sauvegardes importées, ouverture d'un dossier impossible (écran-titre), plein écran / fenêtre impossible, sauvegarde impossible (#198), mémoire du moteur à 78 % et 94 %, réglages du moteur non appliqués, interruption du son (le crochet `alerte` de `son.py` reste mais n'est plus branché).
+- Les cas d'erreur gardent leur trace sans rien afficher : console et `erreurs_fenetre.log`. L'échec d'un état instantané passe par `Jeu._noter_echec_etat`.
+- Tests adaptés : `test_historique_acces`, `test_alerte_tas`, `test_mode_fenetre`, `test_ecrans`, `test_ecriture_sauvegarde`, `test_crochets_manques`, `test_vitesse_combat`. Nouveau `tests/test_sans_notifications.py` (aucun mot `toast` dans `dq4_pc` ; l'échec d'état va au journal), ajouté à la CI.
+
+### Non vérifié
+- À regarder sur Windows : plus aucun message en haut de l'écran (touche de vitesse hors combat, états 1-9, import de sauvegardes).
+- Un avertissement de mémoire du moteur ou un échec d'écriture de sauvegarde n'est plus visible à l'écran : à rétablir sur demande.

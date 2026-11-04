@@ -315,6 +315,6 @@ class CombatMixin:
 
     def changer_vitesse_combat(self, source='touche'):
         """Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
-        defilement des messages (Manuel : a la main). Sans le bouton a l'ecran (masque, ou hors combat), un message bref annonce la nouvelle vitesse."""
+        defilement des messages (Manuel : a la main). Aucun message a l'ecran (retire depuis #267) : le bouton de l'ecran de combat montre la vitesse, la section Defilement du texte de Commandes aussi."""
         v = RG.combat_suivant(self.reg['vitesse_combat']); self.reg['vitesse_combat'] = v; self.appliquer_defilement(); self.reg.enregistrer()
-        if source == 'touche' and not self.hud.visibles(): self.toast('Vitesse de combat : %s' % RG.NOMS_VITESSE_COMBAT[v])
+        return v

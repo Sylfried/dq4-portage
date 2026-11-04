@@ -115,7 +115,6 @@ class PleinEcranMixin:
             if erreur is not None:
                 print('%s impossible (%r) : %s conservé' % ('Plein écran' if cible else 'Fenêtre', erreur, 'plein écran' if self.mode_fen else 'fenêtre'), flush=True)
                 self._noter_echec_bascule(cible, erreur)
-                if self._pret: self.toast('%s impossible' % ('Plein écran' if cible else 'Fenêtre'), 3.0)
         finally: self._en_bascule = False
         return self.est_plein
 

@@ -271,15 +271,14 @@ class IndependanceAccelerateur(unittest.TestCase):
             self.assertEqual(appels, [False, False, False])                                                     # le moteur ne tient pas le joueur : tous les pas sont ordinaires
 
     def test_se_changer_sans_quitter_le_combat(self):
-        """Touche ou bouton : le reglage change, est enregistre, le defilement des messages suit (Manuel : a la main) et un message bref l'annonce si le bouton n'est pas a l'ecran."""
+        """Touche ou bouton : le reglage change, est enregistre, le defilement des messages suit (Manuel : a la main) ; aucun message a l'ecran (retire depuis #267 : le faux jeu n'a pas de `toast`)."""
         r = RG.Reglages(None); sauve = []; r.enregistrer = lambda: sauve.append(r['vitesse_combat']); imposes = []
-        toasts = []; vis = [()]
-        j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), toast=toasts.append, appliquer_defilement=lambda: imposes.append(RG.code_defilement(r['vitesse_combat'])))
+        vis = [()]
+        j = types.SimpleNamespace(reg=r, hud=types.SimpleNamespace(visibles=lambda: vis[0]), appliquer_defilement=lambda: imposes.append(RG.code_defilement(r['vitesse_combat'])))
         for attendu in (2.0, 3.0, 0.0, 1.0, 2.0): F.Jeu.changer_vitesse_combat(j); self.assertEqual(r['vitesse_combat'], attendu)
         self.assertEqual(sauve, [2.0, 3.0, 0.0, 1.0, 2.0]); self.assertEqual(imposes, [0, 0, 4, 0, 0])
-        self.assertEqual(toasts, ['Vitesse de combat : Rapide', 'Vitesse de combat : Très rapide', 'Vitesse de combat : Manuel', 'Vitesse de combat : Normal', 'Vitesse de combat : Rapide'])
-        vis[0] = (HM.COMBAT,); toasts.clear(); F.Jeu.changer_vitesse_combat(j); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])      # bouton a l'ecran : il montre deja la vitesse
-        vis[0] = (); toasts.clear(); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(toasts, [])
+        vis[0] = (HM.COMBAT,); F.Jeu.changer_vitesse_combat(j); F.Jeu.changer_vitesse_combat(j, 'bouton')                      # (bouton a l'ecran ou non : jamais de message)
+        vis[0] = (); F.Jeu.changer_vitesse_combat(j, 'bouton'); self.assertEqual(sauve[-3:], [3.0, 0.0, 1.0])
 
 
 @unittest.skipIf(F is None, 'fenetre.py non importable ici')
