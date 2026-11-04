@@ -51,31 +51,34 @@ class ChampMixin:
         if self.aniso > 1.0: gl.glTexParameterf(t.target, 0x84FE, self.aniso)
 
     def _feuille_orig(self, ident):
-        """Feuille `h<ident>` d'origine (pixels nets) ; False si absente."""
+        """Feuille `h<ident>` d'origine (pixels nets) ; False si absente. 194 = alias de 193 (Chara.SetTexture)."""
+        ident = HD.ALIAS_FEUILLES.get(ident, ident)
         cle = (ident, 0)
         if cle in self.sprite_tex: return self.sprite_tex[cle]
         arr = self.donnees.feuille(ident); r = False
         if arr is not None:
             arr = HD.nettoyer_feuille(arr)[0]                      # heros : plus de halo violet semi-transparent
-            nl = 8 if arr[4 * SPRITE_H:5 * SPRITE_H, :72, 3].any() else 4
-            atlas, _, _ = HD.agrandir_feuille(arr, SPRITE_L, SPRITE_H, 3, nl, lambda c: HD._dilater(c, 2), GOUT_ORIG, 1)         # pixels transparents = couleur du bord voisin : plus de liseré sombre au filtrage
-            r = dict(t=self._tex(atlas, False), tw=atlas.shape[1], th=atlas.shape[0], nl=nl, hd=False, cl=SPRITE_L, ch=SPRITE_H, g=GOUT_ORIG, arr=arr)
+            geo = HD.geometrie_feuille(ident, arr)                  # personnage : cases 24 x 32 sur 3 colonnes ; bateau (193) : cases 40 x 40 sur 12 colonnes et panneau plus grand (voir hd.FEUILLES_SPECIALES)
+            atlas, _, _ = HD.agrandir_feuille(arr, geo['larg'], geo['haut'], geo['cols'], geo['nl'], lambda c: HD._dilater(c, 2), GOUT_ORIG, 1)         # pixels transparents = couleur du bord voisin : plus de liseré sombre au filtrage
+            r = dict(t=self._tex(atlas, False), tw=atlas.shape[1], th=atlas.shape[0], nl=geo['nl'], cols=geo['cols'], pw=geo['pw'], ph=geo['ph'], hd=False, cl=geo['larg'], ch=geo['haut'], g=GOUT_ORIG, arr=arr, geo=geo)
         self.sprite_tex[cle] = r
         return r
 
-    def _calcul_hd(self, arr, nl, ident, cid, algo):
-        """(tache de fond) atlas HD d'une feuille, lu dans le cache disque s'il existe."""
-        f = os.path.join(self.args.cache, 'hd_%s_v%d_h%d.npy' % (cid, HD.VERSION, ident))
+    def _calcul_hd(self, arr, geo, ident, cid, algo):
+        """(tache de fond) atlas HD d'une feuille, lu dans le cache disque s'il existe (une feuille au decoupage special a un fichier a part : le bateau n'a rien de commun avec l'ancien decoupage 24 x 32)."""
+        suffixe = '' if geo['standard'] else '_g%dx%dx%dx%d' % (geo['larg'], geo['haut'], geo['cols'], geo['nl'])
+        f = os.path.join(self.args.cache, 'hd_%s_v%d_h%d%s.npy' % (cid, HD.VERSION, ident, suffixe))
         try:
-            if os.path.exists(f): return np.load(f), SPRITE_L * HD.FACTEUR, SPRITE_H * HD.FACTEUR
+            if os.path.exists(f): return np.load(f), geo['larg'] * HD.FACTEUR, geo['haut'] * HD.FACTEUR
         except Exception: pass
-        atlas, cl, ch = HD.agrandir_feuille(arr, SPRITE_L, SPRITE_H, 3, nl, algo, HD_GOUTTIERE)
+        atlas, cl, ch = HD.agrandir_feuille(arr, geo['larg'], geo['haut'], geo['cols'], geo['nl'], algo, HD_GOUTTIERE)
         try: np.save(f, atlas)
         except Exception: pass
         return atlas, cl, ch
 
     def _feuille(self, ident, mode):
         """Feuille de sprites pour le mode choisi. Les versions HD sont calculees en tache de fond : en attendant, l'original sert."""
+        ident = HD.ALIAS_FEUILLES.get(ident, ident)
         orig = self._feuille_orig(ident)
         if not orig or mode in (0, MODE_PP): return orig
         cle = (ident, mode)
@@ -83,14 +86,14 @@ class ChampMixin:
         fut = self.hd_jobs.get(cle)
         if fut is None:
             _nom, cid, algo = HD.MODES[mode]
-            self.hd_jobs[cle] = self.pool.submit(self._calcul_hd, orig['arr'], orig['nl'], ident, cid, algo)
+            self.hd_jobs[cle] = self.pool.submit(self._calcul_hd, orig['arr'], orig['geo'], ident, cid, algo)
             return orig
         if not fut.done(): return orig
         del self.hd_jobs[cle]
         try: atlas, cl, ch = fut.result()
         except Exception as ex:
             print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
-        r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
+        r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cols=orig['cols'], pw=orig['pw'], ph=orig['ph'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
         if not self.lissage: self._filtrer(r['t'], False)
         return r
 
