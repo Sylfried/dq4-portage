@@ -161,3 +161,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #254 | UNI-04 / MAP-04 : sépia des retours en arrière (paquet 1 : gris pondéré + décalage du shader du jeu, décor seulement, remis à zéro au chargement de carte) ; test_sepia_decor |
 | 04/11 | #256 | UNI-06 : effets d'écran de la classe Capture rejoués (voyage et ailes de Chimère, arrivée comprise ; lampe Ranaruta nuit / matin ; Riremito) : formules du jeu en float32, flou à demi-résolution, bit 1 levé puis abaissé, noir entre départ et arrivée ; test_effets_capture |
 | 04/11 | #258 | Un seul lanceur : dq4_pc\lancer_dq4.bat (relais laissé par #197) supprimé, comme au sondage D-237 ; plan_du_code corrigé |
+| 04/11 | #260 | Ménage demandé par Sylfried : jeux\ (copié puis comparé dans donnees\), test_faisabilite\ et deux vieux fichiers non suivis supprimés du PC ; ligne .gitignore et notes techniques à jour |

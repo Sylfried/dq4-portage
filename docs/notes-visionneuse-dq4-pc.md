@@ -2165,3 +2165,21 @@ La PR #197 avait laissé `dq4_pc\lancer_dq4.bat`, un fichier de deux lignes qui 
 
 ### À savoir
 Un raccourci Windows qui pointait vers `dq4_pc\lancer_dq4.bat` est à refaire vers `lancer_dq4.bat` à la racine. Sur le PC de test, la suppression passe par `git pull` (tracé par git).
+
+## Avance #260 : ménage : jeux, test_faisabilite et vieux fichiers supprimés du PC
+
+### Demande
+Sylfried (04/11/2026, 20 h 57 et 20 h 58) : supprimer `jeux\`, les deux fichiers non suivis et les fichiers et dossiers de test inutiles, « de partout ».
+
+### Établi
+- `test_faisabilite\` (`lancer_test.bat`, `test_core.py`, `rapport_test.txt`, 44 Ko) : le premier essai du 30/10 (verdict « réussi : le moteur du jeu s'exécute sur PC, sans Unity ») ; `dq4_pc\noyau\emu_core.py` en est la suite, aucun test ni script ne l'appelle ; le dossier n'a jamais été suivi par git.
+- `dq4_pc\echantillons_message.npz` et `outils\ui_il2cpp\grande_pile.py` : non suivis, plus référencés dans le code (recherche dans tout le dépôt).
+- `jeux\` : au moment de la demande, `donnees\` venait d'être créé par le premier lancement du nouveau lanceur (19 h 58) ; `jeux\` n'a été supprimé qu'après comparaison octet à octet des 3 APK et des 7 fichiers de sauvegarde du mobile avec `donnees\apk` et `donnees\sauvegardes\mobile`.
+- Gardés : `tests\` (91 fichiers, la suite de la CI), `outils\flux_session\`, `outils\recherche\`, le modèle d'issue `test_windows`, `docs/audit/plan_tests_chapitre2.md`.
+
+### Fait
+- Sur le PC : les quatre suppressions ci-dessus ; `git status` propre ensuite.
+- Dépôt : ligne `test_faisabilite/` retirée du `.gitignore` ; mention des notes techniques complétée.
+
+### Non vérifié
+Que le jeu démarre jusqu'au bout sous Windows avec le nouveau lanceur (le premier lancement du 04/11 à 19 h 58 a bien repris les fichiers, mais je n'ai pas vu la suite) ; `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`, `dq4_pc\historique_*.json` et `dq4_pc\erreurs_fenetre.log` (anciens doublons) laissés en place.

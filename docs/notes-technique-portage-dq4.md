@@ -13,7 +13,7 @@
 - `DevInit` reçoit le chemin de l'APK de données : le moteur lit lui-même le ZIP (21 ouvertures de l'APK au démarrage).
 
 ## Test de faisabilité (voie A) : RÉUSSI
-- `portage_pc/test_faisabilite/` (`lancer_test.bat` + `test_core.py`, archive locale non versionnée ; `dq4_pc/emu_core.py` en est la suite) : chargeur ELF AArch64 maison + Unicorn. 61 constructeurs C++, DevInit, MenuPortInit, GameInit et des centaines de GameUpdate tournent. Validé sous Windows (Python 3.15, pc "pdc") et Linux.
+- `portage_pc/test_faisabilite/` (`lancer_test.bat` + `test_core.py`, archive locale non versionnée, supprimée du PC le 04/11/2026 à la demande de Sylfried (#260) ; `dq4_pc/emu_core.py` en est la suite) : chargeur ELF AArch64 maison + Unicorn. 61 constructeurs C++, DevInit, MenuPortInit, GameInit et des centaines de GameUpdate tournent. Validé sous Windows (Python 3.15, pc "pdc") et Linux.
 - Vitesse : GameUpdate ~15 ms/image dans l'émulateur.
 
 ## Protocole moteur -> Unity (tampons de sortie)
