@@ -20,7 +20,6 @@ __pycache__/
 modules_ok.txt
 
 # --- Archives locales hors dépôt ---
-test_faisabilite/
 *.zip
 *.log
 
