@@ -9,9 +9,12 @@
   3. garde-fou : le panneau d'ORIGINE (correction coupee) se penche bien de plus de 8 degres pres des bords, donc le test 1 verifie quelque chose ;
   4. essai d'inclinaison (#134) : avec `inc` > 0 le panneau est cisaille vers la verticale du monde, pieds fixes, a taille, profondeur et position de bas inchangees ; son bord penche de atan(inc x tan(angle d'une
      verticale du monde au pied)) ; inc = 1 : parallele aux murs ; 0 PAR DEFAUT depuis #180 (« remets l'affichage des PNJ comme sur la version mobile ... ils s'etirent pres du bord » : le cisaillement a 0,5 deformait les
-     sprites ; `Jeu._inclinaison_sprites`, variable DQ_SPRITE_INCLINAISON pour l'essayer) : l'etat livre (correction des bords seule, aucun cisaillement) donne des bords exactement verticaux et la proportion constante ;
+     sprites ; `Jeu._inclinaison_sprites`, variable DQ_SPRITE_INCLINAISON pour l'essayer) : la correction des bords seule (sans cisaillement) donne des bords exactement verticaux et la proportion constante (elle n'est plus le defaut depuis #184 : DQ_CORRECTION_BORDS=100) ;
   5. constat (cause de l'impression de #134, voir `Jeu._panneau_ville`) : les VERTICALES DU MONDE (murs, portes) penchent a l'ecran selon leur position (point de fuite sous l'image, camera a 47 degres), de beaucoup plus en 16/9 que
      sur le portrait d'origine, et cet angle change de plusieurs degres quand le heros monte ou descend (le PNJ change de hauteur a l'ecran) alors que le sprite, lui, reste a 0 : le sprite parait pencher PAR RAPPORT aux murs voisins.
+
+  6. #184 (« reviens a la position brute des PNJ, exactement comme dans le jeu ... avec le nouveau systeme de camera ils ne doivent pas s'aligner si on monte ou descend la camera ») : par defaut le panneau est celui du jeu (correction
+     des bords nulle) et son repere (`Jeu._repere_sprites`) est celui de la camera DU JEU : Haut / Bas ne le change pas (coins identiques en monde), Gauche / Droite le font tourner de face avec l'inclinaison du jeu ;
 
     python3 outils/test_sprites_droits.py        (Linux sans ecran : pyglet en mode « headless »)
 """
@@ -83,19 +86,34 @@ class TestSpritesDroits(unittest.TestCase):
         self.assertLess(pire, 0.01, 'le panneau doit etre un rectangle droit a l\'ecran, a toute position et pour toute camera')
         self.assertGreater(r_min, 0.730); self.assertLess(r_max, 0.745)                                              # proportion constante a +- 1 % (0,72 x la hauteur au centre de l'image : 0,738 mesure)
 
-    def test_etat_livre_par_defaut_bords_verticaux_sans_cisaillement(self):
-        """#180 : avec les reglages par defaut du jeu (correction des bords complete, inclinaison nulle), le PNJ est un rectangle droit a l'ecran partout, a toute camera (pas de sprite deforme pres des bords)."""
+    def test_etat_livre_par_defaut_panneau_brut(self):
+        """#184 (« reviens a la position brute des PNJ, exactement comme dans le jeu ») : par defaut la correction des bords est nulle, le cisaillement aussi : le panneau est celui du jeu, sans reconstruction a l'ecran.
+        L'ancienne correction complete (#134 : bords verticaux, proportion constante) reste disponible par DQ_CORRECTION_BORDS / --correction-bords."""
         ancien = os.environ.pop('DQ_SPRITE_INCLINAISON', None); ancien_b = os.environ.pop('DQ_CORRECTION_BORDS', None)
         try:
-            pire = 0.0; j0 = faux_jeu(); j0.args = types.SimpleNamespace(correction_bords=None); j0.INCLINAISON_SPRITES_DEF = F.Jeu.INCLINAISON_SPRITES_DEF
-            t, inc = F.Jeu._correction_bords(j0), F.Jeu._inclinaison_sprites(j0); self.assertEqual((t, inc), (1.0, 0.0))
-            for nom, (dx, dz) in itertools.product(ETATS, POSITIONS):
-                (M, q, _, _), _ = cas(nom, dx, dz, t, inc); g, d, ratio, (A, B, Cc, D) = forme(M, q)
-                pire = max(pire, abs(D[0] - A[0]), abs(Cc[0] - B[0]), abs(A[1] - B[1]), abs(D[1] - Cc[1])); self.assertAlmostEqual(ratio, 0.738, delta=0.008)
-            self.assertLess(pire, 0.01)
+            j0 = faux_jeu(); j0.args = types.SimpleNamespace(correction_bords=None); j0.INCLINAISON_SPRITES_DEF = F.Jeu.INCLINAISON_SPRITES_DEF
+            self.assertEqual(F.CORRECTION_BORDS_DEF, 0.0)
+            self.assertEqual((F.Jeu._correction_bords(j0), F.Jeu._inclinaison_sprites(j0)), (0.0, 0.0))
+            for val, att in (('100', 1.0), ('0', 0.0), ('40', 0.4), ('250', 1.0), ('-5', 0.0), ('abc', 0.0), ('', 0.0)):
+                os.environ['DQ_CORRECTION_BORDS'] = val; self.assertAlmostEqual(F.Jeu._correction_bords(j0), att, 9, repr(val))
+            os.environ.pop('DQ_CORRECTION_BORDS', None)
+            j0.args = types.SimpleNamespace(correction_bords=100.0); self.assertEqual(F.Jeu._correction_bords(j0), 1.0)          # l'option de la ligne de commande l'emporte
+            # panneau par defaut (t = 0) = panneau d'origine : meme coins que le calcul direct des decalages le long de l'axe de la camera du jeu
+            (M, q, cam3d, C), hero = cas('defaut', 6.0, 3.0, 0.0)
+            r_, u_, f_ = cam3d; w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zt = 0.185 / 0.48 * w, 0.65 / 0.48 * w
+            p = hero + np.array([6.0, 0.0, 3.0]); a, b = p - r_ * (w / 2), p + r_ * (w / 2)
+            for x, y in zip(q, (a - f_ * zb, b - f_ * zb, b + u_ * h - f_ * zt, a + u_ * h - f_ * zt)): self.assertTrue(np.allclose(x, y))
         finally:
             for k, v in (('DQ_SPRITE_INCLINAISON', ancien), ('DQ_CORRECTION_BORDS', ancien_b)):
                 if v is not None: os.environ[k] = v
+
+    def test_etat_correction_complete_bords_verticaux_sans_cisaillement(self):
+        """La correction des bords complete (DQ_CORRECTION_BORDS=100, #134 / #180) donne toujours un rectangle droit a l'ecran, a toute camera."""
+        pire = 0.0
+        for nom, (dx, dz) in itertools.product(ETATS, POSITIONS):
+            (M, q, _, _), _ = cas(nom, dx, dz, 1.0, 0.0); g, d, ratio, (A, B, Cc, D) = forme(M, q)
+            pire = max(pire, abs(D[0] - A[0]), abs(Cc[0] - B[0]), abs(A[1] - B[1]), abs(D[1] - Cc[1])); self.assertAlmostEqual(ratio, 0.738, delta=0.008)
+        self.assertLess(pire, 0.01)
 
     def test_butte_montee_et_descente(self):
         """Camera de la butte (#110) : la hauteur de la camera suit le sol (CAM_Y_RELIEF) ou retarde (escalier) ; a chaque image, un PNJ au bord gauche, au bord droit et en haut reste droit."""
@@ -210,6 +228,89 @@ class TestSpritesDroits(unittest.TestCase):
         r_, u_, f_ = cam3d; w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zh = 0.185 / 0.48 * w, (0.65 - 0.185) / 0.48 * w
         j = TC.faux_jeu(); a = F.Jeu._panneau_ville(j, hero, r_, u_, f_, w, h, zb, zb + zh, 1.0, None, 0.8); b = F.Jeu._panneau_ville(j, hero, r_, u_, f_, w, h, zb, zb + zh, 0.0, None, 0.0)
         for x, y in zip(a, b): self.assertTrue(np.allclose(x, y))
+
+
+def repere_sprites(j, e, corr=0.0):
+    """(M, repere de la vue, repere des sprites choisi par `Jeu._repere_sprites`, position de la camera de la visionneuse) pour l'etat de camera `j`."""
+    M, cam3d = F.Jeu._camera_ville(j, e, ASPECT)
+    return M, cam3d, F.Jeu._repere_sprites(j, cam3d, corr), j._cadre_vue[0]
+
+
+def pitch(fw):
+    """Inclinaison (degres, vers le bas) d'un axe avant."""
+    return math.degrees(math.asin(-fw[1]))
+
+
+class TestSpritesCommeLeJeu(unittest.TestCase):
+    """#184 : le panneau d'un PNJ garde l'inclinaison de la camera DU JEU : monter ou descendre la camera (Haut / Bas) ne le change pas, la rotation autour du heros (Gauche / Droite) le suit."""
+
+    def cadres(self, **kw):
+        hero = CIB + np.array([0.0, kw.get('hy', 0.0), 0.0]); e = TC.faux_etat(CIB, hero, fov=kw.get('fov'), yoff=kw.get('yoff')); j = faux_jeu(kw.get('lacet', 0.0), kw.get('angle', 0.0), kw.get('zoom', 1.0))
+        for _ in range(3): F.Jeu._camera_ville(j, e, ASPECT)
+        return j, e, hero
+
+    def test_sans_inclinaison_ni_rotation_repere_du_jeu(self):
+        """Camera du jeu telle quelle : le repere des sprites est celui de la vue ET celui de `_cadre_jeu` (la camera du jeu sans zoom, centrage ni rotation de la visionneuse)."""
+        j, e, _ = self.cadres(); M, cam3d, rep, _ = repere_sprites(j, e)
+        _, dr, ha, fw = F.Jeu._cadre_jeu(j, e)
+        for a, b in zip(rep, cam3d): self.assertTrue(np.allclose(a, b))
+        for a, b in zip(rep, (dr, ha, fw)): self.assertTrue(np.allclose(a, b, atol=1e-9))
+
+    def test_inclinaison_de_la_visionneuse_ne_change_pas_le_panneau(self):
+        """Haut / Bas (+- 15, +- 30 et le plafond 85 degres) : le repere des sprites et les 4 coins du panneau, en monde, sont ceux de la camera du jeu ; seule la vue change (garde-fou : le repere de la vue, lui, tourne)."""
+        j0, e0, hero = self.cadres(); _, v0, r0, _ = repere_sprites(j0, e0)
+        w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zt = 0.185 / 0.48 * w, 0.65 / 0.48 * w
+        p = hero + np.array([5.0, 0.0, -2.0])
+        ref = F.Jeu._panneau_ville(j0, p, *r0, w, h, zb, zt, 0.0, None)
+        for ang in (-15.0, 15.0, 30.0, 80.0, -80.0):
+            j, e, _ = self.cadres(angle=ang); _, v, r, _ = repere_sprites(j, e)
+            self.assertGreater(abs(pitch(v[2]) - pitch(v0[2])), 1.0, 'garde-fou : la vue s\'incline bien (%s)' % ang)
+            for a, b in zip(r, r0): self.assertTrue(np.allclose(a, b, atol=1e-9), 'repere des sprites inchange (%s)' % ang)
+            for a, b in zip(F.Jeu._panneau_ville(j, p, *r, w, h, zb, zt, 0.0, None), ref): self.assertTrue(np.allclose(a, b, atol=1e-9), 'coins du panneau en monde inchanges (%s)' % ang)
+
+    def test_inclinaison_du_panneau_dans_le_monde_est_celle_du_jeu(self):
+        """Le panneau d'origine est quasi vertical dans le monde (le haut penche de 36 degres vers la camera) ; cette pente (angle du bord bas -> haut avec la verticale) est la meme a toute inclinaison de la camera."""
+        w, h = F.SPRITE_L * F.SPRITE_ECHELLE, F.SPRITE_H * F.SPRITE_ECHELLE; zb, zt = 0.185 / 0.48 * w, 0.65 / 0.48 * w; pentes = []
+        for ang in (-20.0, 0.0, 10.0, 30.0):
+            j, e, hero = self.cadres(angle=ang); _, _, r, _ = repere_sprites(j, e)
+            a, b, c, d = F.Jeu._panneau_ville(j, hero, *r, w, h, zb, zt, 0.0, None); mil_bas, mil_haut = 0.5 * (a + b), 0.5 * (c + d); v = mil_haut - mil_bas
+            pentes.append(math.degrees(math.atan2(math.hypot(v[0], v[2]), v[1])))
+        for x in pentes: self.assertAlmostEqual(x, pentes[0], 6)
+        self.assertLess(pentes[0], 40.0)
+
+    def test_rotation_autour_du_heros_suivie_inclinaison_du_jeu(self):
+        """Gauche / Droite : le panneau reste de face (son cap suit la camera) mais garde l'inclinaison du jeu, aussi quand on incline en meme temps ; inclinaison de la vue sans effet sur le repere."""
+        j0, e0, _ = self.cadres(); _, v0, r0, _ = repere_sprites(j0, e0)
+        for lac in (-45.0, 20.0, 90.0):
+            j, e, _ = self.cadres(lacet=lac); _, v, r, _ = repere_sprites(j, e)
+            self.assertAlmostEqual(pitch(r[2]), pitch(r0[2]), 6)
+            self.assertTrue(np.allclose(r[2], v[2], atol=1e-9), 'sans inclinaison, le panneau est de face a la vue')
+            cap = lambda f: math.degrees(math.atan2(f[0], f[2])); d = (cap(r[2]) - cap(r0[2]) + 180.0) % 360.0 - 180.0
+            self.assertAlmostEqual(abs(d), abs(lac), 4, 'le cap du panneau suit la rotation (%s)' % lac)
+            for ang in (-25.0, 35.0):
+                j2, e2, _ = self.cadres(lacet=lac, angle=ang); _, v2, r2, _ = repere_sprites(j2, e2)
+                for a, b in zip(r2, r): self.assertTrue(np.allclose(a, b, atol=1e-9), 'lacet %s + angle %s' % (lac, ang))
+                self.assertGreater(abs(pitch(v2[2]) - pitch(r2[2])), 1.0, 'garde-fou : la vue, elle, est inclinee')
+
+    def test_correction_des_bords_et_reglages_gardent_le_repere_de_la_vue(self):
+        """Correction des bords > 0 (essai #134) : le repere de la vue (la reconstruction a l'ecran en a besoin) ; DQ_SPRITES_SUR_VUE : l'ancien alignement ; sans camera : rien."""
+        j, e, _ = self.cadres(angle=30.0); _, v, r0, _ = repere_sprites(j, e, 0.0); _, _, r1, _ = repere_sprites(j, e, 0.5)
+        self.assertFalse(np.allclose(r0[2], v[2], atol=1e-3)); [self.assertTrue(np.allclose(a, b)) for a, b in zip(r1, v)]
+        ancien = os.environ.get('DQ_SPRITES_SUR_VUE'); os.environ['DQ_SPRITES_SUR_VUE'] = '1'
+        try: [self.assertTrue(np.allclose(a, b)) for a, b in zip(F.Jeu._repere_sprites(j, v, 0.0), v)]
+        finally:
+            if ancien is None: os.environ.pop('DQ_SPRITES_SUR_VUE', None)
+            else: os.environ['DQ_SPRITES_SUR_VUE'] = ancien
+        self.assertIsNone(F.Jeu._repere_sprites(j, None, 0.0))
+
+    def test_camera_libre_d_une_scene_et_mini_jeu_inchanges(self):
+        """Camera libre (position et angles fixes par le script) : pas de rotation ni d'inclinaison de la visionneuse, le repere des sprites est celui de la vue ; sans appel de la camera, repli sur la vue."""
+        j = faux_jeu(angle_cam=30.0); j._rot_camera = lambda e: F.Jeu._rot_camera(j, e)
+        e = TC.faux_etat(CIB, CIB, libre=True); e.cam_rot = (45.0, 0.0, 0.0)
+        M, cam3d = F.Jeu._camera_ville(j, e, ASPECT); rep = F.Jeu._repere_sprites(j, cam3d, 0.0)
+        for a, b in zip(rep, cam3d): self.assertTrue(np.allclose(a, b))
+        jv = types.SimpleNamespace(); r = F.Jeu._repere_sprites(jv, cam3d, 0.0)
+        for a, b in zip(r, cam3d): self.assertTrue(np.allclose(a, b))
 
 
 if __name__ == '__main__':
