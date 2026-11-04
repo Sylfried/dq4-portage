@@ -7,7 +7,9 @@ l'horloge est simulee, la boucle d'images appelle Pause.maj) :
   - appui puis glisser tout de suite (sans attendre l'appui long) : le panneau suit le pointeur et ne se replie pas ;
   - appui sans bouger (ou avec une secousse de quelques pixels) : replier / deplier ;
   - appui maintenu sans bouger (soulevement) puis glisser : il suit aussi ;
-  - double clic : retour a la position d'origine ; double appui suivi d'un glisser : il se deplace.
+  - double clic : retour a la position d'origine ; double appui suivi d'un glisser : il se deplace ;
+  - detection du double clic alignee sur Windows (#145) : delai compte depuis le DEBUT du premier appui, rectangle SM_CXDOUBLECLK x SM_CYDOUBLECLK centre sur lui, et un simple clic replie des que le double clic est
+    devenu impossible (delai ecoule, pointeur sorti du rectangle, autre appui) au lieu d'attendre betement.
 """
 import os, sys, types, unittest
 from unittest import mock
@@ -104,20 +106,70 @@ class Panneau(unittest.TestCase):
         S.attendre(1.0); self.assertFalse(P.plie)                                              # et le pliage du premier clic n'a pas lieu apres coup
 
     def test_clic_simple_un_seul_changement_apres_le_delai(self):
-        """#145 : un clic simple ne plie qu'une fois le delai du double clic ecoule, et une seule fois."""
+        """#145 : un clic simple ne plie qu'une fois le delai du double clic ecoule, et une seule fois ; le delai court depuis le DEBUT de l'appui (comme Windows), pas depuis son relachement."""
         S, P = self.S, self.P
-        etats = []
+        t0 = S.t; etats = []; instants = []
         S.appui(900, 670); S.attendre(0.05); S.relache()
-        for _ in range(60): S.attendre(0.016); etats.append(P.plie)
+        for _ in range(60): S.attendre(0.016); etats.append(P.plie); instants.append(S.t - t0)
         self.assertFalse(etats[0]); self.assertTrue(etats[-1])                                 # replie, mais pas tout de suite
         self.assertEqual(sum(1 for a, b in zip(etats, etats[1:]) if a != b), 1)                # un seul changement d'etat
-        self.assertGreaterEqual(etats.index(True) * 0.016, PA.DELAI_DOUBLE_CLIC - 0.05)        # pas avant (a un pas d'image pres) la fin du delai
+        quand = instants[etats.index(True)]
+        self.assertGreaterEqual(quand, PA.DELAI_DOUBLE_CLIC - 1e-6)                            # pas avant la fin du delai (compte depuis l'appui)
+        self.assertLess(quand, PA.DELAI_DOUBLE_CLIC + 0.02)                                    # et sans attendre davantage : pas de delai ajoute apres le relachement
+
+    def test_delai_compte_depuis_le_debut_du_premier_appui(self):
+        """#145 (Windows) : second appui a 0,45 s du DEBUT du premier (donc 0,40 s apres son relachement) = double clic ; a 0,55 s du debut = deux clics simples, meme si 0,5 s ne separent pas le relachement du second."""
+        S, P = self.S, self.P
+        P.pan_pos = (700.0, 500.0)
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.40)                      # 0,45 s apres le debut du premier appui
+        self.assertFalse(P.plie)
+        S.appui(900, 670); S.attendre(0.05); S.relache()
+        self.assertIsNone(P.pan_pos); S.attendre(1.0); self.assertFalse(P.plie)                # double clic : retour a l'origine, aucun pliage
+        S.attendre(1.0)
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.52)                       # 0,57 s apres le debut du premier : le premier clic est deja acquis
+        self.assertTrue(P.plie)                                                                # (replie au bout de 0,5 s, sans attendre un delai de plus)
+        S.appui(900, 670); S.attendre(0.05); S.relache(); S.attendre(0.6); self.assertFalse(P.plie)      # le second est un clic simple : il deplie
+
+    def test_rectangle_du_double_clic(self):
+        """#145 (Windows) : le second appui doit tomber dans le rectangle SM_CXDOUBLECLK x SM_CYDOUBLECLK centre sur le premier ; sinon c'est un clic simple de plus."""
+        S, P = self.S, self.P
+        delai, w, h = PA.double_clic_systeme()
+        S.appui(900, 670); S.attendre(0.04); S.relache(); S.attendre(0.04)
+        S.appui(900 + w / 2.0 + 3, 670); S.attendre(0.04); S.relache()                         # trop loin : pas un double clic, le premier clic replie aussitot
+        self.assertTrue(P.plie)
+        S.attendre(1.0); self.assertFalse(P.plie)                                              # et le second (simple) a deplie apres son propre delai
+        P.pan_pos = (700.0, 500.0)
+        S.appui(900, 670); S.attendre(0.04); S.relache(); S.attendre(0.04)
+        S.appui(900 + w / 2.0 - 1, 670 - h / 2.0 + 1); S.attendre(0.04); S.relache()           # dans le rectangle : double clic
+        self.assertIsNone(P.pan_pos); S.attendre(1.0); self.assertFalse(P.plie)
+
+    def test_le_pliage_n_attend_pas_si_le_double_clic_est_impossible(self):
+        """#145 : pointeur sorti du rectangle apres le relachement (survol) = le simple clic est acquis, le panneau replie tout de suite, sans attendre la fin du delai."""
+        S, P = self.S, self.P
+        S.appui(900, 670); S.attendre(0.04); S.relache(); self.assertFalse(P.plie)
+        S.t += 0.03; P.survol(900, 670); self.assertFalse(P.plie)                              # pointeur toujours sur place : on attend encore
+        S.t += 0.03; P.survol(900 + 40, 670); self.assertTrue(P.plie)                          # il s'est eloigne : plus de double clic possible, le clic simple agit a l'instant
+        S.attendre(1.0); self.assertTrue(P.plie)                                               # une seule fois
+
+    def test_un_appui_ailleurs_acquiert_le_clic_en_attente(self):
+        """#145 : un autre appui (hors du rectangle) valide aussitot le clic simple qui attendait, au lieu de le laisser traine."""
+        S, P = self.S, self.P
+        S.appui(900, 670); S.attendre(0.04); S.relache(); S.attendre(0.04)
+        S.appui(900, 500); self.assertTrue(P.plie)                                              # (clic sur une ligne du panneau, loin de la barre)
+        S.relache(); S.attendre(1.0); self.assertTrue(P.plie)
+
+    def test_appui_plus_long_que_le_delai_replie_au_relachement(self):
+        """#145 : si l'appui a deja dure plus que le delai du double clic (delai systeme court), le clic simple est acquis des le relachement."""
+        S, P = self.S, self.P
+        with mock.patch.object(PA, 'double_clic_systeme', lambda: (0.2, 4, 4)), mock.patch.object(PA, 'DELAI_APPUI_LONG', 5.0):
+            S.appui(900, 670); S.attendre(0.3); S.relache()
+            self.assertTrue(P.plie); S.attendre(1.0); self.assertTrue(P.plie)
 
     def test_double_clic_ne_change_jamais_l_etat(self):
         """#145 : un double clic sur un panneau replie ou deplie ne le replie ni ne le deplie, a aucun moment."""
         S, P = self.S, self.P
         for depart in (False, True):
-            P.plie = depart; P.pan_pos = (700.0, 500.0); P.pan_clic_t = 0.0; P.pan_plier_a = None
+            P.plie = depart; P.pan_pos = (700.0, 500.0); P.pan_clic_t = 0.0; P.pan_plier_a = None; P.pan_clic_pos = None
             S.attendre(1.0)
             vus = set()
             S.appui(900, 670); S.attendre(0.05); S.relache(); vus.add(P.plie)

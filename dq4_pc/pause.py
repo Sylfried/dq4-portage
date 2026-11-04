@@ -4,7 +4,7 @@ Pendant que le menu est ouvert le moteur est arrete (la scene reste affichee, as
 Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
 Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, rien n'est encadre : comme au toucher sur mobile, la plaque (ou le bouton) sous le pointeur s'assombrit et se rallume quand il sort.
 Les reglages sont enregistres dans reglages.json. Fenetres noires, curseur dore et bouton retour : ceux des menus du jeu (feuilles MenuTexture et Button)."""
-import math, os, time
+import math, os, sys, time
 import numpy as np
 import pyglet
 from pyglet import gl
@@ -72,7 +72,22 @@ INTERFACES_PROPRES = (RG.CIBLE_ECRAN, 'msg', RG.CIBLE_VITESSE)         # interfa
 ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
 SANS_EDITION = RG.FENETRES_RETIREES
 DELAI_APPUI_LONG = float(os.environ.get('DQ_APPUI_LONG', '0.35'))      # panneau de l'editeur : appui maintenu sans bouger (secondes) avant qu'il se souleve ; en dessous, sans bouger, c'est un appui court (replier / deplier)
-DELAI_DOUBLE_CLIC = float(os.environ.get('DQ_DOUBLE_CLIC', '0.40'))        # double clic sur la barre de titre : secondes entre la fin du premier appui et le debut du second
+DELAI_DOUBLE_CLIC = float(os.environ.get('DQ_DOUBLE_CLIC', '0.50'))        # double clic sur la barre de titre : delai par defaut (secondes) entre le DEBUT du premier appui et celui du second, quand le systeme ne le dit pas (defaut de Windows : 500 ms)
+RECT_DOUBLE_CLIC = (4, 4)                                       # rectangle du double clic par defaut (pixels, centre sur le premier appui ; defaut de Windows : 4 x 4)
+
+
+def double_clic_systeme():
+    """Reglage de double clic du systeme, relu a chaque appui : (delai en secondes, largeur, hauteur en pixels du rectangle autour du premier appui). Windows : GetDoubleClickTime et SM_CXDOUBLECLK / SM_CYDOUBLECLK (le curseur
+    « Vitesse du double-clic » du panneau Souris de Windows) ; la variable d'environnement DQ_DOUBLE_CLIC (secondes) force le delai ; sans Windows, les valeurs par defaut de Windows (0,5 s, 4 x 4)."""
+    delai, (w, h) = DELAI_DOUBLE_CLIC, RECT_DOUBLE_CLIC
+    if sys.platform == 'win32':
+        try:
+            import ctypes; u = ctypes.windll.user32
+            if not os.environ.get('DQ_DOUBLE_CLIC'): delai = max(0.05, u.GetDoubleClickTime() / 1000.0)
+            w, h = max(1, int(u.GetSystemMetrics(36))), max(1, int(u.GetSystemMetrics(37)))
+        except Exception: pass
+    return delai, w, h
+
 TOLERANCE_APPUI = 8.0                                           # deplacement (pixels) du pointeur, depuis le point d'appui sur la barre de titre du panneau, a partir duquel le panneau se deplace (en dessous : appui court)
 CADRE_SELECTION = (255, 235, 130)                               # cadre jaune de l'element choisi dans l'apercu de l'editeur (le meme que celui des boutons de l'ecran : hud_mobile.py)
 MOTS_MASQUE = ('Masquée', 'Masqué')                             # etiquette d'un element masque dans l'apercu de l'editeur : feminin (fenetre, croix), masculin (boutons)
@@ -99,7 +114,7 @@ class Pause:
         self.action_etat = 'creer'; self.etat_suppr = None                                  # menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
         self.barre_liste = None; self.glisse_liste = None; self.liste_top = None; self.liste_cur_vu = None      # liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
         self.cible = 'boutons'; self.drag = None; self.rect_apercu = None           # editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
-        self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0; self.pan_plier_a = None             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
+        self.pan_pos = None; self.pan_appui = None; self.pan_clic_t = 0.0; self.pan_clic_pos = None; self.pan_plier_a = None             # editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
         self.cadre_liste = None; self.pan_dim = None                                    # appui en cours sur la barre de titre {t0, x, y, dx, dy, long (souleve : suit le pointeur), double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
 
     def _et(self, texte, taille, couleur=BLANC):
@@ -195,7 +210,7 @@ class Pause:
         if self.ouvert: return
         self.ouvert = True; self.pile = ['racine']; self.sel = {}; self.capture = None; self.message = None; self.confirme = None; self.popup = None; self.plie = False; self.tt = None; self.debut = {}; self.vu_sel = {}; self.glisse_barre = None
         self.veut_miniature = True; self.minis = {}; self.rep = None; self.glisse = None; self.saisie = None; self.deroule = None
-        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None; self.pan_plier_a = None
+        self.mode_souris = False; self.pos_souris = getattr(self.J, 'souris', None); self.drag = None; self.pan_appui = None; self.pan_plier_a = None; self.pan_clic_pos = None
         self._garde().clavier(self.pos_souris)                    # la selection est au clavier tant que le pointeur ne s'est pas vraiment deplace (ecart cumule depuis son point d'ouverture : entrees.GardeSouris)
         if page: self.pile = [page]; self.sel[page] = 2           # ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
         self.J.pause_jeu(True)
@@ -213,7 +228,7 @@ class Pause:
     def ecran(self): return self.pile[-1]
 
     def retour(self):
-        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None; self.pan_appui = None; self.pan_plier_a = None                # fin de l'edition de l'interface
+        if self.ecran == 'interface': self.J.reg.enregistrer(); self.drag = None; self.pan_appui = None; self.pan_plier_a = None; self.pan_clic_pos = None                # fin de l'edition de l'interface
         if len(self.pile) > 1: self.pile.pop()
         else: self.fermer()
 
@@ -585,7 +600,7 @@ class Pause:
         if self.saisie is not None: self._touche_saisie(symbol); return True
         act = R.action_de(symbol)
         if self.popup is not None: self._touche_popup(symbol, act); return True
-        if self.ecran == 'interface' and symbol == K.TAB: self.plie = not self.plie; self.pan_plier_a = None; return True              # (editeur : plier / deplier le panneau)
+        if self.ecran == 'interface' and symbol == K.TAB: self.plie = not self.plie; self.pan_plier_a = None; self.pan_clic_pos = None; return True              # (editeur : plier / deplier le panneau)
         if self.ecran == 'interface' and self.plie and not (symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B'): return True
         if self.deroule is not None: self._touche_liste(symbol, act); return True
         if symbol in (K.ESCAPE, K.BACKSPACE) or act == 'B': self.retour(); return True
@@ -752,6 +767,7 @@ class Pause:
         un evenement a l'autre, et une souris qui envoie des mouvements de 1 a 2 pixels ne reprenait jamais la main avant un clic ou un geste tres rapide) ; ensuite la selection suit le pointeur."""
         if self.ecran == 'historique': return self.hist.survol(x, y)
         self.pos_souris = (x, y)
+        if self.pan_plier_a is not None and self.pan_appui is None and not self._double_possible(x, y, time.time()): self._plier_en_attente()          # le pointeur a quitte le rectangle du double clic : le clic simple est acquis, le panneau replie / deplie sans attendre la fin du delai (#145)
         if not self.mode_souris and not self._garde().bouge((x, y)): return          # le pointeur n'a pas vraiment bouge : la selection au clavier reste
         self.mode_souris = True
         if self.popup is not None:
@@ -800,6 +816,7 @@ class Pause:
         M = pyglet.window.mouse
         if self.ecran == 'historique': return self.hist.clic(x, y, bouton)
         self.mode_souris = True; self.pos_souris = (x, y)
+        if self.pan_plier_a is not None and not self._double_possible(x, y, time.time()): self._plier_en_attente()          # tout autre appui (ailleurs, trop tard) : le clic simple en attente replie / deplie aussitot, il ne peut plus devenir un double clic
         if self.capture is not None: self.capture = None; return
         if self.popup is not None:                                    # fenetre de confirmation : un bouton la valide, un clic droit ou ailleurs la ferme
             if bouton != M.RIGHT:
@@ -874,20 +891,29 @@ class Pause:
         if not c: return
         if self.deroule is not None: self.deroule = None
         if self.saisie is not None: self._fin_saisie(True)
-        self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, double=t - self.pan_clic_t < DELAI_DOUBLE_CLIC)         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
+        self.pan_appui = dict(t0=t, x=x, y=y, dx=x - c[2], dy=y - c[3], long=False, double=self._double_possible(x, y, t))         # (dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
+
+    def _double_possible(self, x, y, t):
+        """Un appui en (x, y) a l'instant t serait-il le second d'un double clic, comme Windows en juge : le premier appui court date de moins de GetDoubleClickTime (depuis SON DEBUT, pas depuis son relachement) et le second
+        tombe dans le rectangle de SM_CXDOUBLECLK x SM_CYDOUBLECLK pixels centre sur le premier."""
+        if self.pan_clic_pos is None: return False
+        delai, w, h = double_clic_systeme()
+        return 0.0 <= t - self.pan_clic_t <= delai and abs(x - self.pan_clic_pos[0]) <= w / 2.0 and abs(y - self.pan_clic_pos[1]) <= h / 2.0
 
     def _plier_en_attente(self):
         """Le pliage d'un clic simple sur la barre de titre (editeur d'interface) n'a lieu qu'une fois le delai du double clic ecoule : replie / deplie le panneau et n'attend plus rien (sans effet si aucun clic n'attend)."""
         if self.pan_plier_a is None: return
-        self.pan_plier_a = None; self.plie = not self.plie
+        self.pan_plier_a = None; self.pan_clic_pos = None; self.plie = not self.plie          # (le clic simple est acquis : plus de double clic possible sur lui)
 
     def relache(self, x, y, bouton):
         if self.ecran == 'historique': return self.hist.relache(x, y, bouton)
         self.glisse = None; self.glisse_barre = None; self.glisse_liste = None
         a, self.pan_appui = self.pan_appui, None
         if a is not None and not a['long']:                                       # appui court (sans mouvement) : un clic simple replie / deplie APRES le delai du double clic (voir maj) ; deuxieme appui d'un double clic : position d'origine, sans plier ni deplier (#145)
-            if a['double']: self.pan_pos = None; self.pan_plier_a = None; self.pan_clic_t = 0.0
-            else: self.pan_clic_t = time.time(); self.pan_plier_a = self.pan_clic_t + DELAI_DOUBLE_CLIC
+            if a['double']: self.pan_pos = None; self.pan_plier_a = None; self.pan_clic_pos = None; self.pan_clic_t = 0.0
+            else:                                                                                  # clic simple : le delai du double clic court depuis le DEBUT de l'appui (comme Windows) ; deja ecoule au relachement (appui long de plus de ce delai) : replie / deplie tout de suite
+                self.pan_clic_t = a['t0']; self.pan_clic_pos = (a['x'], a['y']); self.pan_plier_a = a['t0'] + double_clic_systeme()[0]
+                if time.time() >= self.pan_plier_a: self._plier_en_attente()
         if self.ecran == 'interface' and self.J.hud.pris is not None: self.J.hud.poser(); self.J.reg.enregistrer()
         if self.drag is not None: self.drag = None; self.J.reg.enregistrer()
 
