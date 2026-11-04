@@ -6,6 +6,7 @@ from dq4_pc.noyau import moteur as MO
 
 BTN_SAUVEGARDES = 8         # numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
 SE_BOUTON = 300               # bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
+PADS_BRUITAGE = 0x810         # touches de manette dont le bouton joue SE_BOUTON a l'appui (MenuPortItem.Update : `m_gamepad & 0x810`) : A (0x10) et action (0x800) ; B (0x20), retour (0x400), fleches (1, 2, 4, 8) et zone 0x80 sont muets
 SE_APERCU = 316                # bruitage d'essai des volumes (page Son du menu Echap) : degats du sol (CommonWalkDamage::checkWalk), court et sans rapport avec l'interface
 SE_COURANTS = (300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 402, 409, 412)       # decodes des le depart en tache de fond
 MODE_PP = 4                   # dernier mode du menu « Shader » (0 originaux, 1 EPX x8, 4 pixel perfect : voir reglages.MODES_SPRITES) : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
@@ -70,3 +71,7 @@ POLICES = ('Segoe UI', 'Arial', 'DejaVu Sans', 'Liberation Sans')
 ACT_FRONTS = ('menu', 'discussion', 'carte', 'L', 'R')       # actions dont on detecte l'appui (front montant)
 BTN_PAROLE, BTN_MENU, BTN_DISCUSSION, BTN_CARTE = 0x100, 0x800, 0x400, 0x1000     # arg2 de GameUpdate : parler / examiner (exactement 0x100), menu de commandes, discussion de groupe, carte
 EMPLACEMENTS_GROUPE = 10      # carte du monde : emplacements 0 a 9 = membres du groupe (heros en 0) ; 10 a 12 = vehicules (bateau, ballon...)
+
+def bruit_bouton(pad):
+    """Vrai si l'appui d'un bouton de menu de touche de manette `pad` joue SE_BOUTON dans le jeu d'origine (A et action seulement). Le clavier suit la meme regle que le doigt (D-156, #60)."""
+    return bool(pad & PADS_BRUITAGE)

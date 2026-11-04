@@ -107,9 +107,9 @@ class SaisieNom:
         return True                                             # le clavier est a la saisie : aucune autre touche n'agit sur le jeu
 
     def texte_saisi(self, t):
-        """Caracteres tapes au clavier : ceux de la grille sont ajoutes (le curseur passe sur OK pour valider d'un Entree)."""
+        """Caracteres tapes au clavier : ceux de la grille sont ajoutes (le curseur passe sur OK pour valider d'un Entree) ; chaque lettre ajoutee joue le bruitage du bouton, comme le clic sur la lettre (#60, D-156)."""
         for c in t:
-            if c in CARS and self._ajouter(c): self.cur = I_OK; self.souris = None
+            if c in CARS and self._ajouter(c): self.cur = I_OK; self.souris = None; self.J.son.jouer_se(SE_BOUTON)
         return True
 
     def clic(self, x, y, bouton):

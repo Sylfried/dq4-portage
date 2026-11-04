@@ -246,6 +246,14 @@ class Boutons:
         if (f & (8 | 0x30047)) != 8: return ()
         return tuple(n for n in NOMS if n != 'carte' or f & 0x20) + ((CROIX,) if J.reg['croix'] else ())
 
+    def permis(self, nom):
+        """Le moteur autorise-t-il ce bouton du terrain (Carte, Commandes, Discussion) en ce moment, que le reglage « boutons » l'affiche ou non ? Le clavier y joue le bruitage du bouton (D-156 : les mêmes situations qu'au doigt)."""
+        J = self.J
+        from dq4_pc.noyau.moteur import PARTIE_COMBAT
+        if J.pause.ouvert or J.moteur.etat.effet is not None or J.moteur.etat.partie == PARTIE_COMBAT or J.carte_ouverte: return False
+        f = J.moteur.drapeaux()
+        return (f & (8 | 0x30047)) == 8 and (nom != 'carte' or bool(f & 0x20))
+
     # ---- souris
     def appuyer(self, x, y, visibles):
         n = self.sous(x, y, visibles)

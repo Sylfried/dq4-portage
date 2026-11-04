@@ -3,7 +3,7 @@ import os
 import pyglet
 from dq4_pc.menus import hud_mobile as HM
 from dq4_pc.noyau import moteur as MO
-from dq4_pc.fenetre.constantes import ACT_FRONTS, BTN_CARTE, BTN_DISCUSSION, BTN_MENU, BTN_PAROLE, BTN_SAUVEGARDES, SE_BOUTON
+from dq4_pc.fenetre.constantes import ACT_FRONTS, BTN_CARTE, BTN_DISCUSSION, BTN_MENU, BTN_PAROLE, BTN_SAUVEGARDES, SE_BOUTON, bruit_bouton
 
 
 class ClavierSourisMixin:
@@ -110,10 +110,10 @@ class ClavierSourisMixin:
         cp = self._carte_ports()
         if 22 in cp:                                                               # boutons de la fenetre de la carte (sans numero) : retour (touche de manette 0x400, ferme la carte) et mode (haut de la manette, change de vue), actifs au relachement
             h = self._bouton_sous(cp[22], x, y)
-            if h and h[0] == -1 and h[1] in (0x400, 2): self.appui = (cp[22], h[0], h[1]); self.son.jouer_se(SE_BOUTON); return
+            if h and h[0] == -1 and h[1] in (0x400, 2): self.appui = (cp[22], h[0], h[1]); return                      # (retour et mode : manette 0x400 et 2, muets comme dans MenuPortItem.Update)
         touches = [(h[2], -i, port, h) for i, port in enumerate(mo.menus_saisie()) for h in [self._bouton_sous(port, x, y)] if h]      # tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
         if touches:
-            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.appui_nd = h[3]; self.son.jouer_se(SE_BOUTON); return
+            _, _, port, h = max(touches, key=lambda t: t[:2]); self.appui = (port, h[0], h[1]); self.appui_nd = h[3]; bruit_bouton(h[1]) and self.son.jouer_se(SE_BOUTON); return
         if mo.msg_visible: self.clic_a = True                                      # toucher le message = page suivante
 
     def on_mouse_motion(self, x, y, dx, dy):
@@ -212,6 +212,10 @@ class ClavierSourisMixin:
         s[0] = False
         return 1 if plus else -1
 
+    def _bruit_hud(self, nom):
+        """Touche Commandes / Discussion / Carte sur le terrain : le bruitage 300 du bouton a l'ecran, dans les memes situations qu'au doigt (#60, D-156 ; le bouton est-il permis par le moteur, qu'il soit affiche ou non)."""
+        if self.hud.permis(nom): self.son.jouer_se(SE_BOUTON)
+
     def _fronts(self):
         """Appuis (front montant) de X, Start, L et R depuis la derniere image du moteur."""
         r = {}; K = pyglet.window.key; k = self.touches
@@ -253,13 +257,13 @@ class ClavierSourisMixin:
             bascule, self.carte_bascule = self.carte_bascule, False
             if liste:                                              # ville : M = plan, puis liste des boutiques, puis ferme ; le bouton « mode de la carte » alterne plan / liste
                 en_liste = bool(mo.ui.f.get(carte[24], {}).get('vis'))
-                if bascule: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
-                elif fr['carte'] and not en_liste: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.son.jouer_se(SE_BOUTON)
-                elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
-                elif en_liste and decl & (MO.GAUCHE | MO.DROITE): mo.envoyer_menu(carte[24], 1, -1, 4 if decl & MO.DROITE else 8); self.menu_relacher = carte[24]; self.son.jouer_se(SE_BOUTON)         # fleches de la liste : boutique suivante / precedente
+                if bascule: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]
+                elif fr['carte'] and not en_liste: mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]
+                elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION
+                elif en_liste and decl & (MO.GAUCHE | MO.DROITE): mo.envoyer_menu(carte[24], 1, -1, 4 if decl & MO.DROITE else 8); self.menu_relacher = carte[24]         # fleches de la liste : boutique suivante / precedente
             elif (fr['carte'] and self.carte_vue == 1 or bascule) and self.carte_deux_vues:           # (le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
-                mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False; self.son.jouer_se(SE_BOUTON)
-            elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION; self.son.jouer_se(SE_BOUTON)
+                mo.envoyer_menu(carte[25], 1, -1, 2); self.menu_relacher = carte[25]; self.carte_vue = 3 - self.carte_vue; fr['carte'] = False
+            elif fr['carte'] or (decl & MO.B): self.hud_decl = BTN_DISCUSSION
         port = None if carte or self.sauv is not None else mo.menu_actif()
         if port is not None and mo.msg_visible and not mo.ui.f[port].get('entree'): port = None
         if port is not None and mo.msg_visible and decl & MO.A and self._quitter_seul(port): port = None          # arene (combat) : la seule fenetre ouverte est « Quitter » (manette 0x400) et A doit tourner la page du message (touche du terrain pour le moteur)
@@ -278,8 +282,8 @@ class ClavierSourisMixin:
             if decl & MO.A:
                 decl = BTN_PAROLE
             elif hd: decl = hd
-            elif fr['menu']: decl = BTN_MENU
-            elif fr['discussion']: decl = BTN_DISCUSSION
-            elif fr['carte']: decl = BTN_CARTE
+            elif fr['menu']: decl = BTN_MENU; self._bruit_hud('menu')
+            elif fr['discussion']: decl = BTN_DISCUSSION; self._bruit_hud('discussion')
+            elif fr['carte']: decl = BTN_CARTE; self._bruit_hud('carte')
             p &= ~(MO.A | MO.B)
         return p, decl

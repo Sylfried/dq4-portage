@@ -1911,3 +1911,20 @@ Windows ; les autres effets d'écran (3, 5, 6 : #68).
 
 ### Non vérifié
 Un usage scénarisé de ces numéros ; Windows.
+
+## Avance #228 : le bruitage des boutons suit la règle du jeu d'origine, au clavier comme au doigt (#227, audit SND-08 / SND-09 / UI-01, règle de #60 / D-156, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+Établi (désassemblage de `MenuPortItem.Update`, 8 sites d'appel de `Sound.PlaySE` dans 3 classes) : à l'appui d'un bouton de menu le jeu joue `PlaySE(300)` seulement si la touche de manette du bouton est A (0x10) ou action (0x800) ; B (0x20), retour (0x400), flèches (1, 2, 4, 8) et zone 0x80 sont muets ; les boutons du terrain (`TouchPad.internalUpdate`) jouent le bruitage. Le portage le jouait pour tout bouton cliqué et, au clavier, pour B, flèches de page, ▲ ▼, changement de colonne de la saisie numérique, fermeture et mode de la carte, retour de la licence ; il ne le jouait pas pour Entrée (Commandes), Espace (Discussion), M (Carte) ni pour les lettres tapées dans la saisie du nom (G-173). Règle de Sylfried (#60, D-156, D-166) : le clavier joue le bruitage dans les mêmes situations qu'au doigt. Les menus du jeu n'ont que les manettes A, B, flèches et action (inventaire des 80 types) : aucun bouton à bascule.
+
+### Fait
+- `fenetre/constantes.py` : `PADS_BRUITAGE = 0x810` et `bruit_bouton(manette)`, le seul critère.
+- `fenetre/clavier_souris.py:on_mouse_press` : un clic sur un bouton de menu joue le bruitage seulement si `bruit_bouton` ; retour et mode de la fenêtre de la carte (0x400, 2) muets. Carte ouverte au clavier (M : changer de vue, fermer ; flèches de la liste des boutiques) : muet.
+- `fenetre/affichage_menus.py` (`_saisie_menu`, `_saisie_pas`) : B, flèches de page (L / R, ◀ ▶ d'une autre fenêtre, quantité des boutiques), ▲ ▼ et changement de colonne de la saisie numérique : muets ; A (et l'action 0x800 de la fiche du bestiaire) : bruitage. Les messages au moteur partent comme avant.
+- Terrain : Entrée (Commandes), Espace (Discussion) et M (Carte) jouent le bruitage 300 quand le moteur autorise le bouton : `hud_mobile.Boutons.permis(nom)` (même condition que `visibles`, sans le réglage d'affichage « boutons » : la touche reste sonore si l'on masque les boutons). Un clic sur le bouton à l'écran ne joue pas deux fois (le bruit part à l'appui).
+- Saisie du nom : une lettre ajoutée au clavier joue le bruitage comme le clic sur la lettre. Licence : le retour (manette 0x20, clic droit) est muet, le bouton « politique » (A) garde son bruitage.
+- Inchangé : les bruitages demandés par le moteur (annulation, curseur : paquet 35), l'écran des sauvegardes et le menu Échap (fonctions du portage), les sons d'aperçu des volumes.
+- `tests/test_bruitage_clavier.py` (25 tests ; dans la CI la règle seule, le reste demande pyglet) : table des manettes, `permis` = `visibles`, vraies méthodes de `Jeu` sur un faux jeu (clic, menu au clavier, saisie numérique, touches du terrain, carte ouverte, lettres du nom) ; sur l'ancien code, 8 cas de comportement échouent (plus `permis`, absent). Voisins relancés : croix et clic, entrées, touche menu, retour au titre, pause, casino, historique, son (tous verts) ; visionneuse complète lancée 200 images sans erreur.
+
+### Non vérifié
+Windows (oreille : B, flèches, ▲ ▼, retour de la carte sans bip ; Entrée, Espace, M et lettres du nom avec bip). Si le moteur joue lui-même un bruitage d'annulation à la fermeture de la carte (paquet 35), il reste audible ; si le jeu d'origine joue un bruitage à la frappe d'une lettre au toucher (3 sites `PlaySE(300)` de `InputName.Update`, correspondance exacte non lue) : Supposé.
