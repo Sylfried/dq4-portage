@@ -152,7 +152,7 @@ class TitreMixin:
         mo.etat.fondu['noir'] = 0                                         # (l'ecran reste noir tant que la fenetre est ouverte : pas de reouverture automatique apres 6 s)
 
     def _licence_retour(self):
-        self.moteur.envoyer_menu(self.port_saisie, 1, -1, 0x20); self.menu_relacher = self.port_saisie; self.son.jouer_se(SE_BOUTON)
+        self.moteur.envoyer_menu(self.port_saisie, 1, -1, 0x20); self.menu_relacher = self.port_saisie                  # (retour : manette 0x20, muet comme dans MenuPortItem.Update)
 
     def _licence_clic(self, x, y, bouton):
         li = self.licence; nom = li.zone(x, y)

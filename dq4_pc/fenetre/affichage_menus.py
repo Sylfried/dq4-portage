@@ -207,38 +207,38 @@ class MenusMixin:
         if not f.get('grille') and len(z) <= 1 and self._saisie_pas(port, f, fe, z, decl): return          # menu de saisie numerique (mise, jetons, montant) : fleches = colonnes et ▲ / ▼
         if pages and not f.get('grille') and len({round(c[0] / 20.0) for c in z.values()}) >= 2:          # L / R (page precedente / suivante) dans une liste a plusieurs colonnes (bestiaire) : gauche / droite y changent de colonne, ce sont donc les fleches ◀ ▶ de page de la fenetre qui sont pressees
             fl = self._fleche_page(port, 8 if pages & 1 else 4)
-            if fl: mo.envoyer_menu(fl[0], 1, fl[1], 8 if pages & 1 else 4); self.menu_relacher = fl[0]; self.son.jouer_se(SE_BOUTON); return
+            if fl: mo.envoyer_menu(fl[0], 1, fl[1], 8 if pages & 1 else 4); self.menu_relacher = fl[0]; return
         if not f.get('grille') and len(z) < 1 and decl & (MO.GAUCHE | MO.DROITE):           # fenetre sans curseur du moteur ni bouton A (pages du Statut, types 13-17) : gauche / droite (Q, D, L, R) tournent les pages avec les fleches d'une autre fenetre (type 6), comme un toucher
             pad = 4 if decl & MO.DROITE else 8; q = self._port_pour_manette(port, pad)
-            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
+            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; return
         if f.get('grille') or len(z) < 1:
             for bit, pad in dirs:
                 if decl & bit:
                     if bit in (MO.GAUCHE, MO.DROITE) and not f.get('grille') and self._fleche_page(port, pad):         # fenetre sans bouton de validation mais avec ses fleches de page (fiche du bestiaire) : gauche / droite les pressent
-                        fl = self._fleche_page(port, pad); mo.envoyer_menu(fl[0], 1, fl[1], pad); self.menu_relacher = fl[0]; self.son.jouer_se(SE_BOUTON); return
+                        fl = self._fleche_page(port, pad); mo.envoyer_menu(fl[0], 1, fl[1], pad); self.menu_relacher = fl[0]; return
                     if bit in (MO.GAUCHE, MO.DROITE) and (f.get('grille') or (1, 1, 1))[0] < 2: pad = 2 if bit == MO.GAUCHE else 1
                     mo.envoyer_menu(port, 1, -1, pad); self.menu_relacher = port; return
             if decl & MO.A:
                 act = next((b for b, pd, *_ in (fe.boutons() if fe else []) if pd & 0x800), None)          # « Action » de la fiche du bestiaire (manette 0x800) : la seule fenetre qui en a un
                 if act is not None and not f.get('grille'): mo.envoyer_menu(port, 1, act, 0x800); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
                 else: mo.envoyer_menu(port, 1, -1, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
-            elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+            elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q
             return
         cle = (port, f['ordre']); cur = self.cur_local.get(cle)
         if cur not in z:
             cur = self.cur_local[cle] = f['cur'] if f['cur'] in z else min(z, key=lambda b: (-round(z[b][1]), z[b][0]))       # depart : le bouton en haut a gauche
         if decl & (MO.GAUCHE | MO.DROITE) and fe and fe.typ in (58, 59, 63):                       # quantite (types 58 / 59 : liste « Acheter », 63 : quantite a vendre) : la rangee du curseur porte ses propres fleches (boutons de meme numero, manette gauche 8 / droite 4 : liste « Acheter » d'une boutique, quantite a vendre) -> gauche / droite changent la quantite de la rangee choisie (comme le toucher d'une fleche) ; le curseur garde la rangee entiere
             pad = 4 if decl & MO.DROITE else 8
-            if any(b == cur and pd & pad for b, pd, *_ in fe.boutons()): mo.envoyer_menu(port, 1, cur, pad); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON); return
+            if any(b == cur and pd & pad for b, pd, *_ in fe.boutons()): mo.envoyer_menu(port, 1, cur, pad); self.menu_relacher = port; return
         if len({round((x0 + x1) / 20.0) for b, pad, x0, z0, x1, z1, _ in (fe.boutons() if fe else []) if b >= 0 and pad & 0x10}) <= 1 and decl & (MO.GAUCHE | MO.DROITE):       # une seule colonne : gauche / droite tournent les pages si une autre fenetre porte les fleches
             pad = 4 if decl & MO.DROITE else 8; q = self._port_pour_manette(port, pad)
-            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON); return
+            if q != port: mo.envoyer_menu(q, 1, -1, pad); self.menu_relacher = q; return
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[cle] = self._voisin(z, cur, bit)
         if decl and os.environ.get('DQ_MENUDBG'): print('MENU curseur local image %d port %d decl %d -> %s ; boutons %s' % (self.n, port, decl, cur, {b: (round(c[0]), round(c[1])) for b, c in z.items()}), flush=True)
         if decl & MO.A and cur == BTN_SAUVEGARDES and self._port_depart(port): self.son.jouer_se(SE_BOUTON); self._sauv_ouvrir()
         elif decl & MO.A: mo.envoyer_menu(port, 1, cur, 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
-        elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+        elif decl & MO.B: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q
 
     def _fleche_page(self, port, pad):
         """Fleche de page ◀ (manette 8) ou ▶ (manette 4) de la fenetre `port` : (port, numero de bouton), ou None. Les fleches de quantite des boutiques (types 58, 59, 63 : une par rangee) n'en sont pas."""
@@ -275,10 +275,9 @@ class MenusMixin:
         self.survol_nd = None                                                       # une touche : le curseur reprend la main
         if decl & (MO.GAUCHE | MO.DROITE):
             i = cols.index(act) + (1 if decl & MO.DROITE else -1); self.cur_pas[cle] = cols[min(max(i, 0), len(cols) - 1)]
-            if self.cur_pas[cle] != act: self.son.jouer_se(SE_BOUTON)
-        elif decl & (MO.HAUT | MO.BAS): mo.envoyer_menu(port, 1, act, 2 if decl & MO.HAUT else 1); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
+        elif decl & (MO.HAUT | MO.BAS): mo.envoyer_menu(port, 1, act, 2 if decl & MO.HAUT else 1); self.menu_relacher = port
         elif decl & MO.A: mo.envoyer_menu(port, 1, next(iter(z), -1), 0x10); self.menu_relacher = port; self.son.jouer_se(SE_BOUTON)
-        else: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q; self.son.jouer_se(SE_BOUTON)
+        else: q = self._port_pour_manette(port, 0x20); mo.envoyer_menu(q, 1, -1, 0x20); self.menu_relacher = q
         return True
 
     @staticmethod

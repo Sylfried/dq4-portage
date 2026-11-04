@@ -160,7 +160,7 @@ Quinze choses que j'ai laissées de côté ou pas finies. Les quatre premières 
 | 5 | PNJ de scénario qui apparaissent ou disparaissent | Jamais rejoués, comportement inconnu | CAR-14 |
 | 6 | Boutons de l'interface inaccessibles au clavier | **Exigence du 03/11 : tous les boutons doivent être accessibles au clavier.** Cas connu : « Sauvegarde rapide » de l'écran Divers (reste à la souris) ; inventaire complet à faire | G-096, D-155 |
 | 7 | ~~`Menu_Echap_DQ4_PC.xlsx`~~ | **Plus d'actualité** (Sylfried, 03/11) : rien à régénérer | G-107, G-143, D-157 |
-| 8 | Bruitage 300 (clic) | **Règle du 03/11** : au clavier, un bruitage seulement là où le toucher en joue un (une note par caractère à la saisie du nom *si* le toucher en joue une), jamais ajouté de force. Entrée, Espace et M ne jouent pas le bruitage 300 que joue le clic sur le bouton : à aligner sous cette règle, cas par cas | G-173, D-156 |
+| 8 | Bruitage 300 (clic) | **Règle du 03/11** : au clavier, un bruitage seulement là où le toucher en joue un (une note par caractère à la saisie du nom *si* le toucher en joue une), jamais ajouté de force. Entrée, Espace et M ne jouent pas le bruitage 300 que joue le clic sur le bouton : à aligner sous cette règle, cas par cas. **Fait le 04/11 (#228, audit SND-08 / SND-09 / UI-01) : A et action seuls jouent le bruitage au clic comme au clavier, Entrée / Espace / M le jouent, une lettre tapée aussi ; à valider sur Windows** | G-173, D-156 |
 | 9 | Événements FEMV, bateaux animés au chargement | Absents | G-053 |
 | 10 | Icône de genre 18, emplacements 10 à 12 de la carte du monde | Possibles éléments non dessinés | G-033, G-034 |
 | 11 | Son : table de volumes, fondus entre musiques, bruitages 3D | Jamais étudiés | G-047 |
