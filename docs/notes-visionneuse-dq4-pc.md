@@ -1726,3 +1726,15 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 
 ### Non vérifié
 Windows (antivirus, OneDrive) : le cas réel d'un verrou n'a pas été reproduit, seulement simulé.
+
+## Avance #202 : Ogg écrêté au lieu de déborder (#200, audit SND-02, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`decoder_akb` lisait les Ogg Vorbis en `int16` (`soundfile.read(dtype='int16')`) : quand le décodage dépasse la pleine échelle (surmodulation normale de Vorbis), l'échantillon déborde et un pic devient un pic de signe opposé. Établi sur un Ogg synthétique et sur les données d'origine : BGM14 (3 échantillons, vers 91 s) et BGM34 (7 échantillons) ; les 49 autres musiques et SE0409 (fanfare, Ogg aussi) n'ont aucun dépassement. Audibilité : non vérifiée (pas de carte son).
+
+### Fait
+- `son.decoder_ogg` : lecture en `float32`, mise à l'échelle 32767, **écrêtage** à ±pleine échelle, puis `int16`. Vérifié sur les vrais fichiers : seuls ces 3 + 7 échantillons changent (les autres musiques sont identiques à l'échantillon près).
+- `tests/test_son_decodage.py` (4 tests ; ajouté à la CI avec `soundfile`).
+
+### Non vérifié
+Windows et l'écoute.
