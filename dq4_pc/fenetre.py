@@ -1138,7 +1138,7 @@ class Jeu(pyglet.window.Window):
             self.garde_souris.clavier(self.souris)             # le pointeur ne choisit rien dans les menus du jeu tant qu'il ne s'est pas ecarte de sa position d'avant (la selection au clavier ne doit pas sauter ; voir entrees.GardeSouris)
 
     def quitter(self):
-        """Menu Echap > Quitter > Oui (et « Quitter » du menu de depart) : la meme fermeture que la croix de la fenetre (sauvegarde automatique, reglages, historique, son)."""
+        """Menu Echap > Quitter > Oui (et « Quitter » du menu de depart) : la meme fermeture que la croix de la fenetre (reglages, historique, son ; aucune sauvegarde de partie : comme le jeu d'origine, l'automatique n'est ecrite qu'a l'arrivee sur une carte, voir docs/notes-technique-portage-dq4.md)."""
         self.on_close(); pyglet.app.exit()
 
     def retour_titre_possible(self):

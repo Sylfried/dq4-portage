@@ -1659,3 +1659,18 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - Sous Windows (écrans 1920 x 1200 et 2560 x 1440) : non vu.
 - Autres fenêtres qui ont la même barre de description en bas : boutiques (types 46, 60, 61, 63) et fiche d'objet de la boutique de vente (70). Les chaînes de description sont (46, 3), (60, 4), (61, 4), (63, 4), (70, 3) ; leur bord droit n'a pas été mesuré (barre supposée identique : 148). Non ajoutées sans capture.
 - Si les proportions d'origine sont quand même voulues : `reglages.LARGEUR_COMMANDES` (fenêtres de combat) et `fenetre.UI_ZOOM` (1,12) sont les deux réglages du port ; ils ne changent rien à ce défaut.
+
+## Avance #193 : sauvegarde automatique, lecture du code du jeu (#192, 04/11/2026)
+
+### Demande (D-235, 04/11 13 h 33)
+« Pareil pour la sauvegarde auto, regarde le code du jeu pour savoir comment est écrite la sauvegarde et ce qui est sauvegardé et comment ». Le détail technique est dans `docs/notes-technique-portage-dq4.md`, section « Sauvegarde automatique : quand, quoi, comment ».
+
+### Établi
+- **Quand** : `AutoSave(bool)` est appelée par `TownPart::initialize` et `FieldPart::initialize` seulement : à l'arrivée sur une carte, jamais à la fermeture. Relevé sur le moteur réel : écrite à l'arrivée sur la carte du monde et à l'entrée de `dab1`, `tbf3`, `dkf1a`, `taf2a`, `sjm2f1` ; non écrite à l'entrée de `mak1f1`, `hhk1f1`, `mlm1f1`, `mbk1f1`, `mfk1f1`, `sif1`, `cbf2`, `sqf4`.
+- **Quoi** : `data5.dat` (banque 4), 15 360 octets, type de sauvegarde 3 = instantané de reprise (carte courante, position exacte, groupe, chapitre, joueur, monstres, drapeaux de campagne, somme de contrôle) ; `data9` (journal le plus récent) n'est pas touché.
+- **Comment** : `Cryption::Filter` (xorshift32 graine CRC) puis `fopen("wb")` / `fwrite` / `fclose`, non atomique. Effacée par « Revenir à l'écran titre » (`killbank(4)`).
+- **Portage** : la visionneuse n'écrit rien elle-même ; le moteur écrit `data5.dat` dans `dq4_pc\sauvegardes` (lu en premier au démarrage). La fermeture de la fenêtre n'enregistre que réglages, historique et son : pas d'écriture à la fermeture, comme l'original.
+
+### Non établi / à trancher
+- Règle complète du saut d'écriture (valeur en `StageStatus + 0x28`, source du bit 17, conditions de `FieldPart`) : le tableau est un relevé, pas la règle. Sous Windows : non vu.
+- Écarts voulus de la visionneuse (inchangés) : plaque « Sauvegarde automatique » grisée au lieu de cachée (`DQ_AUTO_CACHEE=1` rétablit l'original) ; états instantanés `etat_NN.dqs` distincts de la suspension `data4`. À Sylfried de dire s'il les garde, et s'il veut une écriture à la fermeture (absente de l'original).
