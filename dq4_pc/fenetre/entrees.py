@@ -1,5 +1,6 @@
 """Entrees souris / clavier de la visionneuse : la logique pure (sans fenetre ni OpenGL), pour la tester (outils/test_entrees.py).
 - souris_active / GardeSouris : quand le pointeur reprend la main apres un usage du clavier (survol et selection) ;
+- GesteMolette / pivoter : clic molette (clic simple = camera recentree, glisser a gauche / a droite = rotation de la camera, sens reglable) ;
 - zone_infos : ou se pose le bloc d'infos de F1 (en haut a droite)."""
 import math
 
@@ -36,6 +37,48 @@ class GardeSouris:
         """Mouvement du pointeur en `pos` : vrai si la souris a (ou reprend) la main, faux si ce n'est qu'un tremblement apres l'usage du clavier."""
         if souris_active(self.ref, pos, self.tol): self.ref = None; return True
         return False
+
+
+# ---- clic molette
+SEUIL_GLISSE = 4.0            # pixels : deplacement, depuis l'appui, a partir duquel un clic molette devient un glissement (en dessous : un clic ; le tremblement de la main n'en fait pas un glissement)
+CAM_SOURIS_LACET = 180.0      # glissement horizontal : degres de rotation de la camera pour un deplacement egal a la hauteur de la fenetre (la sensibilite ne depend pas de la resolution) ; droite = fleche droite
+
+
+class GesteMolette:
+    """Un geste du bouton du milieu : appui, deplacements, relachement. Un clic (relachement avant d'avoir bouge de SEUIL_GLISSE pixels, dans n'importe quel sens) recentre la camera ; un glissement la fait tourner a gauche / a droite
+    (seul le deplacement horizontal compte), depuis le point ou le seuil est franchi (pas de saut au debut) ; apres un glissement, le relachement ne recentre rien (un clic suivi d'un deplacement n'est pas un clic)."""
+
+    def __init__(self, seuil=SEUIL_GLISSE):
+        self.seuil = seuil; self.annuler()
+
+    def annuler(self):
+        self.en_cours = False; self.glisse = False; self.origine = None; self.dernier = None
+
+    def appui(self, x, y):
+        self.en_cours = True; self.glisse = False; self.origine = (x, y); self.dernier = (x, y)
+
+    def deplacer(self, x, y):
+        """Pointeur en (x, y), bouton du milieu enfonce -> deplacement horizontal en pixels (vers la droite : positif) a appliquer a la camera ; 0 tant que le geste reste un clic."""
+        if not self.en_cours: return 0.0
+        if not self.glisse:
+            if math.hypot(x - self.origine[0], y - self.origine[1]) < self.seuil: return 0.0
+            self.glisse = True; self.dernier = (x, y); return 0.0
+        dx = x - self.dernier[0]; self.dernier = (x, y)
+        return float(dx)
+
+    def relacher(self):
+        """-> True si c'etait un clic simple (la camera se recentre), False apres un glissement ou sans appui."""
+        etait, glissait = self.en_cours, self.glisse
+        self.annuler()
+        return bool(etait and not glissait)
+
+
+def pivoter(lacet, dx, hauteur, limite=None, inverser_gd=False):
+    """Glissement horizontal de dx pixels -> lacet de la camera en degres : meme grandeur que les fleches. Le lacet reste entre -180 et 180 (et entre -limite et +limite si le lieu borne la rotation). `inverser_gd` (reglage
+    « Inverser gauche / droite ») : le sens du glissement est inverse ; les fleches du clavier ne passent pas par ici."""
+    if inverser_gd: dx = -dx
+    lacet += dx / max(1.0, float(hauteur)) * CAM_SOURIS_LACET
+    return max(-limite, min(limite, lacet)) if limite is not None else (lacet + 180.0) % 360.0 - 180.0          # (lieu borne : on s'arrete a la limite, on ne fait pas le tour ; sinon le lacet boucle comme celui des fleches)
 
 
 # ---- bloc d'infos de F1

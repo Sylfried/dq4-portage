@@ -94,7 +94,7 @@ class ClavierSourisMixin:
         M = pyglet.window.mouse; mo = self.moteur
         if not self._pret: self._logo_touche = True; return
         self.dernier_peripherique = 'souris'; self.garde_souris.clic(); self.souris = (x, y)             # un clic agit toujours, aussitot : la souris a la main
-        if bouton == M.MIDDLE: return                                # bouton du milieu : sans effet (il ne servait qu'a la camera, retiree en #264 ; jamais un clic de menu, de message ou de bouton)
+        if bouton == M.MIDDLE: self._molette_appui(x, y); return                                           # bouton du milieu : la camera seulement (jamais un clic de menu, de message ou de bouton)
         if self.pause.ouvert: self.pause.clic(x, y, bouton); return
         if self._saisie_nom_en_cours(): self.saisie_nom.clic(x, y, bouton); return
         if self.sauv is not None: self.sauv.clic(x, y, bouton); return
@@ -122,6 +122,7 @@ class ClavierSourisMixin:
         le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _survol_pas)."""
         if not self._pret: return
         self.souris = (x, y)
+        if self.molette.en_cours: self.molette.annuler()                  # (un mouvement sans bouton enfonce : le relachement du bouton du milieu est passe inapercu, hors de la fenetre ou pendant une perte de focus ; le geste est abandonne)
         if not self.garde_souris.bouge((x, y)): return                # simple tremblement apres l'usage du clavier : ni le mode, ni la selection ne changent (ecart cumule depuis la derniere touche, voir entrees.GardeSouris)
         self.dernier_peripherique = 'souris'
         if self.pause.ouvert: self.pause.survol(x, y); return
@@ -160,7 +161,7 @@ class ClavierSourisMixin:
     def on_mouse_release(self, x, y, bouton, modifiers):
         """Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton])."""
         if not self._pret: return
-        if bouton == pyglet.window.mouse.MIDDLE: return
+        if bouton == pyglet.window.mouse.MIDDLE: self._molette_relache(); return
         if self.pause.ouvert: self.pause.relache(x, y, bouton); return
         if self.licence is not None: self.licence.glisse = None; return
         if bouton == pyglet.window.mouse.LEFT and self.hud.croix_on:
@@ -187,7 +188,7 @@ class ClavierSourisMixin:
             if f: f['cur'] = b
 
     def pad(self):
-        """Manette du jeu d'apres les touches reglees : directions, A (action / valider), B (annuler). Sur le terrain, seules les touches de deplacement (et la croix a l'ecran) marchent ;
+        """Manette du jeu d'apres les touches reglees : directions, A (action / valider), B (annuler). Sur le terrain, les directions suivent la camera (rotation) et les fleches gauche / droite sont celles de la camera ;
         dans un menu, un message ou un combat, les fleches deviennent des directions."""
         p = 0; libre = self._terrain_libre()
         for act, bit in (('haut', MO.HAUT), ('bas', MO.BAS), ('gauche', MO.GAUCHE), ('droite', MO.DROITE)):
@@ -197,9 +198,20 @@ class ClavierSourisMixin:
                 if self._tenue(act): p |= bit
         else:
             p |= self.hud.croix_bits()                                                                        # croix a l'ecran tenue a la souris : une direction de plus (relative a l'ecran, comme les touches)
+            if p and self._lacet_eff(): p = self._tourner_dir(p, int(round(self._lacet_eff() / 45.0)))
         if self._tenue('A'): p |= MO.A
         if self._tenue('B'): p |= MO.B
         return p
+
+    def _etat_axe(self, cle, moins, plus):
+        """Une paire de fleches opposees : -1 / 0 / +1 = sens demande a la main. Les deux ensemble lancent le recentrage anime (`cam_axe[cle][0]`) ; tant qu'il en reste une enfoncee
+        apres cette pression double, rien ne se passe (le relachement n'est jamais exactement simultane) ; une nouvelle pression seule annule le recentrage."""
+        s = self.cam_axe[cle]
+        if moins and plus: s[0] = True; s[1] = True; return 0
+        if not (moins or plus): s[1] = False; return 0
+        if s[1]: return 0
+        s[0] = False
+        return 1 if plus else -1
 
     def _bruit_hud(self, nom):
         """Touche Commandes / Discussion / Carte sur le terrain : le bruitage 300 du bouton a l'ecran, dans les memes situations qu'au doigt (#60, D-156 ; le bouton est-il permis par le moteur, qu'il soit affiche ou non)."""

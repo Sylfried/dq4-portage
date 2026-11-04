@@ -59,7 +59,7 @@ La classe `Jeu` (fenêtre pyglet) est assemblée à partir de dix morceaux (« m
 |---|---|
 | `jeu.py` | le cœur : constructeur, boucle du moteur (`_boucle`, `tick`), `on_draw`, dessin de la scène, démarrage, fermeture, retour au titre |
 | `plein_ecran.py` | plein écran / fenêtre, résolution, moniteurs, journal des erreurs de bascule |
-| `camera.py` | zoom, distance, rotation, recentrage, caméra des villes / du combat / du titre, bords des sprites |
+| `camera.py` | caméra des villes (celle du jeu + la rotation gauche / droite du joueur : flèches, clic molette, recentrage, effacée en douceur dans les scènes : D-233) / du combat / du titre, bords des sprites ; plus de zoom ni d'inclinaison (D-226) |
 | `champ.py` | terrain : cartes, décors, sprites, ombres, carte du monde, icônes de lieux |
 | `scene_combat.py` | combat : monstres, fond, effets, nombres de dégâts, vitesse et pas du moteur en combat |
 | `titre.py` | écran-titre (ciel, logo), ciel prolongé de `dpout` et `ev09`, licence, saisie du nom, écran Sauvegardes |
