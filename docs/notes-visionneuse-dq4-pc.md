@@ -1751,3 +1751,16 @@ SE0329 (fin de boucle 62 501 pour 62 496 échantillons décodés), SE0331 (58 98
 
 ### Non vérifié
 Comportement exact de la bibliothèque son d'origine quand la fin dépasse (supposé : la boucle va jusqu'à la fin des données) ; l'écoute ; Windows.
+
+## Avance #205 : surfaces transparentes triées par leur vraie priorité (#203, audit MAP-01, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`map_objs` lisait la « priorité » d'un objet de carte dans la moitié haute de ses drapeaux (`flag >> 16` : 0 ou 4), alors que `FldObject.Load` lit les drapeaux en entier de 32 bits (+48) et la **priorité en entier de 32 bits en +52** (`FldObject.set_priority` : file de rendu 3000 + priorité). Établi par désassemblage et par lecture des 18 374 objets : 290 cartes ont des surfaces transparentes, 64 ont au moins deux priorités réelles (47 hors décors de combat : `dlb1a`, `dlb3` à `dlb5`, `dib1` à `dib3`, `teout4` à `teout6`, `zaout`, `ev06` à `ev09`, `mlout2`, `mmout`…). Mesure A / B de l'audit : sur `dlb1a` l'écume au pied des cascades manquait (12 % des pixels), `dib2` 3 %, `teout5`, `teout6`, `zaout` moins de 0,3 %. Supposé : que l'original montre bien l'écume (aucune capture d'origine).
+
+### Fait
+- `monde/fld.py:map_objs` : `prio` = entier en +52 ; `flag` = 16 bits bas des drapeaux (+48), identique à avant pour les billboards. Les clés de groupes `('tr', priorité, texture)` et le tri de `fenetre/champ.py` (`_tracer_decor`) sont inchangés : ils reçoivent maintenant la vraie priorité (sur `dlb1a` : 9 groupes transparents de priorités 10, 11, 12, 18 à 23, au lieu de 0 et 4 ; vérifié sur la vraie carte).
+- Cache des cartes `carte10_` -> `carte11_` : **les cartes sont refaites en arrière-plan au premier lancement** (quelques minutes, comme pour chaque changement de version du cache) ; les `carte10_*.pkl` sont supprimés quand tout est prêt (`_purger_anciens`).
+- `tests/test_fld_priorite.py` (4 tests, dans la CI) ; `test_textures_carte` adapté (carte10 purgée, carte11 gardée).
+
+### Non vérifié
+Rendu d'origine (aucune capture) ; Windows. Tri par distance d'Unity à priorité égale : non mesuré.

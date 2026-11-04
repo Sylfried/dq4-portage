@@ -151,7 +151,7 @@ class Donnees:
         'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
         et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
         'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part"""
-        f = os.path.join(self.cache, 'carte10_%s.pkl' % nom)
+        f = os.path.join(self.cache, 'carte11_%s.pkl' % nom)
         if os.path.exists(f):
             with open(f, 'rb') as fh: return pickle.load(fh)
         with self._verrou:
@@ -412,7 +412,7 @@ class Donnees:
     def _elements(self, liste):
         """[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees."""
         el = [('texture', 'field', 'tex_field.npy')]
-        el += [('carte', n, 'carte10_%s.pkl' % n) for n in liste['cartes']]
+        el += [('carte', n, 'carte11_%s.pkl' % n) for n in liste['cartes']]
         el += [('feuille', n, 'sprite_h%d.npy' % int(n)) for n in liste['feuilles']]
         el += [('texture', n, 'tex_%s.npy' % n) for n in liste['monstres'] + liste.get('plans', []) + liste.get('effets', [])]
         el.append(('plan_monde', 'plan_monde', 'plan_monde.npz'))
@@ -420,10 +420,10 @@ class Donnees:
         return el
 
     def _purger_anciens(self):
-        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte9_ : sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre ; carte9_ : surfaces sans texture et decors portes par la racine absents), devenues inutiles."""
+        """Supprime les cartes d'une ancienne version du cache (carte2_ a carte10_ : carte10_ : surfaces transparentes triees par une moitie des drapeaux et non par leur priorite, #203 ; sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre ; carte9_ : surfaces sans texture et decors portes par la racine absents), devenues inutiles."""
         try:
             for f in os.listdir(self.cache):
-                if re.fullmatch(r'carte[0-9]_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
+                if re.fullmatch(r'carte(?:[0-9]|10)_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
             self.log('Anciennes cartes du cache non supprimees : %s' % ex)
 

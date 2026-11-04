@@ -19,7 +19,7 @@ def map_objs(raw):
         pos = struct.unpack_from('<3f', raw, o); oid = struct.unpack_from('<i', raw, o + 12)[0]
         rot = struct.unpack_from('<3f', raw, o + 16); mdl, com = struct.unpack_from('<hH', raw, o + 28)
         scl = struct.unpack_from('<3f', raw, o + 32); uid = struct.unpack_from('<i', raw, o + 44)[0]
-        flag, prio = struct.unpack_from('<HH', raw, o + 48); rest = raw[o + 52:o + 80]
+        flag32, prio = struct.unpack_from('<ii', raw, o + 48); flag = flag32 & 0xffff; rest = raw[o + 52:o + 80]        # FldObject.Load : drapeaux int32 en +48 (billboards : 0x4, 0x20 ; 0x40000 = commun), PRIORITE int32 en +52 (file de rendu 3000 + priorite, FldObject.set_priority ; #203 : avant, `prio` etait la moitie haute des drapeaux)
         seqobj, pmv = struct.unpack_from('<hh', raw, o + 64); canim = struct.unpack_from('<h', raw, o + 74)[0]       # FLD_MAP_OBJ : seq_obj_id (entree de FSEQ : sequence de maillages jouee en continu), pmv_id (mouvement FPMV joue en continu), -1 = aucun ; canim_id (numero de la table d'animations communes de FCAN, -1 = aucune)
         objs.append(dict(i=i, pos=pos, id=oid, rot=rot, mdl=mdl, com=com, scl=scl, uid=uid, flag=flag, prio=prio, seqobj=seqobj, pmv=pmv, canim=canim, rest=rest.hex()))
     return nobj, objs
