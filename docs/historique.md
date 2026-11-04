@@ -154,3 +154,4 @@ Le reste à faire est suivi par les **issues GitHub** de ce dépôt (#51 à #99,
 | 04/11 | #240 | le temps de jeu de la sauvegarde suit l'heure réelle quand le jeu est accéléré : seule la part 1 / a des pas compte (#239, audit ENG-04, sondage du 04/11) |
 | 04/11 | #242 | un état .dqs venu d'ailleurs n'exécute plus de code à l'ouverture : liste blanche de classes, refus en français (#241, audit ENG-05, sondage du 04/11) |
 | 04/11 | #244 | zoom des scènes (audit UNI-08) : le champ du jeu s'applique quand il tient la caméra, ton zoom revient à 100 % au début de la scène, molette et touches sans effet pendant la scène |
+| 04/11 | #247 | alerte de la mémoire du moteur (audit ENG-01) : message à 200 Mo puis à 240 Mo sur 256, une fois par palier ; rien d'écrit par l'alerte |

@@ -123,7 +123,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                 if e.carte: self._charger_carte(e.carte)      # les chargements lourds se font ici, pas pendant le jeu
                 for sp in list(e.sprites.values()): self._feuille(sp['id'], self.mode)
                 e.sons = [x for x in e.sons if x[0] == 37][-1:]      # les bruitages du chargement sont perdus, la musique de la carte reste
-        self.n = 0; self._crochets_signales = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}; self.act_prec = {}
+        self.n = 0; self._crochets_signales = 0; self._tas_niveau = 0; self.dt_moteur = 0.0; self.pad_prec = 0; self.rep = {}; self.act_prec = {}
         self.msg_cle = None; self.msg_img = None; self.msg_spr = None; self.msg_h = 0
         self.etiq_menu = {}; self.focus_vu = None; self.menu_relacher = None
         self.ui_rendu = None; self.ui_g = None; self.ui_msg = None; self.canevas_cle = None
@@ -487,6 +487,18 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         print(texte, end='', flush=True); noter_erreur(texte)
         self.toast('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', duree=6.0)
 
+    def _surveiller_tas(self, core):
+        """Tas du moteur (ENG-01, audit du 04/11/2026 : « Core.malloc » avance toujours, « h_free » ne libere rien, 256 Mo en tout ; environ 480 combats ou 7 000 chargements de carte, soit des heures de jeu) : le moteur s'arreterait d'un coup
+        a 256 Mo. Le joueur est donc prevenu a 200 Mo (78 %), puis a 240 Mo (94 %) : un message a l'ecran et une ligne dans le journal des erreurs, une fois par palier (de nouveau si le tas redescend, par exemple apres le chargement
+        d'un etat). Fermer puis relancer le jeu remet la memoire a zero ; le jeu ecrit sa sauvegarde automatique (data5) a chaque arrivee sur une carte, rien n'est ecrit ici : un etat instantane garderait le tas plein."""
+        u = core.tas_utilise(); niveau = 2 if u >= core.TAS_CRITIQUE else (1 if u >= core.TAS_ALERTE else 0)
+        if niveau > self._tas_niveau:
+            pc = round(100.0 * u / core.HEAP_SIZE)
+            msg = ('Mémoire du moteur à %d %% : pense à fermer puis relancer le jeu (« Continuer » reprend ta partie)' % pc) if niveau == 1 else ('Mémoire du moteur presque pleine (%d %%) : sauvegarde et relance le jeu maintenant, sinon il s\'arrêtera' % pc)
+            noter_erreur('--- %s : memoire du moteur a %d %% (%d Mo sur %d Mo) ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), pc, u >> 20, core.HEAP_SIZE >> 20))
+            self.toast(msg, duree=10.0)
+        self._tas_niveau = niveau
+
     def _signaler_crochets_manques(self, mo):
         """Reglages du moteur que l'apk utilise n'a pas laisses s'installer (Moteur._manque : autre version du moteur que celle etudiee) : le jeu tourne avec le comportement d'origine pour ces points. Une ligne par point dans le journal
         des erreurs et un message a l'ecran, une seule fois (les points trouves plus tard, apres le chargement d'un etat, sont annonces a leur tour)."""
@@ -519,6 +531,7 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
         if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, mo.msg_visible, mo.menu_actif()), flush=True)
         t0 = time.time(); mo.step(p, decl); self.dt_moteur = time.time() - t0
         if len(mo.crochets_manques) > self._crochets_signales: self._signaler_crochets_manques(mo)
+        self._surveiller_tas(mo.core)          # tas du moteur presque plein (ENG-01)
         if mo.core.echecs_ecriture: self._signaler_echecs_ecriture(mo.core)          # une sauvegarde n'a pas pu etre ecrite (#198) : le jeu continue, le joueur est prevenu
         self.historique.maj(mo)          # dialogues et combats de ce pas -> historique (voir historique.py)
         if mo.demande_pause: mo.demande_pause = False; self.pause.ouvrir()          # bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Moteur._detourner_parametres)
