@@ -1508,3 +1508,21 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 - **Supposé** : « la même vitesse » = les mêmes nombres que la rotation (240 par seconde) appliqués aux pourcents ; l'inclinaison garde son minimum propre (90 degrés par seconde, plage plus étroite).
 - **Sous Windows** : le ressenti du retour du zoom et des directions ensemble.
 
+
+## Avance #177 : ciel du titre à plat, à la hauteur de la fenêtre (#174, 04/11/2026)
+
+### Demande (D-228, 04/11 11 h 30)
+« Pour le fond de l'écran titre ajuste la hauteur pour automatiquement s'adapter à la hauteur de la fenêtre, et ça sera sur la largeur que la répétition se fera, et applique bien comme convenu les effets visuels qui doivent être appliqués (je crois qu'il y a une sorte d'effet de vague) » ; 11 h 44, devant la capture 16/9 : « Ce que tu as fait sur cette version est très bien ! Avec les effets visuels comme indiqué et c'est parfait ! »
+
+### Fait
+- `ciel_titre.ciel_ecran` : le ciel est un maillage plein écran en coordonnées normalisées (au fond, sans projection) ; la texture (carrée, 256 x 256) a pour HAUTEUR celle de la fenêtre (v de 0,998 en bas à 0,002 en haut, comme les rangées d'origine) à toute taille de fenêtre, sans agrandissement supplémentaire, et se répète sur la LARGEUR (`aspect` fois : 1,78 en 16/9, 2,33 en 21/9, moins d'une fois en portrait). Texture en REPEAT : aucune couture.
+- L'effet de vague de l'ancien rendu en bandes est conservé et appliqué à toute la largeur : étirure horizontale ondulée (`etirure_plate`, intégrale exacte de `ETIRURE` : pente 0,52 à 1,48, jamais de retournement) et glissement vertical (`glissement_plat`, nul en haut et en bas). Il est fixe à l'écran et la texture défile dessous : les nuages se déforment en passant, et les copies d'une même tuile ne se ressemblent pas.
+- Le dégradé de teinte des rangées d'origine (orange en haut et en bas, blanc au milieu) est repris tel qu'il apparaissait à l'écran (`degrade_ecran` : projection des bords et de points intermédiaires des quatre rangées par la matrice de la caméra) ; les coupures du dégradé deviennent des lignes du maillage.
+- Défilement : même sens et même vitesse en tuiles que l'objet d'origine (une tuile pour 11,5 unités, 599 images) ; mesuré sur 120 images : le ciel à plat et le rendu en bandes glissent dans le même sens (vers la gauche). Le ciel étant plus grand (tuile = hauteur de la fenêtre), il avance plus vite en pixels.
+- `fenetre._tracer_ciel_plat` remplace le tracé du groupe du ciel (seul dans sa texture) ; toute erreur coupe ce rendu et laisse le tracé d'origine (message sur la sortie). `DQ_CIEL_AGRANDI=1` redonne l'essai #130 (ciel agrandi), `DQ_CIEL_BANDES=1` les bandes, `DQ_CIEL_COPIES=1` les copies ; `DQ_CIEL_TUILE` (essai) change la largeur de la tuile en hauteurs de fenêtre.
+- Tests : `outils/test_titre_ciel.py` (34, dont 8 nouveaux) : hauteur de texture = hauteur de fenêtre à sept formats, étendue horizontale = `aspect` tuiles, vague jamais retournée et sans dérive, défilement = décalage de u seul, triangles de même sens et sans trou (aire totale = rectangle), dégradé sommet par sommet, repli sans caméra valable. Captures 16/9, 21/9 et portrait contrôlées ; 16/9 vue et validée par Sylfried dans l'interface.
+
+### À trancher / non vérifié
+- **Supposé** : « effet de vague » = l'ondulation `ETIRURE` / `GLISSE` des bandes (seul effet de ce genre dans les notes) ; « comme convenu » = ce rendu, la teinte d'origine et la vitesse d'origine. Si un autre effet avait été convenu, il manque.
+- La texture de 256 x 256 est agrandie à la hauteur de la fenêtre (1080 px en 16/9) : le ciel est flou, c'est la conséquence directe de « la hauteur de la fenêtre ».
+- **Sous Windows** : le rendu réel à 1866 x 1050 et plein écran (netteté, raccords de tuile, sens et vitesse du défilement).

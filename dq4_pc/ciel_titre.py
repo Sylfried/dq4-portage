@@ -5,7 +5,14 @@ L'original compose le titre pour un ecran portrait (9:16). Son ciel (objet « ku
 l'une par rapport a l'autre) de 3 carreaux de 11,5 unites ; l'objet glisse de 0,0192 unite par image puis revient (periode 11,5) : la zone portrait en voit moins de un carreau et de largeur. En 16/9, 21/9 ou plus large,
 le meme carreau apparaissait 3 a 6 fois de suite, tel quel (« on voit trop le fait que le pattern soit repetitif »).
 
-ESSAI #130 (par defaut) : l'image du ciel est AGRANDIE autour du centre de l'ecran (`zoom_ecran` : x 3,16 en 16/9) de facon que la fenetre entiere ne montre que ce que montrait la zone portrait du jeu d'origine : un seul
+RENDU PAR DEFAUT (#174, 04/11/2026 11 h 30) : « ajuste la hauteur pour automatiquement s'adapter a la hauteur de la fenetre, et ca sera sur la largeur que la repetition se fera, et applique bien comme convenu les effets
+visuels » : le ciel est dessine a plat, a l'echelle de l'ecran (`ciel_ecran`) : la texture (carree, 256 x 256) a pour HAUTEUR celle de la fenetre, a toute taille de fenetre, sans agrandissement supplementaire ; elle se repete sur la
+LARGEUR (1,78 fois en 16/9) ; l'effet de vague de l'ancien rendu en bandes (etirure horizontale ondulee 0,52 a 1,48 fois et glissement vertical, `ETIRURE` / `GLISSE`) est applique a toute la largeur, fixe a l'ecran pendant que
+la texture defile dessous (les nuages se deforment en passant) : les copies d'une meme tuile ne se ressemblent donc pas ; le degrade de teinte des rangees d'origine (orange en haut et en bas, blanc au milieu) est repris tel
+qu'il apparaissait a l'ecran (`degrade_ecran`) ; le defilement garde la vitesse d'origine (une tuile pour 11,5 unites de glissement de l'objet, soit 599 images du moteur). Les rendus precedents restent disponibles : `DQ_CIEL_AGRANDI=1`
+(essai #130 ci-dessous), `DQ_CIEL_BANDES=1` (bandes), `DQ_CIEL_COPIES=1` (copies).
+
+ESSAI #130 (agrandi, `DQ_CIEL_AGRANDI=1`) : l'image du ciel est AGRANDIE autour du centre de l'ecran (`zoom_ecran` : x 3,16 en 16/9) de facon que la fenetre entiere ne montre que ce que montrait la zone portrait du jeu d'origine : un seul
 carreau, jamais repete ; plus de bandes. L'ancienne solution (bandes etirees, ci-dessous) reste disponible avec DQ_CIEL_BANDES=1 pour comparer.
 
 Solution precedente (bandes) : la zone portrait centrale (largeur = hauteur x 9/16) reste EXACTEMENT le ciel d'origine ; de chaque cote, a partir de son bord, des bandes de meme geometrie que les rangees du ciel
@@ -27,6 +34,76 @@ if os.environ.get('DQ_CIEL_PARAMS'):                                    # (test)
     _p = [float(x) for x in os.environ['DQ_CIEL_PARAMS'].split(',')]
     ETIRURE = ((_p[0], ETIRURE[0][1], ETIRURE[0][2]), (_p[1], ETIRURE[1][1], ETIRURE[1][2])); GLISSE = ((_p[2], _p[3], 0.5),)
 MAX_COLONNES = 600                                      # garde-fou (fenetre absurdement large)
+
+
+LARGEUR_TUILE = 1.0                    # rendu a plat (#174) : largeur d'une tuile a l'ecran, en hauteurs de fenetre (texture carree : 1)
+COLONNES_TUILE = 24                    # colonnes de maillage par tuile (la plus courte onde de l'etirure : 0,61 tuile, soit 14 colonnes)
+LIGNES_ECRAN = 9                       # lignes de maillage dans la hauteur (profil du glissement vertical et degrade de teinte ; les coupures du degrade s'y ajoutent)
+if os.environ.get('DQ_CIEL_TUILE'):                                     # (test) largeur de la tuile en hauteurs de fenetre
+    try: LARGEUR_TUILE = max(0.2, float(os.environ['DQ_CIEL_TUILE']))
+    except ValueError: pass
+
+
+def etirure_plate(d):
+    """Rendu a plat : abscisse de texture (en tuiles) a la distance `d` (en tuiles, tableau) du bord gauche de la fenetre. Integrale exacte de 1 + somme des ondes de `ETIRURE` : G(0) = 0, pente entre 0,52 et 1,48 (jamais de retournement),
+    echelle d'ensemble 1 (la somme des ondes est de moyenne nulle). Meme effet de vague que les bandes, mais periodique et sans rampe : il s'applique a toute la largeur."""
+    d = np.asarray(d, float); G = d.copy()
+    for a, lg, ph in ETIRURE:
+        w = 2.0 * math.pi / lg
+        G = G + a / w * (math.cos(ph) - np.cos(w * d + ph))
+    return G
+
+
+def glissement_plat(d):
+    """Rendu a plat : glissement vertical de la texture (fraction de sa hauteur, avant le profil sin(pi t) qui l'annule en haut et en bas de la fenetre) a la distance `d` (tuiles) du bord gauche."""
+    d = np.asarray(d, float); g = np.zeros_like(d)
+    for a, lg, ph in GLISSE: g = g + a * np.sin(2.0 * math.pi * d / lg + ph)
+    return g
+
+
+def degrade_ecran(M, rangees, x_sonde):
+    """Degrade de teinte du ciel d'origine tel qu'il apparait a l'ecran : -> (y, couleurs) : `y` = ordonnees d'ecran normalisees croissantes (-1 bas, +1 haut), `couleurs` (n, 4) = couleur de sommet correspondante, a partir de la
+    projection (matrice `M`) des bords et de quelques points intermediaires de chaque rangee d'origine (la couleur est lineaire dans le monde, pas a l'ecran). Les points hors de l'objectif (derriere la camera) sont ignores."""
+    M = np.asarray(M, float); ys, cs = [], []
+    for r in rangees:
+        t = np.linspace(0.0, 1.0, 9)
+        y = r.bas[0] + t * (r.haut[0] - r.bas[0]); z = r.bas[1] + t * (r.haut[1] - r.bas[1])
+        h = M @ np.stack([np.full_like(y, x_sonde), y, z, np.ones_like(y)])
+        ok = h[3] > 1e-6
+        if not ok.any(): continue
+        ys.append((h[1][ok] / h[3][ok])); cs.append(np.asarray(r.bas[3], float)[None] + t[ok, None] * (np.asarray(r.haut[3], float) - np.asarray(r.bas[3], float))[None])
+    if not ys: return np.array([-1.0, 1.0]), np.ones((2, 4))
+    y = np.concatenate(ys); c = np.concatenate(cs); o = np.argsort(y, kind='stable')
+    y, c = y[o], c[o]
+    garde = np.concatenate([[True], np.diff(y) > 1e-9]); return y[garde], c[garde]
+
+
+def ciel_ecran(aspect, phi_tuiles, degrade=None, tuile=None, lignes=None):
+    """Ciel a plat, a l'echelle de l'ecran (#174) : triangles (positions, coordonnees de texture, couleurs) en coordonnees normalisees (x et y de -1 a 1, profondeur au fond), pour une fenetre de rapport
+    largeur / hauteur `aspect`. La texture a pour hauteur celle de la fenetre (v de 0,998 en bas a 0,002 en haut, comme les rangees d'origine) et pour largeur `tuile` hauteurs de fenetre (`LARGEUR_TUILE`) ; elle se repete sur la
+    largeur (u en tuiles, texture en REPEAT). `phi_tuiles` = defilement de l'objet en tuiles (le contenu glisse vers +x quand il augmente, comme l'objet d'origine). `degrade` = (y, couleurs) de `degrade_ecran` (blanc si None).
+    L'etirure (`etirure_plate`) et le glissement (`glissement_plat`) sont fixes a l'ecran : la texture defile dessous."""
+    tuile = LARGEUR_TUILE if tuile is None else float(tuile); aspect = float(aspect)
+    tuile_ndc = 2.0 * tuile / aspect; dx = tuile_ndc / COLONNES_TUILE
+    K = int(math.ceil(2.0 / dx)) + 1
+    i = np.arange(K + 1); X = -1.0 + i * dx; d = i / float(COLONNES_TUILE)                 # d : tuiles depuis le bord gauche
+    t = np.linspace(0.0, 1.0, (LIGNES_ECRAN if lignes is None else int(lignes)) + 1)
+    if degrade is not None:                                                                  # les coupures du degrade (bords des rangees d'origine) deviennent des lignes du maillage
+        yc = (np.asarray(degrade[0], float) + 1.0) / 2.0
+        t = np.unique(np.round(np.concatenate([t, yc[(yc > 0.0) & (yc < 1.0)]]), 6))
+    if degrade is None: col = np.ones((len(t), 4))
+    else: col = np.stack([np.interp(2.0 * t - 1.0, degrade[0], degrade[1][:, k]) for k in range(4)], axis=1)
+    U = etirure_plate(d) - float(phi_tuiles)
+    dv = glissement_plat(d)
+    uu = np.repeat(U[:, None], len(t), axis=1)
+    vv = 0.998 - 0.996 * t[None] + dv[:, None] * np.sin(math.pi * t)[None]
+    pos = np.zeros((K + 1, len(t), 3)); pos[:, :, 0] = X[:, None]; pos[:, :, 1] = (2.0 * t - 1.0)[None]; pos[:, :, 2] = ZFOND
+    uv = np.stack([uu, vv], axis=2); cc = np.repeat(col[None], K + 1, axis=0)
+    tri = lambda a: CielLarge._tri(a)
+    return tri(pos).astype(np.float32), tri(uv).astype(np.float32), tri(cc).astype(np.float32)
+
+
+ZFOND = 0.9999                          # profondeur (normalisee) du ciel a plat : au fond, devant le plan eloigne (le test de profondeur GL_LESS le laisse passer), derriere tout le reste
 
 
 def zone_portrait(largeur, hauteur):
