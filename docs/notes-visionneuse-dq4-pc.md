@@ -1637,3 +1637,25 @@ Capture « Ragnar lance l'aile de chimère en l'air ! » : « c'est le mauvais e
 ### À trancher / non vérifié
 - « pour le moment » : le rattachement sous la boîte reste prêt (`DQ_VITESSE_ANCRE=1`) ; à reprendre quand tu voudras en refaire le défaut.
 - **Sous Windows** : le bouton sur le bord gauche à chaque image d'un combat, y compris en 16/9 large (écran 2560 x 1440) ; le clic change toujours la vitesse.
+
+## Avance #191 : descriptions d'objets recoupées à leur cadre (#190, 04/11/2026)
+
+### Demande (D-234, 04/11 13 h 30)
+« Revois aussi la taille de certaines interfaces, là par exemple le texte ne tient pas, s'il le faut reviens sur les proportions, les positions et les designs strictement originaux et on avisera après » (capture : « Peut aussi être utilisée comme objet de combat. » sur la cellule « Attaque E 74 »).
+
+### Établi
+- Reproduit sur le vrai moteur (combat forcé, Objets → Épée de cuivre, texte remplacé par celui du patch) : fiche d'objet en combat = fenêtre de type 38, description = chaîne (2, 3) ancrée à x = -214 au milieu de la cellule de gauche (bord droit de la cellule x ≈ 64,7 mesuré sur la capture : 704 px sur 1280, cadre de 447 px pour 452 unités), « Attaque E 24 » = chaîne (2, 4) dans la cellule de droite (x 75). Cellule de 2 lignes.
+- Les 360 descriptions du patch (`assets/msg/en/b0831000.mpt` et `b0835000.mpt`, deux tables jumelles de 180 objets ; lecture : séparateurs `@a@b`, `@cN@`, octets de contrôle) ont des lignes de 38 caractères ou une seule ligne de 50 : avec la vraie police SE-GARRIR, 254 sur 360 dépassent la cellule de combat (270 unités depuis x = -214) et 25 le cadre du menu Objets (359 unités depuis x = -211, jusqu'au bouton du sac).
+- Les proportions du port ne sont pas en cause (fenêtres de combat à 510/459 depuis #47, mise à l'échelle uniforme) : le texte est plus large que la cellule d'origine à toutes les tailles. Rien n'a été ramené aux proportions, positions et designs d'origine.
+
+### Fait
+- `ui_menu.DESCRIPTIONS = {(7, 1), (10, 4), (38, 3)}` : (type de fenêtre, numéro de chaîne) -> bord droit utile (`DESC_FICHE_X_MAX` 148 pour la fiche d'un sort et le menu Objets, `DESC_COMBAT_X_MAX` 56 pour la fiche d'objet en combat). `Fenetre.param_str` pose `wrap_x` / `wrap_n = 2` sur le texte.
+- `Rendu._ajuste_description` (remplace `_recoupe`) : un texte qui tient (au plus 2 lignes, aucune plus large que le cadre) est laissé tel quel, retours à la ligne du patch compris ; sinon les retours sont remplacés par des espaces et le texte recoupé à la largeur du cadre ; s'il faut encore plus de 2 lignes, il est comprimé en largeur par pas de 0,05 jusqu'à `COMPRESSION_MIN` = 0,7. Résultat gardé par texte dans `nd['_adj']` (le dessin est refait à chaque image).
+- Mesure sur les 360 descriptions réelles : après, aucune ne dépasse (2 lignes au plus, largeur dans le cadre, aucun mot perdu) ; 39 sont comprimées en combat (plus forte : x 0,75), aucune dans le menu Objets.
+- Rendus sur le vrai moteur : avant / après (« Peut aussi être utilisée comme objet au / combat. » recouvrait « Attaque »), ligne unique de 50 caractères, deux lignes de 36 et 31 caractères (comprimées), menu Objets du village de Maout.
+- Tests : `outils/test_description_objet.py` (16 dont 3 avec la vraie police et les 360 textes) ; `outils/test_magie_liste.py` reprend les tests de recoupe.
+
+### À trancher / non vérifié
+- Sous Windows (écrans 1920 x 1200 et 2560 x 1440) : non vu.
+- Autres fenêtres qui ont la même barre de description en bas : boutiques (types 46, 60, 61, 63) et fiche d'objet de la boutique de vente (70). Les chaînes de description sont (46, 3), (60, 4), (61, 4), (63, 4), (70, 3) ; leur bord droit n'a pas été mesuré (barre supposée identique : 148). Non ajoutées sans capture.
+- Si les proportions d'origine sont quand même voulues : `reglages.LARGEUR_COMMANDES` (fenêtres de combat) et `fenetre.UI_ZOOM` (1,12) sont les deux réglages du port ; ils ne changent rien à ce défaut.

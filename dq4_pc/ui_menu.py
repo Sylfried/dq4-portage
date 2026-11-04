@@ -153,6 +153,12 @@ NOMS_PRESETS = ((4, 382.0, 67.0), (5, 382.0, 67.0), (5, 434.0, 67.0), (6, 434.0,
 NOMS_DEPART, NOMS_PAS = 382.0, 67.0         # mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
 COUT_FICHE_X_MAX = 214.0              # fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
 DESC_FICHE_X_MAX = 148.0              # fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
+DESC_COMBAT_X_MAX = 56.0              # infos d'un objet en combat (type 38) : bord droit utile de la description (cellule de gauche : x -226 a 64,7, mesure sur une capture du moteur reel, moins la marge) ; la cellule n'a que 2 lignes de haut, la cellule « Attaque E 24 » est a sa droite
+# Descriptions d'objets et de sorts : (type de fenetre, numero de chaine) -> bord droit utile (unites d'interface) de leur cadre, qui ne montre que 2 lignes. Le texte francais du patch a des lignes de 38 caracteres, ou une seule ligne de 50
+# (« Peut aussi etre utilisee comme objet au / combat. », « Au combat, ils peuvent inverser le cours du temps. ») : il sortait du cadre et recouvrait « Attaque E 74 » (type 38) ou le bouton du sac (type 10). Rendu._texte le recoupe a cette largeur puis, si
+# 2 lignes ne suffisent pas, le comprime (Rendu._ajuste_description).
+DESCRIPTIONS = {(7, 1): DESC_FICHE_X_MAX, (10, 4): DESC_FICHE_X_MAX, (38, 3): DESC_COMBAT_X_MAX}
+COMPRESSION_MIN = 0.7                 # compression horizontale maximale d'une description qui ne tient pas en 2 lignes
 
 
 def uv_icone(info, no, decal):
@@ -314,7 +320,7 @@ class Fenetre:
                     elif cs == 'base': nd['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
-        if self.typ == 7 and no == 1: nd['wrap_x'] = DESC_FICHE_X_MAX; nd['wrap_n'] = 2        # description d'un sort : le cadre du bas montre 2 lignes ; au-dela, le texte est recoupe a la largeur du cadre (Rendu._recoupe)
+        if (self.typ, no) in DESCRIPTIONS: nd['wrap_x'] = DESCRIPTIONS[(self.typ, no)]; nd['wrap_n'] = 2        # description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Rendu._ajuste_description)
         if self.typ == 7 and no == 2: nd['fit_x'] = COUT_FICHE_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Rendu._texte
         ts = nd['text'].get('tabSize')
         if ts and self.noms_liste and '\t' in s: s = s.replace('\t', ' ' * max(0, int(round(ts))))        # TextMesh.tabSize : une tabulation vaut tabSize fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » de la liste des magies) ; la police du jeu n'a pas de glyphe pour « \t » : elle comptait pour rien et le nombre collait a l'etiquette (limite a la liste des magies : les autres fenetres a tabSize, types 20, 31, 33, 34, 35, 39, ne sont pas verifiees)
@@ -1058,20 +1064,35 @@ class Rendu:
         if col == 1: return r[1] - r[0] - 2 * self.MARGE_PLAQUE                                      # texte centre : la plaque entiere
         return (r[1] - self.MARGE_PLAQUE - xa) if col == 0 else (xa - r[0] - self.MARGE_PLAQUE)      # texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
 
-    def _recoupe(self, lignes, dispo, bm, u, ts, s, emy):
-        """Description plus haute que son cadre (le texte francais d'un sort a 3 ou 4 lignes de ~20 caracteres, coupees pour un cadre plus etroit, le cadre n'en montre que 2 et la 3e sortait de l'ecran) : les retours a la
-        ligne sont remplaces par des espaces et le texte est recoupe a la largeur `dispo` (unites). Si le resultat n'a pas moins de lignes qu'avant, le texte est laisse tel quel."""
+    def _ajuste_description(self, nd, lignes, dispo, nmax, bm, u, ts, s, emy):
+        """Description dont le cadre montre `nmax` lignes sur `dispo` unites de large : (lignes, facteur de compression). Un texte qui tient deja (au plus `nmax` lignes, aucune plus large que le cadre) est laisse tel quel, avec les retours a la ligne du patch.
+        Sinon les retours a la ligne sont remplaces par des espaces et le texte est recoupe a la largeur du cadre ; s'il faut encore plus de `nmax` lignes, il est comprime en largeur (jusqu'a COMPRESSION_MIN) pour tenir en `nmax` lignes."""
+        cle = (tuple(lignes), dispo, nmax, u, ts, s)
+        c = nd.get('_adj')
+        if c is not None and c[0] == cle: return c[1]
         px = max(6, int(round(emy * s)))
         def larg(x):
             x = re.sub(r'@c\d', '', x)
             return bm.largeur(x) * u * ts if bm else (self.textes.ligne(x, px)[1] - 4) / s * ts
-        out = []; cur = ''
-        for w in ' '.join(l.strip() for l in lignes).split():
-            essai = cur + ' ' + w if cur else w
-            if cur and larg(essai) > dispo: out.append(cur); cur = w
-            else: cur = essai
-        if cur: out.append(cur)
-        return out if len(out) < len(lignes) else lignes
+        utiles = list(lignes)
+        while utiles and not utiles[-1].strip(): utiles.pop()
+        if not utiles or (len(utiles) <= nmax and all(larg(l.strip()) <= dispo + 0.5 for l in utiles)): res = (lignes, 1.0)
+        else:
+            mots = ' '.join(l.strip() for l in utiles).split()
+            def coupe(d):
+                out = []; cur = ''
+                for w in mots:
+                    essai = cur + ' ' + w if cur else w
+                    if cur and larg(essai) > d: out.append(cur); cur = w
+                    else: cur = essai
+                if cur: out.append(cur)
+                return out
+            f = 1.0; out = coupe(dispo)
+            while not (len(out) <= nmax and max(larg(l) for l in out) <= dispo / f + 0.5) and f > COMPRESSION_MIN + 1e-9:
+                f = max(COMPRESSION_MIN, round(f - 0.05, 4)); out = coupe(dispo / f)
+            res = (out, f)
+        nd['_adj'] = (cle, res)
+        return res
 
     def _texte(self, fen, nd, cx, cy, s):
         t = nd['text']; lang = self.ml.hdr['lang']
@@ -1082,7 +1103,8 @@ class Rendu:
         else: emy = TAILLE_POLICE * u; pas = HAUTEUR_LIGNE * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = nd['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = nd['tscale']
-        if nd.get('wrap_x') is not None and len(lignes) > nd.get('wrap_n', 2): lignes = self._recoupe(lignes, nd['wrap_x'] - nd['pos'][0], bm, u, ts, s, emy)       # description plus haute que son cadre
+        if nd.get('wrap_x') is not None:                                # description plus large ou plus haute que son cadre : recoupee, puis comprimee si 2 lignes ne suffisent pas
+            lignes, f = self._ajuste_description(nd, lignes, nd['wrap_x'] - nd['pos'][0], nd.get('wrap_n', 2), bm, u, ts, s, emy); ts *= f
         N = len(lignes)
         row = t['anchor'] // 3; col = t['anchor'] % 3
         base0 = base_premiere_ligne(zp, row, N, pas, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte

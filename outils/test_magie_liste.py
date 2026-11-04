@@ -158,27 +158,29 @@ class TestFicheDuSort(unittest.TestCase):
 
 
 class TestRecoupeDescription(unittest.TestCase):
-    """Rendu._recoupe : la description francaise d'un sort a 3 ou 4 lignes (cadre de 2) est recoupee a la largeur du cadre (police fictive : 9 unites par caractere, cadre de 361 unites = 40 caracteres)."""
+    """Rendu._ajuste_description : la description francaise d'un sort a 3 ou 4 lignes (cadre de 2) est recoupee a la largeur du cadre (police fictive : 9 unites par caractere, cadre de 361 unites = 40 caracteres)."""
     DISPO = 148.0 + 213.0
     def recoupe(self, texte):
         r = object.__new__(UM.Rendu)
         r.textes = types.SimpleNamespace(bitmap=types.SimpleNamespace(largeur=lambda x: 9.0 * len(x)))
-        return r._recoupe(texte.split('\n'), self.DISPO, r.textes.bitmap, 1.0, 1.0, 1.0, 9.0)
+        return r._ajuste_description({}, texte.split('\n'), self.DISPO, 2, r.textes.bitmap, 1.0, 1.0, 1.0, 9.0)
 
     def test_quatre_lignes_en_deux(self):
         for t in ("Permet de sortir\r\nimmédiatement des\r\ndonjons, grottes et\r\ntours.", "Génère une aura\r\nsacrée qui éloigne les\r\nmonstres les plus\r\nfaibles."):
-            out = self.recoupe(t)
-            self.assertEqual(len(out), 2, out)
+            out, f = self.recoupe(t)
+            self.assertEqual((len(out), f), (2, 1.0), out)
             self.assertEqual(' '.join(out), ' '.join(l.strip() for l in t.split('\n')))          # aucun mot perdu ni ajoute
             self.assertTrue(all(9.0 * len(l) <= self.DISPO for l in out), out)
 
     def test_trois_lignes_en_deux(self):
-        out = self.recoupe("Ressuscite un allié\r\nmort en lui octroyant\r\nla moitié de ses PV.")
-        self.assertEqual(len(out), 2, out)
+        out, f = self.recoupe("Ressuscite un allié\r\nmort en lui octroyant\r\nla moitié de ses PV.")
+        self.assertEqual((len(out), f), (2, 1.0), out)
 
-    def test_pas_plus_de_lignes_qu_avant(self):
-        t = "a" * 30 + "\r\n" + "b" * 30 + "\r\n" + "c" * 30                                      # 3 lignes de 30 : recoupees a 40 elles feraient encore 3 lignes : texte laisse tel quel
-        self.assertEqual(self.recoupe(t), t.split('\n'))
+    def test_trois_lignes_trop_longues_comprimees(self):
+        t = "\r\n".join(" ".join([c * 4] * 6) for c in "abc")                                         # 3 lignes de 29 caracteres : recoupees a 40 elles feraient encore 3 lignes : le texte est comprime pour tenir en 2
+        out, f = self.recoupe(t)
+        self.assertEqual(len(out), 2, out); self.assertTrue(UM.COMPRESSION_MIN <= f < 1.0, f)
+        self.assertTrue(all(9.0 * len(l) * f <= self.DISPO + 0.5 for l in out), (out, f))
 
 
 def _stat(mo, i):
