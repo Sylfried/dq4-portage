@@ -7,7 +7,7 @@ from dq4_pc.noyau import moteur as MO
 from dq4_pc.noyau import priorite_jeu as PJ
 from dq4_pc.persistance import reglages as RG
 from dq4_pc.fenetre.constantes import (ASPECT_PORTRAIT, BAS_DEF, CAM_ANGLE_MAX, CAM_ANGLE_MIN, CAM_CENTRE_MAX, CAM_DIST_VIT, CAM_LACET_VIT,
-    CAM_MENE_DIST, CAM_RECENTRE_ANGLE, CAM_RECENTRE_DIST, CAM_RECENTRE_LACET, CAM_SAUT_VILLE, CAM_TANGAGE_VIT, CAM_Y_TAU, CARTE_TITRE, CB_DEC_Z,
+    CAM_MENE_DIST, CAM_RECENTRE_ANGLE, CAM_SCENE_TAU, CAM_RECENTRE_DIST, CAM_RECENTRE_LACET, CAM_SAUT_VILLE, CAM_TANGAGE_VIT, CAM_Y_TAU, CARTE_TITRE, CB_DEC_Z,
     CB_ECHELLE_DECOR, CB_FAR, CB_FOV_NOM, CB_NEAR, CB_YOFFSET, CH_ECHELLE, CH_PX, CH_VUE_HAUT, CORRECTION_BORDS_DEF, DIST_ADJ_VILLE, FOV_VILLE_DEF,
     HEROS_FRAC, MODE_PP, SPRITE_ECHELLE, SPRITE_H, VILLE_FAR, VILLE_NEAR, ZOOM_MAX, ZOOM_MIN)
 from dq4_pc.fenetre.aides import camera_libre, hauteur_camera, matrice, rot_unity
@@ -31,9 +31,10 @@ class CameraMixin:
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
     def _zoom_possible(self):
-        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre (ni sa scene, avant « Touchez l'ecran » : le cadrage du titre est celui du jeu)."""
+        """Le zoom (molette, Ctrl + clic molette) agit sur le terrain : ville, donjon, tour ou carte du monde ; ni message, ni menu du jeu, ni carte ouverte, ni menu Echap, licence, sauvegardes, saisie du nom ou ecran-titre (ni sa scene, avant « Touchez l'ecran » : le cadrage du titre est celui du jeu), ni scene ou le jeu tient la camera (UNI-08)."""
         mo = self.moteur
-        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte)
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self._saisie_nom_en_cours() and mo.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE) and not mo.msg_visible and mo.menu_actif() is None and not self.carte_ouverte
+                and not getattr(self, 'cam_jeu', False))                      # (UNI-08 : pendant une scene ou le jeu tient la camera, le jeu l'emporte : le joueur ne regle pas le zoom)
 
     def _camera_pilotable(self):
         """La camera se tourne a la main (fleches, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde), sauf lieu ou le jeu interdit de la tourner (cam_bloquee). Memes conditions que _maj_camera."""
@@ -52,6 +53,23 @@ class CameraMixin:
         Le mouvement est fait par _maj_distance_clavier (a chaque image) ; une molette ou une touche de distance seule l'interrompt."""
         self.dist_retour = True
 
+    def _transition_scene_possible(self):
+        """Le retour de debut de scene (UNI-08) peut-il se poursuivre ? Sur le terrain d'une ville ou de la carte du monde, meme sous un message ou un menu du jeu (la scene en affiche), mais pas sous le menu Echap, la licence, les sauvegardes
+        ou l'ecran-titre (le joueur y regle sa distance lui-meme) ni hors terrain (combat...)."""
+        return (not self.pause.ouvert and self.licence is None and self.sauv is None and self.titre is None and self.moteur.etat.partie in (MO.PARTIE_CHAMP, MO.PARTIE_VILLE))
+
+    def _scene_en_cours(self, e):
+        """Le jeu tient-il la camera dans une scene ? TownCamera verrouillee et menee ailleurs que sur le joueur (cam_jeu : travelling, plan fixe, cible = un personnage) ou camera libre d'une scene (paquet 11, bit 7), dans une ville, un donjon
+        ou une tour ; jamais l'ecran-titre (le jeu y fixe seul la camera, sans scene)."""
+        return bool(e.partie == MO.PARTIE_VILLE and getattr(self, 'carte_nom', None) != CARTE_TITRE and (self.cam_jeu or e.cam_libre))
+
+    def _suivre_scene(self, e):
+        """A chaque pas du moteur : repere le DEBUT d'une scene (le jeu prend la camera) et ramene alors le zoom du joueur a 100 % par l'animation de la remise a zero (UNI-08, choix du joueur : « le jeu l'emporte dans ses scenes, avec une
+        transition en debut de scene qui remet le zoom par defaut »). Le zoom reste a 100 % ensuite, comme apres la remise a zero au clavier ou a la souris."""
+        s = self._scene_en_cours(e)
+        if s and not self.scene_prec and abs(self.zoom - 1.0) > 1e-6: self.dist_retour = True; self.dist_scene = True
+        self.scene_prec = s
+
     def reinitialiser_camera(self):
         """Remet TOUS les etats de la camera a leur valeur d'origine (#168) : la position (rotation et inclinaison, par l'animation de recentrage) ET la distance (retour anime a 100 %). Touche speciale (Ctrl) + une touche de camera :
         les quatre fleches, Page haut, Page bas. Chaque etat ne se remet que la ou il se regle : la position sur le terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde, ni un lieu qui interdit de tourner la camera),
@@ -67,7 +85,7 @@ class CameraMixin:
         if self.licence is not None: self.licence.defiler(-sy * 60.0); return
         if not (sy and self._zoom_possible()): return
         if self._ctrl_actif(0): self.distance_par_defaut()
-        else: self.dist_retour = False; self.regler_zoom(self.zoom * 1.1 ** sy)                      # (un cran de molette interrompt le retour anime a 100 %)
+        else: self.dist_retour = False; self.dist_scene = False; self.regler_zoom(self.zoom * 1.1 ** sy)                      # (un cran de molette interrompt le retour anime a 100 %)
 
     def _molette_appui(self, x, y, modifiers):
         """Bouton du milieu enfonce : un clic (remise de la position de la camera ; avec Ctrl, de la position et de la distance) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
@@ -119,6 +137,12 @@ class CameraMixin:
 
     dist_retour = False                                           # retour anime de la distance a 100 % en cours (#167)
 
+    dist_scene = False                                            # le retour anime a 100 % en cours est celui d'un debut de scene (UNI-08) : il va a son terme meme pendant un message ou une scene, et les touches de distance n'y changent rien
+
+    scene_prec = False                                            # le jeu tenait la camera (scene) au dernier pas : sert a reperer le DEBUT d'une scene
+
+    cam_scene_w = 0.0                                             # 0 = cadrage commun de la visionneuse (heros a taille fixe), 1 = champ du jeu tel quel (scene), progressif entre les deux
+
     dist_bloque = False                                           # les deux touches de distance ont ete enfoncees ensemble et il en reste une enfoncee : rien ne se passe (le relachement n'est jamais exactement simultane)
 
     def _maj_distance_clavier(self):
@@ -130,13 +154,14 @@ class CameraMixin:
         t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self._t_dist is None else min(0.1, t - self._t_dist)); self._t_dist = t
         pres, loin = self._tenue('cam_pres'), self._tenue('cam_loin')
         if not (pres or loin): self.dist_bloque = False
-        if not self._zoom_possible(): self.dist_retour = False; return
+        if getattr(self, 'dist_scene', False) and self.dist_retour and self._transition_scene_possible(): pres = loin = False                      # retour de debut de scene (UNI-08) : il va a son terme, meme sous un message ; les touches n'y changent rien (le jeu l'emporte)
+        elif not self._zoom_possible(): self.dist_retour = False; self.dist_scene = False; return
         if (pres or loin) and self._tenue('modif'): self.reinitialiser_camera(); self.dist_bloque = True; sens = 0                          # Ctrl + l'une des deux touches (#168) : TOUS les etats de la camera reviennent a l'origine
         elif pres and loin: self.distance_par_defaut(); self.dist_bloque = True; sens = 0                                                    # les deux touches ensemble (#167) : la distance seule
         elif self.dist_bloque: sens = 0
         else:
             sens = (1 if loin else 0) - (1 if pres else 0)
-            if sens: self.dist_retour = False
+            if sens: self.dist_retour = False; self.dist_scene = False
         vit_cam = float(self.reg['vitesse_camera']); lo, hi = RG.BORNES['distance_camera']; actuelle = 100.0 / self.zoom
         if sens:
             vit = vit_cam * (float(self.reg['vitesse_accel']) if self._tenue('accel') else 1.0)
@@ -144,7 +169,7 @@ class CameraMixin:
             if nouvelle != actuelle: self.regler_distance(nouvelle)
         elif self.dist_retour:
             cible = float(RG.DEFAUT['distance_camera']); err = cible - actuelle; pas = max(CAM_RECENTRE_DIST, abs(err) * 5.0) * vit_cam * dt
-            if abs(err) <= pas: self.regler_distance(cible); self.dist_retour = False
+            if abs(err) <= pas: self.regler_distance(cible); self.dist_retour = False; self.dist_scene = False
             else: self.regler_distance(actuelle + math.copysign(pas, err))
 
     # ---- combat : decor + monstres (maillages dynamiques du moteur)
@@ -162,9 +187,13 @@ class CameraMixin:
         titre = self.carte_nom == CARTE_TITRE          # ecran-titre : le jeu fixe seul la camera (x = 0, cible a l'origine) et aucun heros ne marche ; ni centrage sur un heros, ni bornes 16/9 de la carte : sinon, avec « Centrer la camera » = Non, la camera glissait de +4,5 u vers le milieu des bornes (le logo et le decor partaient a gauche, de 15 % de la largeur a 16/9)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
+        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
+        # Scene ou le jeu tient la camera (cam_jeu, UNI-08, choix du joueur : « le jeu l'emporte dans ses scenes ») : le champ du jeu s'applique tel quel (un travelling avant, un gros plan par la distance ou le fov changent la taille du heros
+        # a l'ecran, comme dans l'original) au lieu du cadrage commun ci-dessous ; le passage de l'un a l'autre est progressif (CAM_SCENE_TAU), sans a-coup, et immediat apres une coupure.
+        w_jeu = 1.0 if self.cam_jeu else 0.0; w = w_jeu if self.cam_saut else getattr(self, 'cam_scene_w', 0.0) + (w_jeu - getattr(self, 'cam_scene_w', 0.0)) * (1.0 - math.exp(-CAM_SCENE_TAU * dt)); self.cam_scene_w = w
         if not libre:       # zoom commun : le heros (le point vise) prend HEROS_FRAC de la hauteur de la fenetre, quelle que soit la distance ou le fov de la camera de la ville, de la grotte ou de la tour
             prof = float(np.linalg.norm(cib - pos)) - DIST_ADJ_VILLE
-            if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
+            if prof > 1.0 and 0 in e.sprites and self.carte_nom != 'ev01': th_v = (SPRITE_H * SPRITE_ECHELLE / HEROS_FRAC / (2.0 * prof)) ** (1.0 - w) * th_v ** w       # (titre : aucun heros (le sprite 0 est charge mais cache), champ horizontal fixe de l'original : sans cette exception la formule du heros agrandissait toute la scene de 1,185 : logo plus large que l'ecran portrait)
         th_v /= PJ.facteur_effectif(self.zoom, libre or mini or titre)               # zoom (40 a 400 %) : le champ vertical est divise par le zoom (villes, grottes, tours...) ; camera libre d'une scene (position, angles et champ fixes par le script) : le cadrage est celui du jeu, sans zoom
         # La camera est TOUJOURS centree sur le heros (plus d'option : c'est aussi le fonctionnement du jeu, TownCamera::execute fait setTarget(joueur) a chaque pas tant que son verrou est a 0), sauf quand le jeu la prend :
         # TownCamera verrouillee et menee ailleurs (scene, evenement, chute, sort de retour ; cam_jeu), camera libre d'une scene (paquet 11, bit 7) ou mini-jeu. La camera du jeu s'applique alors telle quelle (aucune borne).
@@ -173,7 +202,6 @@ class CameraMixin:
         if centre:                                                        # camera toujours centree sur le heros (sprite 0) : le jeu borne sa cible aux bords de la carte ; on corrige l'ecart (garde-fou : position du heros perimee)
             sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
             if hp is not None and math.hypot(hp[0] - cib[0], hp[2] - cib[2]) <= CAM_CENTRE_MAX: dec = (hp[0] - cib[0], hp[2] - cib[2])
-        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
         # Correction du centrage = cible (heros - cible du jeu, suivie A L'IMAGE PRES : la camera est rigide sur le heros, meme quand le jeu borne la sienne aux bords de la carte et que le heros court)
         # + reste qui se resorbe en douceur. Le reste ne naît que d'un changement de regime (scene <-> main du joueur) ou d'une coupure : avant, TOUT l'ecart etait lisse (exp(-14 t)), donc la camera trainait derriere
         # un heros en course (v / 14 : ~0,6 u a x1,5, plus aux vitesses x2 a x4) et « continuait son chemin » apres l'arret (declenchement d'un evenement) avant de se recentrer
