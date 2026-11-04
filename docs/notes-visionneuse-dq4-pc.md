@@ -108,7 +108,7 @@ Le reste à faire est suivi par les **issues GitHub de `dq4-portage`** (https://
 - `Jeu._boucle` (exécutée avant chaque dessin, `pyglet.app.run(interval=0)`, le dessin suit la synchronisation verticale) : accumulateur d'horloge réelle, **un pas de moteur par 1/30 s** (tolérance de 15 % pour qu'un écran de 60 Hz fasse un pas toutes les 2 images exactement, au plus 3 pas de rattrapage, un blocage plus long est oublié). **F4** affiche les pas de moteur par seconde (doit rester à 30,0).
 - **Interpolation** (`_instantane`, `_interpoler`, `on_draw` → `_dessiner`) : positions des personnages et de la caméra (carte du monde : `champ['cam']` ; villes : `cam_pos`, `cam_cible`) calculées entre le pas précédent et le pas actuel (alpha = fraction du pas), donc un mouvement continu à toute cadence d'écran (60, 75, 144 Hz) avec un pas de retard. Pas d'interpolation en combat (les monstres sont des maillages envoyés à chaque pas), ni au-delà d'un saut (24 px sur la carte, 1,5 unité en ville), ni à un changement de carte. En pixel perfect, héros et caméra sont arrondis à partir des mêmes valeurs interpolées : l'écart héros / caméra reste constant (vérifié : toujours (0, 2) px de carte).
 - Mode capture de test (`--shot`) : un pas par image affichée, sans horloge ni interpolation (reproductible).
-- **Zoom commun** : `HEROS_FRAC` ≈ 0,1026 = hauteur du panneau du héros (1,44 unité de ville, 32 px sur la carte) / hauteur de la fenêtre, mesurée dans les villes en 16/9 (caméra d'origine, 39,55 de la cible dont 4 d'avance, fov 9,5 x 4/3 sur l'écran 0,5625). `CH_VUE_HAUT = 32/16 x CH_ECHELLE / HEROS_FRAC` ≈ 20,2 tuiles sur la carte du monde ; dans `_camera_ville` (hors caméra libre des scènes) le champ vertical est recalculé pour que le héros occupe `HEROS_FRAC` quelle que soit la distance ou le fov de la ville, de la grotte ou de la tour. (Inversion stricte des tuiles du portrait : 16 de haut sur la carte, soit HEROS_FRAC ≈ 0,13 : une seule constante à changer.)
+- **Zoom commun** : `HEROS_FRAC` ≈ 0,1026 = hauteur du panneau du héros (1,44 unité de ville, 32 px sur la carte) / hauteur de la fenêtre, mesurée dans les villes en 16/9 (caméra d'origine, 39,55 de la cible dont 4 d'avance, fov 9,5 x 4/3 sur l'écran 0,5625). `CH_VUE_HAUT = 32/16 x CH_ECHELLE / HEROS_FRAC` ≈ 20,2 tuiles sur la carte du monde ; dans `_camera_ville` (hors caméra libre des scènes) le champ vertical est recalculé pour que le héros occupe `HEROS_FRAC` quelle que soit la distance ou le fov de la ville, de la grotte ou de la tour (sauf quand le jeu tient la caméra dans une scène : depuis #244 son champ s'applique tel quel, voir « Avance #244 »). (Inversion stricte des tuiles du portrait : 16 de haut sur la carte, soit HEROS_FRAC ≈ 0,13 : une seule constante à changer.)
 - **Scintillements corrigés** : (1) au retour d'une fuite, une image montrait le décor du combat avec la caméra d'une ville (partie = carte du monde mais `champ` pas encore reçu, carte = `btl_*`) : noir tant que la scène suivante n'est pas là ; (2) les lignes d'aide (haut à gauche) disparaissaient pendant l'effet de début de combat et les écrans noirs : `_dessiner_aide` les dessine aussi dans les sorties anticipées ; (3) la grille de tuiles de la carte du monde gardait une taille variable et était recréée (suppression + création côté GPU) toutes les ~20 images de marche : largeur constante, sommets remplacés sur place (a-coups de dessin /2). Méthode : captures de toutes les images d'une séquence + détecteur « image différente puis retour à la précédente » (`pixels changés(i, i+1)` et `(i+1, i+2)` grands, `(i, i+2)` petit) sur un combat (début, attaques, fuite) et un changement de carte.
 
 ## F2 / F3 / décors, correctif du filtre « net » (31/10/2026, #13)
@@ -2026,3 +2026,22 @@ Un `.dqs` est lu par `pickle` (`etats.lire` pour le conteneur externe, `applique
 
 ### Non vérifié
 Un vrai état d'une ancienne version (le dossier `etats\` de ta machine est vide) ; les états d'avant #206 sans empreinte de bibliothèque suivent le même chemin.
+
+## Avance #244 : zoom des scènes : le jeu l'emporte, transition vers 100 % au début de la scène
+
+### Demande
+Sondage du 04/11/2026 (audit UNI-08) : « le jeu l'emporte dans ses scènes, et lors du début de la scène il faut faire un effet de transition pour remettre le zoom par défaut, comme quand on veut réinitialiser le zoom actuellement au clavier ou à la souris ».
+
+### Établi
+Avant : le zoom commun (`HEROS_FRAC`) annulait les travellings / gros plans de scène obtenus par la distance ou le fov, et le zoom du joueur s'appliquait aussi quand le jeu tenait la caméra.
+
+### Fait
+- Une scène = le jeu tient la caméra : `cam_jeu` (verrou TownCamera mené ailleurs que sur le joueur) ou caméra libre (paquet 11 bit 7), dans une ville / un donjon / une tour, jamais l'écran-titre.
+- Début de scène (`_suivre_scene`, à chaque pas du moteur) : retour animé du zoom à 100 % (`dist_retour` + `dist_scene`), même animation et même vitesse que la remise à zéro (#167) ; il va à son terme sous un message, continue après la scène, s'arrête sous le menu Echap ou hors terrain. Le zoom reste à 100 % ensuite.
+- Pendant la scène : `_zoom_possible` est faux (molette, touches, Ctrl + molette sans effet).
+- Cadrage : `cam_scene_w` (0 = zoom commun, 1 = champ du jeu), `CAM_SCENE_TAU` = 6 / s (~0,4 s pour 90 %), immédiat après une coupure ; zoom commun et champ du jeu coïncident à la distance habituelle (`HEROS_FRAC` est calculé dessus).
+- Inchangé : caméra libre, mini-jeux, titre (déjà sans zoom du joueur).
+- `tests/test_zoom_scene.py` (20 tests).
+
+### Non vérifié
+Une vraie scène à l'écran (ton jeu sur Windows) ; les scènes où le jeu change seulement le fov sans verrouiller la caméra restent au zoom commun (à mesurer).
