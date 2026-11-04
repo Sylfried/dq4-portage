@@ -11,6 +11,30 @@ VERSION = 3          # a incrementer quand un algorithme change (invalide les ca
 FACTEUR = 8
 
 
+# Feuilles qui ne se decoupent pas en cases de personnage de 24 x 32 sur 3 colonnes. Chara.SetTexture (libdq4core, libunity 0xCCC6F8) : l'identifiant 193, le bateau de la carte du monde (deux sprites : le navire,
+# rangees 0 a 4, et son sillage, rangees 5 a 9), prend le maillage « mesh12 » : carre de 0,8 x 0,8 (contre 0,48 x 0,64 pour un personnage), cases de 40 x 40, 12 colonnes ; 194 est un alias de 193.
+# identifiant -> (largeur de case, hauteur de case, colonnes, rangees, rapport de largeur du panneau, rapport de hauteur du panneau)
+FEUILLES_SPECIALES = {193: (40, 40, 12, 10, 0.8 / 0.48, 0.8 / 0.64)}
+ALIAS_FEUILLES = {194: 193}
+
+
+def geometrie_feuille(ident, arr, larg=24, haut=32, cols=3):
+    """Decoupage de la feuille `h<ident>` : dict(ident, larg, haut, cols, nl, pw, ph, standard). ident : l'alias est deja resolu (193 pour 194) ; nl : rangees (4 pour un personnage, 8 si la 5e rangee n'est pas vide) ;
+    pw, ph : rapport du panneau dessine a celui d'un personnage (1 sauf pour le bateau)."""
+    ident = ALIAS_FEUILLES.get(ident, ident)
+    if ident in FEUILLES_SPECIALES:
+        l, h, c, nl, pw, ph = FEUILLES_SPECIALES[ident]
+        return dict(ident=ident, larg=l, haut=h, cols=c, nl=nl, pw=pw, ph=ph, standard=False)
+    nl = 8 if arr[4 * haut:5 * haut, :cols * larg, 3].any() else 4
+    return dict(ident=ident, larg=larg, haut=haut, cols=cols, nl=nl, pw=1.0, ph=1.0, standard=True)
+
+
+def uv_case(f, col, row):
+    """(u0, u1, v0, v1) de la case (colonne, rangee) d'un atlas de feuille `f` (origine ou HD, gouttieres exclues) ; v1 = haut de la case (Unity : v = 0 en bas de la texture)."""
+    pl, ph, g = f['cl'] + 2 * f['g'], f['ch'] + 2 * f['g'], f['g']
+    return (col * pl + g) / f['tw'], (col * pl + g + f['cl']) / f['tw'], 1 - (row * ph + g + f['ch']) / f['th'], 1 - (row * ph + g) / f['th']
+
+
 def _cle(a):
     """Clé de comparaison de pixels : RGBA sur 32 bits, tout pixel quasi transparent = 0."""
     k = np.ascontiguousarray(a).view('<u4')[..., 0].copy()

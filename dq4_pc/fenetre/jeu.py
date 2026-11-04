@@ -602,20 +602,19 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
             if s['pos'] is None or s['col'][3] < 0.02 or not s.get('vis', True): continue      # paquet 14 : Chara.SetVisible
             f = self._feuille(s['id'] - 4096 if (champ and s['id'] >= 4096) else s['id'], self.mode)
             if not f: continue
-            tw, th, nl = f['tw'], f['th'], f['nl']
-            col, row = s['pose'] % 3, s['dir'] % nl
+            nl = f['nl']
+            col, row = s['pose'] % f.get('cols', 3), s['dir'] % nl          # (bateau : 12 colonnes de 40 x 40, voir hd.FEUILLES_SPECIALES)
+            pw, ph = f.get('pw', 1.0), f.get('ph', 1.0)                       # panneau du bateau : 0,8 x 0,8 contre 0,48 x 0,64 pour un personnage
             dort = bool(s.get('dort')) and not champ and not bataille and cam3d is not None          # personnage couche (paquet 16) : dessine a plat par pose_couchee, voir plus bas
             if phi and not dort:                                                     # camera tournee : la rangee montre le personnage tel qu'on le voit (cap du personnage - rotation de la camera, au plus proche) ; un personnage couche garde la rangee du moteur (c'est son corps entier qui tourne a l'ecran avec la camera)
                 pas_d = 360.0 / nl; row = int(round((row * pas_d - phi) / pas_d)) % nl
-            pl, ph, g = f['cl'] + 2 * f['g'], f['ch'] + 2 * f['g'], f['g']          # case (col, row) de l'atlas (origine ou HD), gouttieres exclues
-            u0, u1 = (col * pl + g) / tw, (col * pl + g + f['cl']) / tw
-            v1, v0 = 1 - (row * ph + g) / th, 1 - (row * ph + g + f['ch']) / th
+            u0, u1, v0, v1 = HD.uv_case(f, col, row)                                 # case (col, row) de l'atlas (origine ou HD), gouttieres exclues
             p = np.array([(round(s['pos'][0]) if pp else s['pos'][0]) / CH_PX, 0.04 + rang.get(slot, 0) * 0.0005, (round(s['pos'][1]) if pp else s['pos'][1]) / CH_PX]) if champ else np.array(s['pos'], float)       # carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
             if cam3d is not None:
                 # Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
                 # sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
                 k = 1.0 if os.environ.get('DQ_SANS_ECHELLE') else min(max(float(s.get('ech', 1.0)), 0.0), 8.0)          # paquet 13, bit 11 : Chara.SetScale (Transform.localScale du panneau, pieds fixes) ; 1,0 presque partout, 0,738 pour le heros et son equipier dans mlb1a, 0,952 dans ev07 (le reste : valeurs de depart d'une image)
-                wk, hk = w * k, h * k
+                wk, hk = w * k * pw, h * k * ph
                 r_, u_, f_ = self._repere_sprites(cam3d, corr); zb, zh = 0.185 / 0.48 * wk, (0.65 - 0.185) / 0.48 * wk       # decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
                 # Panneau d'origine par defaut depuis #184 (« exactement comme dans le jeu » : voir _correction_bords, _repere_sprites et _panneau_ville) : le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite
                 # « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a 20 degres en 16/9), comme sur le mobile mais plus visible avec le champ du 16/9 ; la correction des bords (bords verticaux, proportions
@@ -631,8 +630,8 @@ class Jeu(PleinEcranMixin, CameraMixin, ChampMixin, CombatMixin, TitreMixin, Men
                     a, b, c, d = self._panneau_ville(p, r_, u_, f_, wk, hk, zb, zb + zh, corr, C_vue, incl)
                 q = np.array([a, b, c, a, c, d], np.float32).ravel().tolist()
             else:
-                a, b = p - dh * w / 2, p + dh * w / 2
-                q = np.array([a, b, b + up, a, b + up, a + up], np.float32).ravel().tolist()
+                a, b = p - dh * w * pw / 2, p + dh * w * pw / 2; upk = up * ph
+                q = np.array([a, b, b + upk, a, b + upk, a + upk], np.float32).ravel().tolist()
             uv = [u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1]
             cl = list(map(float, s['col'])) * 6
             vl = self.sprite_vl.get(slot)

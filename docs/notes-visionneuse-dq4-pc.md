@@ -1791,3 +1791,18 @@ Windows ; un vrai changement d'APK entre l'enregistrement et le chargement.
 ### Non vérifié
 Windows ; types 33, 34, 35, 39 (lignes de coût du type 35 : même tabulation que le type 8, qui déborde déjà de 36 unités, voir le sondage UI-05) ; « ×10 » et plus en combat.
 
+## Avance #211 : le bateau de la carte du monde est bien découpé, plus grand, avec son sillage (#210, audit SPR-01 et SPR-05, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+La feuille `h193` (bateau, 512 × 512) était découpée comme une feuille de personnage (cases de 24 × 32, 3 colonnes) et dessinée dans le panneau d'un personnage (24,9 × 33,2 pixels de carte). `Chara.SetTexture` (branche de l'identifiant 193) lui donne le maillage `mesh12` : **carré de 0,8 × 0,8, cases de 40 × 40, 12 colonnes** ; le moteur envoie deux sprites (navire : rangées 0 à 4 ; sillage : rangées 5 à 9 ; `pose` = colonne jusqu'à 10, `dir` = rangée, +5 pour le sillage). Établi par désassemblage, scénario du chapitre 4 (drapeaux 204 = 1, 205 = 0) et captures de la visionneuse réelle : navire rogné, morceau changeant avec la colonne, sillage perdu. `Chara.SetTexture` remplace aussi 194 par 193.
+
+### Fait
+- `monde/hd.py` : `FEUILLES_SPECIALES` (193 : cases 40 × 40, 12 colonnes, 10 rangées utiles, panneau × 1,667 en largeur et × 1,25 en hauteur : 40 pixels de carte, 41,5 avec l'échelle de la carte), `ALIAS_FEUILLES` (194 -> 193), `geometrie_feuille` et `uv_case` (le calcul des UV de la case, sorti de la boucle de dessin).
+- `fenetre/champ.py` : `_feuille_orig`, `_calcul_hd`, `_feuille` suivent le découpage de la feuille ; l'atlas HD du bateau a son fichier de cache (`hd_epx_v3_h193_g40x40x12x10.npy`, environ 52 Mo, calculé en arrière-plan à la première rencontre ; l'ancien `hd_*_h193.npy` n'est plus lu).
+- `fenetre/jeu.py` : colonne = `pose % colonnes de la feuille` ; panneau du sprite = panneau d'un personnage × `pw`, `ph` de la feuille (1 pour tous les personnages).
+- Vérifié par captures GL de la visionneuse (sprites 4289 et 4290 injectés, modes originaux et EPX) : navire entier dans ses 5 directions, sillage visible, alias 194 identique.
+- `tests/test_feuilles_speciales.py` (7 tests, dans la CI : découpage, alias, couleur de chaque case lue avec `uv_case`, vraie feuille quand elle est dans le cache : rangées 0 à 3 pleines, 4e à 8 cases, sillage rangées 5 à 9).
+
+### Non vérifié
+Rendu de l'original (aucune capture) ; Windows ; le bateau en situation réelle (mouvement, rotation de la direction, accostage : seule la feuille a été vérifiée par sprites injectés) ; poids de l'atlas HD (52 Mo de mémoire vidéo, avec mipmaps).
+
