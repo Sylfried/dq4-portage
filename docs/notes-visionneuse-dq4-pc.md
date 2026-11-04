@@ -1778,3 +1778,16 @@ Rendu d'origine (aucune capture) ; Windows. Tri par distance d'Unity à priorit�
 ### Non vérifié
 Windows ; un vrai changement d'APK entre l'enregistrement et le chargement.
 
+## Avance #209 : la tabulation des textes de menu partout où le jeu en règle une (#208, audit UI-03, 04/11/2026)
+
+### Constat (audit du 04/11/2026)
+`TextMesh.tabSize` : une tabulation vaut `tabSize` fois la largeur d'une espace. Les mises en page exportées en portent une dans les types 8, 20, 34, 35 (8), 31, 33, 39 (25) et 78 (1), mais `ui_menu.param_str` ne la remplaçait que pour la liste des magies (`noms_liste`), et `plaque()` (plaques de monstres) écrivait le texte tel quel ; la police du jeu n'a pas de glyphe pour `\t` (largeur 0). Établi (vrai moteur + vrai rendu, rendus comparés de l'audit) : dans « Ordre de marche » (type 20) la ligne « Nv.: 5 » était dessinée **sur le sprite** du personnage ; dans chaque combat contre un groupe (type 31) le « ×N » était collé à gauche de la plaque. Supposé pour 33, 34, 35, 39 (fenêtres jamais ouvertes pendant l'audit).
+
+### Fait
+- `menus/ui_menu.py:tabuler(s, tab_size)` (nouvelle fonction) : `\t` -> `round(tabSize)` espaces ; cellule sans `tabSize` : texte inchangé. Utilisée par `param_str` (condition `noms_liste` supprimée : la liste des magies garde exactement le même résultat) et par `plaque()`.
+- Mesuré avec la vraie police (SE-GARRIR, espace de 5 px, « × » de 16 px, caractère 9,3925, texte ancré en x = -74, plaque de -71 à +71) : « ×2 » finit à x = 68,8 (dans la plaque), jusqu'à « ×9 ». « ×10 » finirait vers x = 79, soit 8 unités au-delà du bord (supposé identique dans l'original avec les mêmes constantes ; groupe de 10 monstres identiques : rare) : non compressé.
+- `tests/test_tabulation_menu.py` (7 tests, avec pyglet en mode sans fenêtre ; non ajouté à la CI qui n'installe pas pyglet).
+
+### Non vérifié
+Windows ; types 33, 34, 35, 39 (lignes de coût du type 35 : même tabulation que le type 8, qui déborde déjà de 36 unités, voir le sondage UI-05) ; « ×10 » et plus en combat.
+

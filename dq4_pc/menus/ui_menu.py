@@ -64,6 +64,13 @@ def etat_actif(etat):
     return etat not in (ETAT_INVISIBLE, ETAT_GRISE, ETAT_INVERSE)
 
 
+def tabuler(s, tab_size):
+    """TextMesh.tabSize : une tabulation vaut `tabSize` fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » des magies et la ligne « Nv. » de l'ordre de marche, 25 pour le « x2 » des plaques de groupe) ; la police du jeu n'a pas de glyphe pour « \t » :
+    elle comptait pour rien et le texte suivant collait a ce qui precedait (« Nv. » dessine sur le sprite du personnage, « x2 » colle a gauche de la plaque). Cellule sans tabSize : inchange."""
+    if not tab_size or not isinstance(s, str) or '\t' not in s: return s
+    return s.replace('\t', ' ' * max(0, int(round(tab_size))))
+
+
 def plaque_auto_disponible(code_auto, libelle_moteur):
     """La sauvegarde automatique existe-t-elle ? Le moteur le dit par le code 0 du menu de depart (1 : data5.dat valide, 0 : absent ou illisible) et n'envoie l'etiquette de la cellule (4, 1) que dans le premier cas ;
     `code_auto` None (code pas encore recu) : l'etiquette tranche."""
@@ -322,8 +329,7 @@ class Fenetre:
         elif ib.get('variant') == 1 and ib.get('fsize'): nd['text']['characterSize'] = ib['fsize']
         if (self.typ, no) in DESCRIPTIONS: nd['wrap_x'] = DESCRIPTIONS[(self.typ, no)]; nd['wrap_n'] = 2        # description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Rendu._ajuste_description)
         if self.typ == 7 and no == 2: nd['fit_x'] = COUT_FICHE_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Rendu._texte
-        ts = nd['text'].get('tabSize')
-        if ts and self.noms_liste and '\t' in s: s = s.replace('\t', ' ' * max(0, int(round(ts))))        # TextMesh.tabSize : une tabulation vaut tabSize fois la largeur d'une espace (8 pour « Cout en PM:\t  2 » de la liste des magies) ; la police du jeu n'a pas de glyphe pour « \t » : elle comptait pour rien et le nombre collait a l'etiquette (limite a la liste des magies : les autres fenetres a tabSize, types 20, 31, 33, 34, 35, 39, ne sont pas verifiees)
+        s = tabuler(s, nd['text'].get('tabSize'))                              # voir tabuler : toutes les cellules a tabSize (types 8, 20, 31, 33, 34, 35, 39), plus seulement la liste des magies (#208, audit UI-03)
         nd['text']['text'] = s; nd['vu'] = True
 
     def code(self, i, c):
@@ -568,7 +574,7 @@ class Fenetre:
         if nom[:1] == '^' and len(nom) >= 2: nom = nom[2:]                    # marque de couleur : retiree par la plaque
         deux = '\n' in nom
         nc['vtx'] = [[x, z if deux else (z - 9.0 if z > 0 else z + 9.0)] for x, z in nc['base_vtx']]       # fenetre de 36 -> 18 de haut : lignes du haut/bas rapprochees du centre
-        nt = self.N[texte]; nt['text']['text'] = nom; nt['vu'] = True; nt['tcol'] = 0
+        nt = self.N[texte]; nt['text']['text'] = tabuler(nom, nt['text'].get('tabSize')); nt['vu'] = True; nt['tcol'] = 0        # « nom \n \t×N » : la tabulation (tabSize 25) repousse « ×N » vers le bord droit de la plaque
         mask = (prm[4] & 0xffff if len(prm) > 4 else 0) | ((prm[5] & 0xffff) << 16 if len(prm) > 5 else 0)
         pl[i] = dict(cadre=cadre, texte=texte, masque=mask, code=code, deux=deux)
         nc['act'] = True
