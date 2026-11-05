@@ -235,7 +235,7 @@ class TestTownCamera(unittest.TestCase):
         les cles retirees (distance, angle, inversion haut / bas) ne sont pas reecrites."""
         import json, tempfile
         with tempfile.TemporaryDirectory() as d:
-            ch = os.path.join(d, 'reglages.json')
+            ch = os.path.join(d, 'settings.json')
             with open(ch, 'w', encoding='utf-8') as f: json.dump({'distance_camera': 150, 'angle_camera': 12.0, 'vitesse_camera': 3.0, 'camera_inverser_gd': True, 'camera_inverser_hb': True, 'vitesse_marche': 2.0, 'touches': {'cam_pres': ['PAGEUP', None], 'haut': ['W', None]}, 'touches_v': RG.DEFAULT['touches_v']}, f)
             r = RG.Settings(ch); r.store()
             with open(ch, encoding='utf-8') as f: written_data = json.load(f)

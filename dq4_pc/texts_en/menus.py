@@ -8,7 +8,7 @@ EN = {
     'Importer': 'Import',
     'Exporter : enregistre tes journaux (data1 à data5, data9) et tes états instantanés dans un fichier .zip.': 'Export: saves your adventure logs (data1 to data5, data9) and your save states into a .zip file.',
     'Importer : lit un .zip de ce genre, ou des fichiers data1.dat, data2.dat… (par exemple copiés depuis un téléphone Android).': 'Import: reads a .zip like that, or data1.dat, data2.dat… files (for example copied from an Android phone).',
-    "Les fichiers remplacés sont d'abord copiés dans le dossier « avant_import_… » de tes sauvegardes.": 'Replaced files are first copied to the "avant_import_…" folder in your saves folder.',
+    "Les fichiers remplacés sont d'abord copiés dans le dossier « before_import_… » de tes sauvegardes.": 'Replaced files are first copied to the "before_import_…" folder in your saves folder.',
     '%d fichier de sauvegarde': '%d save file',
     '%d fichiers de sauvegarde': '%d save files',
     '%d état instantané': '%d save state',
@@ -33,7 +33,7 @@ EN = {
     'Aucune sauvegarde a exporter (ni journal, ni etat instantane).': 'Nothing to export (no adventure log, no save state).',
     'Aucun fichier de sauvegarde reconnu (%s).': 'No save file recognized (%s).',
     "Aucun fichier n'a pu etre ecrit (%s).": 'No file could be written (%s).',
-    'data1.dat a data5.dat, data9.dat ou etats/etat_NN.dqs attendus': 'expected data1.dat to data5.dat, data9.dat or etats/etat_NN.dqs',
+    'data1.dat a data5.dat, data9.dat ou savestates/state_NN.dqs attendus': 'expected data1.dat to data5.dat, data9.dat or savestates/state_NN.dqs',
     '%s : ecriture impossible (%s) ; le fichier actuel est inchange': '%s: could not be written (%s); the current file is unchanged',
     '%s : taille %d au lieu de %d (%s)': '%s: size %d instead of %d (%s)',
     '%s : %s (%s)': '%s: %s (%s)',
@@ -42,7 +42,7 @@ EN = {
     "ce n'est pas un journal du jeu (en-tete inconnu)": 'not a game adventure log (unknown header)',
     'fichier abime (somme de controle incorrecte)': 'damaged file (checksum mismatch)',
     'Archive zip': 'Zip archive',
-    'Sauvegardes (zip, data*.dat, etat_*.dqs)': 'Saves (zip, data*.dat, etat_*.dqs)',
+    'Sauvegardes (zip, data*.dat, state_*.dqs)': 'Saves (zip, data*.dat, state_*.dqs)',
     'Tous les fichiers': 'All files',
 
     # ---- fenetre Historique (dialogues et combats)

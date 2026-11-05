@@ -62,7 +62,7 @@ class Window(unittest.TestCase):
         try: from dq4_pc.window import game as F
         except Exception as ex: raise unittest.SkipTest('fenetre non importable ici (%r)' % (ex,))
         d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
-        os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'journaux', 'erreurs_fenetre.log')
+        os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'logs', 'window_errors.log')
         self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
         toasts = []; j = types.SimpleNamespace(toast=lambda t, duration=1.8: toasts.append((t, duration)))           # (message a l'ecran rendu aux sauvegardes : D-230)
         core = types.SimpleNamespace(write_failures=["data1.dat : PermissionError('x')"])

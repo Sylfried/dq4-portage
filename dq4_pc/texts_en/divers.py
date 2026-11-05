@@ -1,18 +1,22 @@
 """Textes anglais : divers (aide de la ligne de commande, demarrage, reprise des dossiers, sauvegardes, son, moteur, monde ; voir language.py)."""
 EN = {
     # ---- paths.py
-    '%d fichier(s) de sauvegardes copie(s) dans donnees\\sauvegardes (portage\\ puis mobile\\)': '%d save file(s) copied into donnees\\sauvegardes (portage\\ then mobile\\)',
-    'fichiers non retrouves dans sauvegardes : %s': 'files not found in sauvegardes: %s',
+    '%d fichier(s) de sauvegardes copie(s) dans data\\saves (portage\\ puis mobile\\)': '%d save file(s) copied into data\\saves (portage\\ then mobile\\)',
+    'fichiers non retrouves dans sauvegardes : %s': 'files not found in the saves: %s',
     'anciens dossiers ranges : %s -> %s': 'old folders moved: %s -> %s',
     'anciens dossiers de sauvegardes NON ranges (%s) : ils restent en place': 'old save folders NOT moved (%s): they stay in place',
-    'cache deplace : dq4_pc\\cache -> donnees\\cache': 'cache moved: dq4_pc\\cache -> donnees\\cache',
+    'cache deplace : dq4_pc\\cache -> data\\cache': 'cache moved: dq4_pc\\cache -> data\\cache',
     'cache NON deplace (%s) : il sera recalcule': 'cache NOT moved (%s): it will be recomputed',
-    '%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> donnees\\apk': '%d APK file(s) copied: jeux\\DQ4\\patched_apks -> donnees\\apk',
-    '%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> donnees\\sauvegardes': '%d save file(s) of the PC port copied: dq4_pc\\sauvegardes -> donnees\\sauvegardes',
-    '%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> donnees\\sauvegardes': '%d phone save file(s) copied: jeux\\DQ4\\saves -> donnees\\sauvegardes',
-    '%d fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages': '%d settings file(s) copied: dq4_pc -> donnees\\reglages',
-    'journal des erreurs copie : donnees\\journaux': 'error log copied: donnees\\journaux',
+    '%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> data\\apk': '%d APK file(s) copied: jeux\\DQ4\\patched_apks -> data\\apk',
+    '%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> data\\saves': '%d save file(s) of the PC port copied: dq4_pc\\sauvegardes -> data\\saves',
+    '%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> data\\saves': '%d phone save file(s) copied: jeux\\DQ4\\saves -> data\\saves',
+    '%d fichier(s) de reglages copie(s) : dq4_pc -> data\\settings': '%d settings file(s) copied: dq4_pc -> data\\settings',
+    'journal des erreurs copie : data\\logs': 'error log copied: data\\logs',
     'Migration : %s': 'Migration: %s',
+    'dossiers renommes en anglais : %s': 'folders renamed to English: %s',
+    '%d fichier(s) renomme(s) en anglais (reglages, historique, journaux, etats instantanes...)': '%d file(s) renamed to English (settings, history, logs, save states...)',
+    "NON renomme : %s -> %s existe deja, l'ancien reste en place (rien n'est ecrase)": 'NOT renamed: %s -> %s already exists, the old one stays in place (nothing is overwritten)',
+    'NON renomme : %s (%s). Ferme les fenetres ou programmes qui utilisent ce dossier, puis relance : le renommage se refait tout seul': 'NOT renamed: %s (%s). Close the windows or programs that use this folder, then restart: the renaming is retried automatically',
     # ---- monde/flat_sceneries.py
     'décor : %d triangles plats superposés relevés (%d groupes)': 'scenery: %d overlapping flat triangles raised (%d groups)',
     # ---- monde/donnees.py
@@ -61,10 +65,10 @@ EN = {
     # ---- persistance/reglages.py
     # ---- persistance/sauvegardes.py
     # ---- main.py
-    'dossier des 3 APK (version francaise) ; par defaut donnees\\apk': 'folder of the 3 game APK files; default donnees\\apk',
-    'dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans donnees\\sauvegardes)': 'extra read-only folder containing data1.dat... (tests; default: none, the game reads and writes in donnees\\sauvegardes)',
-    'dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut donnees\\sauvegardes (les etats instantanes sont dans donnees\\sauvegardes\\etats)': 'saves folder (data1.dat... read and written by the game); default donnees\\sauvegardes (save states are in donnees\\sauvegardes\\etats)',
-    'dossier des fichiers calcules a partir des APK ; par defaut donnees\\cache': 'folder of the files computed from the APKs; default donnees\\cache',
+    'dossier des 3 APK (version francaise) ; par defaut data\\apk': 'folder of the 3 game APK files; default data\\apk',
+    'dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans data\\saves)': 'extra read-only folder containing data1.dat... (tests; default: none, the game reads and writes in data\\saves)',
+    'dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut data\\saves (les etats instantanes sont dans data\\saves\\savestates)': 'saves folder (data1.dat... read and written by the game); default data\\saves (save states are in data\\saves\\savestates)',
+    'dossier des fichiers calcules a partir des APK ; par defaut data\\cache': 'folder of the files computed from the APKs; default data\\cache',
     "numero de sauvegarde a charger directement (1-5) en sautant l'ecran-titre ; 0 (defaut) = le jeu demarre par ses logos, son titre et son menu de depart": 'save number to load directly (1-5), skipping the title screen; 0 (default) = the game starts with its logos, its title and its start menu',
     "saute les logos d'entree (SQUARE ENIX, ArtePiazza)": 'skips the intro logos (SQUARE ENIX, ArtePiazza)',
     '(test) joue les logos meme pour une capture': '(test) plays the logos even for a screenshot',
@@ -83,7 +87,7 @@ EN = {
     "(debogage) correction de l'inclinaison des sprites des villes pres des bords gauche / droit de l'ecran, en pourcentage : 0 = aucune (le panneau d'origine, penche vers l'exterieur), 100 = complete ; par defaut toujours complete, ce n'est plus un reglage du joueur (variable d'environnement DQ_CORRECTION_BORDS pour la meme chose)": '(debug) correction of the tilt of town sprites near the left / right edges of the screen, as a percentage: 0 = none (the original billboard, leaning outwards), 100 = full; default always full, it is no longer a player setting (environment variable DQ_CORRECTION_BORDS for the same thing)',
     'anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap': 'hardware antialiasing (0 = none, 4 = x4); default: the one from the Esc menu',
     'fichier des reglages du joueur (menu Echap : affichage, son, touches)': 'player settings file (Esc menu: display, sound, keys)',
-    "fichier des favoris de l'historique (dans donnees\\reglages, jamais dans le dossier des sauvegardes) ; le reste de l'historique n'est pas conserve": 'history favorites file (in donnees\\reglages, never in the saves folder); the rest of the history is not kept',
+    "fichier des favoris de l'historique (dans data\\settings, jamais dans le dossier des sauvegardes) ; le reste de l'historique n'est pas conserve": 'history favorites file (in data\\settings, never in the saves folder); the rest of the history is not kept',
     '(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)': '(test) keys during a battle: "n:mask,..." (n = frames since the start of the battle)',
     '(test) captures a ces images de l\'effet de debut de combat : "1,10,30,..."': '(test) screenshots at these frames of the battle start effect: "1,10,30,..."',
     '(test) captures intermediaires a ces images de combat : "30,60,..."': '(test) intermediate screenshots at these battle frames: "30,60,..."',
@@ -96,7 +100,7 @@ EN = {
     '(test) ex. "20:2,30:0" : image:masque de touches': '(test) e.g. "20:2,30:0": frame:key mask',
     'Migration des fichiers impossible (%r) : le jeu continue avec les dossiers actuels.': 'File migration failed (%r): the game continues with the current folders.',
     'Jeu : APK dans %s': 'Game: APK files in %s',
-    '\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DONNEES=chemin\\vers\\donnees': '\nThe game APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DONNEES=path\\to\\donnees',
+    '\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DATA=chemin\\vers\\data': '\nThe game APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DATA=path\\to\\data',
     # ---- sound.py
     'Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.': 'Music unavailable: "soundfile" module missing (pip install soundfile). Sound effects stay active.',
     'Son indisponible (%r)': 'Sound unavailable (%r)',

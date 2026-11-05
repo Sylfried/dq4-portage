@@ -20,7 +20,7 @@ BACK_WIDTH, BACK_HEIGHT = 62.0, 52.0
 I_BACK = 2
 EXPLANATION = (N_("Exporter : enregistre tes journaux (data1 à data5, data9) et tes états instantanés dans un fichier .zip."),
                N_("Importer : lit un .zip de ce genre, ou des fichiers data1.dat, data2.dat… (par exemple copiés depuis un téléphone Android)."),
-               N_("Les fichiers remplacés sont d'abord copiés dans le dossier « avant_import_… » de tes sauvegardes."))           # (traduits ligne par ligne au dessin : voir dessiner)
+               N_("Les fichiers remplacés sont d'abord copiés dans le dossier « before_import_… » de tes sauvegardes."))           # (traduits ligne par ligne au dessin : voir dessiner)
 FILES = (N_('%d fichier de sauvegarde'), N_('%d fichiers de sauvegarde'))             # (singulier, pluriel) : l'anglais a ses propres modeles
 SAVESTATES = (N_('%d état instantané'), N_('%d états instantanés'))
 

@@ -31,7 +31,7 @@ class Key(unittest.TestCase):
     def test_default_and_validation(self):
         self.assertEqual(RG.DEFAULT['langue'], 'systeme')
         with tempfile.TemporaryDirectory() as t:
-            p = os.path.join(t, 'reglages.json')
+            p = os.path.join(t, 'settings.json')
             self.assertEqual(RG.Settings(p)['langue'], 'systeme')
             for v, att in (('en', 'en'), ('fr', 'fr'), ('systeme', 'systeme'), ('xx', 'systeme'), (7, 'systeme'), (None, 'systeme')):
                 with open(p, 'w', encoding='utf-8') as f: json.dump({'langue': v}, f)
@@ -39,7 +39,7 @@ class Key(unittest.TestCase):
 
     def test_enregistree(self):
         with tempfile.TemporaryDirectory() as t:
-            p = os.path.join(t, 'reglages.json'); r = RG.Settings(p); r['langue'] = 'en'; r.store()
+            p = os.path.join(t, 'settings.json'); r = RG.Settings(p); r['langue'] = 'en'; r.store()
             self.assertEqual(RG.Settings(p)['langue'], 'en')
 
 

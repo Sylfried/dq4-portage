@@ -16,7 +16,7 @@ K = pyglet.window.key
 
 
 def load(content):
-    f = os.path.join(tempfile.mkdtemp(prefix='rg_menu_'), 'reglages.json')
+    f = os.path.join(tempfile.mkdtemp(prefix='rg_menu_'), 'settings.json')
     with open(f, 'w', encoding='utf-8') as fh: json.dump(content, fh)
     return RG.Settings(f), f
 

@@ -416,7 +416,7 @@ class Console(unittest.TestCase):
 
     def test_unreadable_settings(self):
         with tempfile.TemporaryDirectory() as t:
-            path = os.path.join(t, 'reglages.json')
+            path = os.path.join(t, 'settings.json')
             with open(path, 'w', encoding='utf-8') as f: f.write('{pas du json')
             LG.select_language('fr'); fr = self.output(lambda: RG.Settings(path))
             LG.select_language('en'); entry = self.output(lambda: RG.Settings(path))
@@ -424,7 +424,7 @@ class Console(unittest.TestCase):
 
     def test_settings_not_stored(self):
         with tempfile.TemporaryDirectory() as t:
-            r = RG.Settings(os.path.join(t, 'dossier_absent', 'reglages.json'))
+            r = RG.Settings(os.path.join(t, 'dossier_absent', 'settings.json'))
             LG.select_language('fr'); fr = self.output(r.store)
             LG.select_language('en'); entry = self.output(r.store)
         self.assertTrue(fr.startswith('Reglages non enregistres : '), fr); self.assertTrue(entry.startswith('Settings not saved: '), entry)

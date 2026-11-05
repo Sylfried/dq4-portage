@@ -71,17 +71,17 @@ if not exist ".venv\sound_ok.txt" (
   if errorlevel 1 ( call :m_son_echec_%DQLANG% ) else ( echo ok> ".venv\sound_ok.txt" )
 )
 
-rem --- 2ab. rangement : tes anciens fichiers (jeux\DQ4, dq4_pc\cache, dq4_pc\sauvegardes, dq4_pc\reglages.json...) sont COPIES dans "donnees" ; rien n'est supprime ni ecrase
+rem --- 2ab. rangement : tes anciens fichiers (jeux\DQ4, dq4_pc\cache, dq4_pc\sauvegardes, dq4_pc\reglages.json...) sont COPIES dans "data" ; le dossier "donnees" des versions d'avant (et ses sous-dossiers : sauvegardes, reglages, journaux, etats...) est RENOMME en anglais ; rien n'est supprime ni ecrase
 ".venv\Scripts\python.exe" -m dq4_pc.paths
 
 rem --- 2b. fenetres de menu d'origine : mise en page lue dans le code du jeu (une seule fois, si le dump du code existe)
 rem     un ancien fichier (sans la fenetre de message, d'avant le reglage de la langue ou d'avant l'argument des Make_* par groupe : textes mal places, bouton Mode de la carte absent) est refait
-if exist "donnees\cache\ui_layout.json" (
-  ".venv\Scripts\python.exe" -c "import json,sys; d=json.load(open('donnees/cache/ui_layout.json', encoding='utf-8')); sys.exit(0 if 'message' in d and d['header'].get('gen', 1) >= 3 else 1)" >nul 2>nul
-  if errorlevel 1 del "donnees\cache\ui_layout.json"
+if exist "data\cache\ui_layout.json" (
+  ".venv\Scripts\python.exe" -c "import json,sys; d=json.load(open('data/cache/ui_layout.json', encoding='utf-8')); sys.exit(0 if 'message' in d and d['header'].get('gen', 1) >= 3 else 1)" >nul 2>nul
+  if errorlevel 1 del "data\cache\ui_layout.json"
 )
-if not exist "donnees\cache\ui_layout.json" (
-  if exist "donnees\cache\il2cpp\dump.cs" (
+if not exist "data\cache\ui_layout.json" (
+  if exist "data\cache\il2cpp\dump.cs" (
     call :m_ui_lecture_%DQLANG%
     ".venv\Scripts\python.exe" "tools\ui_il2cpp\generate_ui.py"
     if errorlevel 1 (
@@ -117,18 +117,18 @@ exit /b
 echo.
 echo  Dragon Quest IV - portage PC (essai)
 echo  ------------------------------------
-echo  Lit tes APK francais dans "donnees\apk" et tes sauvegardes dans "donnees\sauvegardes" ^(data1.dat... copies du telephone^)
-echo  ^(autre emplacement des donnees : set DQ4_DONNEES=chemin\vers\donnees^)
-echo  ^(le jeu y lit et y ecrit ses sauvegardes ; les etats instantanes sont dans "donnees\sauvegardes\etats"^)
+echo  Lit tes APK francais dans "data\apk" et tes sauvegardes dans "data\saves" ^(data1.dat... copies du telephone^)
+echo  ^(autre emplacement des donnees : set DQ4_DATA=chemin\vers\data^)
+echo  ^(le jeu y lit et y ecrit ses sauvegardes ; les etats instantanes sont dans "data\saves\savestates"^)
 echo.
 exit /b
 :m_intro_en
 echo.
 echo  Dragon Quest IV - PC port ^(trial^)
 echo  ---------------------------------
-echo  Reads your APK files in "donnees\apk" and your saves in "donnees\sauvegardes" ^(data1.dat... copied from the phone^)
-echo  ^(other data location: set DQ4_DONNEES=path\to\donnees^)
-echo  ^(the game reads and writes its saves there; save states are in "donnees\sauvegardes\etats"^)
+echo  Reads your APK files in "data\apk" and your saves in "data\saves" ^(data1.dat... copied from the phone^)
+echo  ^(other data location: set DQ4_DATA=path\to\data^)
+echo  ^(the game reads and writes its saves there; save states are in "data\saves\savestates"^)
 echo.
 exit /b
 
@@ -205,11 +205,11 @@ exit /b
 
 :m_ui_echec_fr
 echo.
-echo  La lecture a echoue : details dans donnees\cache\ui_generation.log ^(menus simples pour cette fois^).
+echo  La lecture a echoue : details dans data\cache\ui_generation.log ^(menus simples pour cette fois^).
 exit /b
 :m_ui_echec_en
 echo.
-echo  Reading failed: details in donnees\cache\ui_generation.log ^(plain menus this time^).
+echo  Reading failed: details in data\cache\ui_generation.log ^(plain menus this time^).
 exit /b
 
 :m_ui_simple_fr
@@ -221,9 +221,9 @@ exit /b
 
 :m_jeu_erreur_fr
 echo.
-echo  Le jeu s'est arrete sur une erreur ^(code %1^) : lis les lignes ci-dessus ^(details dans donnees\journaux^).
+echo  Le jeu s'est arrete sur une erreur ^(code %1^) : lis les lignes ci-dessus ^(details dans data\logs^).
 exit /b
 :m_jeu_erreur_en
 echo.
-echo  The game stopped on an error ^(code %1^): read the lines above ^(details in donnees\journaux^).
+echo  The game stopped on an error ^(code %1^): read the lines above ^(details in data\logs^).
 exit /b

@@ -77,7 +77,7 @@ class Behavior(unittest.TestCase):
 
     def test_savestate_failure_console_log_and_message(self):
         d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
-        os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'journaux', 'erreurs_fenetre.log'); self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
+        os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'logs', 'window_errors.log'); self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
         j = self.fake(); self.F.Game._note_state_failure(j, "Chargement de l'état 3", OSError('disque'))
         with open(os.environ['DQ_JOURNAL_FENETRE'], encoding='utf-8') as f: txt = f.read()
         self.assertIn("Chargement de l'état 3 impossible", txt); self.assertIn('disque', txt)

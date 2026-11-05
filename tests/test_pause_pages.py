@@ -27,7 +27,7 @@ class FakeGame:
     """Ce que le menu Pause demande a la fenetre."""
     def window_names(self): return {'BattleRoot': [1], 'BattleAction': [2], 'RootMenu': [3], 'Status': [4]}
     def __init__(self):
-        self.reg = RG.Settings(os.path.join(tempfile.mkdtemp(prefix='pause_test_'), 'reglages.json'))
+        self.reg = RG.Settings(os.path.join(tempfile.mkdtemp(prefix='pause_test_'), 'settings.json'))
         self.sound = FakeSound(); self.args = types.SimpleNamespace(cache='/inexistant'); self.width, self.height = 1280, 720; self.mouse = None
         self.calls = []; self.fade = None
     def set_sound(self, yes): self.sound.active = bool(yes)

@@ -3,7 +3,7 @@
 
   1. disposition : `data\\saves` reçoit data1.dat à data5.dat, data9.dat ET `savestates\\` (comme le .zip d'export) ; `portage` n'est plus qu'un autre nom de ce dossier ;
   2. reprise des anciens `saves\\portage` et `saves\\mobile\\<date>` au démarrage : les journaux sont COPIÉS dans `saves\\` (le portage d'abord, puis la copie du téléphone la plus récente, sans rien écraser : ce que le jeu lisait
-     avant, fichier par fichier), puis les deux anciens dossiers sont DÉPLACÉS tels quels dans `avant_rangement_<date>\\` ; rien n'est supprimé, une seconde reprise ne fait rien ;
+     avant, fichier par fichier), puis les deux anciens dossiers sont DÉPLACÉS tels quels dans `before_tidy_<date>\\` ; rien n'est supprimé, une seconde reprise ne fait rien ;
   3. cas réel de Sylfried : fichiers du portage plus anciens que ceux du téléphone, `manifest.json` dans la copie du téléphone, vieux `dq4_pc\\saves` encore là (ne doit pas passer devant les fichiers d'aujourd'hui) ;
   4. sécurité : un journal déjà posé dans `saves\\` n'est pas écrasé, une erreur de déplacement laisse tout en place (le jeu lit déjà `saves\\`), DQ4_JEUX (copie du téléphone ailleurs) n'est pas touché ;
   5. le moteur lit ce dossier (`effective_files`), l'export le met à plat et l'import y écrit.
@@ -38,8 +38,8 @@ def all_files(root):
 class Layout(unittest.TestCase):
     def test_a_single_folder(self):
         d = CH.Folders('/projet', env={})
-        self.assertEqual(d.portage, d.saves); self.assertEqual(d.savestates, os.path.join(d.saves, 'etats'))
-        self.assertEqual(d.savestates_folder(d.portage), os.path.join(d.saves, 'etats')); self.assertEqual(d.clones_folder(d.portage), d.saves)
+        self.assertEqual(d.portage, d.saves); self.assertEqual(d.savestates, os.path.join(d.saves, 'savestates'))
+        self.assertEqual(d.savestates_folder(d.portage), os.path.join(d.saves, 'savestates')); self.assertEqual(d.clones_folder(d.portage), d.saves)
 
     def test_game_file_names(self):
         self.assertEqual(NAMES, ('data1.dat', 'data2.dat', 'data3.dat', 'data4.dat', 'data5.dat', 'data9.dat')); self.assertEqual(S.NAMES, NAMES)
@@ -69,7 +69,7 @@ class Resume(unittest.TestCase):
         phone = os.path.join(self.d.mobile, '20261103_222423')
         for name_str in NAMES: write(os.path.join(phone, name_str), b'tel_' + name_str.encode())
         write(os.path.join(phone, 'manifest.json'), b'{"device": "SM S938B"}'); write(os.path.join(self.d.mobile, '20261007_190735', 'data1.dat'), b'tel_ancien')
-        write(os.path.join(self.sv, 'avant_import_20261101_192625', 'data2.dat'), b'AV'); write(os.path.join(self.d.savestates, 'etat_01.dqs'), b'E1')
+        write(os.path.join(self.sv, 'before_import_20261101_192625', 'data2.dat'), b'AV'); write(os.path.join(self.d.savestates, 'state_01.dqs'), b'E1')
         write(os.path.join(self.t, 'dq4_pc', 'sauvegardes', 'data1.dat'), b'tres_vieux'); write(os.path.join(self.t, 'dq4_pc', 'sauvegardes', 'data3.dat'), b'tres_vieux3')
 
     def test_logfiles_moved_up_into_saves(self):
@@ -88,7 +88,7 @@ class Resume(unittest.TestCase):
 
     def test_old_folders_tidied_as_is_nothing_lost(self):
         self.sylfried_case(); before = set(all_files(self.sv)); self.migrate()
-        placement = [x for x in os.listdir(self.sv) if x.startswith('avant_rangement_')]; self.assertEqual(len(placement), 1)
+        placement = [x for x in os.listdir(self.sv) if x.startswith('before_tidy_')]; self.assertEqual(len(placement), 1)
         for under in ('portage', 'mobile'): self.assertFalse(os.path.exists(os.path.join(self.sv, under)), under)                                      # plus de portage\ ni de mobile\
         r = os.path.join(self.sv, placement[0])
         self.assertEqual(content(r, 'portage', 'data2.dat'), b'portage_vieux_data2.dat'); self.assertEqual(content(r, 'mobile', '20261103_222423', 'manifest.json'), b'{"device": "SM S938B"}')
@@ -97,7 +97,7 @@ class Resume(unittest.TestCase):
         for f in before:                                                                                                                                # chaque fichier d'avant est la OU on l'a range, avec le meme contenu
             if f.startswith(('portage' + os.sep, 'mobile' + os.sep)): self.assertIn(os.path.join(placement[0], f), after, f)
             else: self.assertIn(f, after, f)
-        self.assertEqual(content(self.sv, 'etats', 'etat_01.dqs'), b'E1'); self.assertEqual(content(self.sv, 'avant_import_20261101_192625', 'data2.dat'), b'AV')    # etats et copies d'import : a leur place
+        self.assertEqual(content(self.sv, 'savestates', 'state_01.dqs'), b'E1'); self.assertEqual(content(self.sv, 'before_import_20261101_192625', 'data2.dat'), b'AV')    # etats et copies d'import : a leur place
 
     def test_a_second_resume_does_nothing(self):
         self.sylfried_case(); self.migrate(); before = all_files(self.t)
@@ -114,7 +114,7 @@ class Resume(unittest.TestCase):
         write(os.path.join(self.sv, 'data1.dat'), b'copie_du_telephone'); write(os.path.join(self.d.old_port_dir, 'data1.dat'), b'ancien_portage'); write(os.path.join(self.d.old_port_dir, 'data2.dat'), b'portage2')
         self.migrate()
         self.assertEqual(content(self.sv, 'data1.dat'), b'copie_du_telephone'); self.assertEqual(content(self.sv, 'data2.dat'), b'portage2')
-        r = os.path.join(self.sv, [x for x in os.listdir(self.sv) if x.startswith('avant_rangement_')][0]); self.assertEqual(content(r, 'portage', 'data1.dat'), b'ancien_portage')
+        r = os.path.join(self.sv, [x for x in os.listdir(self.sv) if x.startswith('before_tidy_')][0]); self.assertEqual(content(r, 'portage', 'data1.dat'), b'ancien_portage')
 
     def test_nothing_to_tidy(self):
         write(os.path.join(self.sv, 'data1.dat'), b'a'); self.assertEqual(self.migrate(), []); self.assertEqual(all_files(self.sv), ['data1.dat'])
@@ -145,7 +145,7 @@ class Resume(unittest.TestCase):
         self.assertTrue(any('NON ranges' in ph and 'data1.dat' in ph for ph in done), done); self.assertTrue(os.path.isfile(os.path.join(self.d.old_port_dir, 'data1.dat')))
 
     def test_dq4_games_phone_copy_is_not_touched(self):
-        games = os.path.join(self.t, 'ailleurs', 'DQ4'); d = CH.Folders(self.t, env={'DQ4_JEUX': games})
+        games = os.path.join(self.t, 'ailleurs', 'DQ4'); d = CH.Folders(self.t, env={'DQ4_GAMES': games})
         for name_str in NAMES: write(os.path.join(games, 'saves', '20261007_190735', name_str), b'tel_' + name_str.encode())
         write(os.path.join(d.saves, 'portage', 'data1.dat'), b'p')
         self.assertEqual(CH.migrate(d, log=lambda *a: None), [])
@@ -162,18 +162,18 @@ class WithEngineAndZips(unittest.TestCase):
     def test_copying_phone_files_is_enough(self):
         """Le geste voulu : les data1.dat... du telephone dans `saves\\`, rien d'autre ; le moteur les lit (dossier d'ecriture d'abord) et l'export les range a plat avec les etats."""
         for name_str in NAMES: write(os.path.join(self.d.saves, name_str), b'tel_' + name_str.encode())
-        write(os.path.join(self.d.savestates, 'etat_01.dqs'), b'e' * 2000)
+        write(os.path.join(self.d.savestates, 'state_01.dqs'), b'e' * 2000)
         self.assertEqual(sorted(S.effective_files(self.d.portage, None)), sorted(NAMES))
         output = os.path.join(self.t, 'sortie.zip'); self.assertEqual(S.export_saves(self.d.portage, None, output), (6, 1))
-        with zipfile.ZipFile(output) as z: self.assertEqual(sorted(z.namelist()), sorted(NAMES + ('etats/etat_01.dqs',)))
+        with zipfile.ZipFile(output) as z: self.assertEqual(sorted(z.namelist()), sorted(NAMES + ('savestates/state_01.dqs',)))
 
     def test_folder_content_is_that_of_zip(self):
         """Ce que l'export met dans le .zip est ce que le dossier contient (a part les copies de securite) : le dossier se copie d'un PC a l'autre comme le .zip se decompresse."""
         for name_str in NAMES: write(os.path.join(self.d.saves, name_str), b'j' + name_str.encode())
-        write(os.path.join(self.d.savestates, 'etat_02.dqs'), b'e' * 2000); write(os.path.join(self.d.saves, 'avant_import_20261101_101010', 'data1.dat'), b'AV')
+        write(os.path.join(self.d.savestates, 'state_02.dqs'), b'e' * 2000); write(os.path.join(self.d.saves, 'before_import_20261101_101010', 'data1.dat'), b'AV')
         output = os.path.join(self.t, 'sortie.zip'); S.export_saves(self.d.portage, None, output)
         with zipfile.ZipFile(output) as z: in_zip = sorted(z.namelist())
-        folder = sorted(f.replace(os.sep, '/') for f in all_files(self.d.saves) if not f.startswith('avant_'))
+        folder = sorted(f.replace(os.sep, '/') for f in all_files(self.d.saves) if not f.startswith('before_'))
         self.assertEqual(in_zip, folder)
 
 

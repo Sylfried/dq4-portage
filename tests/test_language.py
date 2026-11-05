@@ -61,7 +61,7 @@ class Setting(unittest.TestCase):
 
     def test_read_setting_from_file(self):
         with tempfile.TemporaryDirectory() as t:
-            p = os.path.join(t, 'reglages.json')
+            p = os.path.join(t, 'settings.json')
             self.assertEqual(LG.read_setting(p), 'systeme')                                                 # absent
             for v, att in (('fr', 'fr'), ('en', 'en'), ('systeme', 'systeme'), ('xx', 'systeme'), (3, 'systeme')):
                 with open(p, 'w', encoding='utf-8') as f: json.dump({'langue': v}, f)
