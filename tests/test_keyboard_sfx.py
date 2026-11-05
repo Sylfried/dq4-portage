@@ -116,7 +116,7 @@ class OnTheGame(unittest.TestCase):
         j.mouse_guard = types.SimpleNamespace(click=lambda: None); j.wheel = types.SimpleNamespace(in_progress=False, cancel=lambda: None)
         j._zones = lambda p: zones if p == port else []; j._map_ports = lambda: {}; j._terrain_free = lambda: False
         j._port_for_gamepad = lambda p, pad: p; j._is_start_menu = lambda p: False; j._keyboard_port = lambda p: p
-        j._name_entry_in_progress = lambda: False; j._hidden = lambda t: False
+        j._name_entry_in_progress = lambda: False; j._menu_hidden = lambda t: False
         j._bits_camera = lambda: 0; j._camera_oublier = lambda: None            # (la camera du jeu n'a rien a voir avec les bruitages : test_entries.py et test_engine_camera.py)
         for name_str in ('_menu_input', '_step_entry', '_step_columns', '_active_step', '_neighbor', '_page_arrow', '_button_under', 'on_mouse_press', '_hud_sfx', '_entries', '_step_toward_hover', '_quit_only'):
             f = inspect.getattr_static(WND.Game, name_str, None)

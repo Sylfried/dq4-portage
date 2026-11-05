@@ -340,7 +340,7 @@ class MenusMixin:
         if m is None: m = self._type_names = {n: name_str for name_str, nums in self.window_names().items() for n in nums}          # numero de type -> nom Make_* (une fois par partie : appele pour chaque fenetre a chaque image)
         return m.get(typ)
 
-    def _hidden(self, typ):
+    def _menu_hidden(self, typ):
         """Fenetre du jeu masquee par le joueur (editeur d'interface : « Afficher cette interface a l'ecran » = Non) ?"""
         ms = self.reg['interface_masquees']
         return bool(ms) and self._type_name(typ) in ms
@@ -456,7 +456,7 @@ class MenusMixin:
     def _zones(self, port):
         """Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1, profondeur, identifiant de l'element)] en pixels."""
         wnd = self.ui_g.f.get(port) if self.ui_g else None
-        if not wnd or self._hidden(wnd.typ): return []
+        if not wnd or self._menu_hidden(wnd.typ): return []
         cx, cy, ui_scale = self.ui_tf.get(port) or self._ui_reference(); dz = getattr(self, 'ui_dzp', {}).get(port, 0.0)
         return [(b, pad, cx + x0 * ui_scale, cy + (z0 + dz) * ui_scale, cx + x1 * ui_scale, cy + (z1 + dz) * ui_scale, pr, nid) for b, pad, x0, z0, x1, z1, pr, nid in wnd.buttons(True)]
 
@@ -540,16 +540,16 @@ class MenusMixin:
                 elif p not in custom: bottom.setdefault(self.ui_tf[p][1], []).append(wnd)
             for wnd in topmost:                                   # le message d'abord, puis chaque fenetre qui le suit (Oui/Non) a son propre decalage
                 pf = next((p for _, p in entries if self.ui_g.f[p] is wnd), None); dzf = self.ui_dzp.get(pf, dz)
-                if ('msg' in mask) if pf is None else self._hidden(self.ui_g.f[pf].typ): continue
+                if ('msg' in mask) if pf is None else self._menu_hidden(self.ui_g.f[pf].typ): continue
                 if pf in yes_no: self.ui_render.draw_all([wnd], yes_no[pf][0], yes_no[pf][1], yes_no[pf][2], (self.width, self.height))
                 elif tf_msg: self.ui_render.draw_all([wnd], tf_msg[0], tf_msg[1] + dzf * tf_msg[2], tf_msg[2], (self.width, self.height))
                 else: self.ui_render.draw_all([wnd], cx, ref_frame('msg')[0] + dzf * s, s, (self.width, self.height))
             for cy, wins_g in bottom.items():
                 for wnd in wins_g:
                     if wnd.typ == 53: self._initial_border(wnd, cx, cy, s)
-                self.ui_render.draw_all([wnd for wnd in wins_g if not self._hidden(wnd.typ)], cx, cy, s, (self.width, self.height))
+                self.ui_render.draw_all([wnd for wnd in wins_g if not self._menu_hidden(wnd.typ)], cx, cy, s, (self.width, self.height))
             for p, tf in custom.items():
-                if self._hidden(self.ui_g.f[p].typ): continue
+                if self._menu_hidden(self.ui_g.f[p].typ): continue
                 if self.ui_g.f[p].typ in CENTERED_WINDOWS: self._initial_border(self.ui_g.f[p], tf[0], tf[1], tf[2], True)
                 self.ui_render.draw_all([self.ui_g.f[p]], tf[0], tf[1], tf[2], (self.width, self.height))
             self._anchor_battle_speed(entries, msg, dz, s, cx, ref_frame, tf_msg)

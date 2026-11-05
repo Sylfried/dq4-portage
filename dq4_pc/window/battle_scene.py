@@ -38,7 +38,7 @@ class BattleMixin:
         if msg and self.ui_msg is not None: message_box(dz, tf_msg or (cx, ref_frame('msg')[0], s))
         for _, p in entries:
             wnd = self.ui_g.f[p]
-            if p in self.ui_followers or self._hidden(wnd.typ) or self._type_name(wnd.typ) not in RG.BATTLE_COMMAND_WINDOWS: continue
+            if p in self.ui_followers or self._menu_hidden(wnd.typ) or self._type_name(wnd.typ) not in RG.BATTLE_COMMAND_WINDOWS: continue
             rs = wnd.rects(); tf = self.ui_tf.get(p)
             if not rs or tf is None: continue
             border_part = max(rs, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]))                          # le cadre de la fenetre : le plus grand rectangle
