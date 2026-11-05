@@ -71,7 +71,7 @@ if '--dry' in sys.argv:
         ui, wnd = state(st); open('/tmp/etat_ui_%d.py' % st, 'w', encoding='utf-8').write(ui); open('/tmp/etat_fe_%d.py' % st, 'w', encoding='utf-8').write(wnd)
         for name_str, t in (('ui', ui), ('fe', wnd)):
             try: compile(t, name_str, 'exec')
-            except SyntaxError as e: print('ERREUR stage', st, name_str, e)
+            except SyntaxError as e: print('ERROR stage', st, name_str, e)
     ui, wnd = state(5); assert ui == FINAL_UI and wnd == FINAL_WND
     for st in range(6):
         u, _ = state(st); missing = [m for m in ORIG if '    def %s(' % m not in u]

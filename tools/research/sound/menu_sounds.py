@@ -10,4 +10,4 @@ for n in range(0, 17):
     c.mem_w(buf, b'\0' * 0x40)
     c.call(fn, buf, n, label='sps')
     v = struct.unpack('<8i', c.mem(buf, 32))
-    print('MENU_SOUND %2d : etat=%d BGM=%d  depart(image)=%d  fin(image)=%d  compteur=%d  arret=%d' % (n, v[0], v[1], v[2], v[3], v[4], v[5]))
+    print('MENU_SOUND %2d : state=%d BGM=%d  start(frame)=%d  end(frame)=%d  counter=%d  stop=%d' % (n, v[0], v[1], v[2], v[3], v[4], v[5]))

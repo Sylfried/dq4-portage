@@ -47,7 +47,7 @@ class _Unpickler(pickle.Unpickler):
         module = OLD_MODULES.get(module, module)
         name = OLD_CLASSES.get(name, name) if module == 'dq4_pc.core.engine' else name
         if name not in ALLOWED_CLASSES.get(module, ()):
-            raise pickle.UnpicklingError(tr("fichier d'état refusé : il demande « %s.%s », ce qu'un état du portage ne contient pas (fichier venu d'ailleurs ou abîmé ; il n'a pas été exécuté)") % (module, name))
+            raise pickle.UnpicklingError('state file refused: it asks for "%s.%s", which a state of the port never contains (file from elsewhere or damaged; it was not executed)' % (module, name))
         return super().find_class(module, name)
 
 
@@ -93,9 +93,9 @@ def snapshot(m, viewer=None):
 
 def apply(m, d):
     """Remet le moteur `m` dans l'etat `d` -> objet `viewer` donne a instantane. Les ressources liees a la fenetre (fenetres de menu d'origine, textures) sont a reconstruire par l'appelant (voir Game.load_state)."""
-    if d.get('version') != VERSION: raise ValueError(tr('etat d\'une autre version (%s)') % d.get('version'))
+    if d.get('version') != VERSION: raise ValueError('state from another version (%s)' % d.get('version'))
     c = m.core; uc = c.uc
-    if d.get('lib_sha') and d['lib_sha'] != lib_fingerprint(c): raise ValueError(tr('etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge'))       # (les etats d'avant #206 n'ont pas d'empreinte : acceptes)
+    if d.get('lib_sha') and d['lib_sha'] != lib_fingerprint(c): raise ValueError('state saved with another version of the engine library (different APK): it cannot be loaded')       # (les etats d'avant #206 n'ont pas d'empreinte : acceptes)
     p = _load(d['python']); viewer = _load(d['viewer']) if d.get('viewer') else None            # TOUT est lu avant d'ecrire quoi que ce soit dans le moteur : un fichier abime laisse le jeu intact (#206)
     uc.mem_write(c.LIB_BASE, bytes(c.elf.img))
     for i, b in d['lib']: uc.mem_write(c.LIB_BASE + i * PAGE, b)
@@ -104,7 +104,7 @@ def apply(m, d):
     uc.mem_write(c.DATA_BASE, d['data']); uc.mem_write(c.TLS_BASE, d['tls']); c.data_ptr = d['data_ptr']; c.next_file = d['next_file']
     c.files = {}
     for h, f in d['fichiers'].items():             # fichiers ouverts : on n'en garde la trace que si le moteur en avait ouvert (non vu entre deux images jusqu'ici)
-        m.log('etat : fichier ouvert non restaure (%s)' % (f.get('name'),))
+        m.log('savestate: open file not restored (%s)' % (f.get('name'),))
     old = m.ui.obs
     m.state = p['etat']; m.ui = p['ui']; m.ui.obs = old
     if not hasattr(m.ui, 'damage'): m.ui.damage = []              # etat enregistre par une version plus ancienne (avant les nombres de degats)
@@ -143,7 +143,7 @@ def info(path):
 def read(path):
     """-> dictionnaire d'etat (a passer a appliquer)."""
     with open(path, 'rb') as f:
-        if f.read(len(MAGIC)) != MAGIC: raise ValueError(tr('ce n\'est pas un etat du portage'))
+        if f.read(len(MAGIC)) != MAGIC: raise ValueError('this is not a state file of this port')
         n, = struct.unpack('<I', f.read(4)); f.read(n)
         k, = struct.unpack('<I', f.read(4)); f.read(k)
         return _load(zlib.decompress(f.read()))

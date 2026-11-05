@@ -249,7 +249,7 @@ class Settings:
                 if self.v['langue'] not in LG.CHOICES: self.v['langue'] = DEFAULT['langue']
                 if self.v['msaa'] not in MSAA_VALUES: self.v['msaa'] = DEFAULT['msaa']
             except Exception as ex:
-                print(tr('Reglages illisibles (%s) : valeurs par defaut (%r)') % (path, ex), flush=True)
+                print('Unreadable settings (%s): default values (%r)' % (path, ex), flush=True)
         self.codes_cache = {}
 
     @staticmethod
@@ -303,7 +303,7 @@ class Settings:
             with open(tmp, 'w', encoding='utf-8') as f: json.dump(self.v, f, indent=1, ensure_ascii=False)
             os.replace(tmp, self.path)
         except Exception as ex:
-            print(tr('Reglages non enregistres :'), ex, flush=True)
+            print('Settings not saved:', ex, flush=True)
 
     # ---- touches
     def codes(self, action):

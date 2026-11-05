@@ -20,7 +20,7 @@ rj.wait_decoding(); rj.s.tick(); H.t += 1.0
 if RT:
     if hasattr(rj.s, 'preload_music') and not os.environ.get('SANS_PRECHARGE'): rj.s.preload_music()
     for _ in range(int(float(os.environ.get('MARCHE', '12')) * 30)): rj.image([]) if False else (rj.s.tick(), _time.sleep(1 / 30))      # le joueur marche un moment avant la rencontre
-    rj.talk('  (avant le combat : %d musiques en memoire, %d travaux)' % (len(rj.s.dec), len(rj.s.jobs)))
+    rj.talk('  (before the battle: %d music tracks in memory, %d jobs)' % (len(rj.s.dec), len(rj.s.jobs)))
     H.t0 = _time.time()
 cb = Battle(eng, tr, monsters=monsters, hp=hp)
 # on branche le rejeu sur chaque image du moteur : seul le temps change (facteur de vitesse : t avance de 1/(30 x facteur) par image moteur)
@@ -31,7 +31,7 @@ def step(*a, **k):
     return pkt
 eng.step = step
 end = cb.launch(max_step=3000, after_battle=300)
-print('fin combat image', end)
+print('battle end frame', end)
 if RT:                                                    # le jeu continue : on laisse tourner l'horloge (le moteur ne donne plus d'ordres) pour voir partir les ordres retenus
     for _ in range(int(float(os.environ.get('SUITE', '8')) * 30)): rj.s.tick(); _time.sleep(1 / 30)
-    print('  (fin de la suite : %d ordres encore retenus)' % len(getattr(rj.s, 'bgm_queue', ())))
+    print('  (end of the sequence: %d orders still held)' % len(getattr(rj.s, 'bgm_queue', ())))

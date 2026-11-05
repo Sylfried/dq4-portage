@@ -59,31 +59,22 @@ class Launcher(unittest.TestCase):
                 context_text = ' '.join(l[max(0, k - 6):k + 2]).lower()
                 self.assertTrue('exit /b 1' in context_text or 'call :m_' in context_text, 'pause sans message : ligne %d' % (k + 1))
 
-    def test_each_message_has_its_two_languages(self):
-        calls = set(re.findall(r'call :(m_\w+?)_%DQLANG%', ' '.join(x for x in body() if not x.lower().startswith('rem'))))
+    def test_each_message_is_called_and_returns(self):
+        calls = set(re.findall(r'call :(m_\w+)', ' '.join(x for x in body() if not x.lower().startswith('rem'))))
         m = messages()
         self.assertGreaterEqual(len(calls), 10)
-        for a in calls:
-            self.assertIn(a + '_fr', m, 'message sans version francaise : ' + a); self.assertIn(a + '_en', m, 'message sans version anglaise : ' + a)
+        for a in calls: self.assertIn(a, m, 'message sans etiquette : ' + a)
         for lookup_key in m:
-            self.assertIn(re.sub(r'_(fr|en)$', '', lookup_key), calls, 'etiquette jamais appelee : ' + lookup_key)
+            self.assertIn(lookup_key, calls, 'etiquette jamais appelee : ' + lookup_key)
             self.assertEqual(m[lookup_key][-1].strip(), 'exit /b', 'l\'etiquette %s doit rendre la main (exit /b)' % lookup_key)
-        for a in calls:
-            fr, entry = m[a + '_fr'], m[a + '_en']
-            self.assertEqual(len(fr), len(entry), 'meme nombre de lignes dans les deux langues : ' + a)
-            self.assertEqual([x.strip().split(' ')[0] for x in fr], [x.strip().split(' ')[0] for x in entry], 'meme commande a chaque ligne : ' + a)
-            self.assertEqual(sorted(re.findall(r'%\d|\^\(code', ' '.join(fr))), sorted(re.findall(r'%\d|\^\(code', ' '.join(entry))), 'memes arguments : ' + a)
 
-    def test_language_comes_from_windows(self):
-        l = body()
-        self.assertTrue(any('PreferredUILanguages' in x for x in l) and any('LocaleName' in x for x in l), 'langue d\'affichage de Windows, puis format regional en secours')
-        self.assertTrue(any(x.strip() == 'set "DQLANG=en"' for x in l), 'anglais par defaut')
-        self.assertTrue(any('"fr"' in x and 'DQLANG=fr' in x for x in l), 'francais si Windows est en francais')
+    def test_no_language_detection(self):
+        l = ' '.join(x for x in lines()[1] if not x.lower().startswith('rem'))
+        for word in ('PreferredUILanguages', 'LocaleName', 'DQLANG', '_fr', '_en'): self.assertNotIn(word, l, 'les messages du lanceur sont en anglais seulement : ' + word)
 
-    def test_english_messages_are_in_english(self):
+    def test_messages_are_in_english(self):
         french = re.compile(r"\b(le|la|les|une?|des|du|est|sont|vient|refait|erreur|jeu|dossier|ici|relance|installe|echec|echoue|seule|fois|lit|tes|ton|menus simples|pour|depuis|puis|cette|coche|supprime|lance|lecture|creation|reprise|environnement|fenetres|dans|avec|sans|sur|ou)\b|'", re.I)
         for lookup_key, lg in messages().items():
-            if not lookup_key.endswith('_en'): continue
             for x in lg:
                 if x.strip().lower().startswith('title'): x = x[5:]
                 remainder = re.sub(r'"[^"]*"|\^\(|\^\)|\b[\w\\.]+\.(bat|log|py)\b|data\\\S*|donnees\\\S*|dq4_pc\\\S*|DQ4_DATA|tools\\\S*', '', x)             # chemins et noms propres exclus

@@ -5,7 +5,7 @@ z = zipfile.ZipFile(APK + 'split_UnityDataAssetPack.apk')
 env = UnityPy.load(z.read('assets/bin/Data/datapack.unity3d'))
 lv = [v for v in env.files.values() if hasattr(v, 'files')][0].files['level1']
 objs = lv.objects
-print('objets level1 :', len(objs))
+print('level1 objects:', len(objs))
 names = {}
 for pid, o in objs.items():
     if o.type.name == 'GameObject': names[pid] = o.read().m_Name

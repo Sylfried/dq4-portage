@@ -11,12 +11,12 @@ def tick(self, dt):
         slotobj = struct.unpack('<Q', c.mem(L + 0x23db38, 8))[0]; player = struct.unpack('<Q', c.mem(L + 0x23d428, 8))[0]
         c.mem_w(player + 0x2e8, struct.pack('<i', 500))
         if os.environ.get('CAS_MODE') == 'book':
-            c.call(eng.E('_ZN6Global9startBookEv'), G, label='book'); print('BESTIAIRE lance a l image', self.n, flush=True)
+            c.call(eng.E('_ZN6Global9startBookEv'), G, label='book'); print('BESTIARY started at frame', self.n, flush=True)
         else:
             c.call(eng.E('_ZN6Global11setMinigameEi'), G, int(os.environ.get('CAS_JEU', '0')), label='a')
             c.call(eng.E('_ZN17MaterielMenu_SLOT11setSlotTypeEi'), slotobj, 0, label='b')
             c.call(eng.E('_ZN6Global11startCasinoEv'), G, label='c')
-            print('CASINO lance a l image', self.n, flush=True)
+            print('CASINO started at frame', self.n, flush=True)
     r = orig(self, dt)
     if os.environ.get('CAS_FORCEVILLE') and self.engine.state.part in (0xf, 0x10): self.engine.state.part = 0xc     # (essai) affiche la partie casino / bestiaire comme une ville : sert a prouver la cause du rendu manquant
     if os.environ.get('CAS_MODE') == 'book' and self.n == int(os.environ.get('CAS_N', '150')) + 1: pass

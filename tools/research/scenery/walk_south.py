@@ -18,4 +18,4 @@ for i in range(N):
     e = m.state
     if i % 100 == 0:
         sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
-        print(i, e.game_map, 'heros', None if hp is None else tuple(round(float(x), 2) for x in hp), 'cam', None if e.cam_pos is None else tuple(round(x, 2) for x in e.cam_pos), 'cible', None if e.cam_target is None else tuple(round(x, 2) for x in e.cam_target), '%.0fs' % (time.time() - t0), flush=True)
+        print(i, e.game_map, 'hero', None if hp is None else tuple(round(float(x), 2) for x in hp), 'cam', None if e.cam_pos is None else tuple(round(x, 2) for x in e.cam_pos), 'target', None if e.cam_target is None else tuple(round(x, 2) for x in e.cam_target), '%.0fs' % (time.time() - t0), flush=True)

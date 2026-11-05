@@ -12,8 +12,8 @@ from dq4_pc.window.helpers import adjust_size, transitions_dwm, useful_zone
 
 
 # le message quand un passage fenetre <-> plein ecran echoue : (mode demande est le plein ecran, mode garde est le plein ecran) -> phrase entiere (l'anglais n'a pas le meme ordre des mots)
-TOGGLE_FAILURE_MESSAGES = {(True, True): N_('Plein écran impossible (%r) : plein écran conservé'), (True, False): N_('Plein écran impossible (%r) : fenêtre conservé'),
-                         (False, True): N_('Fenêtre impossible (%r) : plein écran conservé'), (False, False): N_('Fenêtre impossible (%r) : fenêtre conservé')}
+TOGGLE_FAILURE_MESSAGES = {(True, True): 'Full screen failed (%r): full screen kept', (True, False): 'Full screen failed (%r): windowed mode kept',
+                         (False, True): 'Windowed mode failed (%r): full screen kept', (False, False): 'Windowed mode failed (%r): windowed mode kept'}
 
 
 class FullScreenMixin:
@@ -24,7 +24,7 @@ class FullScreenMixin:
         Elle reste cachee jusqu'a une premiere image noire (pas d'eclair blanc). -> mode obtenu."""
         try:
             screen_page = pyglet.display.get_display().get_default_screen(); self.desktop = (int(screen_page.width), int(screen_page.height))      # (la taille du bureau)
-        except Exception as ex: print(tr('Écran principal illisible (%r)') % (ex,), flush=True)
+        except Exception as ex: print('Main screen unreadable (%r)' % (ex,), flush=True)
         for mode in range(requested, -1, -1):
             try:
                 self._simulated_failure(mode)
@@ -32,21 +32,21 @@ class FullScreenMixin:
                 else: super().__init__(args.width_px, args.height_px, caption=tr(self.WINDOW_TITLE), resizable=True, config=cfg, vsync=True, visible=False)
             except Exception as ex:
                 if mode == 0: raise
-                print(tr('Plein écran impossible au lancement (%r) : fenêtre') % (ex,), flush=True)
+                print('Full screen failed at launch (%r): windowed mode' % (ex,), flush=True)
                 continue
             self.win_mode = mode
-            SV.note('fenetre creee (cachee)', mode=mode, size_value='%dx%d' % (self.width, self.height))
+            SV.note('window created (hidden)', mode=mode, size_value='%dx%d' % (self.width, self.height))
             if SV.ACTIVE:
                 for ev in ('on_resize', 'on_show', 'on_hide', 'on_expose', 'on_move', 'on_activate', 'on_deactivate'):
-                    self.push_handlers(**{ev: (lambda *a, _e=ev: SV.note('evenement ' + _e, args=a))})
+                    self.push_handlers(**{ev: (lambda *a, _e=ev: SV.note('event ' + _e, args=a))})
             try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
-            SV.note('image noire presentee (fenetre cachee)')
+            SV.note('black frame presented (window hidden)')
             self.dwm_cut = transitions_dwm(self, False)    # Windows : pas d'animation d'ouverture du gestionnaire de fenetres (remise par on_draw, 2 s apres la 1re image du jeu)
             self.set_visible(True); self.activate()          # (ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
             try: self.switch_to(); gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()      # Windows : l'image noire presentee fenetre cachee n'est pas forcement affichee ; une 2e, fenetre montree, evite le fond de classe (blanc) le temps du chargement
             except Exception: pass
-            SV.note('fenetre montree', size_value='%dx%d' % (self.width, self.height), dwm_cut=self.dwm_cut)
+            SV.note('window shown', size_value='%dx%d' % (self.width, self.height), dwm_cut=self.dwm_cut)
             return mode
 
     def _create_fullscreen(self, cfg):
@@ -90,11 +90,11 @@ class FullScreenMixin:
             if not ctypes.windll.user32.GetClientRect(self._hwnd, ctypes.byref(r)): return
             w, h = r.right - r.left, r.bottom - r.top
             if w <= 0 or h <= 0 or (w, h) == (self._width, self._height): return
-            print(tr('Fenêtre : zone de dessin %d x %d corrigée (le système donne %d x %d)') % (self._width, self._height, w, h), flush=True)
+            print('Window: drawing area %d x %d corrected (the system reports %d x %d)' % (self._width, self._height, w, h), flush=True)
             self._width, self._height = w, h
             self._update_view_location(w, h)
             self.dispatch_event('_on_internal_resize', w, h)
-        except Exception as ex: print(tr('vérification de la taille impossible :'), ex, flush=True)
+        except Exception as ex: print('size check failed:', ex, flush=True)
 
     def set_info(self, yes): self.helptext = bool(yes)
 
@@ -117,9 +117,9 @@ class FullScreenMixin:
             except Exception as ex: error = ex
             self.win_mode = 1 if self.fullscreen else 0           # (l'etat reel de la fenetre)
             R['mode_fenetre'] = self.win_mode
-            self._log_window(N_('plein écran') if self.win_mode else N_('fenêtre'))
+            self._log_window('full screen' if self.win_mode else 'window')
             if error is not None:
-                print(tr(TOGGLE_FAILURE_MESSAGES[(bool(target), bool(self.win_mode))]) % (error,), flush=True)
+                print(TOGGLE_FAILURE_MESSAGES[(bool(target), bool(self.win_mode))] % (error,), flush=True)
                 self._note_toggle_failure(target, error)
         finally: self._toggling = False
         return self.is_fullscreen
@@ -130,18 +130,18 @@ class FullScreenMixin:
         try:
             import traceback
             state = []
-            try: state.append(tr('fenêtre : plein écran = %s, %d x %d, taille mémorisée %s, place d\'avant %s, bureau %s') % (self.fullscreen, self.width, self.height, getattr(self, 'window_size', None), getattr(self, '_windowed_location', None), getattr(self, 'desktop', None)))
-            except Exception as ex: state.append(tr('fenêtre illisible (%r)') % (ex,))
-            try: ec = self.screen; state.append(tr('écran de la fenêtre pour pyglet : %d x %d en (%d, %d)') % (ec.width, ec.height, ec.x, ec.y))
-            except Exception as ex: state.append(tr('écran de la fenêtre illisible (%r)') % (ex,))
-            try: state.append(tr('moniteurs : %s') % ' ; '.join((tr('%d x %d en (%d, %d) (principal)') if d['principal'] else tr('%d x %d en (%d, %d)')) % (d['largeur'], d['hauteur'], d['x'], d['y']) for d in self._read_screens(True)[1]))
-            except Exception as ex: state.append(tr('moniteurs illisibles (%r)') % (ex,))
+            try: state.append('window: full screen = %s, %d x %d, remembered size %s, previous position %s, desktop %s' % (self.fullscreen, self.width, self.height, getattr(self, 'window_size', None), getattr(self, '_windowed_location', None), getattr(self, 'desktop', None)))
+            except Exception as ex: state.append('window unreadable (%r)' % (ex,))
+            try: ec = self.screen; state.append('window screen according to pyglet: %d x %d at (%d, %d)' % (ec.width, ec.height, ec.x, ec.y))
+            except Exception as ex: state.append('window screen unreadable (%r)' % (ex,))
+            try: state.append('monitors: %s' % ' ; '.join(('%d x %d at (%d, %d) (primary)' if d['principal'] else '%d x %d at (%d, %d)') % (d['largeur'], d['hauteur'], d['x'], d['y']) for d in self._read_screens(True)[1]))
+            except Exception as ex: state.append('monitors unreadable (%r)' % (ex,))
             state.append('pyglet %s, Python %s, %s' % (pyglet.version, sys.version.split()[0], sys.platform))
-            text = (tr('--- %s : passage en plein écran impossible ---\n%s%s\n') if target else tr('--- %s : passage en fenêtre impossible ---\n%s%s\n')) % (time.strftime('%Y-%m-%d %H:%M:%S'), ''.join(traceback.format_exception(error)), '\n'.join(state))
+            text = ('--- %s: switch to full screen failed ---\n%s%s\n' if target else '--- %s: switch to windowed mode failed ---\n%s%s\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), ''.join(traceback.format_exception(error)), '\n'.join(state))
             print(text, flush=True)
             path = CH.FOLDERS.errors_logfile(); os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
             with open(path, 'a', encoding='utf-8') as f: f.write(text + '\n')
-        except Exception as ex: print(tr('Erreur de la bascule non notée (%r)') % (ex,), flush=True)
+        except Exception as ex: print('Switch error not logged (%r)' % (ex,), flush=True)
 
     def toggle_full_screen(self):
         """F11 / Alt + Entree : fenetre <-> plein ecran."""
@@ -172,13 +172,13 @@ class FullScreenMixin:
             error = ex
             try: self._apply_full_screen(before, size_value, screen_before)          # (retour a l'etat de depart, fenetre toujours cachee, sur le moniteur de depart)
             except Exception as ex2:
-                print(tr("Retour à l'état de départ impossible (%r)") % (ex2,), flush=True)
-                try: error.add_note(tr("Retour à l'état de départ impossible aussi : %r") % (ex2,))
+                print("Return to the starting state failed (%r)" % (ex2,), flush=True)
+                try: error.add_note("Return to the starting state failed too: %r" % (ex2,))
                 except Exception: pass
         self._toggle_frame()
         if is_hidden:
             try: self.set_visible(True)
-            except Exception as ex: print(tr('Fenêtre non remontrée (%r)') % (ex,), flush=True)
+            except Exception as ex: print('Window not shown again (%r)' % (ex,), flush=True)
             else: self._toggle_frame()          # (supposé : le systeme peut ne pas garder ce qui est affiche pendant que la fenetre est cachee ; la meme image est redessinee des qu'elle est visible, sans attendre la boucle)
         if error is not None: raise error
 
@@ -197,7 +197,7 @@ class FullScreenMixin:
             if loc and zone and seen and EK.screen_of((loc[0], loc[1], self.width, self.height), seen) is None: loc = None          # (son moniteur a ete debranche : elle serait hors de tous les ecrans)
             if not loc and zone:
                 try: self.set_location(int(zone[0] + max(0, (zone[2] - self.width) // 2)), int(zone[1] + max(32, (zone[3] - self.height) // 2)))
-                except Exception as ex: print(tr('Fenêtre non centrée (%r)') % (ex,), flush=True)
+                except Exception as ex: print('Window not centered (%r)' % (ex,), flush=True)
         if sys.platform == 'win32' and not full: self._check_real_size()          # (Windows peut reduire la fenetre sans prevenir)
 
     def _toggle_frame(self):
@@ -208,7 +208,7 @@ class FullScreenMixin:
             else: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear()
             self.flip()
         except Exception as ex:
-            print(tr('Image de la bascule impossible (%r) : noir') % (ex,), flush=True)
+            print('Switch frame failed (%r): black' % (ex,), flush=True)
             try: gl.glClearColor(0.0, 0.0, 0.0, 1.0); self.clear(); self.flip()
             except Exception: pass
 
@@ -222,7 +222,7 @@ class FullScreenMixin:
             screens = list((getattr(self, 'display', None) or pyglet.display.get_display()).get_screens())
             res = (t, screens, EK.listing(screens))
         except Exception as ex:
-            print(tr('Moniteurs illisibles (%r)') % (ex,), flush=True); res = (t, [], [])
+            print('Monitors unreadable (%r)' % (ex,), flush=True); res = (t, [], [])
         self._screen_cache = res
         return res[1], res[2]
 
@@ -241,10 +241,10 @@ class FullScreenMixin:
             if i is None: return False
             fresh = screens[desc[i]['source']]
             if (int(fresh.x), int(fresh.y), int(fresh.width), int(fresh.height)) != old:
-                print(tr('Moniteur de la fenêtre remis à jour : %d x %d en (%d, %d) (avant : %d x %d en (%d, %d))') % (fresh.width, fresh.height, fresh.x, fresh.y, old[2], old[3], old[0], old[1]), flush=True)
+                print('Window monitor refreshed: %d x %d at (%d, %d) (before: %d x %d at (%d, %d))' % (fresh.width, fresh.height, fresh.x, fresh.y, old[2], old[3], old[0], old[1]), flush=True)
             self._screen = fresh; return True
         except Exception as ex:
-            print(tr('Moniteur de la fenêtre non remis à jour (%r)') % (ex,), flush=True); return False
+            print('Window monitor not refreshed (%r)' % (ex,), flush=True); return False
 
     def _window_screen_index(self, desc):
         """Indice (dans `desc`) du moniteur ou se trouve la fenetre (celui de son centre) ; None si elle n'existe pas encore ou si sa place est illisible."""
@@ -261,7 +261,7 @@ class FullScreenMixin:
             if i is None: return None, None
             return screens[desc[i]['source']], desc[i]
         except Exception as ex:
-            print(tr('Moniteur du plein écran illisible (%r)') % (ex,), flush=True); return None, None
+            print('Full screen monitor unreadable (%r)' % (ex,), flush=True); return None, None
 
     def _already_on(self, screen_page):
         """La fenetre (en plein ecran) est-elle deja sur ce moniteur ? (meme position et memes dimensions que le moniteur de pyglet.)"""
@@ -286,14 +286,14 @@ class FullScreenMixin:
         if alt: self.alt_cand = False
         if self._toggling or not hasattr(self, 'post'): return True
         try: self.toggle_full_screen()
-        except Exception as ex: print(tr('Bascule du plein écran impossible : %r') % (ex,), flush=True)
+        except Exception as ex: print('Full screen switch failed: %r' % (ex,), flush=True)
         return True
 
     def _log_window(self, when):
         """Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule."""
         try:
             ec = self.screen; fb = self.get_framebuffer_size()
-            name_str = (tr('fenêtre'), tr('PLEIN ÉCRAN'))[self.win_mode] + ('' if bool(self.fullscreen) == (self.win_mode > 0) else tr(' [INCOHÉRENT : fullscreen=%s]') % self.fullscreen)
-            n = EK.screen_of((ec.x, ec.y, ec.width, ec.height), self._read_screens()[1]); n = '' if n is None else tr(' (écran %d)') % (n + 1)
-            print(tr('Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d%s') % (tr(when), name_str, self.width, self.height, fb[0], fb[1], ec.width, ec.height, n), flush=True)
-        except Exception as ex: print(tr('Fenêtre (%s) : état illisible (%r)') % (tr(when), ex), flush=True)
+            name_str = ('window', 'FULL SCREEN')[self.win_mode] + ('' if bool(self.fullscreen) == (self.win_mode > 0) else ' [INCONSISTENT: fullscreen=%s]' % self.fullscreen)
+            n = EK.screen_of((ec.x, ec.y, ec.width, ec.height), self._read_screens()[1]); n = '' if n is None else ' (screen %d)' % (n + 1)
+            print('Window (%s): %s, %d x %d, drawing area %d x %d, screen %d x %d%s' % (when, name_str, self.width, self.height, fb[0], fb[1], ec.width, ec.height, n), flush=True)
+        except Exception as ex: print('Window (%s): state unreadable (%r)' % (when, ex), flush=True)

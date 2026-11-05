@@ -388,7 +388,7 @@ class History(Language):
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer): f()
             return buffer.getvalue()
-        for language, unreadable, not_written in (('fr', "Favoris de l'historique illisibles (", "Favoris de l'historique non enregistres : "), ('en', 'History favorites unreadable (', 'History favorites not saved: ')):
+        for language, unreadable, not_written in (('fr', 'History favorites unreadable (', 'History favorites not saved: '), ('en', 'History favorites unreadable (', 'History favorites not saved: ')):
             LG.select_language(language)
             p = os.path.join(t, 'fav_%s.json' % language)
             with open(p, 'w', encoding='utf-8') as f: f.write('{pas du json')
@@ -398,13 +398,13 @@ class History(Language):
             h = HI.History(os.path.join(block, 'fav.json'), lambda: 1.0); h.add('Hello.', None, 1); h._dirty = True
             s = output(lambda: h.store(True)); self.assertTrue(s.startswith(not_written), (language, s))
         def refus(sym): raise OSError('pas de symbole')
-        for language, sensor, battle in (('fr', 'Historique : crochets non installes (', 'Historique des combats : '), ('en', 'History: hooks not installed (', 'Battle history: ')):
+        for language, sensor, battle in (('fr', 'History: hooks not installed (', 'Battle history: '), ('en', 'History: hooks not installed (', 'Battle history: ')):
             LG.select_language(language)
             engine = types.SimpleNamespace(core=types.SimpleNamespace(export=refus))
             s = output(lambda: HI.Sensor(engine)); self.assertTrue(s.startswith(sensor), (language, s))
-            s = output(lambda: HC.BattleSensor(engine)); self.assertTrue(s.startswith(battle + ('crochets non installes (' if language == 'fr' else 'hooks not installed (')), (language, s))
+            s = output(lambda: HC.BattleSensor(engine)); self.assertTrue(s.startswith(battle + 'hooks not installed ('), (language, s))
             engine = types.SimpleNamespace(core=types.SimpleNamespace(export=lambda sym: 0))                          # un moteur sans les symboles attendus
-            s = output(lambda: HC.BattleSensor(engine)); self.assertTrue(s.startswith(battle), (language, s)); self.assertFalse(french(s) and language == 'en', s)
+            s = output(lambda: HC.BattleSensor(engine)); self.assertTrue(s.startswith(battle), (language, s)); self.assertFalse(french(s), s)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- saisie du nom, licence, editeur d'interface, notifications...
@@ -505,11 +505,11 @@ class Other(Language):
             j = types.SimpleNamespace(_complete_savestate=outage, _apply_savestate=lambda d: None, state_path=lambda n: 'x', get_framebuffer_size=outage)
             with contextlib.redirect_stdout(output), mock.patch.object(IN.SS, 'read', return_value={}):
                 IN.SnapshotsMixin.load_state(j, 1); IN.SnapshotsMixin._clone_thumbnail(j)
-            starts = {'fr': ['Police des messages non extraite (', 'Images du titre indisponibles', 'Ressources de menu indisponibles'], 'en': ['Message font not extracted (', 'Title images unavailable', 'Menu resources unavailable']}[language]
+            starts = {'fr': ['Message font not extracted (', 'Title images unavailable', 'Menu resources unavailable'], 'en': ['Message font not extracted (', 'Title images unavailable', 'Menu resources unavailable']}[language]
             self.assertTrue(lus[-1].startswith(starts[0]) and lus_ap[-1].startswith(starts[1]) and lus_um[-1].startswith(starts[2]), (language, lus, lus_ap, lus_um))
             lines = output.getvalue().splitlines(); self.assertEqual(len(lines), 2, lines)
-            self.assertEqual([l.split(':')[0].strip() for l in lines], {'fr': ['etat avant chargement non garde', 'miniature impossible'], 'en': ['state before loading not kept', 'thumbnail failed']}[language])
-            if language == 'en': self.assert_no_french([m.replace('SE-GARRIR', '') for m in lus + lus_ap + lus_um] + lines)
+            self.assertEqual([l.split(':')[0].strip() for l in lines], {'fr': ['state before loading not kept', 'thumbnail failed'], 'en': ['state before loading not kept', 'thumbnail failed']}[language])
+            self.assert_no_french([m.replace('SE-GARRIR', '') for m in lus + lus_ap + lus_um] + lines)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- le catalogue

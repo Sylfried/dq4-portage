@@ -11,7 +11,7 @@ c.call(m.E('_ZN6Global11setMinigameEi'), G, 0, label='a'); c.call(m.E('_ZN17Mate
 def state(tag, cnt):
     ports = {p: (f.get('type'), f.get('entree')) for p, f in m.ui.f.items() if f.get('act') and p >= 2}
     cells = {p: {k: v[:14] for k, v in list(f.get('cases', {}).items())[:8]} for p, f in m.ui.f.items() if f.get('act') and p >= 12}
-    print(tag, 'img', m.frames, 'pq', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'menu', m.active_menu(), 'ports', ports, 'cases', cells, flush=True)
+    print(tag, 'img', m.frames, 'pk', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'menu', m.active_menu(), 'ports', ports, 'cells', cells, flush=True)
 def run(n, tag, held=0, fa=0):
     cnt = collections.Counter()
     for i in range(n):
@@ -27,4 +27,4 @@ def A(tag, n=2):
         m.send_menu(p, 1, 0, 0x10); run(n, tag); m.send_menu(p, 1, -1, 0)
 run(100, 'attente')
 for k in range(8):
-    A('A#%d' % k); run(90, ' apres')
+    A('A#%d' % k); run(90, ' after')

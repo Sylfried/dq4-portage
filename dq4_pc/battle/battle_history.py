@@ -199,21 +199,21 @@ class BattleSensor:
             c = self.c = engine.core
             self.g_party = c.export('_ZN6status7g_PartyE'); self.g_monster = c.export('_ZN6status9g_MonsterE'); self.g_game = c.export('_ZN6status6g_GameE'); self.g_result = c.export('_ZN6status14g_BattleResultE')
             if not (self.g_party and self.g_monster and self.g_game and self.g_result) or not self._check():
-                print(tr('Historique des combats : moteur inattendu, capture desactivee'), flush=True); return
+                print('Battle history: unexpected engine, capture disabled', flush=True); return
             for evt, name_str in HOOKS:
                 a = c.export(name_str)
-                if not a: print(tr('Historique des combats : %s introuvable, capture desactivee') % name_str, flush=True); return
+                if not a: print('Battle history: %s not found, capture disabled' % name_str, flush=True); return
             for evt, name_str in HOOKS: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._hook(evt), None, c.export(name_str), c.export(name_str))
             for evt, name_str, off, word in INTERNAL_HOOKS:                               # (en cas de moteur different, seul cet evenement est perdu)
                 a = c.export(name_str)
                 if not a or struct.unpack('<I', c.mem(a + off, 4))[0] != word:
-                    print(tr('Historique des combats : %s inattendu (+%#x), « %s » non suivi') % (name_str, off, evt), flush=True); continue
+                    print('Battle history: unexpected %s (+%#x), "%s" not tracked' % (name_str, off, evt), flush=True); continue
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, self._hook(evt), None, a + off, a + off)
             try: c.uc.ctl_flush_tb()                                                    # (blocs deja traduits avant les crochets : un capteur cree apres quelques combats)
             except Exception: pass
             self.active = True
         except Exception as ex:
-            self.error = repr(ex); print(tr('Historique des combats : crochets non installes (%r)') % (ex,), flush=True)
+            self.error = repr(ex); print('Battle history: hooks not installed (%r)' % (ex,), flush=True)
 
     @classmethod
     def for_(cls, engine):
@@ -293,7 +293,7 @@ class BattleSensor:
             if self.outputs: out, self.outputs = self.outputs, []; return out
             return []
         except Exception as ex:                                                              # la capture ne doit jamais arreter le jeu
-            if self.error is None: print(tr('Historique des combats : erreur (%r)') % (ex,), flush=True)
+            if self.error is None: print('Battle history: error (%r)' % (ex,), flush=True)
             self.error = repr(ex); self.tracking = None; self.events = []
             return []
 

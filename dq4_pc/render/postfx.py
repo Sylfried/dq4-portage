@@ -101,13 +101,13 @@ class PostFX:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo_res)
             gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.tex, 0)
             state2 = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-            if state != gl.GL_FRAMEBUFFER_COMPLETE or state2 != gl.GL_FRAMEBUFFER_COMPLETE: raise RuntimeError('tampon incomplet (%#x, %#x)' % (state, state2))
+            if state != gl.GL_FRAMEBUFFER_COMPLETE or state2 != gl.GL_FRAMEBUFFER_COMPLETE: raise RuntimeError('incomplete framebuffer (%#x, %#x)' % (state, state2))
         else:       # sans multi-echantillonnage : dessin directement dans la texture
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
             gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.tex, 0)
             gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rb_prof)
             state = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-            if state != gl.GL_FRAMEBUFFER_COMPLETE: raise RuntimeError('tampon incomplet (%#x)' % state)
+            if state != gl.GL_FRAMEBUFFER_COMPLETE: raise RuntimeError('incomplete framebuffer (%#x)' % state)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         self.fb = (w, h); self.lookup_key = (w, h, ms)
 
@@ -130,11 +130,11 @@ class PostFX:
             w, h = int(round(W * ui_scale)), int(round(H * ui_scale))
             if self.lookup_key != (w, h, real):
                 self._create(w, h, real); self.msaa = real
-                self.log((tr('Rendu hors écran : %d x %d (x%.2g), anticrénelage x%d') % (w, h, ui_scale, real) if real else tr('Rendu hors écran : %d x %d (x%.2g), anticrénelage non') % (w, h, ui_scale)) + (tr(' (demandé x%d)') % ms if real != ms else ''))
+                self.log(('Offscreen rendering: %d x %d (x%.2g), antialiasing x%d' % (w, h, ui_scale, real) if real else 'Offscreen rendering: %d x %d (x%.2g), antialiasing off' % (w, h, ui_scale)) + (' (requested x%d)' % ms if real != ms else ''))
             self._render_pass()
         except Exception as ex:
             self.ok = False; self.msaa = 0; gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-            self.log(tr('Rendu hors écran impossible (%r) : dessin direct, sans anticrénelage') % (ex,)); return W, H
+            self.log('Offscreen rendering failed (%r): direct drawing, no antialiasing' % (ex,)); return W, H
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
         gl.glViewport(0, 0, *self.fb)
         gl.glClearColor(float(background[0]), float(background[1]), float(background[2]), 1.0); gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)

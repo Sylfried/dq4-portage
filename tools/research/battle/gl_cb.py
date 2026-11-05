@@ -46,7 +46,7 @@ def tick(self, dt, mute=False):
     if lookup_key != st['prev']:
         t = time.perf_counter()
         if st['t0'] is None: st['t0'] = t
-        note('T=%.3f img=%d effet=%d attente=%d fondu=%d fond=%d partie=%#x fa=%.2f fn=%d vitesse=%s' % (t - st['t0'], eng.frames, lookup_key[0], lookup_key[1], lookup_key[2], lookup_key[3], lookup_key[4], e.fade['a'], e.fade['n'], self.reg['vitesse_combat']))
+        note('T=%.3f img=%d effect=%d waiting=%d fade=%d background=%d part=%#x fa=%.2f fn=%d speed=%s' % (t - st['t0'], eng.frames, lookup_key[0], lookup_key[1], lookup_key[2], lookup_key[3], lookup_key[4], e.fade['a'], e.fade['n'], self.reg['vitesse_combat']))
         st['prev'] = lookup_key
     if e.part == ENGINE.PART_BATTLE: st['vu'] = True
     if st.get('vu') and e.part != ENGINE.PART_BATTLE and 'fin' not in st: st['fin'] = self.n

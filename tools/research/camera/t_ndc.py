@@ -23,7 +23,7 @@ for n, pad, h, cc, cp in tr:
         x, y = T.ndc(M, hh); res.append((n, a, pad, y, hh[1]))
     prev = cur
 ys = np.array([r[3] for r in res])
-print(name_str, 'option centree', option, 'images', len(res), 'NDC y du heros : min %.5f max %.5f' % (ys.min(), ys.max()))
+print(name_str, 'centered option', option, 'frames', len(res), 'NDC y of the hero: min %.5f max %.5f' % (ys.min(), ys.max()))
 # ecart d'une image a l'autre et pires frames
 d = np.abs(np.diff(ys)); idx = np.argsort(-d)[:8]
-for i in sorted(idx): print('  pas', res[i+1][0], 'a', res[i+1][1], 'pad', res[i+1][2], 'Y heros %.3f' % res[i+1][4], 'NDC y %.5f -> %.5f' % (res[i][3], res[i+1][3]))
+for i in sorted(idx): print('  step', res[i+1][0], 'a', res[i+1][1], 'pad', res[i+1][2], 'hero Y %.3f' % res[i+1][4], 'NDC y %.5f -> %.5f' % (res[i][3], res[i+1][3]))

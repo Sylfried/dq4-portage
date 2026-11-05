@@ -12,7 +12,7 @@ for name_str in maps:
         if fl.any(): centers.append(P[fl].mean(1))
     centers = np.concatenate(centers)
     tx, ty, tz = [float(v) for v in np.median(centers, axis=0)]
-    print(name_str, 'cible', round(tx, 2), round(ty, 2), round(tz, 2), 'nflat', len(centers))
+    print(name_str, 'target', round(tx, 2), round(ty, 2), round(tz, 2), 'nflat', len(centers))
     for k, tag in ((1.0, 'g'), (0.33, 'z')):
         off = np.array([0.0, 28.94, -26.96]) * k
         plan.append(dict(n=n, carte=name_str, pos=[tx, ty + off[1], tz + off[2]], cib=[tx, ty, tz], tag=tag))

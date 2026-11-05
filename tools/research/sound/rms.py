@@ -7,4 +7,4 @@ for name_str in sys.argv[1:]:
     pcm = r['pcm'].astype(np.float64) / 32768; fr = r['frequence']
     n = len(pcm) // fr
     rms = [float(np.sqrt((pcm[i*fr:(i+1)*fr] ** 2).mean())) for i in range(min(n, 20))]
-    print(name_str, 'dur %.1f' % (len(pcm)/fr), 'boucle', r['boucle'], 'debut/fin', r['debut']/fr, r['fin']/fr, 'rms/s:', ' '.join('%.3f' % x for x in rms))
+    print(name_str, 'dur %.1f' % (len(pcm)/fr), 'loop', r['boucle'], 'start/end', r['debut']/fr, r['fin']/fr, 'rms/s:', ' '.join('%.3f' % x for x in rms))

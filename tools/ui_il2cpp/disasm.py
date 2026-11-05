@@ -7,7 +7,7 @@ except ImportError:
     Cs = None
 BASE = os.environ.get('DQ_IL2', '.')          # dossier contenant libil2cpp.so, script.json, dump.cs
 _so = [p for p in (os.path.join(BASE, 'libil2cpp.so'), os.path.join(BASE, 'entrees', 'libil2cpp.so')) if os.path.exists(p)]
-if not _so: raise SystemExit('libil2cpp.so introuvable dans ' + BASE + ' (lance tools\\dump_il2cpp.bat)')
+if not _so: raise SystemExit('libil2cpp.so not found in ' + BASE + ' (run tools\\dump_il2cpp.bat)')
 so = open(_so[0], 'rb').read()
 # segments PT_LOAD
 e_phoff = struct.unpack_from('<Q', so, 0x20)[0]; e_phentsize, e_phnum = struct.unpack_from('<HH', so, 0x36)

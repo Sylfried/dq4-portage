@@ -41,7 +41,7 @@ class WithoutEngine(unittest.TestCase):
     def test_locations_window_other_version(self):
         other = (ORIGINAL[0], ORIGINAL[1], 0x11000120 | (0x555 << 10))
         m = fake_engine(other); m._widen_symbols()
-        self.assertEqual(len(m.missing_hooks), 1); self.assertIn('fenetre des lieux', m.missing_hooks[0])
+        self.assertEqual(len(m.missing_hooks), 1); self.assertIn('places window', m.missing_hooks[0])
         self.assertEqual(word(m, BASE + 0x44), ORIGINAL[0])                             # rien n'a ete touche
         m._widen_symbols(); self.assertEqual(len(m.missing_hooks), 1)           # pas de doublon
 
@@ -50,7 +50,7 @@ class WithoutEngine(unittest.TestCase):
         self.assertEqual(m.missing_hooks, []); self.assertEqual(word(m, ENGINE.Engine.CMP_PARAMS), 0x713ffd1f)
         m.patch_params(); self.assertEqual(m.missing_hooks, [])               # deja patche
         m = fake_engine(cmp_param=0xd503201f); m.patch_params()                  # autre version : nop au lieu de la comparaison
-        self.assertEqual(len(m.missing_hooks), 1); self.assertIn('Paramètres', m.missing_hooks[0])
+        self.assertEqual(len(m.missing_hooks), 1); self.assertIn('Settings button', m.missing_hooks[0])
         self.assertEqual(word(m, ENGINE.Engine.CMP_PARAMS), 0xd503201f)
 
     def test_installers_report_their_failure(self):

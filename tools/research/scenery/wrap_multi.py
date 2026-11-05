@@ -43,7 +43,7 @@ def place(c):
         if below.any(): new_offsets[meta[d][:2]] = float(yy[below].max()) + 0.002 - q[1]
     for (k, i), dy in new_offsets.items():
         pos, uv, col = g[k]; p2 = np.array(pos, np.float32, copy=True).reshape(-1, 3, 3); p2[i, :, 1] += dy; g[k] = (p2.reshape(-1, 3), uv, col)
-    print('DC_POSER : %d decalques ramenes au sol' % len(new_offsets), flush=True)
+    print('DC_POSER: %d decals brought back to the ground' % len(new_offsets), flush=True)
 od = F.DP.shift
 def dec2(c, log=None):
     if os.environ.get('DC_POSER') or VAR[0] == 'po': place(c)

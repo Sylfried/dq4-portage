@@ -174,19 +174,19 @@ class Sound:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
             self.ogg = True
         except Exception:
-            self.log(tr('Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.'))
+            self.log('Music unavailable: "soundfile" module missing (pip install soundfile). Sound effects stay active.')
         try:
             import pyglet
             from pyglet.media.codecs.base import AudioFormat, AudioData
             self.pyglet = pyglet; self.media = pyglet.media; self.AudioFormat = AudioFormat; self.AudioData = AudioData
             self.ok = True
         except Exception as e:
-            self.log(tr('Son indisponible (%r)') % (e,))
+            self.log('Sound unavailable (%r)' % (e,))
 
     # ---- echecs de lecture (#221, audit SND-10 et SND-12)
     def _note(self, text, alert=None):
         """Une ligne dans la console et dans le journal des erreurs (au plus NOTES_MAX par session) ; `alert` : le meme fait, en bref, a l'ecran."""
-        self.log(tr('Son : %s') % text)
+        self.log('Sound: %s' % text)
         if self._notes < NOTES_MAX:
             self._notes += 1
             if self.logfile is not None:
@@ -198,19 +198,19 @@ class Sound:
 
     def _note_once(self, lookup_key, e):
         """Erreur sans consequence immediate (volume, reprise apres pause) : notee une seule fois par session."""
-        if lookup_key not in self._seen: self._seen.add(lookup_key); self._note(tr('%s impossible (%r), note une seule fois') % (tr(lookup_key), e))
+        if lookup_key not in self._seen: self._seen.add(lookup_key); self._note('%s failed (%r), logged only once' % (lookup_key, e))
 
     def _failure(self, what, e):
         """Un bruitage ou une musique n'a pas pu etre lance : FAILURES_MAX echecs de suite coupent le son un moment (nouvel essai tout seul, voir tick) au lieu de le couper jusqu'a la fermeture du jeu."""
-        self.failures += 1; self._note(tr('%s impossible (%r), echec %d') % (what, e, self.failures))
+        self.failures += 1; self._note('%s failed (%r), failure %d' % (what, e, self.failures))
         if self.failures >= FAILURES_MAX:
             d = RETRY_DELAYS[min(self.outages, len(RETRY_DELAYS) - 1)]; self.outages += 1
             self.ok = False; self.retry = time.time() + d; self._in_outage = True
-            self._note(tr('son interrompu, nouvel essai dans %d s') % d, alert=tr('Son interrompu : nouvel essai automatique'))
+            self._note('sound interrupted, retrying in %d s' % d, alert=tr('Son interrompu : nouvel essai automatique'))
 
     def _success(self):
         """Un son vient de partir : la serie d'echecs est finie (et, apres une coupure, le son est retabli)."""
-        if self._in_outage: self._in_outage = False; self._note(tr('son retabli'), alert=tr('Son rétabli'))
+        if self._in_outage: self._in_outage = False; self._note('sound restored', alert=tr('Son rétabli'))
         self.failures = 0
 
     def _retry(self):
@@ -270,7 +270,7 @@ class Sound:
     def _decode_safe(self, name_str):
         try: return self._decode(name_str)
         except Exception as e:
-            self.log(tr('Son : %s illisible (%r)') % (name_str, e)); return None
+            self.log('Sound: %s unreadable (%r)' % (name_str, e)); return None
 
     def preload(self, ids):
         """Decode en tache de fond les bruitages courants."""
@@ -327,7 +327,7 @@ class Sound:
         if not (self.ok and self.active):
             if self.retry is not None and self.active: self._track_during_outage(evts)
             return
-        if os.environ.get('DQ_SON'): self.log('Son : image %s ordres %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
+        if os.environ.get('DQ_SON'): self.log('Sound: frame %s orders %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
         for t, v in evts:
             if t == 35: self.play_sfx(v)
             elif t == 36: self.stop_sfx(v)
@@ -359,7 +359,7 @@ class Sound:
             self.bgm_queue.popleft(); self._apply_order(v, e)
 
     def play_sfx(self, ident):
-        if os.environ.get('DQ_SON'): self.log('Son : image %s bruitage %d' % (getattr(self, 'image', '?'), ident))
+        if os.environ.get('DQ_SON'): self.log('Sound: frame %s sound effect %d' % (getattr(self, 'image', '?'), ident))
         if ident <= 0: return                                                         # bruitage 0 : « aucun » (le moteur l'envoie avec chaque coup critique, SE0000 n'existe pas dans les donnees)
         name_str = 'SE%04d' % ident
         self._get(name_str, lambda r, i=ident: self._launch_sfx(i, r))
@@ -380,7 +380,7 @@ class Sound:
                 del self.sfx[0]
             self._success()
         except Exception as e:
-            self._failure(tr('bruitage %d') % ident, e)
+            self._failure('sound effect %d' % ident, e)
 
     def stop_sfx(self, ident):
         for x in list(self.sfx):
@@ -427,7 +427,7 @@ class Sound:
             self._success()
         except Exception as e:
             if not restart: self.bgm_lost = ident                          # a relancer au retour du son (un jingle rate n'a plus d'objet)
-            self._failure(tr('musique %d') % ident, e)
+            self._failure('music track %d' % ident, e)
 
     def position_bgm(self):
         """Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue."""
@@ -483,10 +483,10 @@ class Sound:
     def _apply_volumes(self):
         if self.bgm is not None:
             try: self.bgm.volume = self.mix.gain(self.bgm_category, self.bgm_own_volume)
-            except Exception as e: self._note_once(N_('volume de la musique'), e)
+            except Exception as e: self._note_once('music volume', e)
         for x in self.sfx:
             try: x.p.volume = self.mix.gain(x.category, x.own, 'effets')
-            except Exception as e: self._note_once(N_('volume des bruitages'), e)
+            except Exception as e: self._note_once('sound effects volume', e)
 
     def set_volumes(self, music=None, sound_effects=None):
         """Compatibilite : volume de la musique et des bruitages (0 a 1)."""
@@ -529,7 +529,7 @@ class Sound:
             for p in [self.bgm] + [x.p for x in self.sfx]:
                 try:
                     if p is not None: p.play()
-                except Exception as e: self._note_once(N_('reprise apres la pause'), e)
+                except Exception as e: self._note_once('resume after pause', e)
 
     def toggle(self):
         """Touche : son active / coupe."""

@@ -30,5 +30,5 @@ else:
 rd.neighbors = [f]
 win.switch_to(); gl.glClearColor(0.18, 0.25, 0.4, 1); win.clear()
 rd.draw_all([f], W / 2, H / 2, 1.0, (W, H))
-pyglet.image.get_buffer_manager().get_color_buffer().save(output); print('ecrit', output)
+pyglet.image.get_buffer_manager().get_color_buffer().save(output); print('written', output)
 if typ == 66: print('zones', [(b[0], hex(b[1]), [round(x, 1) for x in b[2:6]]) for b in sorted(f.buttons())])

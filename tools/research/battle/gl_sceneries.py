@@ -33,7 +33,7 @@ def tick(self, dt, mute=False):
                     for _ in range(2): self.dispatch_event('on_draw'); self.flip()
                     f = '%s_%s_m%d_%s.png' % (PFX, d, ms, v)
                     pyglet.image.get_buffer_manager().get_color_buffer().save(f)
-                    print('capture', f, 'chargement %.2fs' % dtc, 'msaa reel', self.post.msaa, flush=True)
+                    print('capture', f, 'load %.2fs' % dtc, 'actual msaa', self.post.msaa, flush=True)
         os._exit(0)
     return r
 F.Game.tick = tick

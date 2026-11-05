@@ -10,7 +10,7 @@ if __name__ == '__main__':
     if a.startswith('0x'): s = int(a, 16)
     else:
         c = [k for k, v in d.names.items() if v == a or v.endswith(a)]
-        if not c: raise SystemExit('introuvable')
+        if not c: raise SystemExit('not found')
         s = c[0]; print('RVA %#x' % s)
     e = int(sys.argv[2], 16) if len(sys.argv) > 2 else end(s)
     print('\n'.join(d.dis(s, e)))

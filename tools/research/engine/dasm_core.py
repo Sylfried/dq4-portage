@@ -47,7 +47,7 @@ if __name__ == '__main__':
     a = sys.argv[1]
     if not a.startswith('0x'):
         c = [k for k, v in syms.items() if a in v]
-        if not c: raise SystemExit('symbole introuvable')
+        if not c: raise SystemExit('symbol not found')
         print([ (hex(k), syms[k]) for k in c][:10]); a = hex(c[0])
     a = int(a, 16); n = int(sys.argv[2], 0) if len(sys.argv) > 2 else 0x100
     print('\n'.join(dis(a, n)))

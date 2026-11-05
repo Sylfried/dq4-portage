@@ -190,4 +190,4 @@ if __name__ == '__main__':
         except Exception as e: out[str(typ)] = dict(name=R.tbl[typ], err='EXC ' + repr(e)[:200]); print(typ, 'EXC', repr(e)[:200])
     json.dump(jsonable(out), open(sys.argv[1], 'w'))
     bad = {k: v['err'] for k, v in out.items() if v.get('err')}
-    print(len(out), 'types, erreurs:', bad)
+    print(len(out), 'types, errors:', bad)

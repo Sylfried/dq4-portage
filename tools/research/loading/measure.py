@@ -35,7 +35,7 @@ def analyze(traj, maps_loaded_before, tag_label, verbose=False):
                 if s['retenu']: held += 1
                 if visible: vis_tot.append(j - k)
                 if visible and not ready: vis_deficient.append((j - k, round(vis, 2), 'cam' if not camp else '', 'spr' if not sp_ok else '', 'monde' if not world_ok else ''))
-                if verbose: print('   +%d fa=%.2f ba=%.2f vis=%.2f retenu=%d pret=%d cam=%s' % (j - k, s['fa'], s['ba'], vis, s['retenu'], ready, s['cam']))
+                if verbose: print('   +%d fa=%.2f ba=%.2f vis=%.2f held=%d ready=%d cam=%s' % (j - k, s['fa'], s['ba'], vis, s['retenu'], ready, s['cam']))
             res.append((tag_label, traj[k]['img'], traj[k - 1]['carte'] if k else None, traj[k]['carte'], len(vis_deficient), vis_deficient[:4], held, vis_tot[:1]))
             i = k + 1
         else: i += 1
@@ -43,7 +43,7 @@ def analyze(traj, maps_loaded_before, tag_label, verbose=False):
 
 def show(res):
     for lbl, img, from_, toward, node, det, held, v1 in res:
-        print('%-10s img %5d %s -> %-8s : %d image(s) visible(s) avec scene pas en place %s | images retenues %d | 1re image visible +%s' % (lbl, img, from_, toward, node, det, held, v1[0] if v1 else None))
+        print('%-10s frame %5d %s -> %-8s : %d visible frame(s) with scene not in place %s | frames held %d | 1st visible frame +%s' % (lbl, img, from_, toward, node, det, held, v1[0] if v1 else None))
 
 if __name__ == '__main__':
     mode, scen = sys.argv[1], sys.argv[2]; configure(mode)
@@ -56,7 +56,7 @@ if __name__ == '__main__':
             if m.msg_visible and i % 12 == 0: a = 0x10
             elif not m.msg_visible and m.active_menu() is None: held = d
             m.step(held, a); traj.append(snapshot(m))
-        show(analyze(traj, cc0, 'marche%d' % slot, verb))
+        show(analyze(traj, cc0, 'walk%d' % slot, verb))
 
     elif scen == 'mort':
         OFF_HP = 0x22; PLAYER_STRIDE, OFF_HAVESTATUS = 0x530, 0x58
@@ -114,11 +114,11 @@ if __name__ == '__main__':
             except Exception as ex: print('EXC', name_str, repr(ex)[:80]); continue
             try:
                 for i in range(40): m.step(0, 0); traj.append(snapshot(m))
-            except Exception as ex: print('EXC pas', name_str, repr(ex)[:80]); break
+            except Exception as ex: print('EXC step', name_str, repr(ex)[:80]); break
             for lbl, img, from_, toward, node, det, held, v1 in analyze(traj, cc0, 'tp'):
                 stats[held] += 1; defaults += node; n_ok += 1
                 if node: longs.append((toward, node, det[:1]))
-        print('%s : %d chargements ; images retenues (histogramme) %s ; images visibles avec scene pas en place : %d au total, sur %d chargements %s' % (mode, n_ok, dict(sorted(stats.items())), defaults, len(longs), longs[:5]))
+        print('%s : %d loads ; frames held (histogram) %s ; visible frames with scene not in place: %d in total, over %d loads %s' % (mode, n_ok, dict(sorted(stats.items())), defaults, len(longs), longs[:5]))
     elif scen == 'monde':
         slot = int(sys.argv[3]); m = new('mw_%s_%s' % (mode, slot)); m.load_save(slot)
         for _ in range(100): m.step(0, 0)

@@ -39,4 +39,4 @@ python3 -I "$S/audit_pad_meshes.py" > "$O/pad_meshes.txt" 2>&1 || true
 (cd "$S" && python3 audit_scan_itemparam.py > "$O/scan_itemparam.txt" 2>&1) || true
 # --- Valeurs derivees
 python3 -I "$S/audit_valeurs.py" > "$O/valeurs.txt"
-echo "termine : $O"
+echo "done: $O"

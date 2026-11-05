@@ -34,6 +34,6 @@ if __name__ == '__main__':
     res = {}; t0 = time.time()
     for name_str in NAMES[start_idx:end]:
         res[name_str] = run_sweep(m, name_str, frames)
-        if not res[name_str]['ok']: print('ECHEC', name_str, res[name_str].get('exc'), flush=True)
+        if not res[name_str]['ok']: print('FAILED', name_str, res[name_str].get('exc'), flush=True)
     json.dump(res, open(output, 'w'))
-    print('%d cartes en %.1fs' % (len(res), time.time() - t0))
+    print('%d maps in %.1fs' % (len(res), time.time() - t0))

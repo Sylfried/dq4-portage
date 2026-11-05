@@ -346,8 +346,4 @@ EN = {
     'Pavé SPACE': 'Numpad SPACE',
     'Pavé TAB': 'Numpad TAB',
     'Pavé UP': 'Numpad UP',
-    # ---- messages de la console (settings.py, pause.py)
-    'police du jeu non chargee :': 'game font not loaded:',
-    'Reglages illisibles (%s) : valeurs par defaut (%r)': 'Unreadable settings (%s): default values (%r)',
-    'Reglages non enregistres :': 'Settings not saved:',
 }

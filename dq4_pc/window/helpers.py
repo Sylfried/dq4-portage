@@ -22,7 +22,7 @@ def adjust_size(w, h):
     zu = useful_zone()
     if zu is None or (w <= zu[0] and h <= zu[1]): return int(w), int(h)
     k = min(zu[0] / float(w), zu[1] / float(h)); nw, nh = max(320, int(w * k)), max(180, int(h * k))
-    print(tr('Fenêtre %d x %d trop grande pour l\'écran : %d x %d') % (w, h, nw, nh), flush=True)
+    print('Window %d x %d too large for the screen: %d x %d' % (w, h, nw, nh), flush=True)
     return nw, nh
 
 
@@ -86,4 +86,4 @@ def transitions_dwm(window, active):
         v = ctypes.c_int(0 if active else 1)
         return ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), 3, ctypes.byref(v), ctypes.sizeof(v)) == 0
     except Exception as ex:
-        print(tr('Transitions de fenêtre (DWM) inchangées : %r') % (ex,), flush=True); return False
+        print('Window transitions (DWM) unchanged: %r' % (ex,), flush=True); return False

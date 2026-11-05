@@ -16,7 +16,7 @@ def step(self, mute=False):
     r = orig_step(self, mute)
     eng = self.engine; c = eng.core
     if self.n < 60: return r
-    if state.get('dbg_t') is None or time.perf_counter() - state['dbg_t'] > 5: state['dbg_t'] = time.perf_counter(); print('DIAG n=%d partie=%#x carte=%s msg=%s pos=%s' % (self.n, eng.state.part, eng.state.game_map, eng.msg_visible, None if 0 not in eng.state.sprites else eng.state.sprites[0].get('pos')), flush=True)
+    if state.get('dbg_t') is None or time.perf_counter() - state['dbg_t'] > 5: state['dbg_t'] = time.perf_counter(); print('DIAG n=%d part=%#x map=%s msg=%s pos=%s' % (self.n, eng.state.part, eng.state.game_map, eng.msg_visible, None if 0 not in eng.state.sprites else eng.state.sprites[0].get('pos')), flush=True)
     if eng.state.part != ENGINE.PART_FIELD: return r
     G = c.export('_ZN6status7g_StageE'); t = struct.unpack('<i', c.mem(G + 0xcc, 4))[0]
     enc = c.call(c.export('_ZN7Encount12getSingletonEv')); c.mem_w(enc + 0x18, b'\x00')

@@ -7,4 +7,4 @@ for f in tests/test_*.py; do
   case "$r" in *unrecognized*) r=$(timeout 900 python3 -W ignore $f 2>&1 | tail -3 | tr '\n' ' ');; esac
   echo "$n: $r"
 done
-echo FIN
+echo END

@@ -152,14 +152,14 @@ class Sound:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
             self.ogg = True
         except Exception:
-            self.log('Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.')
+            self.log('Music unavailable: module "soundfile" missing (pip install soundfile). Sound effects stay active.')
         try:
             import pyglet
             from pyglet.media.codecs.base import AudioFormat, AudioData
             self.pyglet = pyglet; self.media = pyglet.media; self.AudioFormat = AudioFormat; self.AudioData = AudioData
             self.ok = True
         except Exception as e:
-            self.log('Son indisponible (%r)' % (e,))
+            self.log('Sound unavailable (%r)' % (e,))
 
     # ---- lecture des fichiers
     def _bytes(self, name_str):
@@ -191,7 +191,7 @@ class Sound:
     def _decode_safe(self, name_str):
         try: return self._decode(name_str)
         except Exception as e:
-            self.log('Son : %s illisible (%r)' % (name_str, e)); return None
+            self.log('Sound: %s unreadable (%r)' % (name_str, e)); return None
 
     def preload(self, ids):
         """Decode en tache de fond les bruitages courants."""
@@ -244,7 +244,7 @@ class Sound:
         """evts : [(type de paquet, valeur)] de l'image : 35 bruitage, 36 arret de bruitage, 37 musique. engine_frame : numero de la derniere image du moteur (30 par seconde a vitesse normale) :
         sert a ne pas couper un jingle quand le jeu tourne plus vite que la normale (voir _is_jingle_protected)."""
         if not (self.ok and self.active): return
-        if os.environ.get('DQ_SON'): self.log('Son : image %s ordres %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
+        if os.environ.get('DQ_SON'): self.log('Sound: frame %s orders %s' % (getattr(self, 'image', '?'), evts))       # (test) journal des ordres du moteur
         for t, v in evts:
             if t == 35: self.play_sfx(v)
             elif t == 36: self.stop_sfx(v)
@@ -276,7 +276,7 @@ class Sound:
             self.bgm_queue.popleft(); self._apply_order(v, e)
 
     def play_sfx(self, ident):
-        if os.environ.get('DQ_SON'): self.log('Son : image %s bruitage %d' % (getattr(self, 'image', '?'), ident))
+        if os.environ.get('DQ_SON'): self.log('Sound: frame %s sound effect %d' % (getattr(self, 'image', '?'), ident))
         name_str = 'SE%04d' % ident
         self._get(name_str, lambda r, i=ident: self._launch_sfx(i, r))
 
@@ -294,7 +294,7 @@ class Sound:
                 except Exception: pass
                 del self.sfx[0]
         except Exception as e:
-            self.log('Son : lecture impossible (%r)' % (e,)); self.ok = False
+            self.log('Sound: playback failed (%r)' % (e,)); self.ok = False
 
     def stop_sfx(self, ident):
         for x in list(self.sfx):
@@ -329,7 +329,7 @@ class Sound:
             if self.t_pause is not None: p.pause()
             self.bgm_end = None if r['boucle'] else self.bgm_t0 + len(r['pcm']) / r['frequence'] - initial       # jingle sans boucle : heure de la reprise de la musique d'avant
         except Exception as e:
-            self.log('Son : musique impossible (%r)' % (e,)); self.ok = False
+            self.log('Sound: music failed (%r)' % (e,)); self.ok = False
 
     def position_bgm(self):
         """Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue."""

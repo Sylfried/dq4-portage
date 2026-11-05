@@ -21,4 +21,4 @@ for n, pad, h, cc, cp in out:
     if last is None or abs(h[1] - last) > 1e-6:
         if k < 80: print(n, pad, 'h', tuple(round(v, 3) for v in h), 'cc', tuple(round(v, 3) for v in cc), 'cpY', round(cp[1], 3))
         k += 1; last = h[1]
-print('changements de Y :', k)
+print('Y changes:', k)

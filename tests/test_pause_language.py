@@ -29,7 +29,6 @@ PAGES = ('racine', 'affichage', 'son', 'commandes', 'modifications', 'etats', 'q
 NEUTRES = {'Interface', 'Modifications', 'Casino', 'Menu', 'Normal', 'Action', 'Tab', 'Shader', 'Antialiasing', 'EPX x8', 'Pixel perfect', 'x2', 'x4', 'x8',
            'FenetreInconnue'}          # (le faux nom que le faux jeu donne à une fenêtre que l'outil ne connaît pas)
 _win = []
-CONSOLE = {'police du jeu non chargee :', 'Reglages illisibles (%s) : valeurs par defaut (%r)', 'Reglages non enregistres :'}          # messages de la console (testés dans la classe Console)
 
 
 def window():
@@ -337,7 +336,7 @@ class Walkthrough(Base):
 
     def test_each_catalog_key_is_used(self):
         """Une clé qui ne sert nulle part est une faute de frappe (le vrai texte resterait en français) ou un reste."""
-        seen = {t for m, t in self.fr.seen} | {ph for t, _ in self.fr.helpers for ph in phrases(t)} | CONSOLE          # (la console : voir la classe Console)
+        seen = {t for m, t in self.fr.seen} | {ph for t, _ in self.fr.helpers for ph in phrases(t)}
         messages = ' '.join(self.fr.texts('message'))                                                              # (un nom d'action n'est dessiné que dans un message : « ... retirée de « Page suivante ». »)
         gab = [(template(k), k) for k in self.category if TL.TROUS.search(k)]
         inutiles = [k for k in self.category if k not in seen and '« %s »' % k not in messages and not any(k == kk and any(g.match(v) for v in seen) for g, kk in gab)]
@@ -420,14 +419,14 @@ class Console(unittest.TestCase):
             with open(path, 'w', encoding='utf-8') as f: f.write('{pas du json')
             LG.select_language('fr'); fr = self.output(lambda: RG.Settings(path))
             LG.select_language('en'); entry = self.output(lambda: RG.Settings(path))
-        self.assertTrue(fr.startswith('Reglages illisibles (%s) : valeurs par defaut (' % path), fr); self.assertTrue(entry.startswith('Unreadable settings (%s): default values (' % path), entry)
+        self.assertTrue(fr.startswith('Unreadable settings (%s): default values (' % path), fr); self.assertTrue(entry.startswith('Unreadable settings (%s): default values (' % path), entry)
 
     def test_settings_not_stored(self):
         with tempfile.TemporaryDirectory() as t:
             r = RG.Settings(os.path.join(t, 'dossier_absent', 'settings.json'))
             LG.select_language('fr'); fr = self.output(r.store)
             LG.select_language('en'); entry = self.output(r.store)
-        self.assertTrue(fr.startswith('Reglages non enregistres : '), fr); self.assertTrue(entry.startswith('Settings not saved: '), entry)
+        self.assertTrue(fr.startswith('Settings not saved: '), fr); self.assertTrue(entry.startswith('Settings not saved: '), entry)
 
     def test_game_font_not_loaded(self):
         """Le fichier de police du jeu existe mais pyglet ne peut pas le charger (ici : refusé exprès) : la console le dit dans la langue de l'outil."""
@@ -441,7 +440,7 @@ class Console(unittest.TestCase):
                 for language in ('fr', 'en'):
                     J = FakeGame(); J.args = types.SimpleNamespace(cache=t); p = PA.Pause(J); LG.select_language(language); outputs.append(self.output(lambda: p._label('Son', 12.0)))
         finally: pyglet.font.add_file = add_file
-        self.assertTrue(outputs[0].startswith('police du jeu non chargee : police refusee'), outputs[0]); self.assertTrue(outputs[1].startswith('game font not loaded: police refusee'), outputs[1])
+        self.assertTrue(outputs[0].startswith('game font not loaded: police refusee'), outputs[0]); self.assertTrue(outputs[1].startswith('game font not loaded: police refusee'), outputs[1])
 
 
 class Catalog(unittest.TestCase):

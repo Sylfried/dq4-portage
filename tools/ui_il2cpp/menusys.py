@@ -50,7 +50,7 @@ def set_language(T, lang=1):
     Sans cela l'emulation prenait des branches « autre langue » et les etiquettes des boutons se retrouvaient 20 unites trop bas."""
     klass_of(T, 'GetLangages')
     sg = R.statics(T, 'GetLangages')
-    if not sg: print('GetLangages : statiques introuvables'); return
+    if not sg: print('GetLangages: statics not found'); return
     T.w(sg + 0, lang, 4); T.w(sg + 4, 1 if lang == 0 else 0, 1)
 
 def make_message(T, port=0):

@@ -11,7 +11,7 @@ def run(n, tag):
         for t, a, f in m.step(0, 0):
             cnt[t] += 1
             if t in (21, 22, 10, 11) and len(ex.setdefault(t, [])) < 2: ex[t].append((m.frames, a[:2], [round(x, 2) for x in f[:3]]))
-    print(tag, 'partie', hex(m.state.part), 'pq', dict(sorted(cnt.items())), ex, 'modeles', dict(m.state.models), 'maillages', {k: (len(v['v']), [round(x, 2) for x in v['pos']]) for k, v in m.state.meshes.items()}, 'cam', m.state.cam_pos, m.state.cam_target, flush=True)
+    print(tag, 'part', hex(m.state.part), 'pk', dict(sorted(cnt.items())), ex, 'models', dict(m.state.models), 'meshes', {k: (len(v['v']), [round(x, 2) for x in v['pos']]) for k, v in m.state.meshes.items()}, 'cam', m.state.cam_pos, m.state.cam_target, flush=True)
 run(120, 'liste')
 p = m.active_menu(); print('menu', p)
 m.send_menu(12, 1, 0, 0x10); run(3, 'select'); m.send_menu(12, 1, -1, 0); run(120, 'detail')

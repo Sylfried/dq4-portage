@@ -114,7 +114,7 @@ if __name__ == '__main__':
     try: a = int(arg, 16)
     except ValueError:
         c = [x for x in starts if arg in syms[x]]
-        if not c: sys.exit('introuvable'); 
+        if not c: sys.exit('not found'); 
         a = c[0]
         if len(c) > 1: print('# plusieurs :', [(hex(x), syms[x]) for x in c][:8], file=sys.stderr)
     if len(sys.argv) > 2:

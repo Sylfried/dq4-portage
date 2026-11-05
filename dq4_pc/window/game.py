@@ -56,12 +56,12 @@ def note_error(text):
         with open(path, 'a', encoding='utf-8') as f: f.write(text)
         return True
     except Exception as ex:
-        print(tr('Erreur non notee dans le journal (%r) : %s') % (ex, text.strip()), flush=True); return False
+        print('Error not written to the log (%r): %s' % (ex, text.strip()), flush=True); return False
 
 
 class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, MenusMixin, KeyboardMouseMixin, SnapshotsMixin, OptionsMixin, CaptureEffectsMixin, pyglet.window.Window):
     def __init__(self, args, reg=None):
-        SV.note('demarrage', width_px=args.width_px, height_px=args.height_px, full_screen=getattr(args, 'full_screen', 0), shot=bool(args.shot))
+        SV.note('startup', width_px=args.width_px, height_px=args.height_px, full_screen=getattr(args, 'full_screen', 0), shot=bool(args.shot))
         self._logo_logged = False
         self.swallowed = set(); self.alt_cand = False; self.alt_tap = False; self.desktop = None; self._toggling = False       # F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; taille du bureau ; bascule fenetre / plein ecran en cours
         self._ready = False                      # les evenements (souris...) recus pendant la creation de la fenetre sont ignores
@@ -75,8 +75,8 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self.window_size = (args.width_px, args.height_px)         # taille de la fenetre a retrouver en quittant un plein ecran
         self.post = PF.PostFX(self, log=lambda *a: print(*a, flush=True))
         self.args = args
-        self._log_window(N_('création'))
-        self._wait(N_('Chargement du moteur...'))
+        self._log_window('creation')
+        self._wait('Loading the engine...')
         self.mode = RG.valid_sprites_mode(args.hd); self.smoothing = not os.environ.get('DQ_SANS_LISSAGE'); self.aniso = self._anisotropy()          # lissage des textures : toujours actif (ex-reglage « Lissage des textures », retire) ; DQ_SANS_LISSAGE=1 : (debogage) plus proche voisin
         self.pool = ThreadPoolExecutor(max_workers=1); self.hd_jobs = {}; self.scenery_hd = {}; self.scenery_arr = {}; self.map_src = None; self.sprite_vl = {}; self.icon_vl = {}; self.icon_tex = {}; self._menu_tex = None; self._linked_domain = None; self.plans = {}
         self.field_key = None; self.field_tex = None; self.field_tex_icon = None; self.field_nearest = None; self.field_vl = None; self.field_base = None; self.field_icon = None
@@ -100,14 +100,14 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self.data = DO.Data(None, args.cache, log=lambda *a: print(*a, flush=True))
         self.backgrounds = TC.Backgrounds(self.data, log=lambda *a: print(*a, flush=True)); self.tz = TC.TzKeys(self.data, log=lambda *a: print(*a, flush=True)); self._gl_tint = None        # teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `tint`
         self._start_engine(args)
-        self._wait(N_('Chargement de la sauvegarde...'))
+        self._wait('Loading the save...')
         self.data.apk = self.engine.apk_data
         self.prep_stop = threading.Event(); self.prep_proc = None
         self.hud = HM.Buttons(self); self.hud_decl = 0; self.map_view = 1; self.map_open = False; self.map_two_views = False; self.map_toggle = False; self.damage_count = []; self._tex_count = None
         if not args.sans_preparation:           # extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
             self._launch_preparation(args.cache)
         self.sound = SOUND.Sound(self.engine.apk_data, args.cache, log=lambda *a: print(*a, flush=True), music_volume=args.music_volume, sfx_volume=args.sfx_volume, active=bool(self.reg['son']) and not args.sans_son,
-                           logfile=lambda t: note_error(tr('--- %s : son : %s ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), t)))
+                           logfile=lambda t: note_error('--- %s: sound: %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), t)))
         self.sound.preload(COMMON_SFX); self.sound.preload_music()
         self._sound_opt = None; self._t_preview = 0.0; self.apply_mix(initial=True); self.apply_text(); self.apply_game(); self.engine.scroll_callback = self._adopt_scroll; self.apply_scroll()
         self.key_list = pyglet.window.key.KeyStateHandler(); self.push_handlers(self.key_list)
@@ -119,10 +119,10 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self.lbl_hd = pyglet.text.Label('', x=10, y=self.height - 30, anchor_y='top', font_size=10, color=(200, 220, 255, 255), multiline=True, width=600)
         if args.slot:
             ok = self.engine.load_save(args.slot)
-            print(tr('sauvegarde %d chargee : oui') % args.slot if ok else tr('sauvegarde %d chargee : NON (fichier data%d.dat introuvable ou invalide dans %s)') % (args.slot, args.slot, args.saves_read), flush=True)
+            print('save %d loaded: yes' % args.slot if ok else 'save %d loaded: NO (file data%d.dat not found or invalid in %s)' % (args.slot, args.slot, args.saves_read), flush=True)
             if ok:      # on laisse le moteur lancer la carte sauvegardee avant le premier affichage
                 for _ in range(6): self.engine.step(0, 0)
-                self._wait(N_('Chargement de la carte...'))
+                self._wait('Loading the map...')
                 e = self.engine.state
                 if e.game_map: self._load_map(e.game_map)      # les chargements lourds se font ici, pas pendant le jeu
                 for sp in list(e.sprites.values()): self._sheet(sp['id'], self.mode)
@@ -138,7 +138,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self.fixed_test = bool(args.shot) and not os.environ.get('DQ_TEMPS_REEL')         # (test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
         pyglet.clock.schedule(self._loop)      # execute avant le dessin des fenetres (pyglet.app.run(interval=0))
         self._ready = True
-        SV.note('constructeur termine')
+        SV.note('constructor finished')
 
     # ---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, a la resolution du bureau : l'affichage du moniteur ne change jamais)
     WINDOW_TITLE = N_('Dragon Quest IV - portage PC (essai)')          # (affiche par full_screen.py avec tr)
@@ -146,13 +146,13 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
     @staticmethod
     def _simulated_failure(mode):
         """(test) DQ_SIM_ECHEC=1 (ou 0, ou 1,0) : la creation / la bascule vers ce mode (1 plein ecran, 0 fenetre) echoue, pour essayer les replis."""
-        if str(mode) in os.environ.get('DQ_SIM_ECHEC', '').split(','): raise RuntimeError('échec simulé (DQ_SIM_ECHEC)')
+        if str(mode) in os.environ.get('DQ_SIM_ECHEC', '').split(','): raise RuntimeError('simulated failure (DQ_SIM_ECHEC)')
 
     def _init_ui(self):
         """Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples."""
         a = self.args; lay = os.path.join(a.cache, 'ui_layout.json')
         if not os.path.exists(lay):
-            print(tr('Menus : mise en page d\'origine absente (%s) -> menus simples. Lancez tools\\generate_ui.bat pour la creer.') % lay, flush=True); return
+            print('Menus: original layout missing (%s) -> simple menus. Run tools\\generate_ui.bat to create it.' % lay, flush=True); return
         if not UI.prepare_resources(a.apk, a.cache, log=lambda *x: print(*x, flush=True)): return
         try:
             from PIL import Image
@@ -161,9 +161,9 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
             if 'hyodai1' in self.pre_game_files: sheets['hyodai1'] = np.array(Image.open(self.pre_game_files['hyodai1']).convert('RGBA'))      # bandeau des titres de chapitre (type 12)
             self.ui_render = UI.Render(ml, sheets, os.path.join(a.cache, 'ui_font.otf')); self.ui_g = UI.Manager(ml); self.engine.ui.obs = self.ui_g; self.ui_g.proj = self._ui_monster_x; self.ui_g.replay(self.engine.ui)
             if ml.message: self.ui_msg = UI.MessageWindow(ml)
-            print((tr('Menus : mise en page d\'origine chargee (%d types, fenetre de message).') if self.ui_msg else tr('Menus : mise en page d\'origine chargee (%d types).')) % len(ml.types), flush=True)
+            print(('Menus: original layout loaded (%d types, message window).' if self.ui_msg else 'Menus: original layout loaded (%d types).') % len(ml.types), flush=True)
         except Exception as e:
-            print(tr('Menus : mise en page d\'origine inutilisable (%r) -> menus simples.') % (e,), flush=True); self.ui_render = None; self.ui_g = None
+            print('Menus: original layout unusable (%r) -> simple menus.' % (e,), flush=True); self.ui_render = None; self.ui_g = None
 
     def _start_engine(self, args):
         """Le moteur se charge dans un fil pendant que les logos d'entree (Boot.Logo : SQUARE ENIX, ArtePiazza) passent, comme sur le mobile ou ils couvrent le chargement ; un appui saute le logo courant.
@@ -178,7 +178,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         logos = AP.Logos(self.pre_game_files) if self.pre_game_files and not args.sans_logos and (args.logos or (not args.shot and not args.slot)) else None
         if logos is not None and not logos.ok: logos = None
         t0 = time.perf_counter(); logo_count = 0; worst_logo = 0.0
-        SV.note('boucle des logos', logos=logos is not None)
+        SV.note('logo loop', logos=logos is not None)
         while (logos is not None and not logos.finished) or fil.is_alive():
             if self._closed: sys.exit(0)
             self.switch_to(); self.dispatch_events()
@@ -190,20 +190,20 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
             else: time.sleep(0.02)           # (le moteur se charge encore : ecran noir, sans texte)
             self._logo_touched = False
             self.flip()
-            if not self._logo_logged: self._logo_logged = True; self._log_window(N_('1re image affichée (logos)'))
+            if not self._logo_logged: self._logo_logged = True; self._log_window('1st frame shown (logos)')
         fil.join()
-        SV.note('logos et moteur termines', frames=logo_count, pire_ecart_ms=round(1000 * worst_logo))
+        SV.note('logos and engine finished', frames=logo_count, worst_gap_ms=round(1000 * worst_logo))
         if 'e' in res: raise res['e']
         self.engine = res['m']; self.engine.anim_duration = self._anim_duration
 
     def _wait(self, text):
         """Ecran noir, sans aucun texte (le texte, lui, va dans la console) : la fenetre reste vivante pendant les chargements du demarrage."""
-        print(tr(text), flush=True)
+        print(text, flush=True)
         try:
             self.switch_to(); gl.glClearColor(0, 0, 0, 1); self.clear()
             self.flip(); self.dispatch_events()
         except Exception: pass
-        SV.note('attente (image noire)', text=text)
+        SV.note('wait (black frame)', text=text)
 
     def _launch_preparation(self, cache):
         """Preparation du cache dans un processus a part, a priorite basse (data.py en ligne de commande) : dans un thread, ses extractions ralentissaient le jeu. Repli : thread."""
@@ -213,7 +213,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
             kw['env'] = dict(os.environ, DQ4_LANGUE=LG.current_language())              # (D-238 : le processus de preparation parle la langue de l'outil, pas celle de l'ordinateur)
             self.prep_proc = subprocess.Popen([sys.executable, '-m', 'dq4_pc.world.data', self.engine.apk_data, cache], stdin=subprocess.PIPE, cwd=CH.ROOT, **kw)
         except Exception as ex:
-            print(tr('Preparation du cache : processus a part impossible (%r), dans le jeu.') % (ex,), flush=True)
+            print('Cache preparation: separate process failed (%r), running inside the game.' % (ex,), flush=True)
             threading.Thread(target=self.data.prepare, args=(self.prep_stop,), daemon=True, name='preparation-cache').start()
 
     def on_close(self):
@@ -247,7 +247,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self._focus_lost = True
         if not self._ready: return                # (pendant la creation de la fenetre, rien n'existe encore : `_loop` gele le jeu et met le son en pause des qu'elle tourne)
         try: self.sound.lose_focus(True)
-        except Exception as ex: print(tr('Son : pause a la perte du focus impossible (%r)') % (ex,), flush=True)
+        except Exception as ex: print('Sound: pausing on focus loss failed (%r)' % (ex,), flush=True)
         self.wheel.cancel(); self.press_state = None; self.hovered = None; self.hud.dpad_drop(); self.hud.press_state = None; self._camera_oublier()          # (rotation demandee a la souris, retour au nord en attente : pas apres coup)
 
     def on_activate(self):
@@ -255,7 +255,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         self._focus_lost = False
         if not self._ready: return
         try: self.sound.lose_focus(False)
-        except Exception as ex: print(tr('Son : reprise au retour du focus impossible (%r)') % (ex,), flush=True)
+        except Exception as ex: print('Sound: resuming on focus return failed (%r)' % (ex,), flush=True)
         self.acc = 0.0; self.t_loop = None
         if self._ready:
             self.pad_prev = self.pad(); self.prev_action = {a: self._held(a) for a in EDGE_ACTIONS}; self.rep = {}
@@ -382,7 +382,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
                 a.shots_loop.remove(n); self.dispatch_event('on_draw'); self.flip()
                 name_n = ('b%d' % n) if isinstance(n, int) else ('c%d+%d' % n)
                 pyglet.image.get_buffer_manager().get_color_buffer().save(a.shot.replace('.png', '_%s.png' % name_n))
-                if os.environ.get('DQ_TEMPS_REEL'): print('PAS moteur=%d images boucle=%d t=%.1f' % (self.n, self.n_loop, time.time() - self.t_startup), flush=True)
+                if os.environ.get('DQ_TEMPS_REEL'): print('STEP engine=%d loop frames=%d t=%.1f' % (self.n, self.n_loop, time.time() - self.t_startup), flush=True)
                 if not a.shots_loop: self.on_close(); pyglet.app.exit()
 
     def _mod_alt_test(self):
@@ -401,7 +401,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
                 if entry.get('l') != lib: continue
                 v = json.loads(val)
                 if isinstance(v, list): v = tuple(v)
-                (entry['set'](v) if entry['t'] == 'choix' else entry['saisie'](float(v))); print('OPTION %s = %s (image %d)' % (lib, val, n), flush=True)
+                (entry['set'](v) if entry['t'] == 'choix' else entry['saisie'](float(v))); print('OPTION %s = %s (frame %d)' % (lib, val, n), flush=True)
 
     def _step(self, mute=False):
         self.prev = self._snapshot()
@@ -471,7 +471,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
     def on_draw(self):
         self._drawing_count = getattr(self, '_drawing_count', 0) + 1
         if self._drawing_count == 1:
-            self._log_window(N_('1re image du jeu'))
+            self._log_window('1st game frame')
             if getattr(self, 'dwm_cut', False): pyglet.clock.schedule_once(lambda dt: transitions_dwm(self, True), 2.0)
         if self._drawing_count <= 90 or self._drawing_count % 120 == 0: self._check_real_size()
         saved = self._interpolate(); t0 = time.perf_counter(); self._drawing_kind = '?'
@@ -501,20 +501,20 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         n = getattr(self, '_tracking_n', 99)
         if self._drawing_count <= 12 or n < 16:
             places = sum(1 for sp in e.sprites.values() if sp['pos'] is not None)
-            SV.note('dessin', n=self._drawing_count, img=self.engine.frames, kind=self._drawing_kind, part=hex(e.part), game_map=e.game_map, chargee=self.map_name, camera=SV.rounded(e.cam_pos, 1), personnages='%d/%d' % (places, len(e.sprites)),
+            SV.note('draw', n=self._drawing_count, img=self.engine.frames, kind=self._drawing_kind, part=hex(e.part), game_map=e.game_map, loaded=self.map_name, camera=SV.rounded(e.cam_pos, 1), characters='%d/%d' % (places, len(e.sprites)),
                      fade='%.2f/%d' % (e.fade['a'], e.fade['n']), background='%.2f/%d' % (e.background_fade['a'], e.background_fade['n']), retained=getattr(e, 'loading', None) is not None, ms=round(1000 * (time.perf_counter() - t0), 1))
         self._tracking_n = n + 1
 
-    def _note_state_failure(self, what, ex):
+    def _note_state_failure(self, what, console_what, ex):
         """Un etat instantane (raccourci chiffre, Ctrl + chiffre) n'a pas pu etre enregistre ou charge : une ligne dans la console et dans le journal des erreurs, et le petit message a l'ecran (D-230)."""
-        text = tr('--- %s : %s impossible : %r ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), what, ex)
+        text = '--- %s: %s failed: %r ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), console_what, ex)
         print(text, end='', flush=True); note_error(text)
         self.toast(tr('%s impossible : %r') % (what, ex))
 
     def _report_write_failures(self, core):
         """Sauvegarde que le moteur n'a pas pu ecrire (GameCore.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; petit message a l'ecran (D-230) et ligne dans le journal des erreurs."""
         lines, core.write_failures = core.write_failures, None
-        text = ''.join(tr('--- %s : sauvegarde impossible : %s ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lines)
+        text = ''.join('--- %s: save failed: %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lines)
         print(text, end='', flush=True); note_error(text)
         self.toast(tr('Sauvegarde impossible : le jeu continue (détails dans window_errors.log)'), duration=6.0)
 
@@ -525,14 +525,14 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         u = core.heap_used(); level = 2 if u >= core.HEAP_CRITICAL else (1 if u >= core.HEAP_ALERT else 0)
         if level > self._heap_level:
             pc = round(100.0 * u / core.HEAP_SIZE)
-            note_error(tr('--- %s : memoire du moteur a %d %% (%d Mo sur %d Mo) ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), pc, u >> 20, core.HEAP_SIZE >> 20))
+            note_error('--- %s: engine memory at %d %% (%d MB of %d MB) ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), pc, u >> 20, core.HEAP_SIZE >> 20))
         self._heap_level = level
 
     def _report_missing_hooks(self, eng):
         """Reglages du moteur que l'apk utilise n'a pas laisses s'installer (Engine._manque : autre version du moteur que celle etudiee) : le jeu tourne avec le comportement d'origine pour ces points. Une ligne par point dans le journal
         des erreurs (aucun message a l'ecran depuis #267), une seule fois (les points trouves plus tard, apres le chargement d'un etat, sont annonces a leur tour)."""
         new_ones = eng.missing_hooks[self._reported_hooks:]; self._reported_hooks = len(eng.missing_hooks)
-        text = ''.join(tr('--- %s : reglage du moteur non applique : %s ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in new_ones)
+        text = ''.join('--- %s: engine setting not applied: %s ---\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in new_ones)
         note_error(text)
 
     def tick(self, dt, mute=False):
@@ -544,7 +544,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
             p = ENGINE.A if (70 <= self.n <= 72 or 88 <= self.n <= 90) else 0
         if self.args.battle_script is not None and self.n_battle > 0: p = self.args.battle_script.get(self.n_battle, 0)
         if self.args.force_champ and self.n == self.args.force_champ: self.engine.start_field()
-        if os.environ.get('DQ_SPR') and self.n == 100: print('SPRITES', {k: (sp['id'], tuple(round(float(x), 2) for x in sp['pos']) if sp['pos'] is not None else None, sp.get('pose'), sp.get('dir'), sp.get('vis', True)) for k, sp in self.engine.state.sprites.items()}, 'icones', self.engine.state.icons, flush=True)
+        if os.environ.get('DQ_SPR') and self.n == 100: print('SPRITES', {k: (sp['id'], tuple(round(float(x), 2) for x in sp['pos']) if sp['pos'] is not None else None, sp.get('pose'), sp.get('dir'), sp.get('vis', True)) for k, sp in self.engine.state.sprites.items()}, 'icons', self.engine.state.icons, flush=True)
         if os.environ.get('DQ_VILLE') and self.n == 30: self.engine.start_town(os.environ['DQ_VILLE'])        # (test) charge cette ville ou ce donjon
         if self.args.clicks:                                                # (test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
             for c in self.args.clicks:
@@ -556,7 +556,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         p, decl = (0, 0) if (mute or self.pause.opened) else self._entries(p)          # menu « Paramètres » ouvert : le jeu tourne mais ne recoit ni touche ni clic (les touches du menu ne font pas marcher le heros)
         eng = self.engine
         if os.environ.get('DQ_CAMV') and self.n % int(os.environ['DQ_CAMV']) == 0: self._camv(eng)
-        if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s actif=%s' % (self.n, p, decl, eng.msg_visible, eng.active_menu()), flush=True)
+        if os.environ.get('DQ_DEBUG') and (p or decl): print('n=%d p=%#x decl=%#x msg=%s active=%s' % (self.n, p, decl, eng.msg_visible, eng.active_menu()), flush=True)
         t0 = time.time(); eng.step(p, decl); self.dt_engine = time.time() - t0
         self._camera_after_step(eng)          # rotation de camera demandee a ce pas : crans de plus selon la vitesse reglee ou le glissement (camera.py)
         if len(eng.missing_hooks) > self._reported_hooks: self._report_missing_hooks(eng)
@@ -572,14 +572,14 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         if eng.ui.damage:                                   # nombres de degats sur les monstres (HoppingNumber) : un par coup
             for ch, h, dm in eng.ui.damage: self.damage_count.append(dict(ch=ch, h=h, dm=dm, t0=eng.frames))
             eng.ui.damage = []
-        if os.environ.get('DQ_FLAG') and self.n % int(os.environ['DQ_FLAG']) == 0: print('FLAG n=%d %#x partie=%s msg=%s menu=%s cam=%s>%s' % (self.n, eng.flags(), eng.state.part, eng.msg_visible, eng.active_menu(), None if eng.state.cam_pos is None else tuple(round(float(x), 2) for x in eng.state.cam_pos), None if eng.state.cam_target is None else tuple(round(float(x), 2) for x in eng.state.cam_target)), flush=True)
+        if os.environ.get('DQ_FLAG') and self.n % int(os.environ['DQ_FLAG']) == 0: print('FLAG n=%d %#x part=%s msg=%s menu=%s cam=%s>%s' % (self.n, eng.flags(), eng.state.part, eng.msg_visible, eng.active_menu(), None if eng.state.cam_pos is None else tuple(round(float(x), 2) for x in eng.state.cam_pos), None if eng.state.cam_target is None else tuple(round(float(x), 2) for x in eng.state.cam_target)), flush=True)
         if eng.state.part == ENGINE.PART_FIELD and eng.state.field is not None: self._advance_patterns()
         self.sound.image = self.n
         if eng.state.sounds: self.sound.events(VC.sounds_to_play(eng.state.sounds, self._sfx_this_frame), engine_frame=eng.frames); eng.state.sounds = []
         self.sound.tick()
         game = eng.game_options()[:2]
         if game != self._sound_opt: self._sound_opt = game; self.sound.set_mix(game={'musique': SOUND.game_option_volume(game[0]), 'effets': SOUND.game_option_volume(game[1])})        # options « volume » de la fenetre Parametres du jeu
-        if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('ETAT n=%d partie=%#x carte=%s champ=%s p=%#x' % (self.n, eng.state.part, eng.state.game_map, None if eng.state.field is None else eng.state.field['cam'], p), flush=True)
+        if os.environ.get('DQ_ETAT') and self.n % 25 == 0: print('STATE n=%d part=%#x map=%s field=%s p=%#x' % (self.n, eng.state.part, eng.state.game_map, None if eng.state.field is None else eng.state.field['cam'], p), flush=True)
         e = self.engine.state
         self._map_objects()
         self.n += 1
@@ -590,11 +590,11 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         if self.args.shots_battle and self.n_battle in self.args.shots_battle and self.args.shot:       # (test) captures intermediaires pendant un combat
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot.replace('.png', '_%d.png' % self.n_battle))
-            print('combat', self.n_battle, 'engine image', self.engine.frames, 'type msg', getattr(self.ui_msg, 'type', None), [(k, len(m['v']), m['pos']) for k, m in sorted(self.engine.state.meshes.items())], flush=True)
+            print('battle', self.n_battle, 'engine frame', self.engine.frames, 'msg type', getattr(self.ui_msg, 'type', None), [(k, len(m['v']), m['pos']) for k, m in sorted(self.engine.state.meshes.items())], flush=True)
         if self.args.shot and (self.n >= self.args.frames or (self.args.images_combat and self.n_battle >= self.args.images_combat)):
             self.dispatch_event('on_draw'); self.flip()
             pyglet.image.get_buffer_manager().get_color_buffer().save(self.args.shot)
-            print('capture :', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.engine.ui.visible_ones()], self.engine.active_menu(), self.engine.msg_visible, flush=True); pyglet.app.exit()
+            print('screenshot:', self.args.shot, [(q, 'cur', f['cur'], list(f['cases'].items())[:3]) for q, f in self.engine.ui.visible_ones()], self.engine.active_menu(), self.engine.msg_visible, flush=True); pyglet.app.exit()
 
     def _draw(self):
         self._draw_scene()
@@ -602,7 +602,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
             n, self.quick_save = self.quick_save, None
             try:
                 t = self._clone_thumbnail(); png = self._png_thumbnail(t); t.delete(); self.save_state(n, png); self.toast(tr('État %d enregistré') % n)
-            except Exception as ex: self._note_state_failure(tr('Enregistrement de l\'état %d') % n, ex)
+            except Exception as ex: self._note_state_failure(tr('Enregistrement de l\'état %d') % n, 'Saving savestate %d' % n, ex)
         if not self.pause.opened: self.hud.draw_all(self.hud.visible_ones())
         if self.pause.opened:
             if self.pause.wants_thumbnail: self.pause.mini_tex = self._clone_thumbnail(); self.pause.wants_thumbnail = False       # le jeu sans le menu, pour la miniature des etats (copie sur la carte graphique : pas de relecture qui bloque)

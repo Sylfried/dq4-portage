@@ -16,13 +16,13 @@ for a, n in d.PLT.items():
          '_Z18UnityInitTouchFlagi': 'UnityInitTouchFlag(int)', '_Z20UnitySetMapBackColorPKcS0_': 'UnitySetMapBackColor', '_Z20UnitySetMapColorRateiii': 'UnitySetMapColorRate(int,int,int)', '_Z18UnityDebugFlagShopv': 'UnityDebugFlagShop()',
          '_ZN3dss6Camera10send_unityEv': 'dss::Camera::send_unity()', '_ZN10DSSAObject15send_unity_loadEii': 'DSSAObject::send_unity_load', '_Z14UnitySetPacketii': 'UnitySetPacket(int,int)'}
     if n in m: targets[a] = m[n]
-print('cibles', {hex(a): n for a, n in targets.items()})
+print('targets', {hex(a): n for a, n in targets.items()})
 res = collections.defaultdict(list)
 # decoder bl
 md = d.md
 md.skipdata = True
 insns = [i for i in md.disasm(code, 0)]
-print('instructions decodees', len(insns), 'sur', len(code)//4)
+print('decoded instructions', len(insns), 'out of', len(code)//4)
 idx = {i.address: k for k, i in enumerate(insns)}
 for k, ins in enumerate(insns):
     if ins.mnemonic in ('bl', 'b') and ins.operands[0].type == ARM64_OP_IMM and ins.operands[0].imm in targets:
@@ -42,5 +42,5 @@ for k, ins in enumerate(insns):
 out = []
 for (t, imm), v in sorted(res.items(), key=lambda x: (x[0][0], str(x[0][1]))):
     fn = sorted(set((n or '?').split('+')[0] for a, n in v))
-    out.append('%s | type=%s | %d appels | %s' % (t, imm, len(v), '; '.join(fn)))
+    out.append('%s | type=%s | %d calls | %s' % (t, imm, len(v), '; '.join(fn)))
 print('\n'.join(out))

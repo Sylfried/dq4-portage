@@ -282,7 +282,7 @@ class State:
                 else: self.fbx.pop(a[0], None)
             elif t == 32 and a:                     # cmd_fbx : emplacement = v & 0xff ; bits 8-9 : visibilite (bit 8 = visible) ; 10 : forcer l'animation ; 11 : echelle (3 flottants) ; 12 : couleur (4) ; 13 : position (3) ; 14 : rotation, degres (3) ; 15 : animation (un entier : sequence)
                 v = a[0]; m = self.fbx.get(v & 0xff); fl = list(f)
-                if FBXLOG: print('FBX image %d paquet 32 : v=%#x ints=%s flottants=%s' % (self.image, v & 0xffff, list(a[1:]), [round(x, 4) for x in fl]), flush=True)         # (test) DQ_FBXLOG=1 : tous les paquets 32 (position, rotation, echelle, couleur, sequence)
+                if FBXLOG: print('FBX frame %d packet 32: v=%#x ints=%s floats=%s' % (self.image, v & 0xffff, list(a[1:]), [round(x, 4) for x in fl]), flush=True)         # (test) DQ_FBXLOG=1 : tous les paquets 32 (position, rotation, echelle, couleur, sequence)
                 if m is not None:
                     if v & 0x300: m['vis'] = bool(v & 0x100)
                     if v & 0x800 and len(fl) >= 3: m['scl'] = tuple(fl[:3]); fl = fl[3:]
@@ -411,7 +411,7 @@ class Interface:
     def apply(self, entries):
         if DBG:
             for port, a in entries:
-                if port in (0, 1) or port >= 12: print('MSG image %s port %d %s' % (getattr(self, 'image', '?'), port, a[:10]), flush=True)
+                if port in (0, 1) or port >= 12: print('MSG frame %s port %d %s' % (getattr(self, 'image', '?'), port, a[:10]), flush=True)
         for port, a in entries:
             if port == 1:                                       # fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement, 4 nom de l'interlocuteur
                 if self.msg['qui_att']:                         # [4, 1] a annonce un nom : le paquet suivant du port en est le texte (un entier par caractere, comme les textes des cases des menus)
@@ -513,7 +513,7 @@ class Engine:
         c = self.core = GameCore(lib, T.ApkFs([pack]), self.log, real_files={'/dq/assets.apk': pack})
         self.E = c.export; self.L = c.LIB_BASE
         self._widen_symbols()
-        if not c.run_init(): raise RuntimeError('constructeurs C++ en echec')
+        if not c.run_init(): raise RuntimeError('C++ constructors failed')
         c.call(self.E('DevInit'), c.cstr('/dq/assets.apk'), c.cstr('/dq/'), language)
         self.buf1, self.buf2 = c.malloc(0x2000), c.malloc(0x2000)          # files de messages interface <-> moteur (allouees par l'appelant)
         c.call(self.E('MenuPortInit'), 32, self.buf1, 129, self.buf2, 1089)
@@ -557,8 +557,8 @@ class Engine:
         self._magic_hooks()
         self.sensor = Sensor(self)             # historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
         self.battle_sensor = BattleSensor.for_(self)       # historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir battle_history.py)
-        if not self.sensor.active: self._record_missing(tr("historique des dialogues : crochet non installe, l'historique restera vide"))
-        if not self.battle_sensor.active: self._record_missing(tr("historique des combats : crochets non installes, l'historique des combats restera vide"))
+        if not self.sensor.active: self._record_missing("dialogue history: hook not installed, the history will stay empty")
+        if not self.battle_sensor.active: self._record_missing("battle history: hooks not installed, the battle history will stay empty")
         for _ in range(3): self.step(0, 0)       # le titre tourne quelques images (curseurs initialises)
         self._create_canvas()
 
@@ -588,15 +588,15 @@ class Engine:
                     self._text_accumulator += v; n = int(self._text_accumulator); self._text_accumulator -= n
                     uc.reg_write(c.XREG[8], min(n, 4000))
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _vt, None, a + UI_MSGLOOP_WRITE, a + UI_MSGLOOP_WRITE)
-            else: self._record_missing(tr('vitesse du texte : ui_MsgLoop inattendu, reglage sans effet'))
-        except Exception as ex: self._record_missing(tr('vitesse du texte non installee : %s') % (ex,))
+            else: self._record_missing('text speed: unexpected ui_MsgLoop, setting has no effect')
+        except Exception as ex: self._record_missing('text speed not installed: %s' % (ex,))
         try:
             sb = c.export('_ZN6status12OptionStatus14setBattleSpeedEc'); mu = c.export('_ZN26TownMenu_OPERATION_SETTING10menuUpdateEv')
             if sb and mu:
                 def _sb(uc, ad, sz, u):
                     if self.scroll_mode is not None and self.scroll_callback is not None and mu <= uc.reg_read(c.XREG[30]) < mu + 0x400: self.scroll_callback(uc.reg_read(c.XREG[1]) & 0xff)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _sb, None, sb, sb)
-        except Exception as ex: self._record_missing(tr('defilement des combats : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('battle text scrolling: hook not installed: %s' % (ex,))
 
     def _level_hooks(self):
         """Option « PV et PM restaures au niveau superieur » (`level_heal`, faux = comme le jeu). Toute montee de niveau passe par `HaveStatus::levelup(bool)` : elle recalcule les caracteristiques, puis, si l'argument est vrai
@@ -605,13 +605,13 @@ class Engine:
         try:
             a = c.export('_ZN6status10HaveStatus7levelupEb')
             if not a or struct.unpack('<I', c.mem(a + HAVESTATUS_LEVELUP_END, 4))[0] != TBZ_W20_0:
-                self._record_missing(tr('PV/PM au niveau superieur : HaveStatus::levelup inattendu, option sans effet')); return
+                self._record_missing('HP/MP on level up: unexpected HaveStatus::levelup, option has no effect'); return
             def _heal(uc, ad, sz, u):
                 if self.level_heal: uc.reg_write(c.XREG[20], uc.reg_read(c.XREG[20]) | 1)
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _heal, None, a + HAVESTATUS_LEVELUP_END, a + HAVESTATUS_LEVELUP_END)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('PV/PM au niveau superieur : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('HP/MP on level up: hook not installed: %s' % (ex,))
 
     def _encounter_hooks(self):
         """Rencontres aleatoires et marche acceleree (voir encounters.py). `walking_speed` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
@@ -621,7 +621,7 @@ class Engine:
         try:
             a = c.export('_ZN9CountDown4execEv')
             if not a or struct.unpack('<I', c.mem(a + COUNTDOWN_EXEC_WRITE, 4))[0] != STR_W8_X0:
-                self._record_missing(tr('rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres')); return
+                self._record_missing('encounters: unexpected CountDown::exec, walking speed has no effect on the encounter rate'); return
             def _cd(uc, ad, sz, u):
                 v = self.walking_speed
                 if v <= 1.0: return                                                          # x1 : le jeu tel quel
@@ -632,7 +632,7 @@ class Engine:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _cd, None, a + COUNTDOWN_EXEC_WRITE, a + COUNTDOWN_EXEC_WRITE)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('rencontres : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('encounters: hook not installed: %s' % (ex,))
 
     def _day_clock_hooks(self):
         """Arrivee de la nuit et marche acceleree (voir encounters.py, #163). Le temps du monde n'avance que par le saut terminal `FieldStage::ChangeTime(0)` de `FieldPlayerDoku::checkDokuDamage` (+ 0x38, carte du monde,
@@ -644,7 +644,7 @@ class Engine:
             u32 = lambda a: struct.unpack('<I', c.mem(a, 4))[0]
             w = u32(f + DOKU_CHANGETIME_B) if f else 0
             if not f or w & 0xfc000000 != 0x14000000 or f + DOKU_CHANGETIME_B + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) != c.LIB_BASE + DOKU_CHANGETIME_STUB or u32(f + DOKU_RET) != RET_A64:
-                self._record_missing(tr("horloge jour / nuit : checkDokuDamage inattendu, la vitesse de marche change la vitesse d'arrivee de la nuit")); return
+                self._record_missing("day / night clock: unexpected checkDokuDamage, walking speed changes how fast night arrives"); return
             def _hj(uc, ad, sz, u):
                 v = self.walking_speed
                 if v <= 1.0: return                                                          # x1 : le jeu tel quel
@@ -653,7 +653,7 @@ class Engine:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _hj, None, f + DOKU_CHANGETIME_B, f + DOKU_CHANGETIME_B)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('horloge jour / nuit : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('day / night clock: hook not installed: %s' % (ex,))
 
     def _game_time_hooks(self):
         """Temps de jeu de la sauvegarde sur l'heure reelle (#239, audit ENG-04, sondage du 04/11/2026). Le moteur ajoute 2 unites (1/60 s) par pas (`GameStatus::addPlayTime(2)` dans `Global::NativeExec`) : a x1
@@ -668,7 +668,7 @@ class Engine:
             stub = struct.unpack('<4I', c.mem(c.LIB_BASE + PLAYTIME_STUB, 16))                                  # (le stub PLT : adrp x16 ; ldr x17, [x16, #0x968] ; add x16, x16, #0x968 ; br x17 : sa case de la table des adresses, 0x240968, contient addPlayTime)
             if not f or not ad or u32(f + PLAYTIME_MOV_W1) != MOV_W1_2 or w & 0xfc000000 != 0x94000000 or f + PLAYTIME_BL + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) != c.LIB_BASE + PLAYTIME_STUB \
                     or stub != PLAYTIME_STUB_WORDS or u64(c.LIB_BASE + PLAYTIME_GOT) != ad:
-                self._record_missing(tr('temps de jeu : NativeExec inattendu, la vitesse du jeu change la vitesse du temps de jeu')); return
+                self._record_missing('play time: unexpected NativeExec, game speed changes how fast play time runs'); return
             def _tj(uc, a, sz, u):
                 v = self.clock_speed
                 if v <= 1.0: return                                                          # x1 : le jeu tel quel
@@ -677,7 +677,7 @@ class Engine:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _tj, None, f + PLAYTIME_BL, f + PLAYTIME_BL)
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('temps de jeu : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('play time: hook not installed: %s' % (ex,))
 
     def _magic_hooks(self):
         """Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
@@ -696,7 +696,7 @@ class Engine:
                 w = u32(a); return w & 0xfc000000 == 0x94000000 and a + ((((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) << 2) == c.LIB_BASE + MAGIC_EXECUSE_STUB
             sites = [(cs + MAGIC_CHARSELECT_BL, False), (nt + MAGIC_WITHOUT_TARGET_BL, True)] if cs and nt and msg and exc else []
             if not sites or not all(is_exec_use(a) for a, _ in sites) or u32(u64(msg) + 0x48 * 201 + 0x14) != MSG_NOTHING_HAPPENS:
-                self._record_missing(tr('sorts sans effet : menu Magie inattendu, le message de succes est garde')); return
+                self._record_missing('ineffective spells: unexpected Magic menu, the success message is kept'); return
             def _before(uc, ad, sz, u):
                 p = uc.reg_read(c.XREG[0]) & 0xffffffffffff; caster = u64(p); action = u32(p + MAGIC_ACTION)
                 cost = c.mem(u64(exc + 0x70) + 0x48 * action + 0x3a, 1)[0]                  # UseAction::getUseMp
@@ -722,10 +722,10 @@ class Engine:
                 def _sound(uc, ad, sz, u):                                                   # avant `sub w8, w8, #0xc4` : le sort n'a eu aucun effet -> w8 = 0xc7 (resultat 3 > 2) : pas de bruitage de soin
                     if self._magic_without_effect: self._magic_without_effect = False; uc.reg_write(c.XREG[8], 0xc7)
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, _sound, None, cs + MAGIC_HEAL_SOUND, cs + MAGIC_HEAL_SOUND)
-            else: self._record_missing(tr('sorts sans effet : bruitage de soin inattendu, il est garde'))
+            else: self._record_missing('ineffective spells: unexpected healing sound, it is kept')
             try: c.uc.ctl_flush_tb()
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('sorts sans effet : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('ineffective spells: hook not installed: %s' % (ex,))
 
     def _fade_hooks(self):
         """Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
@@ -734,14 +734,14 @@ class Engine:
         c = self.core; self._script_fade = False
         try:
             ini = [c.export('_ZN13__cmd_fade_in10initializeEPc'), c.export('_ZN14__cmd_fade_out10initializeEPc')]; usf = c.export('_Z12UnitySetFadei')
-            if not all(ini) or not usf: self._record_missing(tr('fondus de script : fonctions du moteur introuvables, reglage applique a tous les fondus')); return
+            if not all(ini) or not usf: self._record_missing('script fades: engine functions not found, setting applied to all fades'); return
             def end_of(a):                                                       # adresse apres le `ret` de la fonction
                 for k in range(80):
                     if struct.unpack('<I', c.mem(a + 4 * k, 4))[0] == 0xd65f03c0: return a + 4 * (k + 1)
                 return None
             ends = [end_of(a) for a in ini]
             if None in ends or struct.unpack('<I', c.mem(usf + 8, 4))[0] != 0x5280012a:        # UnitySetFade : `mov w10, #9` (type du paquet) a +8 ; autre version du moteur : on ne touche a rien
-                self._record_missing(tr('fondus de script : UnitySetFade inattendu, reglage applique a tous les fondus')); return
+                self._record_missing('script fades: unexpected UnitySetFade, setting applied to all fades'); return
             def _entry(uc, ad, sz, u): self._script_fade = True
             def _exit(uc, ad, sz, u): self._script_fade = False
             def _packet(uc, ad, sz, u):
@@ -753,7 +753,7 @@ class Engine:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _packet, None, usf, usf)
             try: c.uc.ctl_flush_tb()                                             # (blocs deja traduits avant les crochets)
             except Exception: pass
-        except Exception as ex: self._record_missing(tr('fondus de script : crochet non installe : %s') % (ex,))
+        except Exception as ex: self._record_missing('script fades: hook not installed: %s' % (ex,))
 
     def _option(self, offset):
         """Adresse d'un octet de status::g_Option (OptionStatus : +1 volume de la musique, +2 volume des bruitages (0 a 4), +5 vitesse des messages de combat)."""
@@ -806,12 +806,12 @@ class Engine:
             if all(w & 0xffc003e0 == 0x11000120 and (w >> 10) & 0xfff == 1600 for w in words): return        # deja elargie (reapply_fixes)
             for w, imm in zip(words, (0xc0, 0x1c0, 0x314)):
                 if w & 0xffc003e0 != 0x11000120 or (w >> 10) & 0xfff != imm:
-                    self._record_missing(tr('fenetre des lieux non elargie : FieldData::drawSymbol inattendu, les lieux de la carte du monde n\'apparaissent que dans la fenetre d\'origine')); return        # autre version du moteur : on ne touche a rien
+                    self._record_missing('places window not widened: unexpected FieldData::drawSymbol, world map places only appear in the original window'); return        # autre version du moteur : on ne touche a rien
             for dec in (0x44, 0x48, 0x4c):
                 w = struct.unpack('<I', c.mem(a + dec, 4))[0]
                 c.mem_w(a + dec, struct.pack('<I', (w & ~(0xfff << 10)) | (1600 << 10)))
         except Exception as ex:
-            self._record_missing(tr('fenetre des lieux non elargie : %s') % (ex,))
+            self._record_missing('places window not widened: %s' % (ex,))
 
     # TownMenu_OPERATION_ROOT::menuUpdate (liste du menu Divers) : « cmp w8, #7 » (0x16ef28) suivi de « b.ne » vers la sortie « bouton inconnu » ; le bouton 7 (« Paramètres ») ferme le menu et ouvre TownMenu_OPERATION_SETTING
     CMP_PARAMS = 0x16ef28
@@ -822,7 +822,7 @@ class Engine:
         version. Rappelee apres le chargement d'un etat (etats.appliquer remet l'image d'origine de la bibliotheque)."""
         c = self.core; ad = c.LIB_BASE + self.CMP_PARAMS; w = struct.unpack('<I', c.mem(ad, 4))[0]
         if w == 0x71001d1f: c.mem_w(ad, struct.pack('<I', (w & ~(0xfff << 10)) | (0xfff << 10)))       # « cmp w8, #7 » -> « cmp w8, #4095 »
-        elif w != 0x713ffd1f: self._record_missing(tr("bouton Paramètres : comparaison du menu Divers inattendue, le bouton ouvre les reglages d'origine du jeu et non le menu Pause"))        # (0x713ffd1f = deja patche)
+        elif w != 0x713ffd1f: self._record_missing("Settings button: unexpected comparison in the Misc menu, the button opens the game's original settings instead of the Pause menu")        # (0x713ffd1f = deja patche)
 
     def _divert_params(self):
         """Patch du bouton « Paramètres » (patch_params) et crochet sur la comparaison : il leve `request_pause` quand le bouton choisi est le 7 ; la visionneuse n'a plus qu'a ouvrir son menu Pause (Game.tick)."""
@@ -833,7 +833,7 @@ class Engine:
                 if uc.reg_read(c.XREG[8]) & 0xffffffff == 7: self.request_pause = True
             c.uc.hook_add(unicorn.UC_HOOK_CODE, _p, None, ad, ad)
         except Exception as ex:
-            self._record_missing(tr('bouton Paramètres non detourne : %s') % (ex,))
+            self._record_missing('Settings button not redirected: %s' % (ex,))
 
     def _create_canvas(self):
         c = self.core
@@ -908,7 +908,7 @@ class Engine:
     def start_town(self, name_str):
         """(essai) charge une ville ou un donjon : Global::startTown(nom). Refuse un nom sans fichier de carte (`assets/map/<name_str>.stg`) : le moteur d'origine ne le teste pas et plante (pointeur nul dans FldStage::getCameraLimitL),
         par exemple `za3f3`, carte orpheline (`.map` et `.fld` dans le paquet graphique, aucun `.stg`) (#76)."""
-        if self.core.fs is not None and self.core.fs.open('map/%s.stg' % name_str) is None: raise ValueError("carte inconnue : pas de fichier assets/map/%s.stg dans les donnees du jeu" % name_str)
+        if self.core.fs is not None and self.core.fs.open('map/%s.stg' % name_str) is None: raise ValueError("unknown map: no file assets/map/%s.stg in the game data" % name_str)
         self.core.call(self.E('_ZN6Global9startTownEPKc'), self._global(), self.core.cstr(name_str.encode()), label='startTown')
 
     # vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde (Speed, plus les deux constantes locales 0x27520c et 0x275210 que
@@ -1051,7 +1051,7 @@ class Engine:
         r = c.call(self.E('GameUpdate'), held, decl, label='GameUpdate')
         self._return_to_title_after()
         if MSGDBG: self._log_message()
-        if r is None: raise RuntimeError('le moteur s est arrete :\n' + '\n'.join(self.log.lines[-12:]))
+        if r is None: raise RuntimeError('the engine stopped:\n' + '\n'.join(self.log.lines[-12:]))
         pkt = self.pk.packets()
         if os.environ.get('DQ_PKT') and self.state.part == PART_BATTLE:       # (test) journal des paquets de combat : image, [(type, ints...)]
             with open(os.environ['DQ_PKT'], 'a') as fj:
@@ -1107,10 +1107,10 @@ class Engine:
     def _log_message(self):
         """(test, DQ_MSGDBG=1) une ligne a chaque changement d'etat du message : image du moteur, etat, lettres ecrites / lettres de la ligne, vitesse du type de fenetre."""
         o = self.game_options()
-        if o != getattr(self, '_opt_vu', None): self._opt_vu = o; print('MSGDBG image %d options du jeu : volume musique %d, volume bruitages %d, vitesse des messages de combat %d (impose : %s)' % ((self.frames,) + o + (self.scroll_mode,)), flush=True)
+        if o != getattr(self, '_opt_vu', None): self._opt_vu = o; print('MSGDBG frame %d game options: music volume %d, sound effects volume %d, battle message speed %d (forced: %s)' % ((self.frames,) + o + (self.scroll_mode,)), flush=True)
         e = self.message_state()
         if (e[0], e[1], e[4]) != getattr(self, '_msg_vu', None) or (e[1] == 2 and e[2] == e[3]):
-            self._msg_vu = (e[0], e[1], e[4]); print('MSGDBG image %d actif %d etat %d lettres %d/%d vitesse %d combat=%d' % ((self.frames,) + e + (self.state.part == PART_BATTLE,)), flush=True)
+            self._msg_vu = (e[0], e[1], e[4]); print('MSGDBG frame %d active %d state %d letters %d/%d speed %d battle=%d' % ((self.frames,) + e + (self.state.part == PART_BATTLE,)), flush=True)
 
     def _read_world(self):
         """Carte du monde entiere (FieldData : grille CWorldMap +0x188 de 256 x 256 numeros de bloc, table des blocs +0x180 de 6 octets,
@@ -1182,7 +1182,7 @@ class Engine:
 
     def send_menu(self, port, *args):
         """Ce que fait Unity : depose un message [n, args...] dans la file moteur<-interface du port (touches/pointeur des menus)."""
-        if os.environ.get('DQ_MENUDBG'): print('ENVOI image %d port %d %s' % (self.frames, port, list(args)), flush=True)         # (test) messages interface -> moteur
+        if os.environ.get('DQ_MENUDBG'): print('SEND frame %d port %d %s' % (self.frames, port, list(args)), flush=True)         # (test) messages interface -> moteur
         c = self.core
         a = list(struct.unpack('<%dh' % SHORTS_STACK, c.mem(self.buf1, 2 * SHORTS_STACK)))
         n = len(args); idx = a[64] or 65

@@ -62,8 +62,8 @@ def finish(r):
         if seq and seq[-1][0] == s: seq[-1][1] += 1
         else: seq.append([s, 1])
     d['sequence'] = ' '.join(s if k == 1 else '%sx%d' % (s, k) for s, k in seq)
-    line = 'BASCULE n=%(n)d vers=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/montre=%(cache_montre)s mode_moniteur=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d redimensionnements=%(redimensionnements)d trames=%(trames)d (instables=%(instables)d) tampons=%(tampons)d flips=%(flips)d duree=%(duree_ms)sms || fenetre visible sans image : %(montree_sans_image_ms)s ms (tampons refaits pendant ce temps : %(tampons_fenetre_visible)s, deplacements : %(deplacements_fenetre_visible)s)' % d
-    print(line, flush=True); print('   sequence :', d['sequence'], flush=True); print('BASCULE_JSON', json.dumps(d, ensure_ascii=False), flush=True)
+    line = 'TOGGLE n=%(n)d to=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/show=%(cache_montre)s monitor_mode=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d resizes=%(redimensionnements)d frames=%(trames)d (unstable=%(instables)d) buffers=%(tampons)d flips=%(flips)d duration=%(duree_ms)sms || window visible without a frame: %(montree_sans_image_ms)s ms (buffers redone meanwhile: %(tampons_fenetre_visible)s, moves: %(deplacements_fenetre_visible)s)' % d
+    print(line, flush=True); print('   sequence:', d['sequence'], flush=True); print('TOGGLE_JSON', json.dumps(d, ensure_ascii=False), flush=True)
     STATE['fait'].append(d)
 
 
@@ -129,8 +129,8 @@ try:
     screen_page = type(pyglet.display.get_display().get_default_screen())
     for name_str in ('set_mode', 'restore_mode'):
         if hasattr(screen_page, name_str): wrap_text(screen_page, name_str, (lambda n: (lambda self, *a, **k: evt(n)))(name_str))
-except Exception as ex: print('mesure_bascule : ecran illisible (%r)' % (ex,), flush=True)
+except Exception as ex: print('toggle_measure: screen unreadable (%r)' % (ex,), flush=True)
 
-print('mesure_bascule : %s' % TREE, flush=True)
+print('toggle_measure: %s' % TREE, flush=True)
 WND.main()
-print('mesure_bascule : %d bascule(s) mesuree(s)' % len(STATE['fait']), flush=True)
+print('toggle_measure: %d toggle(s) measured' % len(STATE['fait']), flush=True)

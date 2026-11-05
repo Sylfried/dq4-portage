@@ -109,9 +109,9 @@ class BattleMixin:
         if orig is None:
             try: arr = self.data.texture('m%03d' % mid)
             except Exception as ex:
-                print(tr('texture de monstre introuvable :'), mid, ex, flush=True); arr = None
+                print('monster texture not found:', mid, ex, flush=True); arr = None
             else:
-                if arr is None: print(tr('texture de monstre absente des donnees :'), mid, flush=True)          # 25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
+                if arr is None: print('monster texture missing from the data:', mid, flush=True)          # 25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
             if arr is None: arr = np.zeros((16, 16, 4), np.uint8)               # monstre non dessine (texture transparente) plutot qu'un arret du jeu
             t = self._tex(arr, False, 0)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
@@ -128,7 +128,7 @@ class BattleMixin:
         del self.hd_jobs[jc]
         try: a = fut.result()
         except Exception as ex:
-            print(tr('lissage HD impossible (monstre %d) : %s') % (mid, ex), flush=True); self.cb_tex[lookup_key] = orig; return orig
+            print('HD smoothing failed (monster %d): %s' % (mid, ex), flush=True); self.cb_tex[lookup_key] = orig; return orig
         self.cb_tex[lookup_key] = dict(t=self._tex(a, False, HD_LEVELS), tw=a.shape[1], th=a.shape[0], hd=a is not orig['arr'])
         if not self.smoothing: self._filter_texture(self.cb_tex[lookup_key]['t'], False)
         return self.cb_tex[lookup_key]
@@ -199,7 +199,7 @@ class BattleMixin:
             if len(ground) < 20: ground = a[a[:, 0] >= np.percentile(a[:, 0], 85)]
             return tuple(float(x) for x in ground[:, 2:].mean(0))
         except Exception as ex:
-            print(tr('fond de combat non calcule :'), ex, flush=True); return None
+            print('battle background not computed:', ex, flush=True); return None
 
     def _ui_monster_x(self, mask, entries=False):
         """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat. -> (min, max), ou la liste des abscisses (une par monstre) si `entries`."""
@@ -246,7 +246,7 @@ class BattleMixin:
                     t = pyglet.image.ImageData(16, 16, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=64).get_texture(); gl.glBindTexture(t.target, t.id)
                     gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
                     self._tex_count.append(pyglet.sprite.Sprite(t))
-            except Exception as ex: print(tr('Chiffres des degats indisponibles : %r') % (ex,), flush=True)
+            except Exception as ex: print('Damage numbers unavailable: %r' % (ex,), flush=True)
         return self._tex_count
 
     def _draw_damage(self, e):

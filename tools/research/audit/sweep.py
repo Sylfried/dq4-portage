@@ -69,7 +69,7 @@ if __name__ == '__main__':
     for name_str in NAMES[start_idx:end]:
         res[name_str] = reading(m, name_str, frames)
         if not res[name_str]['ok'] and 'exc' in res[name_str]:
-            print('ECHEC', name_str, res[name_str]['exc'][:160].replace('\n', ' | '), flush=True)
+            print('FAILED', name_str, res[name_str]['exc'][:160].replace('\n', ' | '), flush=True)
             m = engine(tag, slot); recreated += 1
     json.dump(res, open(output, 'w'))
-    print('%d cartes en %.1f s (%d moteurs recrees)' % (len(res), time.time() - t0, recreated))
+    print('%d maps in %.1f s (%d engines recreated)' % (len(res), time.time() - t0, recreated))

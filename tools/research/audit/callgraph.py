@@ -24,7 +24,7 @@ def build():
             caller = nm(ins.address)
             if caller != callee: cg[callee].add(caller)
     pickle.dump(dict(cg), open(CG, 'wb'))
-    print('graphe :', len(cg), 'appeles')
+    print('graph:', len(cg), 'called')
 def up(sub, prof=2):
     cg = pickle.load(open(CG, 'rb'))
     targets = [k for k in cg if sub in k]

@@ -190,16 +190,16 @@ class EnglishNames(unittest.TestCase):
         self.assertEqual(self.read('data', 'settings', 'settings.json'), b'{"nouveau": 2}'); self.assertEqual(self.read('data', 'saves', 'savestates', 'state_01.dqs'), b'NEUF')
         self.assertEqual(self.read('data', 'settings', 'reglages.json'), b'{"a": 1}'); self.assertEqual(self.read('data', 'saves', 'savestates', 'etat_01.dqs'), b'E1')      # (a leur place d'avant, intacts)
         self.assertEqual(self.read('data', 'saves', 'savestates', 'state_09.dqs'), b'E9')                       # (le reste est renomme)
-        self.assertTrue(any('NON renomme' in x for x in done), done)
+        self.assertTrue(any('NOT renamed' in x for x in done), done)
         self.assertNotIn(CH.ENGLISH_STAGE, CH._read_resume(self.d))                                         # (pas note fait : le renommage sera refait au prochain demarrage)
-        self.assertTrue(any('NON renomme' in x for x in CH.migrate(self.d, log=lambda *a: None)))
+        self.assertTrue(any('NOT renamed' in x for x in CH.migrate(self.d, log=lambda *a: None)))
 
     def test_both_folders_exist_merge(self):
         write(os.path.join(self.t, 'data', 'saves', 'data3.dat'), b'D3')                                   # `data\\saves` existe deja (renommage interrompu) : on y remet le reste, un fichier a la fois
         done = CH.migrate(self.d, log=lambda *a: None)
         self.assertEqual(self.read('data', 'saves', 'data3.dat'), b'D3'); self.assertEqual(self.read('data', 'saves', 'data1.dat'), b'D1')
         self.assertEqual(self.read('data', 'saves', 'savestates', 'state_01.dqs'), b'E1'); self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees')))
-        self.assertFalse(any('NON renomme' in x for x in done), done)
+        self.assertFalse(any('NOT renamed' in x for x in done), done)
 
     def test_locked_folder_falls_back_to_its_content(self):               # Windows : un dossier ouvert dans l'Explorateur ne se renomme pas ; ses fichiers, eux, se deplacent un par un
         actual = os.replace
@@ -208,22 +208,22 @@ class EnglishNames(unittest.TestCase):
             if os.path.isdir(src): raise PermissionError('dossier ouvert')
             return actual(src, dst)
         with mock.patch('dq4_pc.paths.os.replace', side_effect=refuse_folders): done = CH.migrate(self.d, log=lambda *a: None)
-        self.assertFalse(any('NON renomme' in x for x in done), done); self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees')))
+        self.assertFalse(any('NOT renamed' in x for x in done), done); self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees')))
         self.assertEqual(self.read('data', 'saves', 'savestates', 'state_01.dqs'), b'E1'); self.assertEqual(self.read('data', 'apk', 'base.apk'), b'A'); self.assertEqual(self.read('data', 'settings', 'settings.json'), b'{"a": 1}')
         self.assertEqual(CH.migrate(self.d, log=lambda *a: None), [])
 
     def test_nothing_can_be_renamed_then_it_is_retried(self):
         def refuse_all(src, dst): raise PermissionError('acces refuse')
         with mock.patch('dq4_pc.paths.os.replace', side_effect=refuse_all): done = CH.migrate(self.d, log=lambda *a: None)
-        self.assertTrue(any('NON renomme' in x and 'acces refuse' in x for x in done), done)
+        self.assertTrue(any('NOT renamed' in x and 'acces refuse' in x for x in done), done)
         self.assertEqual(self.read('donnees', 'sauvegardes', 'etats', 'etat_01.dqs'), b'E1'); self.assertEqual(self.read('donnees', 'sauvegardes', 'data1.dat'), b'D1')          # (rien n'a bouge ni disparu)
         self.assertNotIn(CH.ENGLISH_STAGE, CH._read_resume(self.d))
         done = CH.migrate(self.d, log=lambda *a: None)                                                           # le demarrage suivant termine
-        self.assertFalse(any('NON renomme' in x for x in done), done); self.assertEqual(self.read('data', 'saves', 'savestates', 'state_01.dqs'), b'E1')
+        self.assertFalse(any('NOT renamed' in x for x in done), done); self.assertEqual(self.read('data', 'saves', 'savestates', 'state_01.dqs'), b'E1')
         self.assertIn(CH.ENGLISH_STAGE, CH._read_resume(self.d))
 
     def test_english_sentences(self):
-        for code, begins in (('fr', ('dossiers renommes en anglais : ', 'fichier(s) renomme(s) en anglais')), ('en', ('folders renamed to English: ', 'file(s) renamed to English'))):
+        for code, begins in (('fr', ('folders renamed to English: ', 'file(s) renamed to English')), ('en', ('folders renamed to English: ', 'file(s) renamed to English'))):
             shutil.rmtree(self.t); self.setUp(); LG.select_language(code)
             done = CH.migrate(self.d, log=lambda *a: None)
             for b in begins: self.assertTrue(any(b in x for x in done), (b, done))

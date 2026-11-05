@@ -1,16 +1,16 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Extraction du code C# du jeu (recherche)
+title Extracting the game's C# code (research)
 echo.
-echo  Extraction de la structure du code C# de DQ4 (classes, champs, methodes)
+echo  Extracting the structure of the DQ4 C# code (classes, fields, methods)
 echo  ------------------------------------------------------------------------
-echo  Lit tes APK dans ..\data\apk (jamais modifies).
-echo  Resultat : ..\data\cache\il2cpp\dump.cs  (reste sur ton PC, pas envoye sur GitHub).
-echo  Necessite internet la premiere fois (Il2CppDumper, et .NET s'il manque).
+echo  Reads your APK files in ..\data\apk (never modified).
+echo  Result: ..\data\cache\il2cpp\dump.cs  (stays on your PC, not sent to GitHub).
+echo  Needs internet the first time (Il2CppDumper, and .NET if missing).
 echo.
 if not exist "..\.venv\Scripts\python.exe" (
-  echo  Lance d'abord launch_dq4.bat ^(a la racine du projet^) une fois pour creer l'environnement Python.
+  echo  First run launch_dq4.bat ^(at the project root^) once to create the Python environment.
   pause
   exit /b 1
 )
@@ -20,20 +20,20 @@ set "DOTNET="
 where dotnet >nul 2>nul && set "DOTNET=1"
 if exist "%ProgramFiles%\dotnet\dotnet.exe" set "DOTNET=1"
 if not defined DOTNET (
-  echo  .NET est absent : installation automatique, une seule fois.
-  echo  Accepte la fenetre Windows qui peut s'afficher ^(autorisation^).
+  echo  .NET is missing: automatic installation, one time only.
+  echo  Accept the Windows prompt that may appear ^(authorization^).
   echo.
   winget install --id Microsoft.DotNet.Runtime.8 -e --accept-package-agreements --accept-source-agreements
   if errorlevel 1 (
     echo.
-    echo  L'installation automatique a echoue. Installe-le a la main :
+    echo  The automatic installation failed. Install it by hand:
     echo     https://dotnet.microsoft.com/download/dotnet/8.0  ^(".NET Runtime", Windows x64^)
-    echo  puis relance ce fichier.
+    echo  then run this file again.
     pause
     exit /b 1
   )
   echo.
-  echo  .NET installe.
+  echo  .NET installed.
 )
 
 "..\.venv\Scripts\python.exe" dump_il2cpp.py %*

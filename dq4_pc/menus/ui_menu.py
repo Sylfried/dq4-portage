@@ -949,10 +949,10 @@ class Texts:
             try:
                 from dq4_pc.menus.message_font import MessageFont
                 self.messages = MessageFont(m)
-            except Exception as e: print(tr('Police des messages illisible (%r) : SE-GARRIR a la place.') % (e,), flush=True)
+            except Exception as e: print('Message font unreadable (%r): using SE-GARRIR instead.' % (e,), flush=True)
         if os.path.exists(j) and os.path.exists(g) and not os.environ.get('DQ_POLICE_GMARU'):        # DQ_POLICE_GMARU=1 (test) : ancienne police japonaise, pour comparer
             try: self.bitmap = BitmapFont(j, g)
-            except Exception as e: print(tr('Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.') % (e,), flush=True)
+            except Exception as e: print('SE-GARRIR font unreadable (%r): using the Japanese GMaruGoPro-M font instead.' % (e,), flush=True)
     def _font(self, px):
         from PIL import ImageFont
         f = self.pol.get(px)
@@ -1330,12 +1330,12 @@ def prepare_resources(apk_folder, cache, log=print):
     try:
         from dq4_pc.menus.message_font import extract_message_font
         extract_message_font(apk_folder, cache, log)                         # police des messages (facultative), meme quand les autres ressources sont deja la
-    except Exception as e: log(tr('Police des messages non extraite : %r') % (e,))
+    except Exception as e: log('Message font not extracted: %r' % (e,))
     if all(os.path.exists(p) for p in list(dest.values()) + dest_g): return True
     try:
         import UnityPy, zipfile
         os.makedirs(cache, exist_ok=True)
-        log(tr('Lecture des ressources de menu du jeu (une seule fois)...'))
+        log('Reading the game menu resources (once)...')
         base = UnityPy.load(os.path.join(apk_folder, 'base.apk'))
         for o in base.objects:
             if o.type.name == 'Texture2D':
@@ -1348,7 +1348,7 @@ def prepare_resources(apk_folder, cache, log=print):
                     open(dest['ui_font.otf'], 'wb').write(bytes(d.m_FontData))
                 elif d.m_Name == 'SE-GARRIR' and not all(os.path.exists(p) for p in dest_g):
                     try: extract_garrir(o, d, *dest_g)
-                    except Exception as e: log(tr('Police SE-GARRIR non extraite : %r') % (e,))
+                    except Exception as e: log('SE-GARRIR font not extracted: %r' % (e,))
         if not os.path.exists(dest['ui_frameData.bin']):
             pack = UnityPy.load(zipfile.ZipFile(os.path.join(apk_folder, 'split_UnityDataAssetPack.apk')).read('assets/bin/Data/datapack.unity3d'))
             for o in pack.objects:
@@ -1358,4 +1358,4 @@ def prepare_resources(apk_folder, cache, log=print):
                         raw = d.m_Script; open(dest['ui_frameData.bin'], 'wb').write(raw.encode('utf-8', 'surrogateescape') if isinstance(raw, str) else bytes(raw)); break
         return all(os.path.exists(p) for p in dest.values())
     except Exception as e:
-        log(tr('Ressources de menu indisponibles : %r') % (e,)); return False
+        log('Menu resources unavailable: %r' % (e,)); return False

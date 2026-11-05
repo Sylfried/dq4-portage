@@ -71,4 +71,4 @@ if __name__ == '__main__':
                 mk = hi >= 0.5
                 if ref is None: ref = mk
                 iou = (mk & ref).sum() / max(1, (mk | ref).sum())
-                print('   %-10s rugosite %.3f rad/texel   surface %+.2f%%   IoU %.4f' % (vn, roughness(hi, T), 100 * (mk.sum() / ref.sum() - 1), iou))
+                print('   %-10s roughness %.3f rad/texel   surface %+.2f%%   IoU %.4f' % (vn, roughness(hi, T), 100 * (mk.sum() / ref.sum() - 1), iou))

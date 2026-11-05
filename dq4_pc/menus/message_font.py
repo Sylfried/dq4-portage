@@ -33,7 +33,7 @@ class MessageFont:
     def __init__(self, path=None, data=None, language=1, space=6, wide_space=6, tab_width=15, spacing=0):
         if data is None:
             with open(path, 'rb') as f: data = f.read()
-        if data[:4] != b'TNOF': raise ValueError('police de messages illisible (signature)')
+        if data[:4] != b'TNOF': raise ValueError('message font unreadable (signature)')
         self.d = data
         self.table = np.frombuffer(data, '<u4', TABLE_SIZE, TABLE_START)
         self.height_px = struct.unpack_from('<H', data, 24)[0] or 24
@@ -160,8 +160,8 @@ def extract_message_font(apk_folder, cache, log=print, name_str='English.font', 
     try:
         os.makedirs(cache, exist_ok=True)
         with zipfile.ZipFile(os.path.join(apk_folder, 'split_UnityDataAssetPack.apk')) as z: raw = z.read('assets/' + name_str)
-        if raw[:4] != b'TNOF': raise ValueError('signature inattendue')
+        if raw[:4] != b'TNOF': raise ValueError('unexpected signature')
         with open(path + '.tmp', 'wb') as f: f.write(raw)
         os.replace(path + '.tmp', path); return True
     except Exception as ex:
-        log(tr('Police des messages non extraite (%r) : police de menu SE-GARRIR a la place.') % (ex,)); return False
+        log('Message font not extracted (%r): using the SE-GARRIR menu font instead.' % (ex,)); return False

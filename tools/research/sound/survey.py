@@ -4,4 +4,4 @@ for slot in (1, 2, 3, 4, 5):
     eng = new('s45_%d' % slot)
     ok = eng.load_save(slot)
     for _ in range(150): eng.step(0, 0)
-    print('slot', slot, ok, 'partie', hex(eng.state.part), 'carte', eng.state.game_map, 'membres', [(i, hit_points(eng, i)) for i in members(eng)], flush=True)
+    print('slot', slot, ok, 'part', hex(eng.state.part), 'map', eng.state.game_map, 'members', [(i, hit_points(eng, i)) for i in members(eng)], flush=True)

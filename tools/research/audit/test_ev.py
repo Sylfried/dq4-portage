@@ -9,4 +9,4 @@ for n in sys.argv[1:]:
         r = d.game_map(n)
         print(n, 'OK', type(r), (list(r.keys())[:8] if isinstance(r, dict) else None), '%.1fs' % (time.time()-t0))
     except Exception as ex:
-        import traceback; print(n, 'ERREUR', repr(ex)[:300]); traceback.print_exc(limit=3)
+        import traceback; print(n, 'ERROR', repr(ex)[:300]); traceback.print_exc(limit=3)

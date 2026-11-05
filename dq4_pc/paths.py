@@ -169,11 +169,11 @@ def _describe_english_names(d, moves, problems):
     out = []
     folders = [m for m in moves if m[2]]; files = [m for m in moves if not m[2]]
     rel = lambda p: os.path.relpath(p, d.root) if _norm(p).startswith(d.root) else p
-    if folders: out.append(tr('dossiers renommes en anglais : %s') % ', '.join('%s -> %s' % (rel(a), rel(b)) for a, b, _ in folders[:12]))
-    if files: out.append(tr('%d fichier(s) renomme(s) en anglais (reglages, historique, journaux, etats instantanes...)') % len(files))
+    if folders: out.append('folders renamed to English: %s' % ', '.join('%s -> %s' % (rel(a), rel(b)) for a, b, _ in folders[:12]))
+    if files: out.append('%d file(s) renamed to English (settings, history, logs, savestates...)' % len(files))
     for a, b, reason in problems:
-        if reason == 'exists': out.append(tr('NON renomme : %s -> %s existe deja, l\'ancien reste en place (rien n\'est ecrase)') % (rel(a), rel(b)))
-        else: out.append(tr('NON renomme : %s (%s). Ferme les fenetres ou programmes qui utilisent ce dossier, puis relance : le renommage se refait tout seul') % (rel(a), reason))
+        if reason == 'exists': out.append('NOT renamed: %s -> %s already exists, the old one stays in place (nothing is overwritten)' % (rel(a), rel(b)))
+        else: out.append('NOT renamed: %s (%s). Close the windows or programs that use this folder, then restart: the renaming is retried automatically' % (rel(a), reason))
     return out
 
 
@@ -225,16 +225,16 @@ def _tidy_old_folders(d, log):
         recent = d.recent_mobile_save()
         sources = [d.old_port_dir] + ([recent] if recent else [])
         n = _merge_saves(sources, d.saves, log)
-        if n: done.append(tr('%d fichier(s) de sauvegardes copie(s) dans data\\saves (portage\\ puis mobile\\)') % n)
+        if n: done.append('%d save file(s) copied into data\\saves (portage\\ then mobile\\)' % n)
         missing = [name_str for name_str in LOGFILE_NAMES if any(os.path.isfile(os.path.join(s, name_str)) for s in sources) and not os.path.isfile(os.path.join(d.saves, name_str))]
-        if missing: raise OSError(tr('fichiers non retrouves dans sauvegardes : %s') % ', '.join(missing))
+        if missing: raise OSError('files not found in the saves: %s' % ', '.join(missing))
         base = os.path.join(d.saves, 'before_tidy_' + time.strftime('%Y%m%d_%H%M%S')); target = base; k = 1
         while os.path.exists(target): k += 1; target = '%s_%d' % (base, k)
         os.makedirs(target)
         for p in old_dirs: os.replace(p, os.path.join(target, os.path.basename(p)))
-        done.append(tr('anciens dossiers ranges : %s -> %s') % (', '.join('saves\\' + os.path.basename(p) for p in old_dirs), 'saves\\' + os.path.basename(target)))
+        done.append('old folders moved: %s -> %s' % (', '.join('saves\\' + os.path.basename(p) for p in old_dirs), 'saves\\' + os.path.basename(target)))
     except OSError as ex:
-        done.append(tr('anciens dossiers de sauvegardes NON ranges (%s) : ils restent en place') % ex)
+        done.append('old save folders NOT moved (%s): they stay in place' % ex)
     return done
 
 
@@ -301,13 +301,13 @@ def migrate(d=None, log=print):
     if is_pending('cache') and os.path.isdir(old):
         try:
             os.makedirs(os.path.dirname(d.cache), exist_ok=True); os.replace(old, d.cache)
-            done.append(tr('cache deplace : dq4_pc\\cache -> data\\cache')); mark_done('cache')
+            done.append('cache moved: dq4_pc\\cache -> data\\cache'); mark_done('cache')
         except OSError as ex:
-            done.append(tr('cache NON deplace (%s) : il sera recalcule') % ex)
+            done.append('cache NOT moved (%s): it will be recomputed' % ex)
     # 2. APK francais : copies (jeux\DQ4\patched_apks -> data\apk)
     if is_pending('apk') and not d.old_games and os.path.isdir(os.path.join(games, 'patched_apks')):
         n = _clone_tree(os.path.join(games, 'patched_apks'), d.apk, log, 0)
-        if n: done.append(tr('%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> data\\apk') % n)
+        if n: done.append('%d APK file(s) copied: jeux\\DQ4\\patched_apks -> data\\apk' % n)
         mark_done('apk')
     # 3. D-232 : les anciens dossiers data\saves\portage et \mobile\<date> sont remontes dans data\saves puis ranges (AVANT les reprises plus anciennes : ce que le jeu ecrivait ces derniers jours est prioritaire sur de vieilles copies)
     #    (se fait toujours : elle deplace ces deux dossiers, donc ne se repete pas d'elle-meme)
@@ -321,13 +321,13 @@ def migrate(d=None, log=print):
             if os.path.isfile(f): n += _clone(f, os.path.join(d.saves, english_name(name_str, False) or name_str), log, 0)
             elif name_str == 'etats': n += _clone_tree(f, d.savestates, log, 0)
             elif name_str.startswith('avant_import_'): n += _clone_tree(f, os.path.join(d.saves, english_name(name_str, True)), log, 0)
-        if n: done.append(tr('%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> data\\saves') % n)
+        if n: done.append('%d save file(s) of the PC port copied: dq4_pc\\sauvegardes -> data\\saves' % n)
         mark_done('saves_pc_port')
     # 5. sauvegardes du telephone d'avant : jeux\DQ4\saves\<date la plus recente> -> data\saves (ce que le jeu lisait en second, fichier par fichier)
     if is_pending('saves_phone') and not d.old_games and os.path.isdir(os.path.join(games, 'saves')):
         recents = sorted(x for x in glob.glob(os.path.join(games, 'saves', '*')) if os.path.isdir(x))
         n = _merge_saves(recents[-1:], d.saves, log)
-        if n: done.append(tr('%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> data\\saves') % n)
+        if n: done.append('%d phone save file(s) copied: jeux\\DQ4\\saves -> data\\saves' % n)
         mark_done('saves_phone')
     # 6. reglages et favoris de l'historique
     if is_pending('settings'):
@@ -335,15 +335,15 @@ def migrate(d=None, log=print):
         for name_str in ('reglages.json', 'historique_favoris.json', 'historique_messages.json'):
             src = os.path.join(code, name_str)
             if os.path.isfile(src): found = True; n += _clone(src, os.path.join(d.settings_dir, english_name(name_str, False)), log, 0)
-        if n: done.append(tr('%d fichier(s) de reglages copie(s) : dq4_pc -> data\\settings') % n)
+        if n: done.append('%d settings file(s) copied: dq4_pc -> data\\settings' % n)
         if found: mark_done('settings')
     # 7. journal des erreurs de la fenetre
     src = os.path.join(code, 'erreurs_fenetre.log')
     if is_pending('log') and os.path.isfile(src):
-        if _clone(src, d.window_logfile, log, 0): done.append(tr('journal des erreurs copie : data\\logs'))
+        if _clone(src, d.window_logfile, log, 0): done.append('error log copied: data\\logs')
         mark_done('log')
     if new_entries: _note_resume(d, dict(noted, **new_entries))
-    for ph in done: log(tr('Migration : %s') % ph)
+    for ph in done: log('Migration: %s' % ph)
     return done
 
 

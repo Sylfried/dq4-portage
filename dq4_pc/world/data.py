@@ -58,7 +58,7 @@ class Data:
             with self._lock:
                 if self._env is None:
                     import UnityPy
-                    self.log(LG.tr('Lecture du paquet de donnees du jeu (une seule fois, quelques secondes)...'))
+                    self.log('Reading the game data pack (once only, a few seconds)...')
                     raw = zipfile.ZipFile(self.apk).read(DATAPACK)
                     env = UnityPy.load(raw)
                     self._objs = {o.path_id: o for o in env.objects}
@@ -114,7 +114,7 @@ class Data:
                     kind = 'trans' if ('.tim' not in name_str or col[3] != 1.0) else ('atest' if fmt == 4 else 'normal')
                     return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y), col, kind
         except Exception as ex:
-            self.log(LG.tr('  texture illisible: %s') % ex)
+            self.log('  unreadable texture: %s' % ex)
             return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
         # materiau NO_DEFAULT texture (aucune texture dans ses TexEnvs : 21 cartes de lieux, 10 decors de combat) : Unity echantillonne la texture blanche par defaut, la surface est donc dessinee en couleur de sommet x _Color
         # (sol sombre, eau...). Avant, la surface etait absente de la visionneuse (groupe sans texture ignore au dessin).
@@ -180,16 +180,16 @@ class Data:
                 if o is None: break
                 imgs.append(np.array(o.read().image.convert('RGBA')))
             if len(imgs) < len(pam['durees']) or not imgs:
-                self.log(LG.tr('  palette animee %s : %d textures sur %d, ignoree') % (q['nom'], len(imgs), len(pam['durees']))); pamdef[key] = None
+                self.log('  animated palette %s: %d textures out of %d, ignored' % (q['nom'], len(imgs), len(pam['durees']))); pamdef[key] = None
             else:
                 pamdef[key] = {'nom': q['nom'], 'pam': q['pam'], 'evenement': q['event'], 'images': imgs}; tex[key] = imgs[0]
         return key if pamdef[key] else None
 
     def _extract_map(self, name_str, f, silent=False):
-        if not silent: self.log(LG.tr('Extraction de la carte %s ...') % name_str)
+        if not silent: self.log('Extracting map %s ...' % name_str)
         gos = self._gos(); raw = self._map_text(name_str)
         root = gos.get(name_str + '.fld')
-        if root is None or raw is None: raise KeyError('carte introuvable dans les donnees : ' + name_str)
+        if root is None or raw is None: raise KeyError('map not found in the data: ' + name_str)
         nobj, objs = fld.map_objs(raw)
         kids = {}
         rg = self._objs[root].read(); rt = self._components(rg)['Transform'].read()
@@ -342,7 +342,7 @@ class Data:
     def _extract_fbx(self, no, f):
         from UnityPy.helpers.MeshHelper import MeshHandler
         pid = self._gos().get('c%04d' % no)
-        if pid is None: raise KeyError('modele fbx introuvable dans les donnees : c%04d' % no)
+        if pid is None: raise KeyError('fbx model not found in the data: c%04d' % no)
         names, parent, pos, rot, scl, paths, t_idx, rendered = [], [], [], [], [], [], {}, []
 
         def visit(g, parent_idx, path):
@@ -351,21 +351,21 @@ class Data:
             p, q, s = t.m_LocalPosition, t.m_LocalRotation, t.m_LocalScale
             pos.append((p.x, p.y, p.z)); rot.append((q.x, q.y, q.z, q.w)); scl.append((s.x, s.y, s.z))
             if 'SkinnedMeshRenderer' in comps: rendered.append(comps['SkinnedMeshRenderer'].read())
-            elif 'MeshRenderer' in comps: raise ValueError('maillage non skinne non gere (%s)' % g.m_Name)
+            elif 'MeshRenderer' in comps: raise ValueError('unsupported unskinned mesh (%s)' % g.m_Name)
             for ch in t.m_Children:
                 cg = self._objs[ch.deref_parse_as_object().m_GameObject.path_id].read()
                 visit(cg, i, (path + '/' if path else '') + cg.m_Name)
         root = self._objs[pid].read(); comps = self._components(root)
         visit(root, -1, '')
-        if len(rendered) != 1: raise ValueError('%d maillages skinnes (un seul est gere)' % len(rendered))
+        if len(rendered) != 1: raise ValueError('%d skinned meshes (only one is supported)' % len(rendered))
         smr = rendered[0]
         # materiaux : meme texture et shader « Custom/ImdChara » (couleur du sommet x _Color, fusion alpha, ZWrite on, Cull Back)
         tex = {}; tnom = {}; tfmt = {}; lookup_keys = set()
         for mref in smr.m_Materials:
             mat = mref.deref_parse_as_object(); sh = mat.m_Shader.deref_parse_as_object().m_ParsedForm.m_Name
-            if sh != 'Custom/ImdChara': raise ValueError('shader non gere : %s' % sh)
+            if sh != 'Custom/ImdChara': raise ValueError('unsupported shader: %s' % sh)
             lookup_keys.add(self._texture(mref, tex, tnom, tfmt)[0])
-        if len(lookup_keys) != 1 or None in lookup_keys or WHITE_TEX in lookup_keys: raise ValueError('textures : %s' % lookup_keys)          # (modele 3D sans texture : refuse comme avant, la texture blanche ne sert qu'au decor des cartes)
+        if len(lookup_keys) != 1 or None in lookup_keys or WHITE_TEX in lookup_keys: raise ValueError('textures: %s' % lookup_keys)          # (modele 3D sans texture : refuse comme avant, la texture blanche ne sert qu'au decor des cartes)
         mesh = smr.m_Mesh.deref_parse_as_object(); h = MeshHandler(mesh); h.process()
         v = np.array(h.m_Vertices, np.float32).reshape(-1, 3); n = len(v)
         uv = np.array(h.m_UV0, np.float32).reshape(n, -1)[:, :2]
@@ -374,11 +374,11 @@ class Data:
         tri_indices = np.concatenate([np.array(t, np.int64).reshape(-1, 3) for t in h.get_triangles()])
         bind = np.array([[[getattr(b, 'e%d%d' % (r, c)) for c in range(4)] for r in range(4)] for b in mesh.m_BindPose], float)
         bones = [t_idx[b.path_id] for b in smr.m_Bones]
-        if len(bones) != len(bind): raise ValueError('os (%d) et poses de liaison (%d) differents' % (len(bones), len(bind)))
+        if len(bones) != len(bind): raise ValueError('bones (%d) and bind poses (%d) differ' % (len(bones), len(bind)))
         clips = {}
         for cref in comps['Animation'].read().m_Animations:
             c = cref.deref_parse_as_object()
-            if getattr(c, 'm_Compressed', False): raise ValueError('animation comprimee non geree (%s)' % c.m_Name)
+            if getattr(c, 'm_Compressed', False): raise ValueError('unsupported compressed animation (%s)' % c.m_Name)
             cb = []
             for kind, entries in (('pos', c.m_PositionCurves), ('rot', c.m_RotationCurves), ('scl', c.m_ScaleCurves)):
                 for q in entries:
@@ -426,7 +426,7 @@ class Data:
             for f in os.listdir(self.cache):
                 if re.fullmatch(r'carte(?:[0-9]|10)_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
-            self.log(LG.tr('Anciennes cartes du cache non supprimees : %s') % ex)
+            self.log('Old maps in the cache not deleted: %s' % ex)
 
     def prepare(self, stop):
         """Extrait en arriere-plan, au rythme tranquille, toutes les cartes, feuilles de sprites et textures de monstres pas encore en cache : le jeu n'a plus jamais a lire
@@ -449,7 +449,7 @@ class Data:
                          'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'effets': sorted(n for n in tx if re.fullmatch(r'm\d{4}', n)), 'plans': sorted(n for n in tx if re.fullmatch(r'[a-z]{2}_map\d|dsdq4wmap\d+', n)), 'echecs': []}
             failures = set(entries.get('echecs', []))
             t_start = time.time(); n_done = 0
-            self.log(LG.tr('Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...'))
+            self.log('Preparing the cache in the background (once only, about a minute and a half; the game stays playable)...')
             for kind, n, f in self._elements(entries):
                 if stop.is_set(): return
                 if os.path.exists(os.path.join(self.cache, f)) or n in failures: continue
@@ -461,17 +461,17 @@ class Data:
                     elif kind == 'fbx': self.fbx_model(int(n))
                     else: self.texture(n)
                 except Exception as ex:
-                    failures.add(n); self.log(LG.tr('Preparation : %s %s ignore (%s)') % (kind, n, str(ex)[:60]))
+                    failures.add(n); self.log('Preparation: %s %s skipped (%s)' % (kind, n, str(ex)[:60]))
                 n_done += 1
                 time.sleep(min(0.25, 1.0 * (time.perf_counter() - t)) + 0.01)          # rythme tranquille
             entries['echecs'] = sorted(failures)
             with open(fp + '.tmp', 'w', encoding='utf-8') as fh: json.dump(entries, fh)
             os.replace(fp + '.tmp', fp)
-            if n_done: self.log(LG.tr('Preparation du cache terminee : %d elements en %.0f s.') % (n_done, time.time() - t_start))
+            if n_done: self.log('Cache preparation finished: %d items in %.0f s.' % (n_done, time.time() - t_start))
             self._purge_old()
             self.free_up()
         except Exception as ex:
-            self.log(LG.tr('Preparation du cache interrompue : %s') % ex)
+            self.log('Cache preparation interrupted: %s' % ex)
 
 
 if __name__ == '__main__':

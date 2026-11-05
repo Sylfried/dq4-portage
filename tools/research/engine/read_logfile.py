@@ -11,7 +11,7 @@ def dec(a):
         v = (a[3] & 0xffff) | ((a[4] & 0xffff) << 16); sv = v - (1 << 32) if v & 0x80000000 else v
         return 'INT(id=%d,no=%d)=%d  [col=%d low=%d]' % (a[1], a[2], sv, sv >> 16, sv & 0xffff)
     if c == 12: return 'CODE(id=%d)=%d' % (a[1], a[2] if len(a) > 2 else None)
-    if c == 11: return 'TEXTE(ligne=%d,col=%d) suit' % (a[1], a[2])
+    if c == 11: return 'TEXT(line=%d,col=%d) follows' % (a[1], a[2])
     if c in (5, 6): return 'cmd%d' % c
     return 'cmd%d %s' % (c, a[1:])
 def txt(a):

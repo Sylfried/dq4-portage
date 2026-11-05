@@ -71,7 +71,7 @@ class MenusMixin:
                                 if q > p0 + 3: g.append((int(s0), int(p0))); s0 = q
                                 p0 = q
                             g.append((int(s0), int(p0)))
-                        print('CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s' % (self.engine.frames, g, self.engine.ui.msg, self.engine.params_message()), flush=True)
+                        print('CANVAS frame %s lines %s msg %s engine (lines, height, scroll) %s' % (self.engine.frames, g, self.engine.ui.msg, self.engine.params_message()), flush=True)
             m = self.engine.ui.msg; typ = m['type']
             if typ == 1 and a is not None and a[(np.arange(102, 164) + (int(m['y']) & 0x1ff)) % 512].max() > 40: typ = 4       # message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
             self.ui_msg.select_language(typ, m['y'], m['feed'], m.get('qui', ''))
@@ -238,7 +238,7 @@ class MenusMixin:
             if q != port: eng.send_menu(q, 1, -1, pad); self.menu_to_release = q; return
         for bit, _ in dirs:
             if decl & bit: cur = self.cur_local[lookup_key] = self._neighbor(z, cur, bit)
-        if decl and os.environ.get('DQ_MENUDBG'): print('MENU curseur local image %d port %d decl %d -> %s ; boutons %s' % (self.n, port, decl, cur, {b: (round(c[0]), round(c[1])) for b, c in z.items()}), flush=True)
+        if decl and os.environ.get('DQ_MENUDBG'): print('MENU local cursor frame %d port %d decl %d -> %s ; buttons %s' % (self.n, port, decl, cur, {b: (round(c[0]), round(c[1])) for b, c in z.items()}), flush=True)
         if decl & ENGINE.A and cur == BTN_SAVES and self._is_start_menu(port): self.sound.play_sfx(SFX_BUTTON); self._open_saves()
         elif decl & ENGINE.A: eng.send_menu(port, 1, cur, 0x10); self.menu_to_release = port; self.sound.play_sfx(SFX_BUTTON)
         elif decl & ENGINE.B: q = self._port_for_gamepad(port, 0x20); eng.send_menu(q, 1, -1, 0x20); self.menu_to_release = q
@@ -467,7 +467,7 @@ class MenusMixin:
         if os.environ.get('DQ_UIDBG'):                      # (test) etat des fenetres a chaque changement : port, type, visible, fenetre d'origine ou menu simple
             state = tuple(sorted((p, f['type'], f['vis'], p in (self.ui_g.f if self.ui_g else ()), len(f['cases'])) for p, f in eng.ui.f.items() if f['vis'] or f['type'] is not None))
             if state != getattr(self, '_ui_state', None):
-                self._ui_state = state; print('UI image %d actif=%s : %s' % (self.n, active, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in state)), flush=True)
+                self._ui_state = state; print('UI frame %d active=%s : %s' % (self.n, active, ' '.join('%d:t%s%s%s c%d' % (p, t, '' if v else '(cache)', '[O]' if o else '[simple]', c) for p, t, v, o, c in state)), flush=True)
         if self.ui_render:
             entries = sorted((f['ordre'], p) for p, f in eng.ui.f.items() if f['vis'] and p in self.ui_g.f)
             if eng.state.part == ENGINE.PART_BATTLE and max(float(eng.state.fade['a']), float(eng.state.background_fade['a'])) >= 0.6: entries = []       # fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
