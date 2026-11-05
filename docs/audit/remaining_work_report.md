@@ -38,6 +38,16 @@ Relecture de tout le jeu d'origine contre le portage (moteur, cartes, sprites, s
 
 **Reste à faire sans décision à prendre** : accélération des gains du casino par un appui (machine à sous, poker, arène : le moteur la lit sur le même déclenchement que le don d'expérience ; non vérifié en jeu, G-217), FSRA, FEAN et FEMV non rejoués (UNI-03, MAP-03, taille M à L), paquet 6 (SVC-06 ; les paquets 1, 30 et 34, valeurs 3 / 5 / 6, sont traités, #254, #252 et #256 ; durée réelle de l'effet de début de combat, valeur 4, à revérifier), phase 23 à rejouer avec le vrai PNJ (SVC-08), préchargement de la musique de la carte suivante (SND-11), entrée de la position de la caméra (UNI-07).
 
+## Audit complet du 05/11/2026 : où on en est
+
+Relecture de tout le jeu d'origine contre le portage par huit relecteurs en lecture seule (D-240) : **rapport complet dans `docs/audit/audit_2026-11-05.md`**. Rien n'a été modifié dans le code.
+
+- **Ce qui manque** : générique de fin (#297, le plus gros), animations d'événements FEAN (#66), couleurs de matériaux animées FSRA (#298), modèles 3D d'effets de combat (#304), manette (#61), chapitres 2 à 9 et véhicules jamais joués pour de vrai (#62 à #65, #69), entrée « Bestiaire » du menu Divers (#64), trois décisions de toi pas encore exécutées (#94, #95, #97), DQ5 / DQ6 (#88). Les FEMV sont sans objet (code mort dans Unity).
+- **Ce qui bug** : le ciel d'`ev09` se décale (#249, priorité haute) ; un moteur arrêté ferme la fenêtre sans trace (#292) ; allocateur de 256 Mo jamais libéré (#77) ; combat sur une carte sans décor (#306) ; texte natif « copy of Ragnar » (#305) ; textes de l'outil (#300) ; son (#308) ; lanceur et migration des dossiers (#293) ; dépendances et CI (#294) ; états `.dqs` (#295) ; cache de cartes (#301) ; documents et commentaires périmés (#296). « ERROR 3080 » n'est pas un défaut du patch FR (#81).
+- **Aucune régression de comportement** trouvée dans les PR #196 à #291 (caméra, Paramètres, notifications, historique, version anglaise, renommage, sauvegardes), sauf le ciel d'`ev09` et des commentaires et documents périmés.
+- **Issues** : 11 fermées, 17 créées, 112 + 17 = 129 ouvertes après l'audit ; celles pour lesquelles un test Windows est demandé restent ouvertes.
+- **Questions à trancher** : #299, #303, #302, #307 et #93.
+
 ## Décisions de Sylfried
 
 Dix-huit points où je ne peux pas trancher à ta place. Pour chacun, ma recommandation : si tu ne dis rien, je la suis.
