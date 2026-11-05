@@ -2,6 +2,7 @@
 Rien n'est fourni avec ce programme : tout est lu dans les fichiers du joueur puis mis en cache sur son disque."""
 import os, re, math, pickle, zipfile, json, time, threading, gc
 import numpy as np
+from dq4_pc import langue as LG
 from dq4_pc.monde import fld
 
 DATAPACK = 'assets/bin/Data/datapack.unity3d'
@@ -57,7 +58,7 @@ class Donnees:
             with self._verrou:
                 if self._env is None:
                     import UnityPy
-                    self.log('Lecture du paquet de donnees du jeu (une seule fois, quelques secondes)...')
+                    self.log(LG.tr('Lecture du paquet de donnees du jeu (une seule fois, quelques secondes)...'))
                     raw = zipfile.ZipFile(self.apk).read(DATAPACK)
                     env = UnityPy.load(raw)
                     self._objs = {o.path_id: o for o in env.objects}
@@ -113,7 +114,7 @@ class Donnees:
                     genre = 'trans' if ('.tim' not in nom or col[3] != 1.0) else ('atest' if fmt == 4 else 'normal')
                     return key, (v.m_Scale.x, v.m_Scale.y), (v.m_Offset.x, v.m_Offset.y), col, genre
         except Exception as ex:
-            self.log('  texture illisible: %s' % ex)
+            self.log(LG.tr('  texture illisible: %s') % ex)
             return None, (1, 1), (0, 0), (1.0, 1.0, 1.0, 1.0), 'normal'
         # materiau SANS texture (aucune texture dans ses TexEnvs : 21 cartes de lieux, 10 decors de combat) : Unity echantillonne la texture blanche par defaut, la surface est donc dessinee en couleur de sommet x _Color
         # (sol sombre, eau...). Avant, la surface etait absente de la visionneuse (groupe sans texture ignore au dessin).
@@ -179,13 +180,13 @@ class Donnees:
                 if o is None: break
                 imgs.append(np.array(o.read().image.convert('RGBA')))
             if len(imgs) < len(pam['durees']) or not imgs:
-                self.log('  palette animee %s : %d textures sur %d, ignoree' % (q['nom'], len(imgs), len(pam['durees']))); pamdef[key] = None
+                self.log(LG.tr('  palette animee %s : %d textures sur %d, ignoree') % (q['nom'], len(imgs), len(pam['durees']))); pamdef[key] = None
             else:
                 pamdef[key] = {'nom': q['nom'], 'pam': q['pam'], 'evenement': q['event'], 'images': imgs}; tex[key] = imgs[0]
         return key if pamdef[key] else None
 
     def _extraire_carte(self, nom, f, silencieux=False):
-        if not silencieux: self.log('Extraction de la carte %s ...' % nom)
+        if not silencieux: self.log(LG.tr('Extraction de la carte %s ...') % nom)
         gos = self._gos(); raw = self._map_text(nom)
         root = gos.get(nom + '.fld')
         if root is None or raw is None: raise KeyError('carte introuvable dans les donnees : ' + nom)
@@ -425,7 +426,7 @@ class Donnees:
             for f in os.listdir(self.cache):
                 if re.fullmatch(r'carte(?:[0-9]|10)_.+\.pkl', f): os.remove(os.path.join(self.cache, f))
         except OSError as ex:
-            self.log('Anciennes cartes du cache non supprimees : %s' % ex)
+            self.log(LG.tr('Anciennes cartes du cache non supprimees : %s') % ex)
 
     def preparer(self, arret):
         """Extrait en arriere-plan, au rythme tranquille, toutes les cartes, feuilles de sprites et textures de monstres pas encore en cache : le jeu n'a plus jamais a lire
@@ -448,7 +449,7 @@ class Donnees:
                          'monstres': sorted(n for n in tx if re.fullmatch(r'm\d{3}', n)), 'effets': sorted(n for n in tx if re.fullmatch(r'm\d{4}', n)), 'plans': sorted(n for n in tx if re.fullmatch(r'[a-z]{2}_map\d|dsdq4wmap\d+', n)), 'echecs': []}
             echecs = set(liste.get('echecs', []))
             t_debut = time.time(); n_faits = 0
-            self.log('Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...')
+            self.log(LG.tr('Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...'))
             for genre, n, f in self._elements(liste):
                 if arret.is_set(): return
                 if os.path.exists(os.path.join(self.cache, f)) or n in echecs: continue
@@ -460,23 +461,24 @@ class Donnees:
                     elif genre == 'fbx': self.modele_fbx(int(n))
                     else: self.texture(n)
                 except Exception as ex:
-                    echecs.add(n); self.log('Preparation : %s %s ignore (%s)' % (genre, n, str(ex)[:60]))
+                    echecs.add(n); self.log(LG.tr('Preparation : %s %s ignore (%s)') % (genre, n, str(ex)[:60]))
                 n_faits += 1
                 time.sleep(min(0.25, 1.0 * (time.perf_counter() - t)) + 0.01)          # rythme tranquille
             liste['echecs'] = sorted(echecs)
             with open(fp + '.tmp', 'w', encoding='utf-8') as fh: json.dump(liste, fh)
             os.replace(fp + '.tmp', fp)
-            if n_faits: self.log('Preparation du cache terminee : %d elements en %.0f s.' % (n_faits, time.time() - t_debut))
+            if n_faits: self.log(LG.tr('Preparation du cache terminee : %d elements en %.0f s.') % (n_faits, time.time() - t_debut))
             self._purger_anciens()
             self.liberer()
         except Exception as ex:
-            self.log('Preparation du cache interrompue : %s' % ex)
+            self.log(LG.tr('Preparation du cache interrompue : %s') % ex)
 
 
 if __name__ == '__main__':
     # Preparation du cache dans un processus a part (lance par la visionneuse, priorite basse) : dans un thread du jeu, les extractions (Python pur) lui prenaient le
     # verrou de l'interpreteur et saccadaient l'ecran. Fin du processus : quand l'entree standard se ferme (la visionneuse s'est arretee).
     import sys
+    LG.regler(os.environ.get('DQ4_LANGUE') or 'systeme')          # (D-238 : la langue de l'outil, donnee par le jeu qui lance ce processus ; seul, la langue de l'ordinateur)
     arret = threading.Event()
     threading.Thread(target=lambda: (sys.stdin.buffer.read(), arret.set()), daemon=True).start()
     Donnees(sys.argv[1], sys.argv[2], log=lambda *a: print(*a, flush=True)).preparer(arret)

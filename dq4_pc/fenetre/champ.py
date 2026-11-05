@@ -3,6 +3,7 @@ import math, os, threading, time
 import numpy as np
 import pyglet
 from pyglet import gl
+from dq4_pc.langue import tr
 from dq4_pc.monde import contours_decor as CD
 from dq4_pc.monde import decors_plats as DP
 from dq4_pc.monde import donnees as DO
@@ -92,7 +93,7 @@ class ChampMixin:
         del self.hd_jobs[cle]
         try: atlas, cl, ch = fut.result()
         except Exception as ex:
-            print('lissage HD impossible (%s, h%d) : %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
+            print(tr('lissage HD impossible (%s, h%d) : %s') % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[cle] = orig; return orig
         r = self.sprite_tex[cle] = dict(t=self._tex(atlas, False, HD_NIVEAUX), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cols=orig['cols'], pw=orig['pw'], ph=orig['ph'], cl=cl, ch=ch, g=HD_GOUTTIERE, hd=True)
         if not self.lissage: self._filtrer(r['t'], False)
         return r
@@ -230,10 +231,10 @@ class ChampMixin:
             try: c = self.donnees.carte(cand)
             except KeyError as ex: erreur = ex; continue
             except Exception as ex: erreur = ex
-            if c is not None and cand != src: print('decor %s absent des donnees : %s a la place' % (src, cand), flush=True); src = cand
+            if c is not None and cand != src: print(tr('decor %s absent des donnees : %s a la place') % (src, cand), flush=True); src = cand
             break
         if c is None:
-            print('carte non chargee :', erreur, flush=True); self.carte_nom = nom; return
+            print(tr('carte non chargee :'), erreur, flush=True); self.carte_nom = nom; return
         if not os.environ.get('DQ_SANS_DECALAGE'):
             try: DP.decaler(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir decors_plats.py)
             except Exception as ex: print('decors_plats :', ex, flush=True)
@@ -264,7 +265,7 @@ class ChampMixin:
         self.bornes_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
         self.carte_nom = nom
         self.fond_decor = self._fond_combat(c) if nom.startswith('btl_') else None
-        print('carte %s : %d groupes' % (nom, len(self.carte_vl)), flush=True)
+        print(tr('carte %s : %d groupes') % (nom, len(self.carte_vl)), flush=True)
         SV.noter('carte chargee', nom=nom, groupes=len(self.carte_vl), ms=round(1000 * (time.perf_counter() - t_charge)))
 
     def _calcul_hd_decor(self, arrs, algo):
@@ -291,7 +292,7 @@ class ChampMixin:
         del self.hd_jobs[jc]
         try: arrs = fut.result()
         except Exception as ex:
-            print('lissage HD du decor impossible (%s) : %s' % (self.carte_src, ex), flush=True); arrs = {}
+            print(tr('lissage HD du decor impossible (%s) : %s') % (self.carte_src, ex), flush=True); arrs = {}
         r = self.decor_hd[cle] = {}
         for k, a in arrs.items():
             r[k] = t = self._tex(a, True, 99); self._filtrer(t, self.lissage)
@@ -370,7 +371,7 @@ class ChampMixin:
             r = self.fbx_cache[no] = {'etat': 'lecture', 'm': None}
             def tache():
                 try: r['m'] = FX.ModeleFbx(self.donnees.modele_fbx(no)); r['etat'] = 'lu'
-                except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+                except Exception as ex: r['etat'] = 'erreur'; print(tr('Modele 3D %d non affiche : %s') % (no, ex), flush=True)
             threading.Thread(target=tache, daemon=True).start()
         if r['etat'] == 'lu':                                       # objets OpenGL : dans le fil du dessin
             try:
@@ -379,7 +380,7 @@ class ChampMixin:
                 r['uv'] = m.uv[m.tri.ravel()].ravel().astype(np.float32); r['n'] = nt * 3
                 r['vl'] = self.prog.vertex_list(r['n'], gl.GL_TRIANGLES, position=('f', np.zeros(r['n'] * 3, np.float32)), tex_coords=('f', r['uv']), colors=('f', np.ones(r['n'] * 4, np.float32)))
                 r['etat'] = 'pret'
-            except Exception as ex: r['etat'] = 'erreur'; print('Modele 3D %d non affiche : %s' % (no, ex), flush=True)
+            except Exception as ex: r['etat'] = 'erreur'; print(tr('Modele 3D %d non affiche : %s') % (no, ex), flush=True)
         return r if r['etat'] == 'pret' else None
 
     def _tracer_fbx(self, e):
@@ -498,7 +499,7 @@ class ChampMixin:
                 try:
                     a = self.donnees.texture(fe.nom_carte)
                     if a is not None: hd_a = self.plans[fe.nom_carte] = HD.agrandir_plan(a, epx=fe.nom_carte.startswith('dsdq4w'))
-                except Exception as ex: print('Plan %s illisible : %r' % (fe.nom_carte, ex), flush=True)
+                except Exception as ex: print(tr('Plan %s illisible : %r') % (fe.nom_carte, ex), flush=True)
             if hd_a is not None:
                 if cle:                                            # carte du monde : voile (silhouette grisee) sur les blocs de 10 x 10 pixels non explores (16 x 16 blocs a partir de x = 48, y = 16 du plan de 256 x 192)
                     src = self.donnees.voile_monde()
@@ -521,7 +522,7 @@ class ChampMixin:
         flag = f['indic'].get(0, 0) & 0xffff; x, y = f['indic'].get(1), f['indic'].get(2)
         if getattr(fe, '_flag_plan', None) != flag or fe.carte is None:
             try: pl = self.donnees.plan_monde()
-            except Exception as ex: pl = None; print('Plan du monde illisible : %r' % (ex,), flush=True)
+            except Exception as ex: pl = None; print(tr('Plan du monde illisible : %r') % (ex,), flush=True)
             if pl is None: return
             im = pl['base'].copy()
             for bit, px, py, a in pl['pieces']:

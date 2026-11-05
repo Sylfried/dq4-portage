@@ -12,6 +12,8 @@ redemandé au moteur (TextAPI::extractText), donc un message modifié dans le pa
 import json, os, shutil, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as LG
+LG.regler('fr')          # (D-238 : les attentes de ce test sont en francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc.noyau import historique as HI
 
 BRUT_SIMPLE = "Il était une fois, dans un pays lointain.\n"

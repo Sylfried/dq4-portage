@@ -8,6 +8,7 @@ import json, os, sys, tempfile, types, unittest
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ICI, '..'))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 import _chemins          # (aide des tests : retrouver le code source dans les sous-dossiers de dq4_pc)
 from dq4_pc.persistance import reglages as RG
 
@@ -377,7 +378,7 @@ class Bascule(unittest.TestCase):
 
 class PageAffichage(unittest.TestCase):
     """Page Affichage du menu Echap : ordre voulu, ligne « Plein écran » = simple interrupteur Oui / Non, « Résolution » grisee en plein ecran, plus de « Lissage des textures » ni de « Correction des bords des sprites »."""
-    ORDRE = ['Plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Antialiasing', 'Suréchantillonnage', 'Luminosité', 'Interface']
+    ORDRE = ['Langue', 'Plein écran', 'Résolution', 'Netteté', 'Shader', 'Effet de vignetage', 'Antialiasing', 'Suréchantillonnage', 'Luminosité', 'Interface']
 
     @classmethod
     def setUpClass(cls):
@@ -399,7 +400,7 @@ class PageAffichage(unittest.TestCase):
 
     def test_ligne_plein_ecran_est_un_interrupteur(self):
         for plein in (False, True):
-            e, appels = self.page(plein); f = e[0]
+            e, appels = self.page(plein); f = e[1]                                                  # (e[0] : « Langue », D-238)
             self.assertEqual((f['t'], f['vals'], f['sw'], f['v']()), ('choix', [False, True], True, 'Oui' if plein else 'Non'))      # interrupteur Oui / Non, pas une liste deroulante
             self.assertTrue(f['aide'])
             f['ok'](); self.assertEqual(appels[-1], ('plein', not plein))                        # Entree / clic bascule (Jeu.regler_plein_ecran)
@@ -408,10 +409,10 @@ class PageAffichage(unittest.TestCase):
 
     def test_resolution_grisee_en_plein_ecran(self):
         for plein in (False, True):
-            e, appels = self.page(plein); r = e[1]
+            e, appels = self.page(plein); r = e[2]
             self.assertEqual(bool(r['off']), plein, 'plein %s' % plein)
             self.assertNotIn('note', r)                                                        # (plus de texte rouge « Sans effet en plein écran » : la ligne est seulement grisee)
-            self.P.pile = ['affichage']; self.P.sel['affichage'] = 1; self.P.touche(self.PA.pyglet.window.key.RIGHT)          # (au clavier, par le menu : une ligne grisee ne change rien)
+            self.P.pile = ['affichage']; self.P.sel['affichage'] = 2; self.P.touche(self.PA.pyglet.window.key.RIGHT)          # (au clavier, par le menu : une ligne grisee ne change rien)
             self.assertEqual(len(appels), 0 if plein else 1)
 
     def test_plus_d_options_lissage_ni_correction_des_bords(self):
@@ -419,7 +420,7 @@ class PageAffichage(unittest.TestCase):
         for x in e: self.assertNotIn(x['l'], ('Lissage des textures', 'Correction des bords des sprites', 'Fenêtre'))
 
     def test_plein_ecran_et_interface_aux_extremites(self):
-        e, _ = self.page(False); self.assertEqual((e[0]['l'], e[-1]['l']), ('Plein écran', 'Interface'))
+        e, _ = self.page(False); self.assertEqual((e[0]['l'], e[1]['l'], e[-1]['l']), ('Langue', 'Plein écran', 'Interface'))               # (« Langue » en tete, D-238)
 
 
 class CodeRetire(unittest.TestCase):

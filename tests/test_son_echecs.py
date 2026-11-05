@@ -5,6 +5,7 @@ import os, sys, time, unittest
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 sys.modules['pyglet'] = None                                             # pas de pyglet : Son le prend pour « son indisponible », on lui donne de faux lecteurs
 from dq4_pc import son as SON
 

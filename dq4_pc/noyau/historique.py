@@ -17,6 +17,7 @@ Un dialogue est montre comme dans le jeu : une fenetre de message, avec le nom d
 l'ecrit (les paroles d'un personnage sans nom commencent par « *: » dans le patch FR : ce debut est garde). Aucun « qui a dit cela » ni « ou » n'est deduit.
 """
 import json, os, re, struct, time
+from dq4_pc.langue import tr, N_
 
 VERSION = 2                        # fichier des favoris (la version 1 etait l'ancien historique des messages par partie : abandonne)
 MAX_DIALOGUES = 1000               # de la session : les plus anciens sortent
@@ -36,11 +37,11 @@ PARTIE_VILLE, PARTIE_COMBAT, PARTIE_CHAMP = 0xc, 0xd, 0xe
 GENRE_NOM, GENRE_GENERAL = 'n', 'g'                    # message avec un nom que le jeu affiche / sans nom
 CAT_TERRAIN, CAT_COMBAT = 't', 'c'                      # message hors combat / de combat (jamais range dans les dialogues)
 TYPE_DIALOGUE, TYPE_COMBAT = 'd', 'c'
-INTROUVABLE = '(Message introuvable dans les fichiers du jeu : %s)'
+INTROUVABLE = N_('(Message introuvable dans les fichiers du jeu : %s)')            # (traduit quand il remplace le texte d'un favori : voir Historique._resoudre)
 
 TYPE_DE_LISTE = {'dialogues': TYPE_DIALOGUE, 'combats': TYPE_COMBAT}              # liste de l'historique -> type de ses elements (Historique.liste, filtre « Favoris seulement »)
 ISSUES = ('victoire', 'fuite', 'defaite')
-LIBELLE_ISSUE = {'victoire': 'Victoire', 'fuite': 'Fuite', 'defaite': 'Défaite'}
+LIBELLE_ISSUE = {'victoire': N_('Victoire'), 'fuite': N_('Fuite'), 'defaite': N_('Défaite')}            # (traduits par la fenetre au dessin : tr(LIBELLE_ISSUE[...]))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- elements
@@ -211,9 +212,12 @@ def envelopper(texte, largeur, mesure):
     return lignes or ['']
 
 
-def pluriel(n, mot_masc):
-    """« 1 vaincu », « 2 vaincus » (mot au masculin singulier)."""
-    return '%d %s%s' % (n, mot_masc, 's' if n > 1 else '')
+def pluriel(n, singulier, plusieurs):
+    """« 1 vaincu », « 2 vaincus » : le modele du singulier ou du pluriel (`singulier`, `plusieurs` : textes a trous « %d vaincu » / « %d vaincus », N_ ; l'anglais n'a qu'une forme mais le garde en deux)."""
+    return tr(singulier if n < 2 else plusieurs) % n
+
+
+SORTS = ((N_('%d vaincu'), N_('%d vaincus')), (N_('%d enfui'), N_('%d enfuis')), (N_('%d disparu'), N_('%d disparus')), (N_('%d resté'), N_('%d restés')))           # vaincus, enfuis, disparus, restes
 
 
 def ligne_espece(e):
@@ -223,19 +227,19 @@ def ligne_espece(e):
     base = '%s ×%d' % (e['nom'], tot) if tot > 1 else e['nom']
     if vai >= tot: return base
     reste = max(0, tot - vai - fui - dis)
-    if tot == 1: return '%s : %s' % (base, 'enfui' if fui else 'disparu' if dis else 'resté')
-    sorts = [pluriel(n, mot) for n, mot in ((vai, 'vaincu'), (fui, 'enfui'), (dis, 'disparu'), (reste, 'resté')) if n > 0]
-    return '%s : %s' % (base, ', '.join(sorts))
+    if tot == 1: return (tr('%s : enfui') if fui else tr('%s : disparu') if dis else tr('%s : resté')) % base
+    sorts = [pluriel(n, *mots) for n, mots in zip((vai, fui, dis, reste), SORTS) if n > 0]
+    return tr('%s : %s') % (base, ', '.join(sorts))
 
 
 def lignes_combat(c):
     """Lignes de texte d'un combat (Element de type 'c'), une par rangee : une par espece d'ennemi (ligne_espece : qui etait la, qui est vaincu, enfui, disparu ou reste), puis, pour une victoire, l'or et l'experience
     gagnes, puis les objets obtenus (« Objets : Herbe médicinale, Pierre de vie »). Rien n'est ecrit quand il n'y a pas eu d'objet."""
     out = [ligne_espece(e) for e in c.ennemis]
-    if not out: out.append('Ennemis inconnus')
+    if not out: out.append(tr('Ennemis inconnus'))
     if c.issue == 'victoire':
-        out.append('Or : %d\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : %d' % (c.or_, c.xp))          # (espaces insecables : la coupure des lignes ne les fait pas disparaitre)
-        if c.objets: out.append('Objets : ' + ', '.join(o['nom'] for o in c.objets))
+        out.append(tr('Or : %d\u00a0\u00a0\u00a0\u00a0\u00a0Expérience : %d') % (c.or_, c.xp))          # (espaces insecables : la coupure des lignes ne les fait pas disparaitre)
+        if c.objets: out.append(tr('Objets : %s') % ', '.join(o['nom'] for o in c.objets))
     return out
 
 
@@ -292,7 +296,7 @@ class Historique:
             self.erreur = repr(ex); self.favoris = []; self.suivant = 1
             try: os.replace(self.chemin, self.chemin + '.corrompu')
             except Exception: pass
-            print('Favoris de l\'historique illisibles (%s) : mis de cote, on repart de zero (%r)' % (self.chemin, ex), flush=True)
+            print(tr("Favoris de l'historique illisibles (%s) : mis de cote, on repart de zero (%r)") % (self.chemin, ex), flush=True)
 
     def enregistrer(self, force=False):
         """Ecrit le fichier s'il a change (ecriture atomique : fichier temporaire puis remplacement). Les ecritures sont groupees : au plus une toutes les DELAI_ENREGISTREMENT secondes, `force` pour la fermeture."""
@@ -308,7 +312,7 @@ class Historique:
             os.replace(tmp, self.chemin); self._sale = False
             return True
         except Exception as ex:
-            self.erreur = repr(ex); print('Favoris de l\'historique non enregistres :', ex, flush=True)
+            self.erreur = repr(ex); print(tr("Favoris de l'historique non enregistres : %s") % (ex,), flush=True)
             return False
 
     # ---- listes
@@ -354,7 +358,7 @@ class Historique:
         if self._cap is None: return
         for f in self.favoris:
             if not f.attente: continue
-            f.texte = texte_lie(self._modele(f.mid), f.seg, f.val) or INTROUVABLE % cle_message(f.mid)
+            f.texte = texte_lie(self._modele(f.mid), f.seg, f.val) or tr(INTROUVABLE) % cle_message(f.mid)
             f.attente = False; f.n = self._num()                                   # (nouveau numero : la mise en page gardee par la fenetre ne vaut plus)
 
     def actualiser(self):
@@ -364,7 +368,7 @@ class Historique:
         for f in self.favoris:
             if f.lie: f.attente = True
         try: self._resoudre()
-        except Exception as ex: self.erreur = repr(ex); print('Historique : texte des favoris non redemande (%r)' % (ex,), flush=True)
+        except Exception as ex: self.erreur = repr(ex); print(tr('Historique : texte des favoris non redemande (%r)') % (ex,), flush=True)
 
     def retirer_favori(self, ident):
         self.favoris = [f for f in self.favoris if f.fav != ident]
@@ -411,7 +415,7 @@ class Historique:
             self._resoudre()
             self.enregistrer()
         except Exception as ex:                                              # l'historique ne doit jamais arreter le jeu
-            if self.erreur is None: print('Historique : erreur (%r)' % (ex,), flush=True)
+            if self.erreur is None: print(tr('Historique : erreur (%r)') % (ex,), flush=True)
             self.erreur = repr(ex)
 
     def _ranger(self, r):
@@ -465,13 +469,13 @@ class Capteur:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, self._cat, None, cat, cat)
             self.actif = True
         except Exception as ex:
-            print('Historique : crochets non installes (%r)' % (ex,), flush=True)
+            print(tr('Historique : crochets non installes (%r)') % (ex,), flush=True)
             return
         try:
             add = c.export(SYM_UI_MSGADD)
             if add: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._add, None, add, add)
         except Exception as ex:
-            print('Historique : numeros de message non captes (%r)' % (ex,), flush=True)
+            print(tr('Historique : numeros de message non captes (%r)') % (ex,), flush=True)
 
     def _add(self, uc, adr, taille, _):
         """Entree de ui_MsgAdd : le numero du message (1er argument) que TextBuffer::cat va recevoir."""

@@ -31,6 +31,7 @@ Methode (ETABLI par lecture du moteur desassemble puis par mesure : voir outils/
 Tout est protege : une erreur ne renvoie rien et ne s'ecrit qu'une fois dans la console. Un combat dont on n'a pas vu le debut (etat instantane charge en plein combat, capteur cree pendant un combat) n'est jamais
 rapporte : mieux vaut ne rien dire que de dire faux."""
 import re, struct
+from dq4_pc.langue import tr, N_
 
 PARTIE_COMBAT = 0xd
 NB_EMPLACEMENTS = 12                   # g_Monster : 12 monstres au plus
@@ -39,7 +40,7 @@ OFF_NUMERO, OFF_GROUPE = 0x4f8, 0x4fc  # dans un MonsterStatus : numero du monst
 OFF_XP, OFF_OR = 0x2f8, 0x2fc         # dans g_Party : experience et or du combat en cours (versees a la victoire)
 OFF_DEFAITE = 0x509                    # g_BattleResult + 0x509 : le groupe a perdu (ExitTask::terminate le teste avant d'appeler endBattle)
 INCONNU = 0xffffffff
-NOM_INCONNU = 'Monstre'
+NOM_INCONNU = N_('Monstre')                      # (nom de remplacement quand le moteur ne repond pas : traduit a la capture, voir CapteurCombat)
 ISSUES = ('victoire', 'fuite', 'defaite')
 MAX_IMAGES_SANS_COMBAT = 20            # images de suite hors de la partie « combat » avant d'abandonner un suivi (la fin normale arrive toujours avant le changement de partie)
 MAX_SAUT_IMAGES = 8                    # ecart maximal de Moteur.images entre deux appels de maj sans parler de rupture (etat instantane charge...)
@@ -58,7 +59,7 @@ SYM_NOM_OBJET = '_ZN7TextAPI11extractTextEPci'
 GENRE_OBJET = 0x4000000                                                              # « nom d'objet » dans les macros de texte du jeu (setMACRO0(0xa, 0x4000000, numero))
 GENRE_MONSTRE = 0x6000000                                                            # « nom de monstre » (BattleActorMacro::setMacroActor : setMACRO0(1, 0x6000000, numero de monstre))
 OFF_OBJET_TACHE = 0xc                                                                # BattleExecVictory32 : numero de l'objet a donner
-NOM_OBJET_INCONNU = 'Objet n°%d'
+NOM_OBJET_INCONNU = N_('Objet n°%d')
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------- partie pure (sans emulateur)
@@ -164,7 +165,7 @@ class Suivi:
         for m in self.monstres:
             nom = self.noms.get(m['num'])
             cle = ('n', nom) if nom else ('?', m['num'])
-            e = especes.setdefault(cle, {'nom': nom or NOM_INCONNU, 'total': 0, 'vaincus': 0, 'fuis': 0, 'disparus': 0})
+            e = especes.setdefault(cle, {'nom': nom or tr(NOM_INCONNU), 'total': 0, 'vaincus': 0, 'fuis': 0, 'disparus': 0})
             e['total'] += 1; e['vaincus'] += 1 if m['vaincu'] else 0; e['fuis'] += 1 if m['fui'] else 0; e['disparus'] += 1 if m['disparu'] else 0
         return list(especes.values())
 
@@ -198,21 +199,21 @@ class CapteurCombat:
             c = self.c = moteur.core
             self.g_party = c.export('_ZN6status7g_PartyE'); self.g_monster = c.export('_ZN6status9g_MonsterE'); self.g_game = c.export('_ZN6status6g_GameE'); self.g_result = c.export('_ZN6status14g_BattleResultE')
             if not (self.g_party and self.g_monster and self.g_game and self.g_result) or not self._verifier():
-                print('Historique des combats : moteur inattendu, capture desactivee', flush=True); return
+                print(tr('Historique des combats : moteur inattendu, capture desactivee'), flush=True); return
             for evt, nom in CROCHETS:
                 a = c.export(nom)
-                if not a: print('Historique des combats : %s introuvable, capture desactivee' % nom, flush=True); return
+                if not a: print(tr('Historique des combats : %s introuvable, capture desactivee') % nom, flush=True); return
             for evt, nom in CROCHETS: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._crochet(evt), None, c.export(nom), c.export(nom))
             for evt, nom, off, mot in CROCHETS_INTERNES:                               # (en cas de moteur different, seul cet evenement est perdu)
                 a = c.export(nom)
                 if not a or struct.unpack('<I', c.mem(a + off, 4))[0] != mot:
-                    print('Historique des combats : %s inattendu (+%#x), « %s » non suivi' % (nom, off, evt), flush=True); continue
+                    print(tr('Historique des combats : %s inattendu (+%#x), « %s » non suivi') % (nom, off, evt), flush=True); continue
                 c.uc.hook_add(unicorn.UC_HOOK_CODE, self._crochet(evt), None, a + off, a + off)
             try: c.uc.ctl_flush_tb()                                                    # (blocs deja traduits avant les crochets : un capteur cree apres quelques combats)
             except Exception: pass
             self.actif = True
         except Exception as ex:
-            self.erreur = repr(ex); print('Historique des combats : crochets non installes (%r)' % (ex,), flush=True)
+            self.erreur = repr(ex); print(tr('Historique des combats : crochets non installes (%r)') % (ex,), flush=True)
 
     @classmethod
     def pour(cls, moteur):
@@ -292,7 +293,7 @@ class CapteurCombat:
             if self.sorties: out, self.sorties = self.sorties, []; return out
             return []
         except Exception as ex:                                                              # la capture ne doit jamais arreter le jeu
-            if self.erreur is None: print('Historique des combats : erreur (%r)' % (ex,), flush=True)
+            if self.erreur is None: print(tr('Historique des combats : erreur (%r)') % (ex,), flush=True)
             self.erreur = repr(ex); self.suivi = None; self.evenements = []
             return []
 
@@ -346,7 +347,7 @@ class CapteurCombat:
     def _nom_objet(self, numero):
         """Nom de l'objet (le nom que le jeu affiche) ; garde. Sans reponse : « Objet n°12 »."""
         nom = self._noms_objets.get(numero)
-        if nom is None: nom = self._noms_objets[numero] = self._texte_moteur(GENRE_OBJET, numero) or NOM_OBJET_INCONNU % numero
+        if nom is None: nom = self._noms_objets[numero] = self._texte_moteur(GENRE_OBJET, numero) or tr(NOM_OBJET_INCONNU) % numero
         return nom
 
     def _nom_monstre(self, numero):

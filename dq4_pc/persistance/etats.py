@@ -8,6 +8,8 @@ Fichier : b'DQ4ETAT1' | taille + JSON des infos | taille + PNG de la miniature |
 Les etats ne contiennent AUCUN fichier du jeu : ils ne servent qu'avec l'APK qui les a produits (meme version de la bibliotheque)."""
 import hashlib, io, json, os, pickle, struct, time, zlib
 
+from dq4_pc.langue import tr
+
 # Anciens noms de modules (avant le rangement du 04/11/2026 : tout etait a plat dans dq4_pc) -> noms actuels : les etats enregistres avant cette date
 # gardent le nom de module `moteur` (ou autre) dans leur pickle ; on les relit sans les changer.
 ANCIENS_MODULES = {
@@ -41,7 +43,7 @@ class _Depickler(pickle.Unpickler):
     def find_class(self, module, name):
         module = ANCIENS_MODULES.get(module, module)
         if name not in CLASSES_AUTORISEES.get(module, ()):
-            raise pickle.UnpicklingError("fichier d'état refusé : il demande « %s.%s », ce qu'un état du portage ne contient pas (fichier venu d'ailleurs ou abîmé ; il n'a pas été exécuté)" % (module, name))
+            raise pickle.UnpicklingError(tr("fichier d'état refusé : il demande « %s.%s », ce qu'un état du portage ne contient pas (fichier venu d'ailleurs ou abîmé ; il n'a pas été exécuté)") % (module, name))
         return super().find_class(module, name)
 
 
@@ -87,9 +89,9 @@ def instantane(m, viewer=None):
 
 def appliquer(m, d):
     """Remet le moteur `m` dans l'etat `d` -> objet `viewer` donne a instantane. Les ressources liees a la fenetre (fenetres de menu d'origine, textures) sont a reconstruire par l'appelant (voir Jeu.charger_etat)."""
-    if d.get('version') != VERSION: raise ValueError('etat d\'une autre version (%s)' % d.get('version'))
+    if d.get('version') != VERSION: raise ValueError(tr('etat d\'une autre version (%s)') % d.get('version'))
     c = m.core; uc = c.uc
-    if d.get('lib_sha') and d['lib_sha'] != empreinte_lib(c): raise ValueError('etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge')       # (les etats d'avant #206 n'ont pas d'empreinte : acceptes)
+    if d.get('lib_sha') and d['lib_sha'] != empreinte_lib(c): raise ValueError(tr('etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge'))       # (les etats d'avant #206 n'ont pas d'empreinte : acceptes)
     p = _charger(d['python']); viewer = _charger(d['viewer']) if d.get('viewer') else None            # TOUT est lu avant d'ecrire quoi que ce soit dans le moteur : un fichier abime laisse le jeu intact (#206)
     uc.mem_write(c.LIB_BASE, bytes(c.elf.img))
     for i, b in d['lib']: uc.mem_write(c.LIB_BASE + i * PAGE, b)
@@ -137,7 +139,7 @@ def infos(chemin):
 def lire(chemin):
     """-> dictionnaire d'etat (a passer a appliquer)."""
     with open(chemin, 'rb') as f:
-        if f.read(len(MAGIE)) != MAGIE: raise ValueError('ce n\'est pas un etat du portage')
+        if f.read(len(MAGIE)) != MAGIE: raise ValueError(tr('ce n\'est pas un etat du portage'))
         n, = struct.unpack('<I', f.read(4)); f.read(n)
         k, = struct.unpack('<I', f.read(4)); f.read(k)
         return _charger(zlib.decompress(f.read()))

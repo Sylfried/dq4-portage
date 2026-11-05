@@ -9,6 +9,7 @@ import ctypes, os
 import numpy as np
 from pyglet import gl
 from pyglet.graphics.shader import Shader, ShaderProgram
+from dq4_pc.langue import tr
 
 VERT = '''#version 330 core
 in vec2 position; in vec2 tex_coords;
@@ -129,11 +130,11 @@ class PostFX:
             w, h = int(round(W * ech)), int(round(H * ech))
             if self.cle != (w, h, reel):
                 self._creer(w, h, reel); self.msaa = reel
-                self.log('Rendu hors écran : %d x %d (x%.2g), anticrénelage %s%s' % (w, h, ech, 'x%d' % reel if reel else 'non', ' (demandé x%d)' % ms if reel != ms else ''))
+                self.log((tr('Rendu hors écran : %d x %d (x%.2g), anticrénelage x%d') % (w, h, ech, reel) if reel else tr('Rendu hors écran : %d x %d (x%.2g), anticrénelage non') % (w, h, ech)) + (tr(' (demandé x%d)') % ms if reel != ms else ''))
             self._passe()
         except Exception as ex:
             self.ok = False; self.msaa = 0; gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-            self.log('Rendu hors écran impossible (%r) : dessin direct, sans anticrénelage' % (ex,)); return W, H
+            self.log(tr('Rendu hors écran impossible (%r) : dessin direct, sans anticrénelage') % (ex,)); return W, H
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
         gl.glViewport(0, 0, *self.fb)
         gl.glClearColor(float(fond[0]), float(fond[1]), float(fond[2]), 1.0); gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)

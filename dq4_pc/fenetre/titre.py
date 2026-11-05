@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pyglet
 from pyglet import gl
+from dq4_pc.langue import tr, N_
 from dq4_pc.menus import avant_partie as AP
 from dq4_pc.menus import ecran_sauvegardes as ES
 from dq4_pc.rendu import ciel_titre as CT
@@ -48,7 +49,7 @@ class TitreMixin:
                             continue
                         self.ciel_ext = {'ciel': cl, 'tex': self.tex_gl[(src, key)], 'key': key, 'deb': deb, 'vl': None, 'nv': 0}
                         continue
-                    except Exception as ex: print('Ciel du titre : %s (copies decalees a la place)' % ex, flush=True)
+                    except Exception as ex: print(tr('Ciel du titre : %s (copies decalees a la place)') % ex, flush=True)
                 cur = self.objets.cur[key][deb:deb + n]; larg = float(cur[:, 0].max() - cur[:, 0].min())
                 for dx in (-larg, larg):
                     vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', CT.positions_copie(cur, dx).ravel()), tex_coords=('f', self.objets.uv(key)[deb:deb + n].ravel()), colors=('f', self.objets.col(key)[deb:deb + n].ravel()))
@@ -92,7 +93,7 @@ class TitreMixin:
             return True
         except Exception as ex:
             self.ciel_plat = None; self.prog['mvp'] = tuple(float(x) for x in self._M_ville.T.ravel()); gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
-            print('Ciel du titre (a plat) desactive : %s' % ex, flush=True)
+            print(tr('Ciel du titre (a plat) desactive : %s') % ex, flush=True)
             return False
 
     def _tracer_ciel(self, r, net_o):
@@ -115,7 +116,7 @@ class TitreMixin:
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
         except Exception as ex:
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL); self.ciel_ext = None
-            print('Ciel du titre (bandes) desactive : %s' % ex, flush=True)
+            print(tr('Ciel du titre (bandes) desactive : %s') % ex, flush=True)
 
     def _port_depart(self, port):
         """Vrai si ce port est le menu de depart (type 53, Make_StartMenuSecond)."""
@@ -132,7 +133,7 @@ class TitreMixin:
 
     def _apres_import(self):
         """Des journaux viennent d'etre importes (le catalogue du moteur a deja ete relu par l'ecran Sauvegardes)."""
-        self.toast('Sauvegardes importées')
+        self.toast(N_('Sauvegardes importées'))                      # (N_ : marque le texte, que toast() traduit)
 
     def _cadre_depart(self, fe, cx, cy, s, visibles=False):
         """Cadre noir (comme les autres menus du portage) derriere tout le menu de depart (ou de la fenetre d'avant-partie centree)."""
@@ -177,7 +178,7 @@ class TitreMixin:
         elif nom == 'politique':
             self.son.jouer_se(SE_BOUTON)
             try: import webbrowser; webbrowser.open(AP.URL_CONFIDENTIALITE)
-            except Exception as ex: print('Ouverture de la page de la politique de confidentialite impossible : %r' % (ex,), flush=True)
+            except Exception as ex: print(tr('Ouverture de la page de la politique de confidentialite impossible : %r') % (ex,), flush=True)
 
     def _dessiner_sauvegardes(self):
         if self.sauv is None: return

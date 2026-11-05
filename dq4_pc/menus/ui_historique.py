@@ -28,17 +28,18 @@ from dq4_pc.noyau import historique as HI
 from dq4_pc.menus import hud_mobile as HM
 from dq4_pc.persistance import reglages as RG
 from dq4_pc.menus import ui_menu as UM
+from dq4_pc.langue import tr, N_
 
 OR = (255, 235, 4); BLANC = (255, 255, 255); GRIS = (150, 150, 150); AIDE = (175, 175, 175); ETOILE = (255, 210, 40); VIDE_ETOILE = (20, 20, 20)
 TOLERANCE_GLISSE = 6.0               # pixels : en dessous, un appui dans la liste n'est pas un glissement
-ONGLETS = (('Dialogues', 'dialogues'), ('Combats', 'combats'))
+ONGLETS = ((N_('Dialogues'), 'dialogues'), (N_('Combats'), 'combats'))            # (noms traduits au dessin)
 O_DIALOGUES, O_COMBATS = 0, 1
-LIBELLE_FILTRE = 'Favoris seulement'
+LIBELLE_FILTRE = N_('Favoris seulement')
 ECHELLE_BOITE = 1.12                 # agrandissement des fenetres du jeu par rapport a H / 800 (= fenetre.UI_ZOOM) : la boite de l'historique a la taille d'une boite de dialogue du jeu a l'ecran
 TEXTE_ECH = 1.09                     # un pixel de la police d'origine (SE-GARRIR) = 1,09 unite d'interface dans le canevas de message du jeu (mesure : ligne de 371 pixels de police = 407 pixels a l'ecran a l'echelle 1,008 ; l'en-tete de la mise en page annonce 1,105, le moteur arrondit les avances)
-VIDES = {'dialogues': 'Aucun dialogue pour l\'instant.', 'combats': 'Aucun combat pour l\'instant.'}
-VIDES_FAVORIS = {'dialogues': 'Aucun dialogue en favori : décoche « Favoris seulement », choisis un dialogue et appuie sur Entrée (ou clique son étoile) pour le garder.',
-                 'combats': 'Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.'}
+VIDES = {'dialogues': N_("Aucun dialogue pour l'instant."), 'combats': N_("Aucun combat pour l'instant.")}
+VIDES_FAVORIS = {'dialogues': N_('Aucun dialogue en favori : décoche « Favoris seulement », choisis un dialogue et appuie sur Entrée (ou clique son étoile) pour le garder.'),
+                 'combats': N_('Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.')}            # (traduits au dessin, en entier avant d'etre coupes aux mots)
 
 
 def couper_mots(texte, largeur, larg_max):
@@ -478,7 +479,7 @@ class VueHistorique:
 
     def _largeur_filtre(self, bm, sc, taille, k):
         """Largeur de la plaque de la case « Favoris seulement » : marge, case, marge, petite etoile, libelle, marge."""
-        return 14 * k + 18 * k + 9 * k + 2 * 8 * k + 7 * k + self._larg(bm, LIBELLE_FILTRE, sc, taille) + 14 * k
+        return 14 * k + 18 * k + 9 * k + 2 * 8 * k + 7 * k + self._larg(bm, tr(LIBELLE_FILTRE), sc, taille) + 14 * k
 
     def _filtre(self, bm, sc, taille, asc, k, fx, ty, th):
         """Case a cocher « Favoris seulement » : une plaque a la hauteur des onglets, a droite du dernier onglet (le groupe onglets + case est centre dans la fenetre), avec la case, une petite etoile et le libelle ;
@@ -498,7 +499,7 @@ class VueHistorique:
             pyglet.shapes.Line(bx + cb * 0.42, by + cb * 0.22, bx + cb * 0.84, by + cb * 0.82, thickness=max(2.0, 2.6 * k), color=OR + (255,)).draw()
         ex = bx + cb + 9 * k + rs; ey = ty + th / 2
         pyglet.shapes.Star(ex, ey, rs * 1.15, rs * 0.5, 5, rotation=0, color=(ETOILE if on else GRIS) + (255,)).draw()
-        self._ligne(bm, LIBELLE_FILTRE, ex + rs + 7 * k, ty + th / 2 - (asc * 0.37 if bm else 6 * k), sc, coul, taille)
+        self._ligne(bm, tr(LIBELLE_FILTRE), ex + rs + 7 * k, ty + th / 2 - (asc * 0.37 if bm else 6 * k), sc, coul, taille)
 
     def _plaque(self, x, y, w, h, k, choisi):
         J = self.J; r = getattr(J, 'ui_rendu', None)
@@ -592,13 +593,13 @@ class VueHistorique:
         else: fm = bm; base_texte = B.base
         asc = (bm.ascent * su) if bm else 18 * k
         kb = 1.1 * k; bw, bh = 64 * kb, 55.5 * kb
-        lgs = [self._larg(bm, nom, su, taille) + 44 * k for nom, _ in ONGLETS]; tw = max(lgs + [120 * k]); gap = 10 * k
+        lgs = [self._larg(bm, tr(nom), su, taille) + 44 * k for nom, _ in ONGLETS]; tw = max(lgs + [120 * k]); gap = 10 * k
         larg_onglets = tw * len(ONGLETS) + gap * (len(ONGLETS) - 1); fw = self._largeur_filtre(bm, su, taille, k)
         larg_ligne = larg_onglets + 14 * k + fw                                                       # la ligne des onglets : les onglets puis la case « Favoris seulement »
         pw = min(W - 20 * k, max(B.LARG * s + B.MARGES * k, larg_ligne + 2 * 34 * k)); h = H - 2 * 30 * k - bh - 10 * k
         x0 = (W - pw) / 2; y1 = (H + h + bh + 10 * k) / 2; y0 = y1 - h
         HM.cadre(x0, y0, pw, h, k, fond=(0, 0, 0), opacite=HM.OPACITE_JEU)                # aussi transparent que les autres fenetres du jeu
-        titre = 'Historique'
+        titre = tr('Historique')
         wt = self._larg(bm, titre, su * 1.25, taille * 1.3)
         self._ligne(bm, titre, x0 + (pw - wt) / 2, y1 - 24 * k - asc * 1.25, su * 1.25, BLANC, taille * 1.3)
         # onglets (plaques du jeu : l'onglet ouvert est la plaque « choisie »)
@@ -608,12 +609,12 @@ class VueHistorique:
             zx = tx + i * (tw + gap); zone = (zx, ty, zx + tw, ty + th); self.zones_onglet.append(zone + (i,))
             sur = (P._sur(zone) if hasattr(P, '_sur') else False) and P.mode_souris
             self._plaque(zx, ty, tw, th, k, i == self.onglet or sur)
-            lf = self._larg(bm, nom, su, taille); self._ligne(bm, nom, zx + (tw - lf) / 2, ty + th / 2 - (asc * 0.37 if bm else 6 * k), su, OR if i == self.onglet else BLANC, taille)
+            nom = tr(nom); lf = self._larg(bm, nom, su, taille); self._ligne(bm, nom, zx + (tw - lf) / 2, ty + th / 2 - (asc * 0.37 if bm else 6 * k), su, OR if i == self.onglet else BLANC, taille)
         self._filtre(bm, su, taille, asc, k, tx + larg_onglets + 14 * k, ty, th)                  # case « Favoris seulement » (a droite des onglets)
         # aide (une ou deux lignes, selon la largeur de la fenetre)
         ks = (J.reg['touches'].get('historique') or [None])[0] if hasattr(J.reg, '__getitem__') else None
         kn = RG.nom_touche(ks) if ks else None
-        aide = ['Haut / Bas : message précédent / suivant', 'Molette : défiler', 'Gauche / Droite : onglet', 'Entrée : favori ★', 'F : favoris seulement'] + (['%s : suite' % kn] if kn else []) + ['Échap : fermer']
+        aide = [tr('Haut / Bas : message précédent / suivant'), tr('Molette : défiler'), tr('Gauche / Droite : onglet'), tr('Entrée : favori ★'), tr('F : favoris seulement')] + ([tr('%s : suite') % tr(kn)] if kn else []) + [tr('Échap : fermer')]
         la_max = pw - 24 * k; mes_aide = lambda t: self._larg(bm, t, su * 0.72, taille * 0.72)
         lignes_aide = []; cur = ''
         for a in aide:
@@ -628,7 +629,7 @@ class VueHistorique:
         n = len(self.elements)
         if not n:
             self.hc = self.hv = 0.0; self.pos = 0.0; self._mise = None
-            msg = (VIDES_FAVORIS if self.favoris_seuls else VIDES)[ONGLETS[self.onglet][1]]
+            msg = tr((VIDES_FAVORIS if self.favoris_seuls else VIDES)[ONGLETS[self.onglet][1]])
             vl = couper_mots(msg, lambda t: self._larg(bm, t, su, taille), pw - 40 * k)                 # le message tient dans la fenetre : coupe en plusieurs lignes, centrees (il debordait du cadre quand il etait long)
             pas_v = (bm.interligne * su) if bm else 28 * k; y_v = (ly0 + ly1) / 2 + (len(vl) - 1) * pas_v / 2
             for j, l in enumerate(vl): self._ligne(bm, l, x0 + (pw - self._larg(bm, l, su, taille)) / 2, y_v - j * pas_v, su, GRIS, taille)
@@ -653,7 +654,7 @@ class VueHistorique:
                     if i == self.sel and p == haut_de[i]: P._curseur(x0 + 4 * k, yb + hb / 2, min(hb * 0.7, 28 * k))      # le message choisi (clavier ou souris) : la petite fleche, et rien d'autre
                     rang = 0
                     if e.type == HI.TYPE_COMBAT and p == 0:                                # entete : l'issue du combat a gauche, l'heure de jeu a droite
-                        base = yb + hb - base_texte(0) * s; self._ligne(fm, HI.LIBELLE_ISSUE.get(e.issue, ''), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
+                        base = yb + hb - base_texte(0) * s; self._ligne(fm, tr(HI.LIBELLE_ISSUE.get(e.issue, '')), lx0 + B.TEXTE_X * s, base, sc, OR, taille_b)
                         ht = heure_jeu(e.t); self._ligne(fm, ht, lx0 + (B.LARG - 14) * s - self._larg(fm, ht, sc * 0.8, taille_b * 0.8), base, sc * 0.8, AIDE, taille_b * 0.8); rang = 1
                     for l in rangees:
                         self._ligne(fm, l, lx0 + B.TEXTE_X * s, yb + hb - base_texte(rang) * s, sc, BLANC, taille_b); rang += 1

@@ -14,6 +14,7 @@ import os, shutil, sys, tempfile, unittest, zipfile
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc import chemins as CH
 from dq4_pc.persistance import sauvegardes as S
 

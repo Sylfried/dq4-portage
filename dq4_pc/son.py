@@ -10,6 +10,7 @@ Rien n'est ecrit hors du dossier cache ; aucun fichier du jeu n'est modifie.
 import os, io, time, struct, zipfile, threading, collections
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
+from dq4_pc.langue import N_, tr
 
 DEBUT_DONNEES = 0xcc
 ADAPT = (230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230)
@@ -173,19 +174,19 @@ class Son:
             import soundfile                                               # lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
             self.ogg = True
         except Exception:
-            self.log('Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.')
+            self.log(tr('Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.'))
         try:
             import pyglet
             from pyglet.media.codecs.base import AudioFormat, AudioData
             self.pyglet = pyglet; self.media = pyglet.media; self.AudioFormat = AudioFormat; self.AudioData = AudioData
             self.ok = True
         except Exception as e:
-            self.log('Son indisponible (%r)' % (e,))
+            self.log(tr('Son indisponible (%r)') % (e,))
 
     # ---- echecs de lecture (#221, audit SND-10 et SND-12)
     def _noter(self, texte, alerte=None):
         """Une ligne dans la console et dans le journal des erreurs (au plus NOTES_MAX par session) ; `alerte` : le meme fait, en bref, a l'ecran."""
-        self.log('Son : ' + texte)
+        self.log(tr('Son : %s') % texte)
         if self._notes < NOTES_MAX:
             self._notes += 1
             if self.journal is not None:
@@ -197,19 +198,19 @@ class Son:
 
     def _une_fois(self, cle, e):
         """Erreur sans consequence immediate (volume, reprise apres pause) : notee une seule fois par session."""
-        if cle not in self._vus: self._vus.add(cle); self._noter('%s impossible (%r), note une seule fois' % (cle, e))
+        if cle not in self._vus: self._vus.add(cle); self._noter(tr('%s impossible (%r), note une seule fois') % (tr(cle), e))
 
     def _echec(self, quoi, e):
         """Un bruitage ou une musique n'a pas pu etre lance : ECHECS_MAX echecs de suite coupent le son un moment (nouvel essai tout seul, voir tick) au lieu de le couper jusqu'a la fermeture du jeu."""
-        self.echecs += 1; self._noter('%s impossible (%r), echec %d' % (quoi, e, self.echecs))
+        self.echecs += 1; self._noter(tr('%s impossible (%r), echec %d') % (quoi, e, self.echecs))
         if self.echecs >= ECHECS_MAX:
             d = DELAIS_REESSAI[min(self.pannes, len(DELAIS_REESSAI) - 1)]; self.pannes += 1
             self.ok = False; self.reessai = time.time() + d; self._en_panne = True
-            self._noter('son interrompu, nouvel essai dans %d s' % d, alerte='Son interrompu : nouvel essai automatique')
+            self._noter(tr('son interrompu, nouvel essai dans %d s') % d, alerte=tr('Son interrompu : nouvel essai automatique'))
 
     def _succes(self):
         """Un son vient de partir : la serie d'echecs est finie (et, apres une coupure, le son est retabli)."""
-        if self._en_panne: self._en_panne = False; self._noter('son retabli', alerte='Son rétabli')
+        if self._en_panne: self._en_panne = False; self._noter(tr('son retabli'), alerte=tr('Son rétabli'))
         self.echecs = 0
 
     def _reessayer(self):
@@ -269,7 +270,7 @@ class Son:
     def _decode_sur(self, nom):
         try: return self._decode(nom)
         except Exception as e:
-            self.log('Son : %s illisible (%r)' % (nom, e)); return None
+            self.log(tr('Son : %s illisible (%r)') % (nom, e)); return None
 
     def precharger(self, ids):
         """Decode en tache de fond les bruitages courants."""
@@ -379,7 +380,7 @@ class Son:
                 del self.se[0]
             self._succes()
         except Exception as e:
-            self._echec('bruitage %d' % ident, e)
+            self._echec(tr('bruitage %d') % ident, e)
 
     def arreter_se(self, ident):
         for x in list(self.se):
@@ -426,7 +427,7 @@ class Son:
             self._succes()
         except Exception as e:
             if not relance: self.bgm_perdue = ident                          # a relancer au retour du son (un jingle rate n'a plus d'objet)
-            self._echec('musique %d' % ident, e)
+            self._echec(tr('musique %d') % ident, e)
 
     def position_bgm(self):
         """Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue."""
@@ -482,10 +483,10 @@ class Son:
     def _appliquer_volumes(self):
         if self.bgm is not None:
             try: self.bgm.volume = self.mix.gain(self.bgm_cat, self.bgm_propre)
-            except Exception as e: self._une_fois('volume de la musique', e)
+            except Exception as e: self._une_fois(N_('volume de la musique'), e)
         for x in self.se:
             try: x.p.volume = self.mix.gain(x.cat, x.propre, 'effets')
-            except Exception as e: self._une_fois('volume des bruitages', e)
+            except Exception as e: self._une_fois(N_('volume des bruitages'), e)
 
     def regler_volumes(self, musique=None, bruitages=None):
         """Compatibilite : volume de la musique et des bruitages (0 a 1)."""
@@ -528,7 +529,7 @@ class Son:
             for p in [self.bgm] + [x.p for x in self.se]:
                 try:
                     if p is not None: p.play()
-                except Exception as e: self._une_fois('reprise apres la pause', e)
+                except Exception as e: self._une_fois(N_('reprise apres la pause'), e)
 
     def basculer(self):
         """Touche : son active / coupe."""

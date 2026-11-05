@@ -4,6 +4,7 @@ Tout vient du code d'origine (Boot, TapToStart, ApplicationQuit... de libil2cpp.
 section « Avant la partie »). Ce module ne depend ni du moteur ni d'OpenGL en dehors du dessin des images (pyglet.sprite)."""
 import os
 import pyglet
+from dq4_pc.langue import tr, N_
 
 # fichiers du cache -> (archive, type d'objet Unity, nom de la ressource)
 RESSOURCES = {
@@ -61,7 +62,7 @@ def preparer(dossier_apk, cache, log=print):
     try:
         import UnityPy, zipfile
         os.makedirs(cache, exist_ok=True)
-        log('Lecture des images du titre (une seule fois)...')
+        log(tr('Lecture des images du titre (une seule fois)...'))
         archives = {}
         for cle in {RESSOURCES[n][0] for n in manque}:
             if cle == 'base': archives[cle] = UnityPy.load(os.path.join(dossier_apk, 'base.apk'))
@@ -78,7 +79,7 @@ def preparer(dossier_apk, cache, log=print):
                 break
         return all(os.path.exists(p) for p in dest.values())
     except Exception as ex:
-        log('Images du titre indisponibles : %r' % (ex,)); return False
+        log(tr('Images du titre indisponibles : %r') % (ex,)); return False
 
 
 def chemins(cache):
@@ -176,6 +177,7 @@ LI_TEXTE = (-198.0, -262.0, 186.0, 272.0)                  # zone du texte (x0, 
 LI_POLITIQUE = (-198.0, -334.0, 90.0, -284.0)              # bouton « Privacy Policy »
 LI_RETOUR = (136.0, -337.0, 198.0, -285.0)
 LI_TITRE_Y = 302.0
+LI_TITRE = N_('Licence')                    # (dessine par Pause._et, qui le traduit ; « Privacy Policy » est le texte du jeu)
 
 
 # Texte ajoute en tete de l'ecran Licence (en anglais, comme la liste d'origine) : ce que le portage est et ce qu'il utilise. La liste d'origine (TextAsset Menu/License_list_A) suit, inchangee.
@@ -265,7 +267,7 @@ class Licence:
         g.glDisable(g.GL_DEPTH_TEST); g.glEnable(g.GL_BLEND); g.glBlendFunc(g.GL_SRC_ALPHA, g.GL_ONE_MINUS_SRC_ALPHA)
         x0, y0 = U(LI_CADRE[0], LI_CADRE[1]); x1, y1 = U(LI_CADRE[2], LI_CADRE[3]); P._cadre(x0, y0, x1 - x0, y1 - y0, k)
         P._melange()
-        et = P._et('Licence', 24 * ech * 0.75); et.x = cx - et.content_width / 2; et.y = cy + LI_TITRE_Y * ech - 9 * ech; et.draw()
+        et = P._et(LI_TITRE, 24 * ech * 0.75); et.x = cx - et.content_width / 2; et.y = cy + LI_TITRE_Y * ech - 9 * ech; et.draw()
         lay = self._mise(J, ech); self.haut = min(self.haut, self.maximum())
         tx, ty = U(LI_TEXTE[0], LI_TEXTE[1]); lay.x = int(tx); lay.y = int(ty); lay.view_y = -int(self.haut); lay.draw()
         # barre de defilement

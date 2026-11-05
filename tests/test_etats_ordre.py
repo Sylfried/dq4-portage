@@ -4,6 +4,7 @@ Sans APK : cas avec faux moteur. Avec l'APK (DQ_APK) : le meme essai sur le vrai
 import hashlib, os, shutil, sys, tempfile, types, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc.persistance import etats
 APK = os.environ.get('DQ_APK', '/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks')
 

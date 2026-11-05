@@ -3,6 +3,7 @@ import math, os, time
 import numpy as np
 import pyglet
 from pyglet import gl
+from dq4_pc.langue import tr
 from dq4_pc.combat import effets_plein_ecran as EPE
 from dq4_pc.combat import vitesse_combat as VC
 from dq4_pc.menus import avant_partie as AP
@@ -108,9 +109,9 @@ class CombatMixin:
         if orig is None:
             try: arr = self.donnees.texture('m%03d' % mid)
             except Exception as ex:
-                print('texture de monstre introuvable :', mid, ex, flush=True); arr = None
+                print(tr('texture de monstre introuvable :'), mid, ex, flush=True); arr = None
             else:
-                if arr is None: print('texture de monstre absente des donnees :', mid, flush=True)          # 25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
+                if arr is None: print(tr('texture de monstre absente des donnees :'), mid, flush=True)          # 25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
             if arr is None: arr = np.zeros((16, 16, 4), np.uint8)               # monstre non dessine (texture transparente) plutot qu'un arret du jeu
             t = self._tex(arr, False, 0)
             gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
@@ -127,7 +128,7 @@ class CombatMixin:
         del self.hd_jobs[jc]
         try: a = fut.result()
         except Exception as ex:
-            print('lissage HD impossible (monstre %d) : %s' % (mid, ex), flush=True); self.cb_tex[cle] = orig; return orig
+            print(tr('lissage HD impossible (monstre %d) : %s') % (mid, ex), flush=True); self.cb_tex[cle] = orig; return orig
         self.cb_tex[cle] = dict(t=self._tex(a, False, HD_NIVEAUX), tw=a.shape[1], th=a.shape[0], hd=a is not orig['arr'])
         if not self.lissage: self._filtrer(self.cb_tex[cle]['t'], False)
         return self.cb_tex[cle]
@@ -198,7 +199,7 @@ class CombatMixin:
             if len(sol) < 20: sol = a[a[:, 0] >= np.percentile(a[:, 0], 85)]
             return tuple(float(x) for x in sol[:, 2:].mean(0))
         except Exception as ex:
-            print('fond de combat non calcule :', ex, flush=True); return None
+            print(tr('fond de combat non calcule :'), ex, flush=True); return None
 
     def _ui_x_monstres(self, masque, liste=False):
         """Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat. -> (min, max), ou la liste des abscisses (une par monstre) si `liste`."""
@@ -245,7 +246,7 @@ class CombatMixin:
                     t = pyglet.image.ImageData(16, 16, 'RGBA', np.ascontiguousarray(a[::-1]).tobytes(), pitch=64).get_texture(); gl.glBindTexture(t.target, t.id)
                     gl.glTexParameteri(t.target, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST); gl.glTexParameteri(t.target, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
                     self._nb_tex.append(pyglet.sprite.Sprite(t))
-            except Exception as ex: print('Chiffres des degats indisponibles : %r' % (ex,), flush=True)
+            except Exception as ex: print(tr('Chiffres des degats indisponibles : %r') % (ex,), flush=True)
         return self._nb_tex
 
     def _dessiner_degats(self, e):

@@ -2,6 +2,7 @@
 import math, sys
 import numpy as np
 import pyglet
+from dq4_pc.langue import tr
 from dq4_pc.noyau import moteur as MO
 from dq4_pc.fenetre.constantes import EMPLACEMENTS_GROUPE, MARGE_FENETRE
 
@@ -21,7 +22,7 @@ def ajuster_taille(w, h):
     zu = zone_utile()
     if zu is None or (w <= zu[0] and h <= zu[1]): return int(w), int(h)
     k = min(zu[0] / float(w), zu[1] / float(h)); nw, nh = max(320, int(w * k)), max(180, int(h * k))
-    print('Fenêtre %d x %d trop grande pour l\'écran : %d x %d' % (w, h, nw, nh), flush=True)
+    print(tr('Fenêtre %d x %d trop grande pour l\'écran : %d x %d') % (w, h, nw, nh), flush=True)
     return nw, nh
 
 
@@ -85,4 +86,4 @@ def transitions_dwm(fenetre, actif):
         v = ctypes.c_int(0 if actif else 1)
         return ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), 3, ctypes.byref(v), ctypes.sizeof(v)) == 0
     except Exception as ex:
-        print('Transitions de fenêtre (DWM) inchangées : %r' % (ex,), flush=True); return False
+        print(tr('Transitions de fenêtre (DWM) inchangées : %r') % (ex,), flush=True); return False

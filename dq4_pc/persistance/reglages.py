@@ -1,6 +1,8 @@
 """Reglages du joueur (menu Echap) : affichage, son, touches. Enregistres dans reglages.json (a cote de fenetre.py, ignore par git)."""
 import json, os
 import pyglet
+from dq4_pc import langue as LG
+from dq4_pc.langue import N_, tr
 
 # Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
 TOUCHES_DEF = {
@@ -13,16 +15,17 @@ TOUCHES_DEF = {
 }
 ANCIEN_MENU = ['RETURN', None]         # defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Reglages.__init__)
 # libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
-ACTIONS = [('haut', 'Haut'), ('bas', 'Bas'), ('gauche', 'Gauche'), ('droite', 'Droite'),
-           ('cam_haut', 'Flèche haut (menus)'), ('cam_bas', 'Flèche bas (menus)'), ('cam_gauche', 'Caméra (Gauche)'), ('cam_droite', 'Caméra (Droite)'),
-           ('accel', "Touche d'accélérateur"), ('vit_combat', 'Changer la vitesse en combat'), ('modif', 'Touche spéciale'),
-           ('A', 'Action'), ('menu', 'Menu'), ('B', 'Annuler/Retour'), ('carte', 'Carte'), ('discussion', 'Discussion de groupe'), ('historique', 'Historique'),
-           ('infos', 'Infos à l\'écran'), ('L', 'Page précédente'), ('R', 'Page suivante')]
+ACTIONS = [('haut', N_('Haut')), ('bas', N_('Bas')), ('gauche', N_('Gauche')), ('droite', N_('Droite')),
+           ('cam_haut', N_('Flèche haut (menus)')), ('cam_bas', N_('Flèche bas (menus)')), ('cam_gauche', N_('Caméra (Gauche)')), ('cam_droite', N_('Caméra (Droite)')),
+           ('accel', N_("Touche d'accélérateur")), ('vit_combat', N_('Changer la vitesse en combat')), ('modif', N_('Touche spéciale')),
+           ('A', N_('Action')), ('menu', N_('Menu')), ('B', N_('Annuler/Retour')), ('carte', N_('Carte')), ('discussion', N_('Discussion de groupe')), ('historique', N_('Historique')),
+           ('infos', N_('Infos à l\'écran')), ('L', N_('Page précédente')), ('R', N_('Page suivante'))]          # (D-238 : libellés en français, traduits à l'affichage par le menu Pause : `tr(libelle)`)
 RESERVEES = ('ESCAPE', 'F11')          # Echap ouvre le menu, F11 bascule fenetre / plein ecran (comme Alt + Entree) : non reattribuables
-NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': 'Maj gauche', 'RSHIFT': 'Maj droite', 'LCTRL': 'Ctrl gauche', 'RCTRL': 'Ctrl droite',
-        'LALT': 'Alt gauche', 'RALT': 'Alt droite', 'SPACE': 'Espace', 'RETURN': 'Entrée', 'ENTER': 'Entrée pavé', 'BACKSPACE': 'Retour arrière', 'TAB': 'Tab',
-        'DELETE': 'Suppr', 'INSERT': 'Inser', 'HOME': 'Début', 'END': 'Fin', 'PAGEUP': 'Page haut', 'PAGEDOWN': 'Page bas', 'CAPSLOCK': 'Verr Maj',
-        'NUM_ADD': 'Pavé +', 'NUM_SUBTRACT': 'Pavé -', 'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
+NOMS = {'LEFT': '←', 'RIGHT': '→', 'UP': '↑', 'DOWN': '↓', 'LSHIFT': N_('Maj gauche'), 'RSHIFT': N_('Maj droite'), 'LCTRL': N_('Ctrl gauche'), 'RCTRL': N_('Ctrl droite'),
+        'LALT': N_('Alt gauche'), 'RALT': N_('Alt droite'), 'SPACE': N_('Espace'), 'RETURN': N_('Entrée'), 'ENTER': N_('Entrée pavé'), 'BACKSPACE': N_('Retour arrière'), 'TAB': 'Tab',
+        'DELETE': N_('Suppr'), 'INSERT': N_('Inser'), 'HOME': N_('Début'), 'END': N_('Fin'), 'PAGEUP': N_('Page haut'), 'PAGEDOWN': N_('Page bas'), 'CAPSLOCK': N_('Verr Maj'),
+        'NUM_ADD': N_('Pavé +'), 'NUM_SUBTRACT': N_('Pavé -'), 'COMMA': ',', 'PERIOD': '.', 'SEMICOLON': ';', 'COLON': ':', 'EXCLAMATION': '!', 'MINUS': '-', 'PLUS': '+', 'EQUAL': '=', 'SLASH': '/', 'BACKSLASH': '\\'}
+# (D-238 : `nom_touche` rend toujours le nom FRANCAIS (une donnee, comme les libelles des actions) ; le menu le traduit en le dessinant, `tr(nom_touche(...))`, y compris « Pavé 0 » a « Pavé 9 » des autres touches du pave numerique)
 
 # Fenetres de commandes du combat (le cadre du bas : Combattre / Fuir, Attaquer / Magie / Objets / Defense, cibles, objets et sorts, infos) : cadre de 459 unites d'interface, alors que les messages d'action du combat
 # (types 2 et 3 de la fenetre de message) en font 510. Par defaut ces fenetres sont agrandies a la largeur des boites de dialogue (510 / 459) : le bouton de vitesse, colle au coin bas gauche de la boite du bas, ne se
@@ -31,6 +34,7 @@ FENETRES_COMMANDES_COMBAT = ('BattleRoot', 'BattleAction', 'BattleTarget', 'Batt
 LARGEUR_COMMANDES = round(510.0 / 459.0, 4)
 
 DEFAUT = {
+    'langue': 'systeme',            # langue de l'outil (D-238) : 'systeme' (francais si Windows est en francais, sinon anglais), 'en' ou 'fr' ; les textes du jeu ne changent pas
     'mode_sprites': 4,            # « Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
     'mode_fenetre': 0,            # fenetre : 0 fenetre, 1 plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas) ; F11 / Alt + Entree passent de l'un a l'autre (ex-booleen « plein_ecran » ; l'ancien plein ecran exclusif, mode 2, est devenu 1)
     'msaa': 4,                    # anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
@@ -121,7 +125,7 @@ VITESSES_TEXTE = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 4000.0)     # crans de la vites
 VITESSES_X = (1.0, 2.0, 3.0, 4.0)                            # crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
 VITESSES_X_CLES = ('vitesse_marche', 'vitesse_camera')
 VITESSES_COMBAT = (0.0, 1.0, 2.0, 3.0)                       # crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
-NOMS_VITESSE_COMBAT = {0.0: 'Manuel', 1.0: 'Normal', 2.0: 'Rapide', 3.0: 'Très rapide'}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
+NOMS_VITESSE_COMBAT = {0.0: N_('Manuel'), 1.0: N_('Normal'), 2.0: N_('Rapide'), 3.0: N_('Très rapide')}      # libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
 # Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
 # suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 0 (la plus courte, 12 images) sinon (#45 : avec 2, la valeur d'origine, 32 images, le nombre de degats n'apparaissait que 0,77 s apres le debut de l'animation du coup
 # et un tour d'attaque durait 5,7 s ; avec 0 : 0,43 s et 3,0 s ; l'animation du coup garde sa duree) : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
@@ -242,9 +246,10 @@ class Reglages:
                 if isinstance(self.v['boutons_pos'], dict): self.v['boutons_pos'] = {n: x for n, x in self.v['boutons_pos'].items() if n != 'combat'}      # (la position du bouton de vitesse n'est plus ici)
                 self.v['mode_sprites'] = mode_sprites_valide(self.v['mode_sprites'])
                 self.v['mode_fenetre'] = mode_fenetre_valide(self.v['mode_fenetre'])          # (2 = ancien plein ecran exclusif -> 1)
+                if self.v['langue'] not in LG.CHOIX: self.v['langue'] = DEFAUT['langue']
                 if self.v['msaa'] not in MSAA_VALEURS: self.v['msaa'] = DEFAUT['msaa']
             except Exception as ex:
-                print('Reglages illisibles (%s) : valeurs par defaut (%r)' % (chemin, ex), flush=True)
+                print(tr('Reglages illisibles (%s) : valeurs par defaut (%r)') % (chemin, ex), flush=True)
         self.codes_cache = {}
 
     @staticmethod
@@ -298,7 +303,7 @@ class Reglages:
             with open(tmp, 'w', encoding='utf-8') as f: json.dump(self.v, f, indent=1, ensure_ascii=False)
             os.replace(tmp, self.chemin)
         except Exception as ex:
-            print('Reglages non enregistres :', ex, flush=True)
+            print(tr('Reglages non enregistres :'), ex, flush=True)
 
     # ---- touches
     def codes(self, action):

@@ -15,6 +15,7 @@ Ce module ne contient que ce qui sert a reconnaitre les groupes « tz_ » : le c
 nom contient « tz_ » est lue dans le paquet de donnees UNE fois (une demi-seconde apres le chargement du paquet, qui prend lui-meme quelques secondes) et gardee dans `tz_cles.json` du cache.
 """
 import json, os, struct, threading
+from dq4_pc.langue import tr
 
 FICHIER = 'tz_cles.json'
 MARQUE = 'tz_'                              # FldObject.update_material_color : Texture.name.IndexOf("tz_") != -1 -> pas de teinte
@@ -75,7 +76,7 @@ class Cles:
                 def travail():
                     try: self._ids = calculer(self.donnees)
                     except Exception as ex:
-                        self.log('Teinte des cartes : textures « tz_ » illisibles (%s) : toute la carte sera teintee' % str(ex)[:80]); self._ids = set()
+                        self.log(tr('Teinte des cartes : textures « tz_ » illisibles (%s) : toute la carte sera teintee') % str(ex)[:80]); self._ids = set()
                 self._fil = threading.Thread(target=travail, daemon=True, name='teinte-tz'); self._fil.start()
         return self._ids
 
@@ -149,6 +150,6 @@ class Fonds:
                 def travail():
                     try: self._fonds = calculer_fonds(self.donnees)
                     except Exception as ex:
-                        self.log('Fonds des decors de combat illisibles (%s) : fond estime' % str(ex)[:80]); self._fonds = {}
+                        self.log(tr('Fonds des decors de combat illisibles (%s) : fond estime') % str(ex)[:80]); self._fonds = {}
                 self._fil = threading.Thread(target=travail, daemon=True, name='fonds-decor'); self._fil.start()
         return (self._fonds or {}).get(nom)

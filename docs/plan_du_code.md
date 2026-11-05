@@ -13,6 +13,8 @@ dq4-portage\
     principal.py          lecture des arguments de la ligne de commande, puis ouverture de la fenêtre
     chemins.py            TOUS les dossiers et fichiers (un seul endroit) + reprise de l'ancienne disposition
     son.py                musiques et bruitages d'origine (conteneur AKB)
+    langue.py             langue de l'outil (français / anglais) : `tr('texte français')`, `N_()`, réglage « Langue » (D-238)
+    textes_en\            les traductions anglaises (un `EN = {texte français: anglais}` par thème : pause, menus, fenetre, divers)
     noyau\                le jeu d'origine émulé et ce qu'on en lit
     monde\                cartes, décors, sprites, modèles 3D : lecture et préparation
     rendu\                rendu hors écran (anticrénelage…), ciel du titre

@@ -27,6 +27,9 @@ import os
 import shutil
 import time
 
+from dq4_pc import langue as LG
+from dq4_pc.langue import tr
+
 CODE = os.path.dirname(os.path.abspath(__file__))                 # .../dq4-portage/dq4_pc
 RACINE = os.path.dirname(CODE)                                    # .../dq4-portage
 FICHIER_REPRISE = 'reprise.json'                                      # dans donnees\ : les etapes de la reprise deja faites (D-235)
@@ -122,16 +125,16 @@ def _ranger_anciens_dossiers(d, log):
         recente = d.sauvegarde_mobile_recente()
         sources = [d.ancien_portage] + ([recente] if recente else [])
         n = _remonter(sources, d.sauvegardes, log)
-        if n: fait.append('%d fichier(s) de sauvegardes copie(s) dans donnees\\sauvegardes (portage\\ puis mobile\\)' % n)
+        if n: fait.append(tr('%d fichier(s) de sauvegardes copie(s) dans donnees\\sauvegardes (portage\\ puis mobile\\)') % n)
         manque = [nom for nom in NOMS_JOURNAUX if any(os.path.isfile(os.path.join(s, nom)) for s in sources) and not os.path.isfile(os.path.join(d.sauvegardes, nom))]
-        if manque: raise OSError('fichiers non retrouves dans sauvegardes : %s' % ', '.join(manque))
+        if manque: raise OSError(tr('fichiers non retrouves dans sauvegardes : %s') % ', '.join(manque))
         base = os.path.join(d.sauvegardes, 'avant_rangement_' + time.strftime('%Y%m%d_%H%M%S')); cible = base; k = 1
         while os.path.exists(cible): k += 1; cible = '%s_%d' % (base, k)
         os.makedirs(cible)
         for p in anciens: os.replace(p, os.path.join(cible, os.path.basename(p)))
-        fait.append('anciens dossiers ranges : %s -> %s' % (', '.join('sauvegardes\\' + os.path.basename(p) for p in anciens), 'sauvegardes\\' + os.path.basename(cible)))
+        fait.append(tr('anciens dossiers ranges : %s -> %s') % (', '.join('sauvegardes\\' + os.path.basename(p) for p in anciens), 'sauvegardes\\' + os.path.basename(cible)))
     except OSError as ex:
-        fait.append('anciens dossiers de sauvegardes NON ranges (%s) : ils restent en place' % ex)
+        fait.append(tr('anciens dossiers de sauvegardes NON ranges (%s) : ils restent en place') % ex)
     return fait
 
 
@@ -188,13 +191,13 @@ def migrer(d=None, log=print):
     if a_faire('cache') and os.path.isdir(ancien):
         try:
             os.makedirs(os.path.dirname(d.cache), exist_ok=True); os.replace(ancien, d.cache)
-            fait.append('cache deplace : dq4_pc\\cache -> donnees\\cache'); faite('cache')
+            fait.append(tr('cache deplace : dq4_pc\\cache -> donnees\\cache')); faite('cache')
         except OSError as ex:
-            fait.append('cache NON deplace (%s) : il sera recalcule' % ex)
+            fait.append(tr('cache NON deplace (%s) : il sera recalcule') % ex)
     # 2. APK francais : copies (jeux\DQ4\patched_apks -> donnees\apk)
     if a_faire('apk') and not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'patched_apks')):
         n = _copier_arbre(os.path.join(jeux, 'patched_apks'), d.apk, log, 0)
-        if n: fait.append('%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> donnees\\apk' % n)
+        if n: fait.append(tr('%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> donnees\\apk') % n)
         faite('apk')
     # 3. D-232 : les anciens dossiers donnees\sauvegardes\portage et \mobile\<date> sont remontes dans donnees\sauvegardes puis ranges (AVANT les reprises plus anciennes : ce que le jeu ecrivait ces derniers jours est prioritaire sur de vieilles copies)
     #    (se fait toujours : elle deplace ces deux dossiers, donc ne se repete pas d'elle-meme)
@@ -208,13 +211,13 @@ def migrer(d=None, log=print):
             if os.path.isfile(f): n += _copier(f, os.path.join(d.sauvegardes, nom), log, 0)
             elif nom == 'etats': n += _copier_arbre(f, d.etats, log, 0)
             elif nom.startswith('avant_import_'): n += _copier_arbre(f, os.path.join(d.sauvegardes, nom), log, 0)
-        if n: fait.append('%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> donnees\\sauvegardes' % n)
+        if n: fait.append(tr('%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> donnees\\sauvegardes') % n)
         faite('sauvegardes_portage')
     # 5. sauvegardes du telephone d'avant : jeux\DQ4\saves\<date la plus recente> -> donnees\sauvegardes (ce que le jeu lisait en second, fichier par fichier)
     if a_faire('sauvegardes_telephone') and not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'saves')):
         recentes = sorted(x for x in glob.glob(os.path.join(jeux, 'saves', '*')) if os.path.isdir(x))
         n = _remonter(recentes[-1:], d.sauvegardes, log)
-        if n: fait.append('%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> donnees\\sauvegardes' % n)
+        if n: fait.append(tr('%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> donnees\\sauvegardes') % n)
         faite('sauvegardes_telephone')
     # 6. reglages et favoris de l'historique
     if a_faire('reglages'):
@@ -222,17 +225,18 @@ def migrer(d=None, log=print):
         for nom in ('reglages.json', 'historique_favoris.json', 'historique_messages.json'):
             src = os.path.join(code, nom)
             if os.path.isfile(src): trouve = True; n += _copier(src, os.path.join(d.reglages_dir, nom), log, 0)
-        if n: fait.append('%d fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages' % n)
+        if n: fait.append(tr('%d fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages') % n)
         if trouve: faite('reglages')
     # 7. journal des erreurs de la fenetre
     src = os.path.join(code, 'erreurs_fenetre.log')
     if a_faire('journal') and os.path.isfile(src):
-        if _copier(src, d.journal_fenetre, log, 0): fait.append('journal des erreurs copie : donnees\\journaux')
+        if _copier(src, d.journal_fenetre, log, 0): fait.append(tr('journal des erreurs copie : donnees\\journaux'))
         faite('journal')
     if nouvelles: _noter_reprise(d, dict(notees, **nouvelles))
-    for ph in fait: log('Migration : ' + ph)
+    for ph in fait: log(tr('Migration : %s') % ph)
     return fait
 
 
 if __name__ == '__main__':           # `python -m dq4_pc.chemins` : la reprise seule (lancee par lancer_dq4.bat avant le jeu)
+    LG.regler(LG.lire_reglage(DOSSIERS.reglages))          # (D-238 : les messages de la reprise sont dans la langue de l'outil)
     migrer()

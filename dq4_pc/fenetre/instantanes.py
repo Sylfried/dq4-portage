@@ -4,6 +4,7 @@ import numpy as np
 import pyglet
 from pyglet import gl
 from dq4_pc import chemins as CH
+from dq4_pc.langue import tr, N_
 from dq4_pc.noyau import moteur as MO
 from dq4_pc.persistance import etats as ET
 
@@ -26,10 +27,11 @@ class InstantanesMixin:
         return ET.infos(self.chemin_etat(n))
 
     def _lieu(self):
+        """Lieu note dans le fichier de l'etat : un texte FRANCAIS stable (marque N_), jamais traduit ici ; la page des etats du menu Pause le traduit en l'affichant (Pause._et)."""
         e = self.moteur.etat
-        if e.partie == MO.PARTIE_CASINO: return 'Casino : poker' if e.carte == 'ev04' else ('Casino : machine à sous' if e.carte == 'ev05' else 'Casino')          # (cartes ev04 / ev05 : voir Global::setMinigame)
-        if e.partie == MO.PARTIE_BESTIAIRE: return 'Bestiaire'
-        return 'Carte du monde' if e.partie == MO.PARTIE_CHAMP else ('Combat' if e.partie == MO.PARTIE_COMBAT else (e.carte or '?'))
+        if e.partie == MO.PARTIE_CASINO: return N_('Casino : poker') if e.carte == 'ev04' else (N_('Casino : machine à sous') if e.carte == 'ev05' else N_('Casino'))          # (cartes ev04 / ev05 : voir Global::setMinigame)
+        if e.partie == MO.PARTIE_BESTIAIRE: return N_('Bestiaire')
+        return N_('Carte du monde') if e.partie == MO.PARTIE_CHAMP else (N_('Combat') if e.partie == MO.PARTIE_COMBAT else (e.carte or '?'))
 
     def _etat_complet(self):
         """Etat instantane du moteur + de la visionneuse (objets animes de la carte compris)."""
@@ -46,14 +48,14 @@ class InstantanesMixin:
         """Recharge l'emplacement n ; l'etat d'avant le chargement est gardé en memoire (annuler_chargement)."""
         d = ET.lire(self.chemin_etat(n))
         try: self.etat_annul = self._etat_complet()
-        except Exception as ex: self.etat_annul = None; print('etat avant chargement non garde :', ex, flush=True)
+        except Exception as ex: self.etat_annul = None; print(tr('etat avant chargement non garde :'), ex, flush=True)
         self._appliquer_etat(d)
 
     def annuler_chargement(self):
         """Revient a l'etat juste avant le dernier chargement (un deuxieme appel refait le chargement)."""
-        if self.etat_annul is None: self.toast('Aucun chargement à annuler'); return False
+        if self.etat_annul is None: self.toast(N_('Aucun chargement à annuler')); return False
         actuel = self._etat_complet(); d, self.etat_annul = self.etat_annul, actuel
-        self._appliquer_etat(d); self.toast('Chargement annulé')
+        self._appliquer_etat(d); self.toast(N_('Chargement annulé'))
         return True
 
     def _appliquer_etat(self, d):
@@ -88,7 +90,7 @@ class InstantanesMixin:
             gl.glBindTexture(t.target, t.id); gl.glCopyTexSubImage2D(t.target, 0, 0, 0, 0, 0, w, h)
             return t
         except Exception as ex:
-            print('miniature impossible :', ex, flush=True); return None
+            print(tr('miniature impossible :'), ex, flush=True); return None
 
     def _png_miniature(self, t):
         """Texture de _copier_miniature -> PNG reduit (miniature des etats)."""
@@ -100,4 +102,4 @@ class InstantanesMixin:
             a = np.frombuffer(img.get_data('RGB', img.width * 3), np.uint8).reshape(img.height, img.width, 3)[::-1]
             im = Image.fromarray(np.ascontiguousarray(a)); im.thumbnail((320, 180)); b = io.BytesIO(); im.save(b, 'PNG'); return b.getvalue()
         except Exception as ex:
-            print('miniature impossible :', ex, flush=True); return b''
+            print(tr('miniature impossible :'), ex, flush=True); return b''
