@@ -1,201 +1,119 @@
-"""Description d'un objet qui ne tient pas dans son cadre (retour de 13 h 30, #190) : en combat, « Peut aussi etre utilisee comme objet au / combat. » sortait de la cellule de gauche de la fiche de l'objet (type 38)
-et recouvrait la cellule « Attaque E 74 » ; dans le menu Objets (type 10) une description d'une seule ligne de 50 caracteres allait sous le bouton du sac. Le texte francais du patch a des lignes de 38 caracteres, la
-mise en page du jeu a ete faite pour 2 lignes de ~28 : Render._texte recoupe maintenant la description a la largeur de son cadre (UM.DESCRIPTIONS) et, si 2 lignes ne suffisent pas, la comprime (jusqu'a COMPRESSION_MIN).
+"""Descriptions d'objets et de sorts a la position et a la taille EXACTES du jeu (D-243, 05/11/2026, issue #311). Avant (#190 a #191, puis #219 pour les boutiques et le casino), la description etait recoupee a la largeur de son cadre (2 lignes) puis comprimee
+jusqu'a x0,7 : « Peut aussi etre utilisee comme objet au / combat. » ne recouvrait plus « Attaque E 74 ». Sylfried a repris : le texte du jeu s'affiche tel quel et deborde comme sur le mobile ; le projet de traduction raccourcira les chaines.
 
-    python3 tools/test_item_description.py
-    DQ_APK=<APK patches> [DQ_UI_CACHE=<cache de l'interface>] python3 tools/test_item_description.py        (ajoute les 360 descriptions reelles du patch avec la vraie police)"""
-import os, re, sys, types, unittest, zipfile
+Les huit cellules concernees (type, port, numero de chaine) : fiche d'un sort (7, 0, 1), menu Objets (10, 0, 4), infos d'objet en combat (38, 2, 3), casino (46, 4, 3), boutiques (60, 4, 4), (61, 4, 4), (63, 0, 4), fiche d'objet de vente (70, 0, 3).
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..'))
-import pyglet
-pyglet.options['shadow_window'] = False
-if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.options['headless'] = True
-from dq4_pc.menus import ui_menu as UM
+  1. la cellule ne porte plus ni limite de recoupe (`wrap_x`, `wrap_n`) ni limite de largeur (`fit_x`), et son texte est celui du moteur ;
+  2. `Render._text` (police factice, sans GL) dessine toutes les lignes du texte, aux memes retours a la ligne, a l'ancre de la cellule, a l'echelle 1 : ni recoupe, ni fusion, ni compression ;
+  3. avec la vraie mise en page (cache de l'interface : DQ_UI_CACHE) : les huit cellules existent et sont dessinees telles quelles ;
+  4. avec DQ_APK=<dossier des APK patches> et la vraie police : les 360 descriptions du patch (assets/msg/en/b0831000.mpt et b0835000.mpt) sont dessinees telles quelles, ligne pour ligne.
+
+    python3 tests/test_item_description.py
+    DQ_APK=<APK patches> [DQ_UI_CACHE=<cache de l'interface>] python3 tests/test_item_description.py
+"""
+import os, re, sys, unittest, zipfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _text_render as TR
+UM = TR.UM
 
 APK = os.environ.get('DQ_APK')
-CACHE = os.environ.get('DQ_UI_CACHE', '/tmp/uicache47_camera')
-U = 9.945 * 0.1                                                      # unites d'interface par pixel de police (characterSize 9,945 des descriptions)
-BATTLE_LAYOUT = UM.BATTLE_DESC_X_MAX + 214.0                          # type 38 : texte ancre a x = -214
-ITEMS_LAYOUT = UM.CARD_DESC_X_MAX + 211.0                           # type 10 : texte ancre a x = -211
+CELLS = ((7, 0, 1), (10, 0, 4), (38, 2, 3), (46, 4, 3), (60, 4, 4), (61, 4, 4), (63, 0, 4), (70, 0, 3))
+ONE_LINE = "Au combat, ils peuvent inverser le cours du temps."                      # une seule ligne de 50 caracteres
+TWO_LINES = "Peut aussi être utilisée comme objet au\r\ncombat."                      # 1re ligne de 39 caracteres
+FOUR_LINES = "Permet de sortir\r\nimmédiatement des\r\ndonjons, grottes et\r\ntours."
 
 
-def render(width_px):
-    r = object.__new__(UM.Render)
-    r.texts = types.SimpleNamespace(bitmap=types.SimpleNamespace(width_px=width_px))
-    return r
+def description_window(typ, port, no):
+    """Fenetre synthetique : `no` + 1 cellules de texte du port `port`, la derniere est la description (a l'ancre x = -214, en bas : z = -324)."""
+    return TR.make_window(typ, [dict(pos=[-214.0, 4.0, -324.0], anchor=3, ls=0.881)] * (no + 1), port=port)
 
 
-def adjust(r, text, layout, node=None):
-    return r._adjust_description({} if node is None else node, text.split('\n'), layout, 2, r.texts.bitmap, 1.0, 1.0, 1.0, 9.0)
+class Cells(unittest.TestCase):
+    def test_no_limit_on_any_cell(self):
+        for typ, port, no in CELLS:
+            wnd = description_window(typ, port, no)
+            for k in range(no + 1): wnd.param_str(port, k, 'x' * 60 if k != no else FOUR_LINES)
+            for k in range(no + 1):
+                node = wnd.N[10 + k]; self.assertFalse({'wrap_x', 'wrap_n', 'fit_x', '_adj'} & set(node), (typ, port, no, k))
+            self.assertEqual(wnd.N[10 + no]['text']['text'], FOUR_LINES, (typ, port, no))                 # le texte du moteur n'est pas modifie
+
+    def test_spell_card_cost_line_has_no_limit_either(self):
+        wnd = TR.make_window(7, [dict(pos=[75.0, 12.0, 103.0], anchor=0, ls=0.88)] * 4)
+        for no, s in enumerate(('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')): wnd.param_str(0, no, s)
+        for k in range(4): self.assertFalse({'wrap_x', 'wrap_n', 'fit_x'} & set(wnd.N[10 + k]), k)
 
 
-class TestWindows(unittest.TestCase):
-    def window(self, typ, nodes, port=0):
-        def text(nid): return {'id': nid, 'par': 1, 'pos': [-214.0, 4.0, -197.0], 'act': True, 'text': {'font': 'font', 'characterSize': 9.945, 'text': None, 'anchor': 3, 'alignment': 0, 'lineSpacing': 1.0}, 'mats': []}
-        t = {'name': 'Make_Test()', 'err': None, 'nodes': [{'id': 1, 'par': None, 'pos': [0.0, 0.0, 0.0], 'act': True, 'mats': []}] + [text(10 + k) for k in range(nodes)],
-             'parts': [{'node': 1, 'ib': [{'k': 'text', 'go': 10 + k, 'variant': 0} for k in range(nodes)]}], 'params': [{'id': port, 'no': k, 'parts': 0, 'base': k} for k in range(nodes)], 'codes': [], 'builds': []}
-        return UM.Window(types.SimpleNamespace(types={str(typ): t}, info=[], borders=[], hdr={'lang': {'hiro': 1.0}}, pushed=(0.0, 0.0)), typ)
+class DrawnAsIs(unittest.TestCase):
+    def check(self, wnd, node, text, x=-214.0):
+        quads = TR.draw(wnd, node); step = TR.LEADING * node['text']['characterSize'] * 0.1 * node['text']['lineSpacing']
+        self.assertEqual([q.text for q in quads], [l for l in text.split('\n') if l])                  # toutes les lignes, memes retours a la ligne, rien de fusionne ni de recoupe
+        for i, q in enumerate(quads):
+            self.assertAlmostEqual(q.x, x, delta=0.01); self.assertAlmostEqual(q.ts, 1.0, places=6); self.assertAlmostEqual(q.base, quads[0].base - i * step, delta=0.01)
+        return quads
 
-    def test_description_table(self):
-        F = UM.CARD_DESC_X_MAX      # (type, port, numero de chaine) : le port est dans la cle (#219 : la fenetre du casino a d'autres textes au meme numero)
-        self.assertEqual(UM.DESCRIPTIONS, {(7, 0, 1): F, (10, 0, 4): F, (38, 2, 3): UM.BATTLE_DESC_X_MAX, (46, 4, 3): F, (60, 4, 4): F, (61, 4, 4): F, (63, 0, 4): F, (70, 0, 3): F})
-        self.assertLess(UM.BATTLE_DESC_X_MAX, 63.0)                  # la cellule « Attaque » commence a x = 63 : la description s'arrete avant son cadre
+    def test_every_cell_every_text(self):
+        for typ, port, no in CELLS:
+            for text in (ONE_LINE, TWO_LINES, FOUR_LINES, "Ne semble pas avoir d'effets\r\nparticuliers.\n"):
+                wnd = description_window(typ, port, no)
+                for k in range(no + 1): wnd.param_str(port, k, 'x')
+                wnd.param_str(port, no, text); self.check(wnd, wnd.N[10 + no], text)
 
-    def test_item_card_in_battle(self):
-        wnd = self.window(38, 5, port=2)
-        for no, s in enumerate(('Ragnar', 'Objets', 'Épée de cuivre', "Peut aussi être utilisée comme objet au\r\ncombat.", 'Attaque\n   E 24')): wnd.param_str(2, no, s)
-        self.assertEqual([(wnd.N[10 + k].get('wrap_x'), wnd.N[10 + k].get('wrap_n')) for k in range(5)], [(None, None)] * 3 + [(UM.BATTLE_DESC_X_MAX, 2), (None, None)])
-        self.assertEqual(wnd.N[13]['text']['text'], "Peut aussi être utilisée comme objet au\r\ncombat.")       # le texte du moteur n'est pas modifie (c'est le rendu qui recoupe)
+    def test_single_long_line_stays_a_single_line_and_overflows(self):
+        wnd = description_window(38, 2, 3)
+        for k in range(4): wnd.param_str(2, k, 'x')
+        wnd.param_str(2, 3, ONE_LINE); quads = self.check(wnd, wnd.N[13], ONE_LINE)
+        self.assertEqual(len(quads), 1); self.assertGreater(quads[0].width, 270.0)                     # 400 unites dans une cellule de 270 : il deborde comme sur le mobile
 
-    def test_items_menu(self):
-        wnd = self.window(10, 6)
-        for no, s in enumerate(('Arme', 'Lance de fer', 'Attaque\n     E 50', "Ne semble pas avoir d'effets\r\nparticuliers.\n", '')): wnd.param_str(0, no, s)
-        self.assertEqual([wnd.N[10 + k].get('wrap_x') for k in range(6)], [None, None, None, None, UM.CARD_DESC_X_MAX, None])
-
-    def test_shops_and_casino(self):
-        """#219 (audit UI-04) : la barre du bas des fenetres du casino (46), d'achat (60, 61), de vente (63) et de la fiche d'objet de vente (70) est recoupee comme celle des fiches d'objet."""
-        for typ, port, no in ((46, 4, 3), (60, 4, 4), (61, 4, 4), (63, 0, 4), (70, 0, 3)):
-            wnd = self.window(typ, no + 1, port=port)
-            for k in range(no + 1): wnd.param_str(port, k, 'x' * 60)
-            self.assertEqual([(wnd.N[10 + k].get('wrap_x'), wnd.N[10 + k].get('wrap_n')) for k in range(no + 1)], [(None, None)] * no + [(UM.CARD_DESC_X_MAX, 2)], typ)
-
-    def test_same_number_in_other_port_not_touched(self):
-        """Type 46 : les listes (ports 0 a 3) ont aussi un texte au numero 3 ; seule la barre du bas (port 4) est recoupee."""
-        for port in (0, 1, 2, 3):
-            wnd = self.window(46, 4, port=port)
-            for k in range(4): wnd.param_str(port, k, 'x' * 60)
-            self.assertTrue(all(wnd.N[10 + k].get('wrap_x') is None for k in range(4)), port)
-
-    def test_another_window_is_not_touched(self):
-        wnd = self.window(36, 5)
-        for no in range(5): wnd.param_str(0, no, 'x' * 60)
-        self.assertTrue(all(wnd.N[10 + k].get('wrap_x') is None for k in range(5)))
+    def test_a_text_that_fits_is_unchanged_too(self):
+        wnd = description_window(10, 0, 4)
+        for k in range(5): wnd.param_str(0, k, 'x')
+        wnd.param_str(0, 4, "Ne semble pas avoir d'effets\r\nparticuliers.\n"); self.check(wnd, wnd.N[14], "Ne semble pas avoir d'effets\r\nparticuliers.\n")
 
 
-class TestAdjusted(unittest.TestCase):
-    """Police fictive : 8 pixels par caractere (U = 0,9945 : 8 unites par caractere a peu pres), cellule de combat = 270 unites (33 caracteres), cadre du menu Objets = 359 unites (44 caracteres)."""
-    def setUp(self): self.r = render(lambda x: 8.0 * len(x) / U)
+@unittest.skipUnless(os.path.exists(os.path.join(TR.CACHE, 'ui_layout.json')) and TR.real_font() is not None, "mise en page et police reelles : cache de l'interface (DQ_UI_CACHE : ui_layout.json, ui_garrir.json / .png)")
+class RealPageLayout(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ml = UM.PageLayout(os.path.join(TR.CACHE, 'ui_layout.json')); cls.font = TR.real_font()
 
-    def wid(self, l): return 8.0 * len(l.strip())
-
-    def test_a_text_that_fits_is_left_as_is(self):
-        t = "Ne semble pas avoir d'effets\r\nparticuliers.\n"
-        out, f = adjust(self.r, t, BATTLE_LAYOUT)
-        self.assertEqual((out, f), (t.split('\n'), 1.0))                    # memes lignes, memes retours a la ligne, ligne vide finale comprise
-
-    def test_too_wide_line_rewrapped(self):
-        out, f = adjust(self.r, "Peut aussi être utilisée comme objet au\r\ncombat.", BATTLE_LAYOUT)           # 1re ligne de 39 caracteres = 312 unites > 270
-        self.assertEqual((out, f), (['Peut aussi être utilisée comme', 'objet au combat.'], 1.0))
-
-    def test_single_line_of_fifty_chars(self):
-        t = "Au combat, ils peuvent inverser le cours du temps."
-        out, f = adjust(self.r, t, BATTLE_LAYOUT)
-        self.assertEqual((len(out), f), (2, 1.0)); self.assertEqual(' '.join(out), t)
-        self.assertTrue(all(self.wid(l) <= BATTLE_LAYOUT for l in out), out)
-        out, f = adjust(self.r, t, ITEMS_LAYOUT)                            # menu Objets : 400 unites > 359
-        self.assertEqual((len(out), f), (2, 1.0)); self.assertTrue(all(self.wid(l) <= ITEMS_LAYOUT for l in out), out)
-
-    def test_two_long_lines_compressed(self):
-        t = "Sonnez-le avant le combat final pour\r\nfaire apparaître votre chariot."           # 36 + 31 caracteres : trois lignes a 270 unites, deux en comprimant
-        out, f = adjust(self.r, t, BATTLE_LAYOUT)
-        self.assertEqual(len(out), 2, out); self.assertTrue(UM.COMPRESSION_MIN <= f < 1.0, f)
-        self.assertTrue(all(self.wid(l) * f <= BATTLE_LAYOUT + 0.5 for l in out), (out, f))
-        self.assertEqual(' '.join(out), "Sonnez-le avant le combat final pour faire apparaître votre chariot.")
-
-    def test_hopeless_text_compressed_to_the_minimum(self):
-        out, f = adjust(self.r, "mot " * 80, BATTLE_LAYOUT)
-        self.assertEqual(f, UM.COMPRESSION_MIN); self.assertGreater(len(out), 2)           # (ne plante pas : le texte deborde, comme avant)
-
-    def test_word_wider_than_border(self):
-        out, f = adjust(self.r, "x" * 40, BATTLE_LAYOUT)                    # 320 unites : un seul mot, 1 ligne, comprime pour tenir
-        self.assertEqual(len(out), 1); self.assertAlmostEqual(self.wid(out[0]) * f, BATTLE_LAYOUT, delta=17.0); self.assertLessEqual(self.wid(out[0]) * f, BATTLE_LAYOUT + 0.5)
-
-    def test_empty_texts(self):
-        for t in ('', '\n\n', ' \r\n'):
-            out, f = adjust(self.r, t, BATTLE_LAYOUT); self.assertEqual((out, f), (t.split('\n'), 1.0))
-
-    def test_color_codes_have_no_width(self):
-        out, f = adjust(self.r, "@c1" + "a" * 30 + "@c0", BATTLE_LAYOUT)           # 30 caracteres = 240 unites : tient (les codes @cN ne comptent pas)
-        self.assertEqual(f, 1.0); self.assertEqual(len(out), 1)
-
-    def test_result_kept_in_memory(self):
-        node = {}; t = "Peut aussi être utilisée comme objet au\r\ncombat."
-        a = adjust(self.r, t, BATTLE_LAYOUT, node); self.assertIn('_adj', node)
-        self.r.texts.bitmap.width_px = lambda x: 1 / 0                      # le deuxieme appel (meme texte, meme cadre) ne mesure plus rien
-        self.assertIs(adjust(self.r, t, BATTLE_LAYOUT, node), a)
+    def test_each_cell_is_the_bottom_description_cell_and_is_drawn_as_is(self):
+        for typ, port, no in CELLS:
+            wnd = UM.Window(self.ml, typ); pt, ib = wnd._ib(wnd.params[(port, no)])
+            self.assertEqual(ib['k'], 'text', (typ, port, no)); node = wnd.N[ib['go']]
+            self.assertTrue(node['pos'][2] < -190 and node['pos'][0] < -200, (typ, port, no, node['pos']))      # barre du bas (z -324 ou -323,5) ou cellule de gauche en combat (z -197), texte a gauche
+            wnd.param_str(port, no, FOUR_LINES)
+            for n in wnd.N.values(): self.assertFalse({'wrap_x', 'wrap_n', 'fit_x'} & set(n), (typ, port, no))
+            quads = TR.draw(wnd, node, r=TR.render(self.font, ml=self.ml))
+            self.assertEqual([q.text for q in quads], FOUR_LINES.split('\n'), (typ, port, no))
+            for q in quads: self.assertAlmostEqual(q.ts, 1.0, places=5); self.assertAlmostEqual(q.x, node['pos'][0], delta=0.01)
 
 
-@unittest.skipUnless(APK and os.path.exists(os.path.join(CACHE, 'ui_garrir.json')) and os.path.exists(os.path.join(CACHE, 'ui_garrir.png')), 'police et descriptions reelles : DQ_APK=<dossier des APK patches> et le cache de l\'interface (ui_garrir.*)')
-class TestRealDescriptions(unittest.TestCase):
-    """Les 360 descriptions du patch (assets/msg/en/b0831000.mpt et b0835000.mpt : deux tables jumelles de 180 objets) avec la vraie police SE-GARRIR : aucune ne sort du cadre, ni en combat (type 38) ni dans le menu Objets (type 10)."""
+@unittest.skipUnless(APK and os.path.exists(os.path.join(APK, 'split_UnityDataAssetPack.apk')) and os.path.exists(os.path.join(TR.CACHE, 'ui_layout.json')) and TR.real_font() is not None,
+                     "descriptions reelles : DQ_APK=<dossier des APK patches> et le cache de l'interface (ui_layout.json, ui_garrir.*)")
+class RealDescriptions(unittest.TestCase):
+    """Les 360 descriptions du patch (assets/msg/en/b0831000.mpt et b0835000.mpt : deux tables jumelles de 180 objets), la vraie police et la vraie fenetre : chacune est dessinee telle quelle, ligne pour ligne."""
     SEP = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f�]+|@c\d@(?:@a@b)?|@a@b")
 
     @classmethod
     def setUpClass(cls):
-        cls.bm = UM.BitmapFont(os.path.join(CACHE, 'ui_garrir.json'), os.path.join(CACHE, 'ui_garrir.png'))
+        cls.ml = UM.PageLayout(os.path.join(TR.CACHE, 'ui_layout.json')); cls.font = TR.real_font()
         z = zipfile.ZipFile(os.path.join(APK, 'split_UnityDataAssetPack.apk')); cls.texts = []
         for name_str in ('assets/msg/en/b0831000.mpt', 'assets/msg/en/b0835000.mpt'):
             b = z.read(name_str).decode('utf-8', 'replace'); cls.texts += [e for e in cls.SEP.split(b[b.find('@a@b'):]) if len(e.strip()) >= 6]
-        cls.r = render(cls.bm.width_px); cls.r.texts.bitmap = cls.bm
-
-    def verify(self, layout, u=U):
-        n_before = n_compressed = 0; fmin = 1.0
-        for e in self.texts:
-            lines = e.split('\n'); useful = [l for l in lines]
-            while useful and not useful[-1].strip(): useful.pop()
-            if len(useful) > 2 or max(self.bm.width_px(l.strip()) * u for l in useful) > layout + 0.5: n_before += 1
-            out, f = self.r._adjust_description({}, lines, layout, 2, self.bm, u, 1.0, 1.0, u)
-            out = [l for l in out]
-            while out and not out[-1].strip(): out.pop()
-            self.assertLessEqual(len(out), 2, e); self.assertLessEqual(max(self.bm.width_px(l.strip()) * u for l in out) * f, layout + 0.5, e)
-            self.assertEqual(' '.join(x.strip() for x in useful if x.strip()).split(), ' '.join(x.strip() for x in out).split(), e)        # aucun mot perdu, ajoute ou deplace
-            n_compressed += f < 1.0; fmin = min(fmin, f)
-        return n_before, n_compressed, fmin
 
     def test_patch_descriptions_exist(self):
         self.assertGreaterEqual(len(self.texts), 300)
         self.assertTrue(any('Peut aussi être utilisée comme objet au' in t for t in self.texts))
 
-    def test_battle(self):
-        n_before, n_compressed, fmin = self.verify(BATTLE_LAYOUT)
-        self.assertGreater(n_before, 100)                             # (le constat : la majorite des descriptions debordait de la cellule de gauche)
-        self.assertGreaterEqual(fmin, 0.75 - 1e-9)                   # compression la plus forte : x 0,75
-
-    def test_items_menu(self):
-        n_before, n_compressed, fmin = self.verify(ITEMS_LAYOUT)
-        self.assertGreater(n_before, 0); self.assertEqual(n_compressed, 0)       # aucune n'a besoin d'etre comprimee : le recoupage suffit
-
-    def test_shops_and_casino(self):
-        """#219 : barre du bas des fenetres 46, 60, 61, 70 (texte a l'ancre x = -213,5, taille 9,945) : 24 descriptions sur 360 sortaient du cadre (pire : +72 unites), aucune ne sort apres."""
-        n_before, n_compressed, fmin = self.verify(UM.CARD_DESC_X_MAX + 213.5)
-        self.assertGreaterEqual(n_before, 20); self.assertGreaterEqual(fmin, 0.7 - 1e-9)
-
-    def test_sale_smaller_text(self):
-        """Type 63 : texte de taille 8,2875 (0,83 fois les autres) : aucune ligne trop large, mais 3 descriptions de plus de 2 lignes (comprimees pour tenir sur 2)."""
-        n_before, n_compressed, fmin = self.verify(UM.CARD_DESC_X_MAX + 213.5, u=0.82875)
-        self.assertEqual(n_before, 3)
-
-
-@unittest.skipUnless(os.path.exists(os.path.join(CACHE, 'ui_layout.json')), "mise en page reelle : cache de l'interface (ui_layout.json, DQ_UI_CACHE)")
-class TestRealPageLayout(unittest.TestCase):
-    """Les cles de UM.DESCRIPTIONS designent bien, dans la vraie mise en page, la barre de description du bas de chaque fenetre (et rien d'autre)."""
-    @classmethod
-    def setUpClass(cls): cls.ml = UM.PageLayout(os.path.join(CACHE, 'ui_layout.json'))
-
-    def test_each_key_designates_bottom_text_cell(self):
-        for (typ, port, no), limit in UM.DESCRIPTIONS.items():
-            wnd = UM.Window(self.ml, typ); pt, ib = wnd._ib(wnd.params[(port, no)])
-            self.assertEqual(ib['k'], 'text', (typ, port, no)); node = wnd.N[ib['go']]
-            self.assertTrue(node['pos'][2] < -190 and node['pos'][0] < -200, (typ, port, no, node['pos']))             # barre du bas (z -324 ou -323,5) ou cellule de gauche en combat (z -197), texte a gauche
-            self.assertGreater(limit - node['pos'][0], 250.0)
-
-    def test_a_single_cell_rewrapped_per_window(self):
-        for typ in sorted({t for t, _, _ in UM.DESCRIPTIONS}):
-            wnd = UM.Window(self.ml, typ)
-            for (port, no) in list(wnd.params): wnd.param_str(port, no, 'x' * 60)
-            rewrapped = [n for n in wnd.N.values() if n.get('wrap_x') is not None]
-            self.assertEqual(len(rewrapped), sum(1 for t, _, _ in UM.DESCRIPTIONS if t == typ), typ)
+    def test_every_description_drawn_line_for_line(self):
+        for typ, port, no in ((38, 2, 3), (10, 0, 4)):
+            wnd = UM.Window(self.ml, typ); pt, ib = wnd._ib(wnd.params[(port, no)]); node = wnd.N[ib['go']]; r = TR.render(self.font, ml=self.ml)
+            for text in self.texts:
+                wnd.param_str(port, no, text)
+                lines = [l for l in node['text']['text'].split('\n') if l]; quads = TR.draw(wnd, node, r=r)
+                self.assertEqual([q.text for q in quads], lines, (typ, text))                                    # aucune recoupe, aucune fusion
+                for q in quads: self.assertAlmostEqual(q.ts, 1.0, places=5, msg=(typ, text)); self.assertAlmostEqual(q.x, node['pos'][0], delta=0.01, msg=(typ, text))     # aucune compression, a l'ancre du jeu
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ Relecture de tout le jeu d'origine contre le portage (moteur, cartes, sprites, s
 - « ERROR 3080 » (SVC-01) : **laissé tel quel** (comportement du jeu de base ; à voir avec le projet de traduction si c'est un souci de textes).
 - Débordements du français (UI-05) : **rien à changer** tant qu'ils dépassent comme sur mobile (traités dans l'autre projet, les APK seront changés ensuite).
 - Plaque « Sauvegarde automatique » grisée : **gardée** ; écriture à la fermeture : **non** (comme l'original) ; proportions d'interface (×1,12, commandes 510 / 459) : **gardées** ; `pause.py` et `ui_menu.py` : **non découpés**.
-- Poker « Abandonner » (SVC-03) : **police réduite** (décidé plus tôt). Mémoire du moteur (ENG-01) : alerte à 200 Mo + sauvegarde automatique (par discernement).
+- Poker « Abandonner » (SVC-03) : **police réduite** (décidé plus tôt ; **remplacé par D-243 le 05/11/2026** : plus de compression, position et taille exactes du jeu). Mémoire du moteur (ENG-01) : alerte à 200 Mo + sauvegarde automatique (par discernement).
 
 **Reste à faire sans décision à prendre** : accélération des gains du casino par un appui (machine à sous, poker, arène : le moteur la lit sur le même déclenchement que le don d'expérience ; non vérifié en jeu, G-217), FSRA, FEAN et FEMV non rejoués (UNI-03, MAP-03, taille M à L), paquet 6 (SVC-06 ; les paquets 1, 30 et 34, valeurs 3 / 5 / 6, sont traités, #254, #252 et #256 ; durée réelle de l'effet de début de combat, valeur 4, à revérifier), phase 23 à rejouer avec le vrai PNJ (SVC-08), préchargement de la musique de la carte suivante (SND-11), entrée de la position de la caméra (UNI-07).
 

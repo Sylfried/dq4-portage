@@ -1,6 +1,6 @@
 # Rapports finaux des agents du lot #45 (retours du 02/11 à 14 h 08)
 
-Rapports bruts remis par les dix sous-agents (SubagentHandback) ; les notes utiles sont déjà fusionnées dans `docs/notes-*.md` (sections « Avance #45 »). Les chemins `/tmp/...` cités n'existent plus : les scripts réutilisables sont dans `tools/research/`.
+Rapports bruts remis par les dix sous-agents (SubagentHandback) ; les notes utiles sont déjà fusionnées dans `docs/notes-*.md` (sections « Avance #45 »). **Note du 05/11/2026 (D-243, #311) : le recentrage des textes et la variable `DQ_TEXTE_ORIGINAL` décrits plus bas ont été supprimés (position exacte du jeu) ; ces rapports sont gardés tels quels, comme état d'alors.** Les chemins `/tmp/...` cités n'existent plus : les scripts réutilisables sont dans `tools/research/`.
 
 ---
 
