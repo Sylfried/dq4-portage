@@ -12,20 +12,24 @@ Tout ce qui t'appartient (APK, sauvegardes, caches, reglages) est dans UN dossie
       cache\\                    ce que le portage calcule a partir des APK (cartes, sprites, sons, menus) : sans danger a effacer
       reglages\\                 reglages.json, historique_favoris.json, historique_messages.json
       journaux\\                 erreurs_fenetre.log
+      reprise.json               les etapes de la reprise de l'ancienne disposition deja faites (D-235)
 
 Deux variables d'environnement, pour les tests et les installations particulieres :
   DQ4_DONNEES : un autre emplacement pour tout le dossier `donnees`.
   DQ4_JEUX    : (ancien fonctionnement) un dossier « jeux\\DQ4 » contenant `patched_apks` et `saves\\<date>` ; il remplace `donnees\\apk`, et `saves\\<date>` reste une copie LUE SEULEMENT de sauvegardes (tests, installations particulieres).
 
 `migrer()` reprend l'ancienne disposition (jeux\\DQ4, dq4_pc\\cache, dq4_pc\\sauvegardes, dq4_pc\\reglages.json ...) : elle COPIE (ou, pour le cache seulement, deplace) vers la nouvelle,
-sans jamais ecraser un fichier deja present et sans rien supprimer. Elle est relancee a chaque demarrage (sans effet quand il n'y a plus rien a reprendre)."""
+sans jamais ecraser un fichier deja present et sans rien supprimer. Chaque reprise n'a lieu QU'UNE FOIS (D-235) : `donnees\\reprise.json` note les etapes faites, pour que ce que tu effaces dans `donnees\\`
+(un dossier `avant_import_...`, un journal, des reglages) ne soit pas recopie depuis l'ancien dossier au demarrage suivant. Une disposition deja en service (journaux, etats, reglages ou cache dans `donnees\\`) compte comme reprise faite."""
 import glob
+import json
 import os
 import shutil
 import time
 
 CODE = os.path.dirname(os.path.abspath(__file__))                 # .../dq4-portage/dq4_pc
 RACINE = os.path.dirname(CODE)                                    # .../dq4-portage
+FICHIER_REPRISE = 'reprise.json'                                      # dans donnees\ : les etapes de la reprise deja faites (D-235)
 NOMS_JOURNAUX = tuple('data%d.dat' % n for n in (1, 2, 3, 4, 5, 9))     # les fichiers du jeu : data1 a data3 = journaux, data4 = suspension, data5 = sauvegarde auto, data9 = journal le plus recent
 
 
@@ -51,6 +55,7 @@ class Dossiers:
         self.reglages_dir = os.path.join(self.donnees, 'reglages')
         self.reglages = os.path.join(self.reglages_dir, 'reglages.json')
         self.favoris = os.path.join(self.reglages_dir, 'historique_favoris.json')
+        self.fichier_reprise = os.path.join(self.donnees, FICHIER_REPRISE)
         self.journaux = os.path.join(self.donnees, 'journaux')
         self.journal_fenetre = os.path.join(self.journaux, 'erreurs_fenetre.log')
 
@@ -130,30 +135,73 @@ def _ranger_anciens_dossiers(d, log):
     return fait
 
 
+ETAPES = ('cache', 'apk', 'sauvegardes_portage', 'sauvegardes_telephone', 'reglages', 'journal')       # les reprises qui ne se font qu'une fois (D-235)
+
+
+def _lire_reprise(d):
+    """Les etapes deja faites (`donnees\\reprise.json`) : dict nom -> date, ou {} (fichier absent ou illisible)."""
+    try:
+        with open(d.fichier_reprise, encoding='utf-8') as f: etapes = json.load(f).get('etapes', {})
+        return {k: str(v) for k, v in etapes.items()} if isinstance(etapes, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _noter_reprise(d, etapes):
+    try:
+        os.makedirs(d.donnees, exist_ok=True)
+        tmp = d.fichier_reprise + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f: json.dump({'etapes': etapes}, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, d.fichier_reprise)
+    except OSError:
+        pass                          # (sans le fichier la reprise se refait au prochain demarrage : elle ne ecrase rien)
+
+
+def _deja_en_service(d):
+    """Pour chaque etape : sa destination sert deja dans `donnees\\` (une version d'avant D-235 a deja fait la reprise, ou tu as copie tes fichiers toi-meme) -> rien a recopier."""
+    journaux = any(os.path.isfile(os.path.join(d.sauvegardes, nom)) for nom in NOMS_JOURNAUX) or os.path.isdir(d.etats)
+    return {'cache': os.path.exists(d.cache), 'apk': bool(glob.glob(os.path.join(d.apk, '*.apk'))),
+            'sauvegardes_portage': journaux, 'sauvegardes_telephone': journaux,
+            'reglages': bool(glob.glob(os.path.join(d.reglages_dir, '*.json'))), 'journal': os.path.isfile(d.journal_fenetre)}
+
+
 def migrer(d=None, log=print):
     """Reprend l'ancienne disposition dans `donnees\\`. -> liste de phrases decrivant ce qui a ete fait (vide : rien a faire).
-    Copie sans jamais ecraser ni supprimer, sauf le cache (deplace d'un coup si `donnees\\cache` n'existe pas, sinon laisse tel quel) et les anciens dossiers `sauvegardes\\portage` et `mobile` (deplaces dans `avant_rangement_<date>` apres copie) ; ne fait rien avec DQ4_DONNEES / DQ4_JEUX non reconnus."""
+    Copie sans jamais ecraser ni supprimer, sauf le cache (deplace d'un coup si `donnees\\cache` n'existe pas, sinon laisse tel quel) et les anciens dossiers `sauvegardes\\portage` et `mobile` (deplaces dans `avant_rangement_<date>` apres copie) ; ne fait rien avec DQ4_DONNEES / DQ4_JEUX non reconnus.
+    Chaque reprise ne se fait qu'une fois (D-235) : ce que tu effaces ensuite dans `donnees\\` (un dossier `avant_import_...`, un journal, des reglages) ne revient pas depuis l'ancien dossier."""
     d = d or DOSSIERS
     fait = []
     code = os.path.join(d.racine, 'dq4_pc')
+    jeux = os.path.join(d.racine, 'jeux', 'DQ4')
+    notees = _lire_reprise(d); en_service = _deja_en_service(d); nouvelles = {}
+
+    def a_faire(nom):
+        """L'etape reste a faire ? Sinon (faite avant, ou destination deja en service) on la note faite, sans rien copier."""
+        if nom in notees: return False
+        if en_service[nom]: nouvelles[nom] = 'en place'; return False
+        return True
+
+    def faite(nom): nouvelles[nom] = time.strftime('%d/%m/%Y %H:%M:%S')
+
     # 1. cache : meme volume, donc un simple renommage (il pese plusieurs centaines de Mo)
     ancien = os.path.join(code, 'cache')
-    if os.path.isdir(ancien) and not os.path.exists(d.cache):
+    if a_faire('cache') and os.path.isdir(ancien):
         try:
             os.makedirs(os.path.dirname(d.cache), exist_ok=True); os.replace(ancien, d.cache)
-            fait.append('cache deplace : dq4_pc\\cache -> donnees\\cache')
+            fait.append('cache deplace : dq4_pc\\cache -> donnees\\cache'); faite('cache')
         except OSError as ex:
             fait.append('cache NON deplace (%s) : il sera recalcule' % ex)
     # 2. APK francais : copies (jeux\DQ4\patched_apks -> donnees\apk)
-    jeux = os.path.join(d.racine, 'jeux', 'DQ4')
-    if not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'patched_apks')) and not glob.glob(os.path.join(d.apk, '*.apk')):
+    if a_faire('apk') and not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'patched_apks')):
         n = _copier_arbre(os.path.join(jeux, 'patched_apks'), d.apk, log, 0)
         if n: fait.append('%d fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> donnees\\apk' % n)
+        faite('apk')
     # 3. D-232 : les anciens dossiers donnees\sauvegardes\portage et \mobile\<date> sont remontes dans donnees\sauvegardes puis ranges (AVANT les reprises plus anciennes : ce que le jeu ecrivait ces derniers jours est prioritaire sur de vieilles copies)
+    #    (se fait toujours : elle deplace ces deux dossiers, donc ne se repete pas d'elle-meme)
     fait += _ranger_anciens_dossiers(d, log)
     # 4. sauvegardes du portage d'avant : dq4_pc\sauvegardes\{data*.dat, etats\, avant_import_*\} -> donnees\sauvegardes (D-232 : un seul dossier)
     ancien = os.path.join(code, 'sauvegardes')
-    if os.path.isdir(ancien):
+    if a_faire('sauvegardes_portage') and os.path.isdir(ancien):
         n = 0
         for f in glob.glob(os.path.join(ancien, '*')):
             nom = os.path.basename(f)
@@ -161,20 +209,27 @@ def migrer(d=None, log=print):
             elif nom == 'etats': n += _copier_arbre(f, d.etats, log, 0)
             elif nom.startswith('avant_import_'): n += _copier_arbre(f, os.path.join(d.sauvegardes, nom), log, 0)
         if n: fait.append('%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\\sauvegardes -> donnees\\sauvegardes' % n)
+        faite('sauvegardes_portage')
     # 5. sauvegardes du telephone d'avant : jeux\DQ4\saves\<date la plus recente> -> donnees\sauvegardes (ce que le jeu lisait en second, fichier par fichier)
-    if not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'saves')):
+    if a_faire('sauvegardes_telephone') and not d.jeux_ancien and os.path.isdir(os.path.join(jeux, 'saves')):
         recentes = sorted(x for x in glob.glob(os.path.join(jeux, 'saves', '*')) if os.path.isdir(x))
         n = _remonter(recentes[-1:], d.sauvegardes, log)
         if n: fait.append('%d fichier(s) de sauvegardes du telephone copie(s) : jeux\\DQ4\\saves -> donnees\\sauvegardes' % n)
+        faite('sauvegardes_telephone')
     # 6. reglages et favoris de l'historique
-    n = 0
-    for nom in ('reglages.json', 'historique_favoris.json', 'historique_messages.json'):
-        src = os.path.join(code, nom)
-        if os.path.isfile(src): n += _copier(src, os.path.join(d.reglages_dir, nom), log, 0)
-    if n: fait.append('%d fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages' % n)
+    if a_faire('reglages'):
+        n = 0; trouve = False
+        for nom in ('reglages.json', 'historique_favoris.json', 'historique_messages.json'):
+            src = os.path.join(code, nom)
+            if os.path.isfile(src): trouve = True; n += _copier(src, os.path.join(d.reglages_dir, nom), log, 0)
+        if n: fait.append('%d fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages' % n)
+        if trouve: faite('reglages')
     # 7. journal des erreurs de la fenetre
     src = os.path.join(code, 'erreurs_fenetre.log')
-    if os.path.isfile(src) and _copier(src, d.journal_fenetre, log, 0): fait.append('journal des erreurs copie : donnees\\journaux')
+    if a_faire('journal') and os.path.isfile(src):
+        if _copier(src, d.journal_fenetre, log, 0): fait.append('journal des erreurs copie : donnees\\journaux')
+        faite('journal')
+    if nouvelles: _noter_reprise(d, dict(notees, **nouvelles))
     for ph in fait: log('Migration : ' + ph)
     return fait
 

@@ -2352,3 +2352,25 @@ Sylfried (05/11/2026, 00 h 00), après D-226 (#264) : « Quand je parlais de ret
 - Aux bords de la carte, la cible du jeu est bornée : la rotation se fait autour d'elle, le héros peut s'écarter du centre pendant le mouvement (comme sur mobile, non vérifié).
 - Barre de rotation de la caméra du mobile (G-103) : toujours non reproduite. La rotation n'est pas enregistrée (elle repart de 0 au lancement).
 - DQ5 / DQ6 : même réglage à prévoir (non regardé).
+
+## Avance #280 : la reprise de l'ancienne disposition ne se fait qu'une fois (le dossier `avant_import_…` ne revient plus)
+
+### Demande
+Sylfried (05/11/2026, 01 h 07) : « Pourquoi dans le dossier des sauvegardes le dossier "avant_import_20261101_192625" revient en rechargeant le jeu ? Il faut qu'il disparaisse et que les fichiers directement dans le dossier `donnees\sauvegardes` soient pris en compte (d'ailleurs j'ai rajouté le fichier "manifest.json" qui est utilisé par la version mobile, en as-tu l'utilité de l'intégrer ?) »
+
+### Cause (établie, sur le PC de Sylfried)
+- `dq4_pc\sauvegardes\` existe encore (D-232 : « rien n'est supprimé ») et contient `avant_import_20261101_192625\`. `chemins.migrer` (lancée par `lancer_dq4.bat` puis par le jeu) **recopiait à chaque démarrage** tout ce qui manquait dans `donnees\sauvegardes` : le dossier effacé à la main revenait. Même défaut pour un journal `dataN.dat`, `etats\`, les réglages ou le journal d'erreurs effacés. Les fichiers directs de `donnees\sauvegardes` étaient bien lus par le jeu (D-232 : lecture et écriture dans ce seul dossier) ; la reprise ne les écrasait pas.
+
+### Fait (D-235)
+- **Chaque reprise ne se fait qu'une fois** : `donnees\reprise.json` (`{"etapes": {nom: date}}`) note les étapes faites (`cache`, `apk`, `sauvegardes_portage`, `sauvegardes_telephone`, `reglages`, `journal`) ; le rangement des anciens `portage\` et `mobile\` (D-232) déplace ses dossiers, il ne se répète donc pas de lui-même.
+- **Une destination déjà en service compte comme faite** (`_deja_en_service`) : journaux ou `etats\` dans `donnees\sauvegardes`, un `.json` dans `reglages\`, un `.apk` dans `apk\`, le cache, le journal d'erreurs. C'est le cas de Sylfried : au premier lancement le fichier est écrit avec « en place » pour chaque étape et plus rien n'est recopié. Fichier illisible : comme une première fois (copie sans rien écraser, puis fichier refait). Une étape sans ancien dossier n'écrit rien (installation neuve : pas de `reprise.json`).
+- Rien n'est supprimé ni écrasé : `dq4_pc\sauvegardes\` et `dq4_pc\reglages.json` restent en place, à effacer à la main quand tu as vérifié.
+- `tests/test_chemins.py` (20 tests, dans la CI) : tout effacé dans `donnees\` ne revient pas, disposition déjà en service (le cas réel) sans rien recopier, fichier de reprise illisible, installation vide sans fichier ; 3 mutations du code toutes tuées (une avait d'abord survécu : le test efface maintenant aussi `reglages\` et `sauvegardes\`).
+
+### `manifest.json` (établi / supposé)
+- **Établi** : le jeu ne lit pas `manifest.json` (aucune occurrence dans le code managé, seulement les ressources .NET, ni dans les chaînes de `libdq4core.so`). Son contenu : `date` (3 novembre 21 h 24 UTC), `package` (`com.square_enix.android_googleplay.dq4`), `device` (`SM S938B`), `files` (taille et sha256 de `data1.dat` à `data5.dat` et `data9.dat`). **Supposé** : écrit par l'outil qui a copié les sauvegardes du téléphone, pas par le jeu.
+- **Pas intégré** : chaque journal a déjà son contrôle (en-tête + somme, `format_journal.verifier`) et l'import contrôle les tailles ; le manifeste n'apporte rien au jeu. L'import l'ignore (test) ; il peut rester dans le dossier.
+- **Constat utile** (sha256 du dossier de Sylfried, 05/11 01 h) : `data3.dat`, `data4.dat` et `data5.dat` sont **identiques à ceux du manifeste** (copie du téléphone) ; `data1.dat`, `data2.dat` et `data9.dat` **ne le sont pas** (`data2.dat` = l'ancien du portage du 3 novembre 18 h 25 ; `data1.dat` et `data9.dat` réécrits depuis, sans doute par le jeu).
+
+### Non vérifié
+- Windows : relancer le jeu deux fois après avoir effacé `avant_import_…` : il ne revient pas, `reprise.json` apparaît dans `donnees\`.

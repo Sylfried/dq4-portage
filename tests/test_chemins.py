@@ -91,6 +91,33 @@ class Migration(unittest.TestCase):
         self.assertEqual(self.lire('donnees', 'reglages', 'reglages.json'), b'{"nouveau": 2}'); self.assertEqual(self.lire('donnees', 'sauvegardes', 'data1.dat'), b'NEUF')
         self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
 
+    def test_ce_que_tu_effaces_ne_revient_pas(self):                                  # D-235 : le dossier avant_import_... effacé revenait a chaque demarrage (recopie depuis dq4_pc\\sauvegardes)
+        CH.migrer(self.d, log=lambda *a: None)
+        av = os.path.join(self.t, 'donnees', 'sauvegardes', 'avant_import_20261101_101010'); self.assertTrue(os.path.isdir(av))
+        shutil.rmtree(os.path.join(self.t, 'donnees', 'sauvegardes')); shutil.rmtree(os.path.join(self.t, 'donnees', 'reglages'))        # (tout effacé : seul le fichier de reprise empeche la recopie)
+        self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
+        for p in (('sauvegardes',), ('reglages',)): self.assertFalse(os.path.exists(os.path.join(self.t, 'donnees', *p)), p)
+        self.assertTrue(os.path.isfile(os.path.join(self.t, 'dq4_pc', 'sauvegardes', 'data1.dat')))              # (l'ancien dossier n'est toujours pas touché)
+
+    def test_disposition_deja_en_service_rien_n_est_recopie(self):                 # le cas de Sylfried : la reprise a eu lieu avec une version d'avant D-235, il a effacé avant_import_... a la main
+        ecrire(os.path.join(self.t, 'donnees', 'sauvegardes', 'data3.dat'), b'A_MOI'); ecrire(os.path.join(self.t, 'donnees', 'reglages', 'reglages.json'), b'{}')
+        ecrire(os.path.join(self.t, 'donnees', 'cache', 'x.pkl'), b'C'); ecrire(os.path.join(self.t, 'donnees', 'apk', 'base.apk'), b'A'); ecrire(os.path.join(self.t, 'donnees', 'journaux', 'erreurs_fenetre.log'), b'J')
+        self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
+        self.assertEqual(sorted(os.listdir(os.path.join(self.t, 'donnees', 'sauvegardes'))), ['data3.dat'])
+        self.assertEqual(self.lire('donnees', 'reglages', 'reglages.json'), b'{}')
+        with open(self.d.fichier_reprise, encoding='utf-8') as f: etapes = __import__('json').load(f)['etapes']
+        self.assertEqual(sorted(etapes), sorted(CH.ETAPES)); self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
+
+    def test_fichier_de_reprise_illisible(self):
+        ecrire(self.d.fichier_reprise, b'{pas du json')
+        fait = CH.migrer(self.d, log=lambda *a: None)                                                      # comme une premiere fois : copie sans rien ecraser, puis le fichier est refait
+        self.assertGreaterEqual(len(fait), 6); self.assertEqual(self.lire('donnees', 'sauvegardes', 'data1.dat'), b'P1')
+        self.assertEqual(CH.migrer(self.d, log=lambda *a: None), [])
+
+    def test_une_etape_sans_ancien_dossier_n_ecrit_rien(self):
+        with tempfile.TemporaryDirectory() as vide:
+            dv = CH.Dossiers(vide, env={}); self.assertEqual(CH.migrer(dv, log=lambda *a: None), []); self.assertFalse(os.path.exists(dv.fichier_reprise))
+
     def test_cache_deja_present_n_est_pas_touche(self):
         ecrire(os.path.join(self.t, 'donnees', 'cache', 'autre.pkl'), b'N')
         CH.migrer(self.d, log=lambda *a: None)
@@ -129,6 +156,12 @@ class Sauvegardes(unittest.TestCase):
         self.assertEqual(os.path.dirname(copie), self.d.sauvegardes); self.assertTrue(os.path.basename(copie).startswith('avant_import_'))
         with open(os.path.join(copie, 'data1.dat'), 'rb') as f: self.assertEqual(f.read(), journal_valide(1))
         with open(os.path.join(copie, 'etats', 'etat_01.dqs'), 'rb') as f: self.assertEqual(f.read(), b'e' * 2000)
+
+    def test_manifest_json_du_telephone_est_ignore(self):                          # D-235 : le jeu ne lit pas manifest.json (liste des fichiers + sha256 faite par l'outil de copie) ; les journaux ont leur propre controle
+        src = os.path.join(self.t, 'copie_telephone'); ecrire(os.path.join(src, 'data3.dat'), journal_valide(3)); ecrire(os.path.join(src, 'manifest.json'), b'{"files": {"data3.dat": {"size": 15360, "sha256": "0"}}}')
+        jr, et, pb = S.lire_sources([src]); self.assertEqual((sorted(jr), et, pb), (['data3.dat'], {}, []))
+        nj, ne, copie, pb = S.importer([src], self.d.portage, self.d.mobile); self.assertEqual((nj, ne, copie, pb), (1, 0, None, []))
+        self.assertFalse(os.path.exists(os.path.join(self.d.portage, 'manifest.json')))
 
     def test_export_reprend_les_etats_du_bon_dossier(self):
         ecrire(os.path.join(self.d.portage, 'data1.dat'), journal_valide(1)); ecrire(os.path.join(self.d.etats, 'etat_02.dqs'), b'e' * 2000)

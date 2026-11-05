@@ -77,18 +77,19 @@ Règles : un module de `fenetre\` n'importe jamais `jeu.py` (pas de cycle) ; il 
 ```
 donnees\
   apk\                       les 3 APK français (base.apk, split_config.arm64_v8a.apk, split_UnityDataAssetPack.apk)
-  sauvegardes\
-    mobile\<date>\           copie de tes sauvegardes du téléphone (data1.dat…) : lues, jamais modifiées ; la plus récente est utilisée
-    portage\                 les sauvegardes écrites par le portage (data1.dat à data5.dat, data9.dat)
+  sauvegardes\              UN SEUL dossier (D-232) : le contenu du .zip d'export
+    data1.dat … data5.dat, data9.dat    les journaux du jeu (lus et écrits par le moteur ; ceux du téléphone se copient ici)
     etats\                   les états instantanés (etat_01.dqs…)
     avant_import_<date>\     copies de sécurité faites avant chaque import de sauvegardes
+    avant_rangement_<date>\  anciens dossiers portage\ et mobile\ rangés tels quels (sans danger à effacer)
   cache\                     ce que le portage calcule à partir des APK (sans danger à effacer ; il est refait)
   reglages\                  reglages.json, historique_favoris.json, historique_messages.json
   journaux\                  erreurs_fenetre.log
+  reprise.json               les étapes de la reprise de l'ancienne disposition déjà faites (D-235 : elle ne se refait pas)
 ```
 Tout est défini dans `dq4_pc\chemins.py`. Variables d'environnement : `DQ4_DONNEES` (autre emplacement du dossier `donnees`), `DQ4_JEUX` (ancien fonctionnement : un dossier `jeux\DQ4` avec `patched_apks` et `saves`). Les options `--apk`, `--saves-lecture`, `--saves-ecriture`, `--cache`, `--reglages`, `--historique` restent.
 
-**Reprise de l'ancienne disposition** (`chemins.migrer`, lancée par `lancer_dq4.bat` puis par le jeu) : `jeux\DQ4\patched_apks` → `donnees\apk` (copie) ; `jeux\DQ4\saves\<date la plus récente>` et `dq4_pc\sauvegardes` → `donnees\sauvegardes\{data*.dat,etats,avant_import_…}` (copie, un seul dossier depuis D-232) ; `donnees\sauvegardes\portage` et `\mobile\<date>` (disposition du 04/11) → remontés dans `donnees\sauvegardes` puis déplacés dans `avant_rangement_<date>` ; `dq4_pc\reglages.json`, `historique_favoris.json`, `historique_messages.json` → `donnees\reglages` (copie) ; `dq4_pc\erreurs_fenetre.log` → `donnees\journaux` (copie) ; `dq4_pc\cache` → `donnees\cache` (déplacé d'un coup : il pèse plusieurs centaines de Mo). Rien n'est supprimé ni écrasé : les anciens dossiers restent en place et peuvent être effacés à la main quand tu as vérifié.
+**Reprise de l'ancienne disposition** (`chemins.migrer`, lancée par `lancer_dq4.bat` puis par le jeu ; **une seule fois par étape**, notée dans `donnees\reprise.json`, D-235) : `jeux\DQ4\patched_apks` → `donnees\apk` (copie) ; `jeux\DQ4\saves\<date la plus récente>` et `dq4_pc\sauvegardes` → `donnees\sauvegardes\{data*.dat,etats,avant_import_…}` (copie, un seul dossier depuis D-232) ; `donnees\sauvegardes\portage` et `\mobile\<date>` (disposition du 04/11) → remontés dans `donnees\sauvegardes` puis déplacés dans `avant_rangement_<date>` ; `dq4_pc\reglages.json`, `historique_favoris.json`, `historique_messages.json` → `donnees\reglages` (copie) ; `dq4_pc\erreurs_fenetre.log` → `donnees\journaux` (copie) ; `dq4_pc\cache` → `donnees\cache` (déplacé d'un coup : il pèse plusieurs centaines de Mo). Rien n'est supprimé ni écrasé : les anciens dossiers restent en place et peuvent être effacés à la main quand tu as vérifié.
 
 ## 3. Correspondance ancien nom → nouveau
 | Avant | Maintenant |
