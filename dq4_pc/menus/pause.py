@@ -37,7 +37,7 @@ LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : tail
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
 # gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; la camera ne fait que tourner a gauche / a droite et se recentrer (D-233)
-GESTES_SOURIS = (('Clic molette maintenu + déplacement', 'Tourne la caméra à gauche ou à droite'),
+GESTES_SOURIS = (('Clic molette maintenu + déplacement', 'Tourne la caméra'),
                  ('Clic molette', 'Recentre la caméra'))
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
@@ -480,7 +480,7 @@ class Pause:
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
     def _e_commandes(self):
-        """Sections (intertitres) : deplacement (touches), camera (touches gauche / droite, souris), vitesses (marche, camera, transition : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
+        """Sections (intertitres) : deplacement (touches), « Camera » (touches gauche / droite, souris, sens, vitesse de camera ; un seul groupe depuis D-237), vitesses (marche, accelerateur : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _defilement_texte), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches."""
         R = self.J.reg; T = self._touche
         def vit(lib, cle, aide, f=None):
             d = self._choix(lib, list(RG.VITESSES_X), lambda: R[cle], lambda v: (R.__setitem__(cle, v), f(v) if f else None), defaut=RG.DEFAUT[cle]); d['aide'] = aide; return d
@@ -495,14 +495,13 @@ class Pause:
         tch_cb = T('vit_combat'); tch_cb['aide'] = "Passe de Manuel à Normal, Rapide, Très rapide, puis revient à Manuel   Marche aussi en plein combat (le réglage est dans la section Défilement du texte)   " + self.AIDE_TOUCHE
         return [dict(t='sep', l='Déplacement'),
                 T('haut'), T('bas'), T('gauche'), T('droite'),
-                dict(t='sep', l='Caméra au clavier'),
+                dict(t='sep', l='Caméra'),
                 *[dict(T(a), aide="Tourne la caméra autour du héros (villes, donjons et tours)   Les deux flèches ensemble : recentre la caméra (animation)   Souris : clic molette maintenu + déplacement = tourne la caméra   Clic molette : recentre la caméra   Dans un menu ou un message, ces flèches sont des directions   " + self.AIDE_TOUCHE) for a in ('cam_gauche', 'cam_droite')],
-                dict(t='sep', l='Caméra à la souris'),
                 inverse('Inverser gauche / droite', 'camera_inverser_gd', "Caméra déplacée à la souris (clic molette maintenu + déplacement) : inverse le sens gauche / droite   Non : glisser vers la droite tourne comme la flèche droite   Les flèches du clavier ne changent pas"),
                 *[dict(t='sep', l=g, v=e) for g, e in GESTES_SOURIS],          # (lecture seule : lignes d'information, ni choisies ni cliquables)
+                vit('Vitesse de caméra', 'vitesse_camera', 'Rotation de la caméra aux flèches gauche / droite, et recentrage : x1 à x4   La touche d\'accélérateur n\'y change rien'),
                 dict(t='sep', l='Vitesses'),
                 vit('Vitesse de marche', 'vitesse_marche', 'Vitesse du héros et du jeu quand on marche : x1 comme le jeu, jusqu\'à x4 (les menus et les messages gardent leur vitesse ; les combats ont leur propre vitesse)   Rencontres aléatoires par seconde et arrivée de la nuit sur la carte du monde : (1 + x) / 2 fois plus (x2 : 1,5 fois, x4 : 2,5 fois)'),
-                vit('Vitesse de caméra', 'vitesse_camera', 'Rotation de la caméra aux flèches gauche / droite, et recentrage : x1 à x4   La touche d\'accélérateur n\'y change rien'),
                 accel, vit_acc, tch_cb,
                 *self._defilement_texte(),
                 dict(t='sep', l='Actions du jeu'),

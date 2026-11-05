@@ -2391,3 +2391,16 @@ Sylfried (05/11/2026, 01 h 07) : « Fais en sorte que le CMD qui s'ouvre lors du
 
 ### Non vérifié
 - Windows : fermer la fenêtre du jeu par la croix, Alt + F4 et le menu Quitter ferme la console ; le comportement sur une erreur (garder la console ouverte) n'a pas été vu non plus. Un processus du jeu qui ne se terminerait pas (fil non démon) garderait la console ouverte : rien de tel n'est connu.
+
+## Avance #284 : Commandes : un seul groupe « Caméra »
+
+### Demande
+Sylfried (05/11/2026, 01 h 07) : « Regroupe toutes les options de caméra directement dans un groupe nommé "Caméra" » ; « Change le texte "Tourne la caméra à gauche ou à droite" par "Tourne la caméra" »
+
+### Fait (D-237)
+- Page Commandes (`Pause._e_commandes`) : l'intertitre **« Caméra »** regroupe, dans cet ordre, « Caméra (Gauche) », « Caméra (Droite) », « Inverser gauche / droite », les lignes d'information « Clic molette maintenu + déplacement : Tourne la caméra » et « Clic molette : Recentre la caméra », puis « Vitesse de caméra » (qui était sous « Vitesses »). Les intertitres « Caméra au clavier » et « Caméra à la souris » disparaissent. « Vitesses » commence par « Vitesse de marche ».
+- `GESTES_SOURIS` : « Tourne la caméra ». Les aides des lignes, les touches par défaut et `reglages.json` ne changent pas.
+- `tests/test_pause_pages.py` (29 tests) : liste des intertitres, contenu exact du groupe, plus de « Vitesse de caméra » sous « Vitesses », textes des deux informations ; 3 mutations (ancien texte, ancien intertitre, vitesse remise sous « Vitesses ») toutes tuées.
+
+### Non vérifié
+- Windows : l'aspect de la page (le groupe tient-il sans défilement ? les deux lignes d'information au milieu du groupe sont affichées comme avant : geste à gauche, effet en gris à droite).
