@@ -9,6 +9,8 @@ import numpy as np
 import pyglet
 from pyglet import gl
 from dq4_pc.persistance import reglages as RG
+from dq4_pc import langue as LG
+from dq4_pc.langue import N_, tr
 from dq4_pc.monde import hd as HD
 from dq4_pc.menus import hud_mobile as HM
 from dq4_pc.fenetre import entrees as EN
@@ -37,34 +39,34 @@ LARG_SW, HAUT_SW = 46.0, 24.0                    # interrupteur Oui / Non : tail
 TAILLE_JEU = 1.0                                  # echelle des textes en police du jeu (par rapport aux polices du systeme)
 MSAA_CHOIX = (0, 2, 4, 8)
 # gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; la camera ne fait que tourner a gauche / a droite et se recentrer (D-233)
-GESTES_SOURIS = (('Clic molette maintenu + déplacement', 'Tourne la caméra'),
-                 ('Clic molette', 'Recentre la caméra'))
+GESTES_SOURIS = ((N_('Clic molette maintenu + déplacement'), N_('Tourne la caméra')),
+                 (N_('Clic molette'), N_('Recentre la caméra')))          # (D-238 : textes français, traduits en les dessinant)
 # editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
 # Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.FENETRES_RETIREES : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
-NOMS_FENETRES = {'boutons': "Boutons et croix de l'écran", 'bouton_vitesse': 'Combat : bouton de vitesse', 'msg': 'Dialogues (messages)', 'YesNo': 'Oui / Non', 'Chapter': 'Titre du chapitre',
-                 'RootMenu': 'Menu principal', 'LeftCharaList': 'Liste des personnages', 'TargetCharaList': 'Choix du personnage', 'Money': 'Argent', 'Pageing': 'Flèches de page',
-                 'ItemList': 'Liste des objets', 'ItemInfo': "Infos de l'objet", 'OperationItemList': 'Actions sur les objets',
-                 'Status': 'Statut du personnage', 'Chapter2Status': 'Chapitre 2 : statut', 'MemberShift': "Ordre de l'équipe", 'MemberShiftButton': "Ordre de l'équipe : boutons",
-                 'NameButton': 'Divers : liste des boutons', 'BCInfo': 'Sauvegarde rapide', 'Senreki': 'Journal de bord', 'MonsterEncyclopedia': 'Bestiaire',
-                 'CityMap': 'Carte : plan (ville, monde)', 'WorldLargeMap': 'Carte : grande carte du monde', 'MapButton': 'Carte : boutons Mode et retour', 'ShopMap': 'Carte : liste des boutiques',
-                 'BattleUpStatus': "Combat : bandeau de l'équipe", 'BattleRoot': 'Combat : menu principal', 'BattleAction': 'Combat : actions', 'BattleTarget': 'Combat : cibles', 'BattleGo': 'Combat : en avant',
-                 'BattleIM': 'Combat : objets et sorts', 'BattleInfo': "Combat : infos de l'équipe", 'BattleEnemyTarget': 'Combat : cible ennemie', 'BattlePartyTarget': 'Combat : cible alliée',
-                 'BattleChangeButton': 'Combat : changement', 'BattleChangeInfo': 'Combat : infos du changement',
-                 'ShopRoot': 'Boutique : menu', 'ShopBuy': 'Boutique : achat', 'ShopBuyInfo': "Boutique : infos de l'objet", 'ShopSellItemList': 'Boutique : vente', 'ShopSellItemInfo': 'Boutique : infos de vente',
-                 'TorunekoMiseban': 'Boutique de Torneko', 'BankDeposit': 'Banque : dépôt', 'BankDraw': 'Banque : retrait', 'ChurchRoot': 'Église : menu', 'ChurchWork': 'Église : services',
-                 'Casino_CoinShop': 'Casino : jetons', 'Casino_GiftList': 'Casino : cadeaux', 'Casino_GiftTarget': 'Casino : destinataire', 'Casino_Slot': 'Casino : machine à sous', 'Casino_Poker': 'Casino : poker',
-                 'Casino_FightStadiumSelect': 'Casino : choix du stade', 'Casino_FightStadiumBet': 'Casino : pari du stade', 'Casino_FightStadiumCoin': 'Casino : jetons du stade', 'FightStadiumAbort': 'Casino : abandon du stade'}
-GROUPES_INTERFACE = (("Écran tactile", ('boutons',)),
-                     ("Dialogues", ('msg', 'YesNo', 'Chapter')),
-                     ("Menu en jeu", ('RootMenu', 'LeftCharaList', 'TargetCharaList', 'Money', 'Pageing')),
-                     ("Objets", ('ItemList', 'ItemInfo', 'OperationItemList')),
-                     ("Équipe et statut", ('Status', 'Chapter2Status', 'MemberShift', 'MemberShiftButton')),
-                     ("Divers", ('NameButton', 'BCInfo', 'Senreki', 'MonsterEncyclopedia')),
-                     ("Cartes", ('CityMap', 'WorldLargeMap', 'MapButton', 'ShopMap')),
-                     ("Combat", ('bouton_vitesse', 'BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
-                     ("Boutiques et banque", ('ShopRoot', 'ShopBuy', 'ShopBuyInfo', 'ShopSellItemList', 'ShopSellItemInfo', 'TorunekoMiseban', 'BankDeposit', 'BankDraw')),
-                     ("Églises", ('ChurchRoot', 'ChurchWork')),
-                     ("Casino", ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
+NOMS_FENETRES = {'boutons': N_("Boutons et croix de l'écran"), 'bouton_vitesse': N_('Combat : bouton de vitesse'), 'msg': N_('Dialogues (messages)'), 'YesNo': N_('Oui / Non'), 'Chapter': N_('Titre du chapitre'),
+                 'RootMenu': N_('Menu principal'), 'LeftCharaList': N_('Liste des personnages'), 'TargetCharaList': N_('Choix du personnage'), 'Money': N_('Argent'), 'Pageing': N_('Flèches de page'),
+                 'ItemList': N_('Liste des objets'), 'ItemInfo': N_("Infos de l'objet"), 'OperationItemList': N_('Actions sur les objets'),
+                 'Status': N_('Statut du personnage'), 'Chapter2Status': N_('Chapitre 2 : statut'), 'MemberShift': N_("Ordre de l'équipe"), 'MemberShiftButton': N_("Ordre de l'équipe : boutons"),
+                 'NameButton': N_('Divers : liste des boutons'), 'BCInfo': N_('Sauvegarde rapide'), 'Senreki': N_('Journal de bord'), 'MonsterEncyclopedia': N_('Bestiaire'),
+                 'CityMap': N_('Carte : plan (ville, monde)'), 'WorldLargeMap': N_('Carte : grande carte du monde'), 'MapButton': N_('Carte : boutons Mode et retour'), 'ShopMap': N_('Carte : liste des boutiques'),
+                 'BattleUpStatus': N_("Combat : bandeau de l'équipe"), 'BattleRoot': N_('Combat : menu principal'), 'BattleAction': N_('Combat : actions'), 'BattleTarget': N_('Combat : cibles'), 'BattleGo': N_('Combat : en avant'),
+                 'BattleIM': N_('Combat : objets et sorts'), 'BattleInfo': N_("Combat : infos de l'équipe"), 'BattleEnemyTarget': N_('Combat : cible ennemie'), 'BattlePartyTarget': N_('Combat : cible alliée'),
+                 'BattleChangeButton': N_('Combat : changement'), 'BattleChangeInfo': N_('Combat : infos du changement'),
+                 'ShopRoot': N_('Boutique : menu'), 'ShopBuy': N_('Boutique : achat'), 'ShopBuyInfo': N_("Boutique : infos de l'objet"), 'ShopSellItemList': N_('Boutique : vente'), 'ShopSellItemInfo': N_('Boutique : infos de vente'),
+                 'TorunekoMiseban': N_('Boutique de Torneko'), 'BankDeposit': N_('Banque : dépôt'), 'BankDraw': N_('Banque : retrait'), 'ChurchRoot': N_('Église : menu'), 'ChurchWork': N_('Église : services'),
+                 'Casino_CoinShop': N_('Casino : jetons'), 'Casino_GiftList': N_('Casino : cadeaux'), 'Casino_GiftTarget': N_('Casino : destinataire'), 'Casino_Slot': N_('Casino : machine à sous'), 'Casino_Poker': N_('Casino : poker'),
+                 'Casino_FightStadiumSelect': N_('Casino : choix du stade'), 'Casino_FightStadiumBet': N_('Casino : pari du stade'), 'Casino_FightStadiumCoin': N_('Casino : jetons du stade'), 'FightStadiumAbort': N_('Casino : abandon du stade')}
+GROUPES_INTERFACE = ((N_("Écran tactile"), ('boutons',)),
+                     (N_("Dialogues"), ('msg', 'YesNo', 'Chapter')),
+                     (N_("Menu en jeu"), ('RootMenu', 'LeftCharaList', 'TargetCharaList', 'Money', 'Pageing')),
+                     (N_("Objets"), ('ItemList', 'ItemInfo', 'OperationItemList')),
+                     (N_("Équipe et statut"), ('Status', 'Chapter2Status', 'MemberShift', 'MemberShiftButton')),
+                     (N_("Divers"), ('NameButton', 'BCInfo', 'Senreki', 'MonsterEncyclopedia')),
+                     (N_("Cartes"), ('CityMap', 'WorldLargeMap', 'MapButton', 'ShopMap')),
+                     (N_("Combat"), ('bouton_vitesse', 'BattleUpStatus', 'BattleRoot', 'BattleAction', 'BattleTarget', 'BattleGo', 'BattleIM', 'BattleInfo', 'BattleEnemyTarget', 'BattlePartyTarget', 'BattleChangeButton', 'BattleChangeInfo')),
+                     (N_("Boutiques et banque"), ('ShopRoot', 'ShopBuy', 'ShopBuyInfo', 'ShopSellItemList', 'ShopSellItemInfo', 'TorunekoMiseban', 'BankDeposit', 'BankDraw')),
+                     (N_("Églises"), ('ChurchRoot', 'ChurchWork')),
+                     (N_("Casino"), ('Casino_CoinShop', 'Casino_GiftList', 'Casino_GiftTarget', 'Casino_Slot', 'Casino_Poker', 'Casino_FightStadiumSelect', 'Casino_FightStadiumBet', 'Casino_FightStadiumCoin', 'FightStadiumAbort')))
 INTERFACES_PROPRES = (RG.CIBLE_ECRAN, 'msg', RG.CIBLE_VITESSE)         # interfaces de l'editeur qui ne sont pas des fenetres Make_* du moteur : boutons et croix de l'ecran, dialogues, bouton de vitesse de combat
 ENTETE = '#'                                                    # valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
 SANS_EDITION = RG.FENETRES_RETIREES
@@ -87,7 +89,7 @@ def double_clic_systeme():
 
 TOLERANCE_APPUI = 8.0                                           # deplacement (pixels) du pointeur, depuis le point d'appui sur la barre de titre du panneau, a partir duquel le panneau se deplace (en dessous : appui court)
 CADRE_SELECTION = (255, 235, 130)                               # cadre jaune de l'element choisi dans l'apercu de l'editeur (le meme que celui des boutons de l'ecran : hud_mobile.py)
-MOTS_MASQUE = ('Masquée', 'Masqué')                             # etiquette d'un element masque dans l'apercu de l'editeur : feminin (fenetre, croix), masculin (boutons)
+MOTS_MASQUE = (N_('Masquée'), N_('Masqué'))                             # etiquette d'un element masque dans l'apercu de l'editeur : feminin (fenetre, croix), masculin (boutons)
 
 
 class Pause:
@@ -121,8 +123,8 @@ class Pause:
             f = os.path.join(self.J.args.cache, 'ui_font.otf')
             if os.path.exists(f):
                 try: pyglet.font.add_file(f); self._pol = ('FOT-GMaruGo Pro', 'FOT-GMaruGo Pro M', 'GMaruGoPro-M')
-                except Exception as ex: print('police du jeu non chargee :', ex, flush=True)
-        return self.J._etiq(texte, taille * (1.0 if not self._pol else TAILLE_JEU), couleur, self._pol)
+                except Exception as ex: print(tr('police du jeu non chargee :'), ex, flush=True)
+        return self.J._etiq(tr(texte), taille * (1.0 if not self._pol else TAILLE_JEU), couleur, self._pol)          # (D-238 : tout texte dessiné par les pages passe par la traduction ; un texte sans traduction reste tel quel)
 
     # ---- sprites des menus du jeu
     def _feuille(self, nom):
@@ -301,7 +303,7 @@ class Pause:
         if label == 'Interface à modifier': return self.nom_cible(v)
         n = self.noms.get(label, {}).get(v)
         if n is not None: return n
-        if isinstance(v, bool): return 'Oui' if v else 'Non'
+        if isinstance(v, bool): return N_('Oui') if v else N_('Non')
         return '%d x %d' % v if isinstance(v, tuple) else str(v)
 
     def _curs(self, label, get, appliquer, mini, maxi, pas, pas_f, fmt, mult=1.0, defaut=None):
@@ -314,12 +316,13 @@ class Pause:
         return d
 
     noms = {
-        'Shader': {0: 'Aucun', 1: 'EPX x8', 4: 'Pixel perfect'},
-        'Antialiasing': {0: 'Aucun', 2: 'x2', 4: 'x4', 8: 'x8'},
-        'Suréchantillonnage': {1.0: 'Aucun', 1.5: 'x1,5', 2.0: 'x2'},
-        'Action': {'creer': 'Créer un état', 'charger': 'Charger un état', 'supprimer': 'Supprimer un état'},
+        'Langue': {'systeme': N_('Système'), 'en': N_('Anglais'), 'fr': N_('Français')},
+        'Shader': {0: N_('Aucun'), 1: 'EPX x8', 4: 'Pixel perfect'},
+        'Antialiasing': {0: N_('Aucun'), 2: 'x2', 4: 'x4', 8: 'x8'},
+        'Suréchantillonnage': {1.0: N_('Aucun'), 1.5: N_('x1,5'), 2.0: 'x2'},
+        'Action': {'creer': N_('Créer un état'), 'charger': N_('Charger un état'), 'supprimer': N_('Supprimer un état')},
     }
-    noms['Vitesse du texte'] = {0.5: 'Très lent', 1.0: 'Lent', 2.0: 'Assez lent', 4.0: 'Normal', 8.0: 'Rapide', 16.0: 'Très rapide', 4000.0: 'Instantané'}
+    noms['Vitesse du texte'] = {0.5: N_('Très lent'), 1.0: N_('Lent'), 2.0: N_('Assez lent'), 4.0: N_('Normal'), 8.0: N_('Rapide'), 16.0: N_('Très rapide'), 4000.0: N_('Instantané')}      # (D-238 : noms français, traduits en les dessinant : `_nom_valeur` rend des donnees)
     noms['Vitesse de combat'] = RG.NOMS_VITESSE_COMBAT                                                    # Manuel, Normal, Rapide, Très rapide (jamais x1, x2, x3)
     for lib in ('Vitesse de marche', 'Vitesse de caméra'): noms[lib] = {v: 'x%d' % v for v in RG.VITESSES_X}
     del lib
@@ -331,13 +334,15 @@ class Pause:
                 R[k] = v
                 if f: f(v)                 # (les reglages sont enregistres a la fermeture du menu)
             return s
+        lang = self._choix('Langue', list(LG.CHOIX), lambda: R['langue'], set_('langue', LG.regler), defaut=RG.DEFAUT['langue'])          # (D-238 : au-dessus de « Plein écran » ; s'applique tout de suite)
+        lang['aide'] = "Langue de l'outil : paramètres, historique, sauvegardes, licence, informations...   Système : français si Windows est en français (quelle que soit la variante), sinon anglais   Les textes du jeu ne changent pas"
         fen = self._choix('Plein écran', [False, True], lambda: J.est_plein, J.regler_plein_ecran, defaut=False)          # (interrupteur : l'ancien reglage d'avant la #42 ; F11 et Alt + Entree font la meme chose)
         fen['aide'] = "Plein écran : fenêtre sans bordure à la résolution de l'écran où se trouve la fenêtre (l'affichage de l'écran ne change pas)   F11 ou Alt + Entrée : passe du plein écran à la fenêtre et inversement"
         res = self._choix('Résolution', J.resolutions(), J.resolution_courante, lambda v: (J.regler_resolution(v), R.__setitem__('resolution', list(v))), off=J.est_plein, defaut=tuple(RG.DEFAUT['resolution']))          # (plein ecran : ligne inactive, relue a chaque image : voir _inactif)
         res['aide'] = "Fenêtré : taille de la fenêtre   Plein écran : sans effet, la fenêtre prend la résolution de l'écran"
         msaa = self._choix('Antialiasing', list(MSAA_CHOIX), lambda: R['msaa'], set_('msaa'), defaut=RG.DEFAUT['msaa'])
-        if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa: msaa['aide'] = 'Limité à x%d par cette carte graphique' % J.post.max_msaa          # (ancienne note rouge : plus qu'une infobulle)
-        return [fen, res,
+        if J.post.max_msaa is not None and R['msaa'] > J.post.max_msaa: msaa['aide'] = tr('Limité à x%d par cette carte graphique') % J.post.max_msaa          # (ancienne note rouge : plus qu'une infobulle)
+        return [lang, fen, res,
                 self._curs('Netteté', lambda: R['nettete'], lambda v: R.__setitem__('nettete', v), 0.0, 1.0, 0.05, 0.1, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['nettete']),
                 self._choix('Shader', list(RG.MODES_SPRITES), lambda: J.mode, set_('mode_sprites', J.regler_mode), defaut=RG.DEFAUT['mode_sprites']),
                 self._curs('Effet de vignetage', lambda: R['vignette'], lambda v: R.__setitem__('vignette', v), 0.0, 1.0, 0.01, 0.05, lambda v: '%d %%' % round(v * 100), 100.0, defaut=RG.DEFAUT['vignette']),
@@ -354,7 +359,7 @@ class Pause:
             l = [i for i in ids if i in INTERFACES_PROPRES or i in noms]; vus.update(ids)
             if l: out += [ENTETE + titre] + l
         reste = sorted((n for n in noms if n not in vus and n not in RG.FENETRES_RETIREES), key=lambda n: n.lower())
-        return out + ([ENTETE + 'Autres'] + reste if reste else [])
+        return out + ([ENTETE + N_('Autres')] + reste if reste else [])
 
     def nom_cible(self, c):
         return c[len(ENTETE):] if self._entete(c) else NOMS_FENETRES.get(c, c)
@@ -475,7 +480,7 @@ class Pause:
         """Ligne d'une action au clavier : deux cases (touche principale, secondaire) ; Suppr efface la case choisie, le bouton rond (ou Debut) remet les touches d'origine."""
         R = self.J.reg
         def defaut():
-            for a in R.action_par_defaut(act): self._info('Une touche d\'origine est retirée de « %s ».' % dict(RG.ACTIONS)[a])
+            for a in R.action_par_defaut(act): self._info(N_("Une touche d'origine est retirée de « %s »."), False, dict(RG.ACTIONS)[a])
             R.enregistrer()
         return dict(t='touche', l=dict(RG.ACTIONS)[act], act=act, v=[RG.nom_touche(n) for n in R['touches'][act]], defaut=defaut, est_defaut=lambda: R.est_par_defaut(act))
 
@@ -545,25 +550,35 @@ class Pause:
         self.fermer(); self.J.retour_titre()
 
     # ---- actions
-    def _info(self, texte, erreur=False): self.message = (texte, time.time(), erreur)
+    def _info(self, modele, erreur=False, *valeurs):
+        """Message d'information (4 secondes, au-dessus du cadre) : `modele` est le texte FRANCAIS, a trous (%d, %s) s'il y a des `valeurs`. `message[0]` est le texte francais complet ; l'affichage (`_texte_message`) traduit le modele AVANT de mettre
+        les valeurs (D-238 : l'anglais n'a pas le meme ordre des mots), et traduit aussi les valeurs qui sont des textes de l'outil (nom d'une action, nom d'une touche)."""
+        self.message = (modele % valeurs if valeurs else modele, time.time(), erreur, modele, valeurs)
+
+    def _texte_message(self):
+        """Le message d'information dans la langue de l'outil ('' s'il n'y en a pas, ou s'il date de plus de 4 secondes)."""
+        m = self.message
+        if not m or time.time() - m[1] >= 4.0: return ''
+        return tr(m[3]) % tuple(tr(v) for v in m[4]) if m[4] else tr(m[3])
 
     def _sauver(self, n):
         try:
             self.J.sauver_etat(n, self.J._png_miniature(self.mini_tex))
-            self.minis.pop(n, None); self._info('État enregistré dans l\'emplacement %d.' % n)
+            self.minis.pop(n, None); self._info(N_("État enregistré dans l'emplacement %d."), False, n)
         except Exception as ex:
-            self._info('Impossible d\'enregistrer l\'état : %r' % (ex,), True)
+            self._info(N_("Impossible d'enregistrer l'état : %r"), True, ex)
 
     def _charger(self, n):
         try:
             self.J.charger_etat(n); self.fermer()
         except Exception as ex:
-            self._info('Impossible de charger l\'état : %r' % (ex,), True)
+            self._info(N_("Impossible de charger l'état : %r"), True, ex)
 
     def _demander_suppression(self, n):
         """Supprimer l'etat n : une fenetre modale demande confirmation (Non preselectionne)."""
         inf = self.J.infos_etat(n); date = self._date_fr(inf[0].get('date')).strip() if inf else ''
-        self.popup = dict(titre="Supprimer l'état %d ?" % n, detail=date, oui=lambda: self._supprimer(n), sel=1)
+        modele = N_("Supprimer l'état %d ?")
+        self.popup = dict(titre=modele % n, modele=modele, valeurs=(n,), detail=date, oui=lambda: self._supprimer(n), sel=1)          # (`modele` + `valeurs` : le titre est traduit avant d'y mettre le numero, voir _dessiner_popup)
 
     def _touche_popup(self, symbol, act):
         K = pyglet.window.key; p = self.popup
@@ -582,9 +597,9 @@ class Pause:
             if t is not None:
                 try: t.delete()
                 except Exception: pass
-            self._info('État %d supprimé.' % n)
+            self._info(N_('État %d supprimé.'), False, n)
         except Exception as ex:
-            self._info('Impossible de supprimer l\'état : %r' % (ex,), True)
+            self._info(N_("Impossible de supprimer l'état : %r"), True, ex)
 
     # ---- touches clavier
     def touche(self, symbol, modifiers=0):
@@ -745,9 +760,9 @@ class Pause:
         K = pyglet.window.key; R = self.J.reg; act, col = self.capture
         if symbol == K.ESCAPE: self.capture = None; return
         if symbol in (K.DELETE, K.BACKSPACE): R.delier(act, col); self.capture = None; R.enregistrer(); return
-        if RG.nom_de(symbol) in RG.RESERVEES: self._info('Cette touche est réservée (%s).' % RG.nom_touche(RG.nom_de(symbol)), True); return
+        if RG.nom_de(symbol) in RG.RESERVEES: self._info(N_('Cette touche est réservée (%s).'), True, RG.nom_touche(RG.nom_de(symbol))); return
         avait = R.lier(act, col, symbol); self.capture = None; R.enregistrer()
-        if avait and avait != act: self._info('%s retirée de « %s ».' % (RG.nom_touche(RG.nom_de(symbol)), dict(RG.ACTIONS)[avait].split(' :')[0]))
+        if avait and avait != act: self._info(N_('%s retirée de « %s ».'), False, RG.nom_touche(RG.nom_de(symbol)), dict(RG.ACTIONS)[avait].split(' :')[0])
 
     # ---- souris
     def _zone(self, x, y):
@@ -1160,10 +1175,10 @@ class Pause:
         if n and (ecr != 'quitter' or e[i_sel]['t'] != 'sep'): i_sel = self.sel[ecr] = self._ligne_active(e, i_sel)          # (la selection saute les intertitres et les lignes inactives, y compris a l'ouverture de l'ecran ou quand la ligne choisie vient de devenir inactive)
         n_f = 1 if e and e[0].get('fixe') is True else 0                                 # ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
         fs, fst, fsp = 18 * k, 24 * k, 13 * k; pad = 30 * k
-        titres = {'racine': 'Paramètres', 'affichage': 'Affichage', 'son': 'Son', 'commandes': 'Commandes', 'interface': 'Interface', 'etats': 'États', 'quitter': 'Quitter'}
-        titres['modifications'] = 'Modifications'
+        titres = {'racine': N_('Paramètres'), 'affichage': N_('Affichage'), 'son': N_('Son'), 'commandes': N_('Commandes'), 'interface': N_('Interface'), 'etats': N_('États'), 'quitter': N_('Quitter')}
+        titres['modifications'] = 'Modifications'                                    # (identique en anglais : rien a traduire ; `_et` le traduirait au besoin)
         avec_mini = ecr == 'etats'
-        msg = self.message[0] if self.message and time.time() - self.message[1] < 4.0 else ''
+        msg = self._texte_message()
         # hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
         avec_ret = not editeur and ecr != 'racine'                                  # (pas de bouton retour a la racine : « Reprendre » ferme le menu)
         kb = 1.1 * k; bw, bh = 64 * kb, 55.5 * kb; marge_ret = bh + 10 * k if avec_ret else 0.0
@@ -1226,7 +1241,7 @@ class Pause:
         plx = x0 + 42 * k; plw = pw - 84 * k                                      # boutons : meme marge a gauche et a droite
         if ecr == 'commandes':
             for c, cx in enumerate((cx1, cx2)):
-                eh = self._et('Touche %d' % (c + 1), fsp, GRIS); eh.x = cx + (LARG_CELLULE * k - eh.content_width) / 2; eh.y = y1 - h_titre + 6 * k; eh.draw()
+                eh = self._et(tr('Touche %d') % (c + 1), fsp, GRIS); eh.x = cx + (LARG_CELLULE * k - eh.content_width) / 2; eh.y = y1 - h_titre + 6 * k; eh.draw()
         pos = []
         if n_f: pos.append((0, y1 - 66 * k))
         yy = y1 - h_titre
@@ -1332,8 +1347,9 @@ class Pause:
         self._dessiner_popup(k, fs, fsp, W, H)
 
     # ---- infobulles (aides au survol de la souris) et fenetre modale
+    # (D-238 : les aides sont des textes francais ; `_lignes_aide` traduit chaque phrase separee par trois espaces, voir le catalogue textes_en\pause.py : une aide assemblee (« ... » + AIDE_TOUCHE) se traduit donc phrase par phrase)
     AIDE_TOUCHE = "Entrée : changer la touche   ←/→ : case   Suppr : effacer   Début ou bouton rond : touche d'origine"
-    AIDE_ETATS = {'creer': "Entrée : enregistrer ici (écrase l'état)", 'charger': 'Entrée : charger cet état', 'supprimer': 'Entrée : supprimer cet état'}
+    AIDE_ETATS = {'creer': N_("Entrée : enregistrer ici (écrase l'état)"), 'charger': N_('Entrée : charger cet état'), 'supprimer': N_('Entrée : supprimer cet état')}
 
     def _aide_ligne(self, en):
         """Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas."""
@@ -1351,11 +1367,11 @@ class Pause:
         return ''
 
     def _lignes_aide(self, texte, maxw, fz):
-        """Lignes d'une infobulle : coupees aux espaces triples, puis a la largeur maxw."""
+        """Lignes d'une infobulle : coupees aux espaces triples, puis a la largeur maxw. Chaque phrase (entre deux espaces triples) est traduite AVANT d'etre coupee a la largeur : une ligne coupee n'est plus une phrase du catalogue (D-238)."""
         import re
         out = []
         for l in re.split(r'\s{3,}', texte.strip()):
-            cur = ''
+            l = tr(l); cur = ''
             for mot in l.split(' '):
                 essai = (cur + ' ' + mot).strip()
                 if cur and self._et(essai, fz).content_width > maxw: out.append(cur); cur = mot
@@ -1368,7 +1384,7 @@ class Pause:
         if self.popup is not None: self.tt = None; return
         fz = fsp * 1.05; texte = ''; ancre = None
         i_sel = min(self.sel.get(self.ecran, 0), max(0, n - 1))
-        if self.capture is not None: texte = "Appuie sur la touche pour « %s »   Échap : annuler   Suppr : effacer" % dict(RG.ACTIONS)[self.capture[0]]; ancre = i_sel
+        if self.capture is not None: texte = tr("Appuie sur la touche pour « %s »") % tr(dict(RG.ACTIONS)[self.capture[0]]) + "   Échap : annuler   Suppr : effacer"; ancre = i_sel
         elif self.saisie is not None: texte = 'Tape la valeur   Entrée : valider   Échap : annuler'; ancre = self.saisie[0]
         elif self.deroule is not None: self.tt = None; return
         elif self.pan_appui is not None: self.tt = None; return                       # (pas d'infobulle pendant un appui sur la barre de titre)
@@ -1405,7 +1421,8 @@ class Pause:
         p = self.popup
         if p is None: return
         voile = pyglet.shapes.Rectangle(0, 0, W, H, color=(0, 0, 0)); voile.opacity = 120; voile.draw()
-        et = self._et(p['titre'], fs * 1.2, BLANC); ed = self._et(p['detail'], fsp * 1.15, GRIS) if p.get('detail') else None
+        titre = tr(p['modele']) % p['valeurs'] if p.get('modele') else p['titre']
+        et = self._et(titre, fs * 1.2, BLANC); ed = self._et(p['detail'], fsp * 1.15, GRIS) if p.get('detail') else None
         bw, bh = 150 * k, 46 * k; w = max(2 * bw + 60 * k, et.content_width + 80 * k, (ed.content_width + 80 * k) if ed else 0); h = 200 * k
         x, y = (W - w) / 2, (H - h) / 2
         self._cadre(x, y, w, h, k)

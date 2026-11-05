@@ -5,6 +5,7 @@ mouvement de la camera (les fleurs « scintillent »). Au chargement d'une carte
 plat qui en recouvre un autre deja dessine a sa hauteur, d'autant que de triangles empiles ; le dernier dessine l'emporte, toujours. Les groupes de textures sont copies : le cache de carte reste intact.
 """
 import numpy as np
+from dq4_pc.langue import tr
 
 PAS = 0.003            # hauteur ajoutee par triangle empile (unites de ville)
 TOL_Y = 0.0015         # deux triangles plats dont la hauteur differe de moins que cela sont consideres comme coplanaires
@@ -71,5 +72,5 @@ def decaler(c, log=None):
     g2 = dict(groupes)
     for cle, T in nouveaux.items(): g2[cle] = (T.reshape(-1, 3), groupes[cle][1], groupes[cle][2])
     c['groupes'] = g2
-    if log: log('décor : %d triangles plats superposés relevés (%d groupes)' % (len(niveau), len(nouveaux)))
+    if log: log(tr('décor : %d triangles plats superposés relevés (%d groupes)') % (len(niveau), len(nouveaux)))
     return len(niveau)

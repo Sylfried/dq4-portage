@@ -6,6 +6,7 @@ from pyglet import gl
 from pyglet.graphics.shader import Shader
 from pyglet.graphics.shader import ShaderProgram
 from dq4_pc.combat import effet_combat as EC
+from dq4_pc.langue import tr, N_
 from dq4_pc.fenetre import entrees as EN
 from dq4_pc.menus import ui_menu as UI
 from dq4_pc.noyau import moteur as MO
@@ -22,7 +23,7 @@ class MenusMixin:
     def toast(self, texte, duree=1.8):
         """Petit message en haut de l'ecran, SEULEMENT pour les sauvegardes (etats instantanes, sauvegarde du jeu impossible, import) : depuis #267 les autres notifications (vitesse de combat, plein ecran, memoire du moteur, reglages, son...) n'existent plus (D-228) ;
         les sauvegardes les ont retrouvees le 04/11/2026 (D-230). tests/test_notifications_sauvegardes.py garde la liste des appels permis."""
-        self.toasts = [(texte, time.time() + duree)]
+        self.toasts = [(tr(texte), time.time() + duree)]            # (D-238 : le texte est traduit ici ; un texte a trous doit l'etre avant d'etre formate : toast(tr('Etat %d') % n))
 
     def ui_g_reset(self):
         """Refait les fenetres de menu d'origine d'apres la memoire de l'interface (apres le chargement d'un etat)."""
@@ -31,11 +32,11 @@ class MenusMixin:
 
     H_ECH = 87                                                  # hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limiter_lignes)
 
-    ESSAIS = (("Aperçu d'un message.",),                                                          # textes d'essai de l'editeur d'interface (1 a 3 lignes, comme une boite de dialogue) : un au hasard a chaque choix de « Dialogues »
-              ("Ceci est un texte de test.", "Il sert à régler la taille et", "la position des dialogues."),
-              ("Aperçu d'un message", "sur deux lignes."),
-              ("Voici un exemple de dialogue.", "Déplace et redimensionne cette", "fenêtre comme tu le souhaites."),
-              ("Texte d'essai : les messages du jeu", "s'afficheront ici, à cette taille."))
+    ESSAIS = ((N_("Aperçu d'un message."),),                                                      # textes d'essai de l'editeur d'interface (1 a 3 lignes, comme une boite de dialogue) : un au hasard a chaque choix de « Dialogues » ; chaque ligne est traduite au dessin
+              (N_("Ceci est un texte de test."), N_("Il sert à régler la taille et"), N_("la position des dialogues.")),
+              (N_("Aperçu d'un message"), N_("sur deux lignes.")),
+              (N_("Voici un exemple de dialogue."), N_("Déplace et redimensionne cette"), N_("fenêtre comme tu le souhaites.")),
+              (N_("Texte d'essai : les messages du jeu"), N_("s'afficheront ici, à cette taille.")))
 
     def nouvel_echantillon(self):
         """L'editeur choisit le texte d'essai montre dans la fenetre de dialogue : au hasard parmi ESSAIS (autre que le precedent)."""
@@ -50,7 +51,7 @@ class MenusMixin:
         im = Image.new('L', (512, self.H_ECH), 0); dr = ImageDraw.Draw(im)
         try: f = ImageFont.truetype(os.path.join(self.args.cache, 'ui_font.otf'), 22)
         except Exception: f = ImageFont.load_default()
-        for j, t in enumerate(self.ESSAIS[self._essai % len(self.ESSAIS)]): dr.text((4, 7 + 28 * j + 20), t, font=f, fill=255, anchor='ls')
+        for j, t in enumerate(self.ESSAIS[self._essai % len(self.ESSAIS)]): dr.text((4, 7 + 28 * j + 20), tr(t), font=f, fill=255, anchor='ls')
         cv[:self.H_ECH] = np.asarray(im)
         return cv
 
@@ -610,7 +611,7 @@ class MenusMixin:
         gl.glEnable(gl.GL_BLEND); gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         stats = self.stats and bool(self.ecarts)
         if stats:
-            if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = '%.0f images/s | moteur %.1f pas/s (%.1f ms) | pire image %.0f ms | dessin Python %.1f ms' % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), (len(self.pas_t) - 1) / max(1e-6, self.pas_t[-1] - self.pas_t[0]) if len(self.pas_t) > 2 else 0.0, self.dt_moteur * 1000, max(self.ecarts) * 1000, self.dt_dessin * 1000)
+            if self.n % 10 == 0 or not self.etiq_stats.text: self.etiq_stats.text = tr('%.0f images/s | moteur %.1f pas/s (%.1f ms) | pire image %.0f ms | dessin Python %.1f ms') % (len(self.ecarts) / max(1e-6, sum(self.ecarts)), (len(self.pas_t) - 1) / max(1e-6, self.pas_t[-1] - self.pas_t[0]) if len(self.pas_t) > 2 else 0.0, self.dt_moteur * 1000, max(self.ecarts) * 1000, self.dt_dessin * 1000)
         lignes = [self.etiquette, self.etiq_hd] + ([self.etiq_stats] if stats else [])
         cote, marge = self._marge_aide()
         if (cote, marge) != self.aide_cle: self.aide_cle = (cote, marge); self.aide_larg = 0.0          # (fenetre redimensionnee, plein ecran, autre disposition : la largeur est recalculee)

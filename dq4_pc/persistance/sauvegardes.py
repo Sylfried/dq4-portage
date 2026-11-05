@@ -14,6 +14,7 @@ import time
 import zipfile
 
 from dq4_pc import chemins as CH
+from dq4_pc.langue import tr
 from dq4_pc.persistance import format_journal as FJ
 from dq4_pc.persistance.ecriture import ecrire_atomique
 
@@ -49,7 +50,7 @@ def nom_export_par_defaut():
 def exporter(ecriture, lecture, destination):
     """Ecrit le .zip. -> (nombre de journaux, nombre d'etats). Leve ValueError s'il n'y a rien a exporter."""
     j = fichiers_effectifs(ecriture, lecture); e = etats(ecriture)
-    if not j and not e: raise ValueError("Aucune sauvegarde a exporter (ni journal, ni etat instantane).")
+    if not j and not e: raise ValueError(tr("Aucune sauvegarde a exporter (ni journal, ni etat instantane)."))
     dossier = os.path.dirname(os.path.abspath(destination))
     if dossier: os.makedirs(dossier, exist_ok=True)
     tmp = destination + '.tmp'
@@ -68,14 +69,14 @@ def lire_sources(chemins):
         m = RE_JOURNAL.search(nom_complet)
         if m:
             nom = m.group(1).lower(); d = lire()
-            if len(d) != TAILLES[nom]: pb.append('%s : taille %d au lieu de %d (%s)' % (nom, len(d), TAILLES[nom], origine)); return
+            if len(d) != TAILLES[nom]: pb.append(tr('%s : taille %d au lieu de %d (%s)') % (nom, len(d), TAILLES[nom], origine)); return
             raison = FJ.verifier(nom, d)
-            if raison: pb.append('%s : %s (%s)' % (nom, raison, origine)); return
+            if raison: pb.append(tr('%s : %s (%s)') % (nom, raison, origine)); return
             jr[nom] = d; return
         m = RE_ETAT.search(nom_complet) or RE_ETAT_ISOLE.match(os.path.basename(nom_complet))
         if m:
             d = lire()
-            if len(d) < 1024: pb.append('%s : fichier trop petit (%s)' % (m.group(1), origine)); return
+            if len(d) < 1024: pb.append(tr('%s : fichier trop petit (%s)') % (m.group(1), origine)); return
             et[m.group(1).lower()] = d
 
     for c in chemins:
@@ -88,7 +89,7 @@ def lire_sources(chemins):
                 with zipfile.ZipFile(c) as z:
                     for i in z.infolist():
                         if not i.is_dir() and i.file_size < 64 * 1024 * 1024: ajouter(i.filename, lambda i=i, z=z: z.read(i), os.path.basename(c))
-            except zipfile.BadZipFile: pb.append('%s : ce n\'est pas un .zip valide' % os.path.basename(c))
+            except zipfile.BadZipFile: pb.append(tr("%s : ce n'est pas un .zip valide") % os.path.basename(c))
         else: ajouter(os.path.basename(c), lambda c=c: open(c, 'rb').read(), os.path.dirname(c))
     return jr, et, pb
 
@@ -97,7 +98,7 @@ def importer(chemins, ecriture, lecture):
     """Copie les journaux / etats trouves dans le dossier d'ecriture, apres avoir copie ceux qu'ils remplacent dans `avant_import_<date>`. -> (nb journaux, nb etats, dossier de copie ou None, problemes).
     Leve ValueError si rien d'utilisable n'a ete trouve."""
     jr, et, pb = lire_sources(chemins)
-    if not jr and not et: raise ValueError('Aucun fichier de sauvegarde reconnu (%s).' % ('; '.join(pb) if pb else 'data1.dat a data5.dat, data9.dat ou etats/etat_NN.dqs attendus'))
+    if not jr and not et: raise ValueError(tr('Aucun fichier de sauvegarde reconnu (%s).') % ('; '.join(pb) if pb else tr('data1.dat a data5.dat, data9.dat ou etats/etat_NN.dqs attendus')))
     os.makedirs(ecriture, exist_ok=True)
     dossier_etats = CH.DOSSIERS.dossier_etats(ecriture)
     copie = os.path.join(CH.DOSSIERS.dossier_copies(ecriture), 'avant_import_' + horodatage()); n_copie = 0
@@ -113,12 +114,12 @@ def importer(chemins, ecriture, lecture):
     for nom, d in jr.items():
         ex = ecrire_atomique(os.path.join(ecriture, nom), d)
         if ex is None: ecrits_j += 1
-        else: pb.append('%s : ecriture impossible (%s) ; le fichier actuel est inchange' % (nom, ex))
+        else: pb.append(tr('%s : ecriture impossible (%s) ; le fichier actuel est inchange') % (nom, ex))
     for nom, d in et.items():
         ex = ecrire_atomique(os.path.join(dossier_etats, nom), d)
         if ex is None: ecrits_e += 1
-        else: pb.append('%s : ecriture impossible (%s) ; le fichier actuel est inchange' % (nom, ex))
-    if not ecrits_j and not ecrits_e: raise ValueError('Aucun fichier n\'a pu etre ecrit (%s).' % '; '.join(pb))
+        else: pb.append(tr('%s : ecriture impossible (%s) ; le fichier actuel est inchange') % (nom, ex))
+    if not ecrits_j and not ecrits_e: raise ValueError(tr("Aucun fichier n'a pu etre ecrit (%s).") % '; '.join(pb))
     return ecrits_j, ecrits_e, (copie if n_copie else None), pb
 
 
@@ -143,10 +144,10 @@ class Dialogue:
             kw = dict(parent=racine, title=titre)
             if dossier and os.path.isdir(dossier): kw['initialdir'] = dossier
             if mode == 'enregistrer':
-                p = filedialog.asksaveasfilename(defaultextension='.zip', filetypes=[('Archive zip', '*.zip')], initialfile=nom or nom_export_par_defaut(), **kw)
+                p = filedialog.asksaveasfilename(defaultextension='.zip', filetypes=[(tr('Archive zip'), '*.zip')], initialfile=nom or nom_export_par_defaut(), **kw)
                 self.resultat = [p] if p else []
             else:
-                ps = filedialog.askopenfilenames(filetypes=[('Sauvegardes (zip, data*.dat, etat_*.dqs)', '*.zip *.dat *.dqs'), ('Tous les fichiers', '*.*')], **kw)
+                ps = filedialog.askopenfilenames(filetypes=[(tr('Sauvegardes (zip, data*.dat, etat_*.dqs)'), '*.zip *.dat *.dqs'), (tr('Tous les fichiers'), '*.*')], **kw)
                 self.resultat = list(ps) if ps else []
         except Exception as ex:
             self.indisponible = True; self.erreur = repr(ex); self.resultat = []

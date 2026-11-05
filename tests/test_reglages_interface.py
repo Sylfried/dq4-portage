@@ -18,7 +18,7 @@ HORS_INTERFACE = {'mode_sprites', 'mode_fenetre', 'msaa', 'echelle_rendu', 'nett
                   'resolution', 'vignette', 'vitesse_marche', 'vitesse_camera', 'vitesse_accel', 'vitesse_combat', 'taille_degats',
                   'touches_v', 'touches', 'soin_niveau'}
 HORS_INTERFACE |= {'camera_inverser_gd', 'interface_v'}          # sens de la camera deplacee a la souris (#45, D-233) ; version des tailles par defaut des fenetres (#47)
-HORS_INTERFACE |= {'historique_favoris_seuls'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
+HORS_INTERFACE |= {'historique_favoris_seuls', 'langue'}                                          # case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
 
 # valeurs differentes de DEFAUT pour chaque reglage d'interface
 AUTRES = {'boutons': False, 'croix': False, 'croix_taille': 1.7, 'boutons_taille': 1.4, 'boutons_pos': {'carte': [10, 5], 'menu': [3, 2.5], 'discussion': [0, 9], 'croix': [20, 9]},

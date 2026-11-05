@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import _chemins          # (aide des tests : retrouver le code source dans les sous-dossiers de dq4_pc)
 import pyglet
 pyglet.options['shadow_window'] = False                     # (pas d'affichage necessaire : on ne dessine rien)
+from dq4_pc import langue as LG
+LG.regler('fr')          # (D-238 : les attentes de ce test sont en francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc.noyau import historique as HI
 from dq4_pc.persistance import reglages as RG
 from dq4_pc.menus import ui_historique as UH

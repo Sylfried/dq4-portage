@@ -175,7 +175,7 @@ class PageAffichage(unittest.TestCase):
         f = fen([A(), B()]); f.mode = 4; f.zoom = 1.0; f.post = types.SimpleNamespace(max_msaa=None); f.resolutions = lambda: [(1280, 720), (1920, 1080)]; f.resolution_courante = lambda: (1280, 720)
         f.regler_resolution = lambda v: None; f.regler_mode = lambda v: None; f.regler_distance = lambda v: None
         ordre = [x['l'] for x in self.PA.Pause(f)._e_affichage()]
-        self.assertEqual(ordre[:2], ['Plein écran', 'Résolution']); self.assertFalse([l for l in ordre if 'cran du plein' in l or 'moniteur' in l.lower()], ordre)
+        self.assertEqual(ordre[:3], ['Langue', 'Plein écran', 'Résolution']); self.assertFalse([l for l in ordre if 'cran du plein' in l or 'moniteur' in l.lower()], ordre)
         for nom in ('valeurs_ecran', 'valeur_ecran', 'nom_ecran', 'ecran_modifiable', 'regler_ecran_plein'): self.assertFalse(hasattr(FE.Jeu, nom), nom)          # (et plus rien dans la fenetre pour le choisir)
 
 

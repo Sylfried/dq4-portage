@@ -14,6 +14,7 @@ melange) ; un ecart entre les lettres (`g_letterSpace`, 0 en jeu) s'ajoute a cha
 Module sans pyglet : seule `ligne` (la texture d'une ligne) en a besoin."""
 import struct
 import numpy as np
+from dq4_pc.langue import tr
 
 TAILLE_TABLE = 65536
 DEBUT_TABLE = 28
@@ -163,4 +164,4 @@ def extraire_police_messages(dossier_apk, cache, log=print, nom='English.font', 
         with open(chemin + '.tmp', 'wb') as f: f.write(octets)
         os.replace(chemin + '.tmp', chemin); return True
     except Exception as ex:
-        log('Police des messages non extraite (%r) : police de menu SE-GARRIR a la place.' % (ex,)); return False
+        log(tr('Police des messages non extraite (%r) : police de menu SE-GARRIR a la place.') % (ex,)); return False

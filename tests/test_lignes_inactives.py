@@ -141,7 +141,9 @@ class PageAffichage(unittest.TestCase):
         J, p, e, n = self.lignes(True); p.sel['affichage'] = n['Plein écran']                       # plein écran : « Résolution » est sautée
         p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Netteté'])
         p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Plein écran'])
+        p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Langue'])                           # (« Langue » est la premiere ligne de la page, D-238)
         p.touche(K.UP); self.assertEqual(p.sel['affichage'], n['Interface'])                        # (le tour de la liste reprend par la fin)
+        p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Langue'])
         p.touche(K.DOWN); self.assertEqual(p.sel['affichage'], n['Plein écran'])
 
     def test_molette_saute_les_lignes_inactives(self):

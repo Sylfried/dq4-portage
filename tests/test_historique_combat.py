@@ -14,6 +14,8 @@ import os, re, struct, sys, tempfile, unittest
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ICI, '..'))
+from dq4_pc import langue as LG
+LG.regler('fr')          # (D-238 : les attentes de ce test sont en francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc.combat import historique_combat as HC
 
 

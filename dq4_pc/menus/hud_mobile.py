@@ -15,6 +15,7 @@ import math, os, time
 import numpy as np
 import pyglet
 from pyglet import gl
+from dq4_pc.langue import tr, N_
 
 COLS, LIGNES = 32, 18                       # grille de l'ecran (cases proportionnelles a la fenetre)
 ANCRAGE_VITESSE_DEF = False                 # bouton de vitesse de combat : False = a sa place de la grille, sur le bord gauche de l'ecran (defaut depuis #188 : « remets-le sur le bord gauche pour le moment ») ; True = rattache au coin bas gauche de la boite du bas (#47)
@@ -41,7 +42,7 @@ def noms_ed(cible):
 DEFAUT = {'carte': (0.4, 1), 'menu': (0.4, 12), 'discussion': (0.4, 14), COMBAT: (0.4, 8)}      # coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas ; vitesse des combats entre les deux : a gauche des fenetres de combat (colonne portrait centree), elle n'en cache aucune
 DECL = {'carte': 0x1000, 'menu': 0x800, 'discussion': 0x400}
 ICONE = {'carte': 3, 'menu': 4, 'discussion': 15}
-LIBELLE = {'carte': 'Carte', 'menu': 'Commandes', 'discussion': 'Discussion', COMBAT: 'Vitesse de combat', CROIX: 'Croix'}
+LIBELLE = {'carte': N_('Carte'), 'menu': N_('Commandes'), 'discussion': N_('Discussion'), COMBAT: N_('Vitesse de combat'), CROIX: N_('Croix')}            # (noms des elements dans l'editeur d'interface : traduits au dessin)
 LIGNE_ICONES = 224                           # ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
 # Plaques des boutons (TouchPad.CreateMenuButton 0xD2377C : plaque (t x 40 + 32) x (t x 32 + 32) pour une taille t) en unites de l'interface d'origine (450 x 800) : (largeur, hauteur, cote de l'icone = 48 x taille d'icone)
 PLAQUE_DQ = {'carte': (72.0, 64.0, 57.6), 'menu': (72.0, 64.0, 57.6), 'discussion': (63.0, 56.8, 48.0), COMBAT: (118.0, 60.0, 0.0)}      # (le bouton de vitesse des combats n'a pas d'icone : plaque plus large qui porte « Vitesse » et la vitesse courante)
@@ -441,10 +442,10 @@ class Boutons:
                 s.draw()
             if edition:
                 pyglet.shapes.Box(x, y, w, h, thickness=2, color=(255, 235, 130)).draw()
-                et = self.J._etiq(LIBELLE[nom], max(11.0, h / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + w / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + h + 4, H - et.content_height - 2); et.draw()
+                et = self.J._etiq(tr(LIBELLE[nom]), max(11.0, h / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + w / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + h + 4, H - et.content_height - 2); et.draw()
         if CROIX in visibles:
             self._croix(edition)
             if edition:
                 x, y, c, _ = self.rect(CROIX); actif = self.pris is not None and self.pris[0] == CROIX
                 pyglet.shapes.Box(x, y, c, c, thickness=2, color=(255, 235, 130)).draw()
-                et = self.J._etiq(LIBELLE[CROIX], max(11.0, self.taille() / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + c / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + c + 4, H - et.content_height - 2); et.draw()
+                et = self.J._etiq(tr(LIBELLE[CROIX]), max(11.0, self.taille() / 5.0), (255, 235, 130, 255)); et.x = min(max(4.0, x + c / 2 - et.content_width / 2), W - et.content_width - 4); et.y = min(y + c + 4, H - et.content_height - 2); et.draw()

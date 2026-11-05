@@ -2,6 +2,7 @@
 Lancer depuis la racine : PYGLET_HEADLESS=1 python3 tests/test_ecriture_sauvegarde.py"""
 import os, sys, tempfile, types, unittest, shutil
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc.noyau import moteur as MO
 
 

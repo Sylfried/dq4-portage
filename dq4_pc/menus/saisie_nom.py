@@ -9,12 +9,15 @@ Le clavier de l'ordinateur sert aussi (tout caractere de la grille), comme la so
 import time
 import pyglet
 from pyglet import gl
+from dq4_pc.langue import N_
 
 VIDE = '＠'                           # case vide de la grille (C_NA)
 ALPHABET = ('abcdefghijklmnopqrstuvwxyz -,.!?' + VIDE * 3, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ -,.!?' + VIDE * 3)       # C_ALPHABET : minuscules, majuscules
 ACCENTS = ('àáâäçèéêëìíîïñòóôöùúûüß' + VIDE * 12, 'ÀÁÂÄÇÈÉÊËÌÍÎÏÑÒÓÔÖÙÚÛÜß' + VIDE * 12)                      # C_AA
 PAGES = (ALPHABET, ACCENTS)           # C_LOCALIZE
 FONCTIONS = ('Alphabet', 'à À', 'Maj.', 'Suppr.', 'OK')                   # C_ALPHABET_ETC (non localise dans le jeu)
+TITRE = N_('Saisir un nom')                      # (dessines par Pause._et, qui les traduit ; les libelles de FONCTIONS sont ceux du jeu : on n'y touche pas)
+AIDE_CLAVIER = (N_('Clavier : taper le nom'), N_('Entrée : valider · Échap : retour'))
 COLS, LIGNES = 5, 7
 SE_BOUTON = 300                       # bruitage d'appui sur un bouton de menu (comme fenetre.SE_BOUTON)
 N_GRILLE = COLS * LIGNES               # 35 cases ; puis 35 a 39 = boutons de fonction ; 40 = Retour
@@ -140,7 +143,7 @@ class SaisieNom:
             """Texte de `taille` unites de haut centre (ancre 1), a gauche (0) ou a droite (2) en (x, y) (unites)."""
             et = P._et(t, taille * ech * 0.75, coul); w = et.content_width; px, py = U(x, y)
             et.x = px - (w / 2 if ancre == 1 else (w if ancre == 2 else 0)); et.y = py - taille * ech * 0.30; et.draw()
-        P._melange(); texte('Saisir un nom', 0, TITRE_Y, 26)
+        P._melange(); texte(TITRE, 0, TITRE_Y, 26)
         # champ : une fente par caractere possible
         n = self.max; x_deb = -(n * FENTE_PAS - (FENTE_PAS - FENTE_L)) / 2
         t = time.time() - self.t0
@@ -171,4 +174,4 @@ class SaisieNom:
         P._bouton_retour(a, b, w, h, sel or sur)
         if sel: P._curseur(a - 24 * ech, b + h / 2, 28 * ech)
         zones.append((a, b, a + w, b + h, I_RETOUR)); self.zones = zones
-        P._melange(); texte('Clavier : taper le nom', CADRE[0] + 18, CADRE[1] + 44, 13, AIDE, 0); texte('Entrée : valider · Échap : retour', CADRE[0] + 18, CADRE[1] + 26, 13, AIDE, 0)
+        P._melange(); texte(AIDE_CLAVIER[0], CADRE[0] + 18, CADRE[1] + 44, 13, AIDE, 0); texte(AIDE_CLAVIER[1], CADRE[0] + 18, CADRE[1] + 26, 13, AIDE, 0)

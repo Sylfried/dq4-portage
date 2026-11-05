@@ -6,22 +6,29 @@ import os
 import pyglet
 from pyglet import gl
 from dq4_pc.persistance import sauvegardes as S
+from dq4_pc import langue as LG
+from dq4_pc.langue import tr, N_
 
 CADRE = (-215.0, -215.0, 215.0, 215.0)                 # unites d'interface, origine au centre de la colonne de 450 x 800, Y vers le haut
 BLANC = (255, 255, 255, 255); AIDE = (170, 170, 170, 255); GRIS = (128, 128, 128, 255); ROUGE = (255, 110, 110, 255); VERT = (150, 235, 160, 255)
 JAUNE = (255, 235, 4)
 SE_BOUTON = 300                                          # bruitage d'appui sur un bouton de menu (comme fenetre.SE_BOUTON)
-BOUTONS = ('Exporter', 'Importer')
+TITRE = N_('Sauvegardes')
+BOUTONS = (N_('Exporter'), N_('Importer'))                # (dessines par Pause._et, qui les traduit)
 BTN_Y, BTN_L, BTN_H, BTN_X = -42.0, 180.0, 50.0, 100.0
 RETOUR_L, RETOUR_H = 62.0, 52.0
 I_RETOUR = 2
-EXPLICATION = ("Exporter : enregistre tes journaux (data1 à data5, data9) et tes états instantanés dans un fichier .zip.",
-               "Importer : lit un .zip de ce genre, ou des fichiers data1.dat, data2.dat… (par exemple copiés depuis un téléphone Android).",
-               "Les fichiers remplacés sont d'abord copiés dans le dossier « avant_import_… » de tes sauvegardes.")
+EXPLICATION = (N_("Exporter : enregistre tes journaux (data1 à data5, data9) et tes états instantanés dans un fichier .zip."),
+               N_("Importer : lit un .zip de ce genre, ou des fichiers data1.dat, data2.dat… (par exemple copiés depuis un téléphone Android)."),
+               N_("Les fichiers remplacés sont d'abord copiés dans le dossier « avant_import_… » de tes sauvegardes."))           # (traduits ligne par ligne au dessin : voir dessiner)
+FICHIERS = (N_('%d fichier de sauvegarde'), N_('%d fichiers de sauvegarde'))             # (singulier, pluriel) : l'anglais a ses propres modeles
+ETATS = (N_('%d état instantané'), N_('%d états instantanés'))
 
 
-def _nb(n, singulier, pluriel):
-    return '%d %s' % (n, singulier if n < 2 else pluriel)
+def _nb(n, modeles):
+    """« 1 fichier de sauvegarde », « 3 fichiers de sauvegarde » : `modeles` = (modele du singulier, modele du pluriel). Regle du pluriel de la langue : en francais 0 et 1 sont au singulier (« 0 etat instantane »), en anglais seul 1 l'est (« 0 save states »)."""
+    singulier = n < 2 if LG.courante() == 'fr' else n == 1
+    return tr(modeles[0] if singulier else modeles[1]) % n
 
 
 class EcranSauvegardes:
@@ -37,14 +44,14 @@ class EcranSauvegardes:
     def exporter(self):
         if self.dialogue is not None: return
         ecr, _ = self._dossiers()
-        self.action = 'export'; self.dialogue = S.Dialogue('enregistrer', 'Exporter les sauvegardes', ecr if os.path.isdir(ecr) else None, S.nom_export_par_defaut())
-        self._dire(["Choisis où enregistrer le fichier dans la fenêtre qui vient de s'ouvrir…"], AIDE)
+        self.action = 'export'; self.dialogue = S.Dialogue('enregistrer', tr('Exporter les sauvegardes'), ecr if os.path.isdir(ecr) else None, S.nom_export_par_defaut())
+        self._dire([tr("Choisis où enregistrer le fichier dans la fenêtre qui vient de s'ouvrir…")], AIDE)
 
     def importer(self):
         if self.dialogue is not None: return
         ecr, _ = self._dossiers()
-        self.action = 'import'; self.dialogue = S.Dialogue('ouvrir', 'Importer des sauvegardes', None)
-        self._dire(["Choisis le .zip ou les fichiers de sauvegarde dans la fenêtre qui vient de s'ouvrir…"], AIDE)
+        self.action = 'import'; self.dialogue = S.Dialogue('ouvrir', tr('Importer des sauvegardes'), None)
+        self._dire([tr("Choisis le .zip ou les fichiers de sauvegarde dans la fenêtre qui vient de s'ouvrir…")], AIDE)
 
     def _dire(self, lignes, coul=BLANC):
         self.msg = list(lignes); self.msg_coul = coul
@@ -58,31 +65,31 @@ class EcranSauvegardes:
             if action == 'export':
                 if d.indisponible:                                     # pas de boite de dialogue : un dossier du portage
                     chemin = os.path.join(ecr, 'export', S.nom_export_par_defaut())
-                elif not d.resultat: self._dire(['Export annulé.'], AIDE); return
+                elif not d.resultat: self._dire([tr('Export annulé.')], AIDE); return
                 else: chemin = d.resultat[0]
                 nj, ne = S.exporter(ecr, lec, chemin)
-                self._dire(['Exporté : %s et %s.' % (_nb(nj, 'fichier de sauvegarde', 'fichiers de sauvegarde'), _nb(ne, 'état instantané', 'états instantanés')), chemin], VERT)
+                self._dire([tr('Exporté : %s et %s.') % (_nb(nj, FICHIERS), _nb(ne, ETATS)), chemin], VERT)
             elif action == 'import':
                 if d.indisponible:
                     dossier = os.path.join(ecr, 'import'); os.makedirs(dossier, exist_ok=True)
                     if not any(os.scandir(dossier)):
                         try: os.startfile(dossier)                      # (Windows) ouvre le dossier dans l'Explorateur
                         except Exception: pass
-                        self._dire(['Pas de boîte de dialogue disponible : dépose tes fichiers (.zip, data1.dat…) dans', dossier, 'puis clique de nouveau sur Importer.'], ROUGE); return
+                        self._dire([tr('Pas de boîte de dialogue disponible : dépose tes fichiers (.zip, data1.dat…) dans'), dossier, tr('puis clique de nouveau sur Importer.')], ROUGE); return
                     sources = [dossier]
-                elif not d.resultat: self._dire(['Import annulé.'], AIDE); return
+                elif not d.resultat: self._dire([tr('Import annulé.')], AIDE); return
                 else: sources = d.resultat
                 nj, ne, copie, pb = S.importer(sources, ecr, lec)
                 self.a_recharger = True; mo = self.J.moteur
                 nouveau = mo.relire_journaux()                         # les listes (Continuer, Reprendre, Supprimer, Auto) affichent aussitot les nouveaux journaux
-                lignes = ['Importé : %s et %s.' % (_nb(nj, 'fichier de sauvegarde', 'fichiers de sauvegarde'), _nb(ne, 'état instantané', 'états instantanés'))]
-                if copie: lignes.append('Anciens fichiers copiés dans : ' + copie)
-                if pb: lignes.append('Ignorés : ' + '; '.join(pb))
+                lignes = [tr('Importé : %s et %s.') % (_nb(nj, FICHIERS), _nb(ne, ETATS))]
+                if copie: lignes.append(tr('Anciens fichiers copiés dans : %s') % copie)
+                if pb: lignes.append(tr('Ignorés : %s') % '; '.join(pb))
                 if mo.etat_boutons_depart(nouveau) != mo.etat_boutons_depart(self.J.statut_depart):
-                    lignes.append('Pour mettre à jour les boutons grisés du menu de départ, relance le jeu.')
+                    lignes.append(tr('Pour mettre à jour les boutons grisés du menu de départ, relance le jeu.'))
                 self._dire(lignes, VERT)
         except Exception as ex:
-            self._dire(['Impossible : %s' % (ex,)], ROUGE)
+            self._dire([tr('Impossible : %s') % (ex,)], ROUGE)
 
     # ---- entrees
     def appuyer(self, i):
@@ -144,10 +151,10 @@ class EcranSauvegardes:
         def texte(t, x, y, taille, coul=BLANC, ancre=1):
             et = P._et(t, taille * ech * 0.75, coul); w = et.content_width; px, py = U(x, y)
             et.x = px - (w / 2 if ancre == 1 else (w if ancre == 2 else 0)); et.y = py - taille * ech * 0.30; et.draw()
-        texte('Sauvegardes', 0, CADRE[3] - 40, 26)
+        texte(TITRE, 0, CADRE[3] - 40, 26)
         y = CADRE[3] - 82; larg = (CADRE[2] - CADRE[0] - 40) * ech
         for ligne in EXPLICATION:
-            for l in self._lignes(P, ligne, larg, 13 * ech * 0.75):
+            for l in self._lignes(P, tr(ligne), larg, 13 * ech * 0.75):          # (traduite en entier avant d'etre coupee aux mots)
                 texte(l, CADRE[0] + 20, y, 13, AIDE, 0); y -= 17
             y -= 4
         souris = J.dernier_peripherique == 'souris'; zones = []

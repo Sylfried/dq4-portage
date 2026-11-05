@@ -5,6 +5,7 @@ Sans APK : pickles fabriques (dont des pieges : os.system, eval, subprocess, nom
 import collections, io, os, pickle, shutil, struct, sys, tempfile, unittest, zlib
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 import numpy as np
 from dq4_pc.persistance import etats as ET
 APK, SAVES = os.environ.get('DQ_APK'), os.environ.get('DQ_SAVES')

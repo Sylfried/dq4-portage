@@ -9,6 +9,7 @@ import numpy as np
 import pyglet
 from pyglet import gl
 from pyglet.graphics.shader import Shader, ShaderProgram
+from dq4_pc.langue import tr
 
 VERT = '''#version 330 core
 in vec2 position; in vec2 tex_coords; in vec4 colors;
@@ -254,7 +255,7 @@ class Fenetre:
                 for nid, dd in ((e.get('fx') or {}).get('0') or {}).get('d', {}).items():
                     if int(nid) in self.N and dd.get('act') is False: self.N[int(nid)]['act'] = False
         if self.t.get('name', '').startswith('Make_StartMenuSecond'):     # menu de depart : la case « Sauv. cloud » (bouton 8) n'existe plus pour le moteur (octet g_isAmazon) ; le portage y met son bouton « Sauvegardes » (export / import), libelle pose ici
-            self.param_str(5, 0, 'Sauvegardes')
+            self.param_str(5, 0, tr('Sauvegardes'))
         if nom.startswith('Make_Chapter('):               # titre de chapitre : l'exporteur voit le quad de MenuParts.CreateFromTexture(« Menu/map/hyodai1 », bFitWidth = true, haspect = 1) avec son maillage par defaut (carre de 450) et sans texture (creee par le code)
             for nd in self.N.values():                  # CreateFromTexture ajuste la largeur (450) et deduit la hauteur de la texture (256 x 128 : 225) : bandeau dore a fond bleu, centre
                 if nd['vtx'] and nd['mats'] and nd['mats'][0].get('sheet') is None:
@@ -948,10 +949,10 @@ class Textes:
             try:
                 from dq4_pc.menus.police_messages import PoliceMessages
                 self.messages = PoliceMessages(m)
-            except Exception as e: print('Police des messages illisible (%r) : SE-GARRIR a la place.' % (e,), flush=True)
+            except Exception as e: print(tr('Police des messages illisible (%r) : SE-GARRIR a la place.') % (e,), flush=True)
         if os.path.exists(j) and os.path.exists(g) and not os.environ.get('DQ_POLICE_GMARU'):        # DQ_POLICE_GMARU=1 (test) : ancienne police japonaise, pour comparer
             try: self.bitmap = PoliceBitmap(j, g)
-            except Exception as e: print('Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.' % (e,), flush=True)
+            except Exception as e: print(tr('Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.') % (e,), flush=True)
     def _font(self, px):
         from PIL import ImageFont
         f = self.pol.get(px)
@@ -1329,12 +1330,12 @@ def preparer_ressources(dossier_apk, cache, log=print):
     try:
         from dq4_pc.menus.police_messages import extraire_police_messages
         extraire_police_messages(dossier_apk, cache, log)                         # police des messages (facultative), meme quand les autres ressources sont deja la
-    except Exception as e: log('Police des messages non extraite : %r' % (e,))
+    except Exception as e: log(tr('Police des messages non extraite : %r') % (e,))
     if all(os.path.exists(p) for p in list(dest.values()) + dest_g): return True
     try:
         import UnityPy, zipfile
         os.makedirs(cache, exist_ok=True)
-        log('Lecture des ressources de menu du jeu (une seule fois)...')
+        log(tr('Lecture des ressources de menu du jeu (une seule fois)...'))
         base = UnityPy.load(os.path.join(dossier_apk, 'base.apk'))
         for o in base.objects:
             if o.type.name == 'Texture2D':
@@ -1347,7 +1348,7 @@ def preparer_ressources(dossier_apk, cache, log=print):
                     open(dest['ui_font.otf'], 'wb').write(bytes(d.m_FontData))
                 elif d.m_Name == 'SE-GARRIR' and not all(os.path.exists(p) for p in dest_g):
                     try: extraire_garrir(o, d, *dest_g)
-                    except Exception as e: log('Police SE-GARRIR non extraite : %r' % (e,))
+                    except Exception as e: log(tr('Police SE-GARRIR non extraite : %r') % (e,))
         if not os.path.exists(dest['ui_frameData.bin']):
             pack = UnityPy.load(zipfile.ZipFile(os.path.join(dossier_apk, 'split_UnityDataAssetPack.apk')).read('assets/bin/Data/datapack.unity3d'))
             for o in pack.objects:
@@ -1357,4 +1358,4 @@ def preparer_ressources(dossier_apk, cache, log=print):
                         raw = d.m_Script; open(dest['ui_frameData.bin'], 'wb').write(raw.encode('utf-8', 'surrogateescape') if isinstance(raw, str) else bytes(raw)); break
         return all(os.path.exists(p) for p in dest.values())
     except Exception as e:
-        log('Ressources de menu indisponibles : %r' % (e,)); return False
+        log(tr('Ressources de menu indisponibles : %r') % (e,)); return False

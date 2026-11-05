@@ -5,6 +5,8 @@ import os, shutil, struct, sys, tempfile, unittest, zipfile
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc import langue as LG
+LG.regler('fr')          # (D-238 : les attentes de ce test sont en francais, quelle que soit la langue de l'ordinateur)
 from dq4_pc import chemins as CH
 from dq4_pc.persistance import ecriture as EC
 from dq4_pc.persistance import format_journal as FJ

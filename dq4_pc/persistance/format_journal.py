@@ -5,6 +5,8 @@ Format (desassemblage de Cryption::Filter 0x152de8 et de Profile::isValidData ; 
 des 0x3660 premiers octets (mot 2 mis a zero). data9.dat (512 octets) n'est qu'un numero de banque : seule sa taille se controle."""
 import struct
 
+from dq4_pc.langue import tr
+
 CLE, POLY = b'vb76Eg43', 0x7a7b58c6
 MAGIE1, MAGIE2 = 0x65747261, 0x0bf697de
 NEUVE, SUPPRIMEE = 0x4e455744, 0x44454c44
@@ -38,6 +40,6 @@ def verifier(nom, octets):
     if nom.lower() == 'data9.dat' or len(octets) != TAILLE_JOURNAL: return None
     clair = dechiffrer(octets); m0, m1, ck = struct.unpack_from('<III', clair, 0)
     if m0 in (NEUVE, SUPPRIMEE): return None                                      # banque vide : valide, sans somme
-    if m0 != MAGIE1 or m1 != MAGIE2: return "ce n'est pas un journal du jeu (en-tete inconnu)"
-    if ck != somme(clair): return 'fichier abime (somme de controle incorrecte)'
+    if m0 != MAGIE1 or m1 != MAGIE2: return tr("ce n'est pas un journal du jeu (en-tete inconnu)")
+    if ck != somme(clair): return tr('fichier abime (somme de controle incorrecte)')
     return None

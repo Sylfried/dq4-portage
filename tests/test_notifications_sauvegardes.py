@@ -12,6 +12,7 @@ import ast, os, shutil, sys, tempfile, time, types, unittest
 
 RACINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, RACINE)
+from dq4_pc import langue as _LANGUE; _LANGUE.regler('fr')          # (D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
 
 PERMIS = ('État %d enregistré', 'État %d chargé', 'État %d vide', 'Chargement annulé', 'Aucun chargement à annuler', '%s impossible : %r', 'Sauvegarde impossible', 'Sauvegardes importées')     # (début du texte de chaque appel)
 
@@ -27,6 +28,7 @@ def appels_toast():
                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'toast' and n.args:
                     a = n.args[0]
                     if isinstance(a, ast.BinOp) and isinstance(a.op, ast.Mod): a = a.left
+                    if isinstance(a, ast.Call) and getattr(a.func, 'id', None) in ('tr', 'N_') and a.args: a = a.args[0]                    # (D-238 : tr('texte') % x ou N_('texte') : le texte francais est dedans)
                     out.append((nom, n.lineno, a.value if isinstance(a, ast.Constant) and isinstance(a.value, str) else None))
     return out
 

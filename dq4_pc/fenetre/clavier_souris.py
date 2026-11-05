@@ -1,6 +1,7 @@
 """Clavier, souris et manette : evenements de la fenetre et lecture des touches."""
 import os
 import pyglet
+from dq4_pc.langue import tr
 from dq4_pc.fenetre import entrees as EN
 from dq4_pc.menus import hud_mobile as HM
 from dq4_pc.noyau import moteur as MO
@@ -44,9 +45,9 @@ class ClavierSourisMixin:
             if self._tenue('modif'):
                 self.combo[1] = True
                 if self.infos_etat(n):
-                    try: self.charger_etat(n); self.toast('État %d chargé' % n)
-                    except Exception as ex: self._noter_echec_etat('Chargement de l\'état %d' % n, ex)
-                else: self.toast('État %d vide' % n)
+                    try: self.charger_etat(n); self.toast(tr('État %d chargé') % n)
+                    except Exception as ex: self._noter_echec_etat(tr('Chargement de l\'état %d') % n, ex)
+                else: self.toast(tr('État %d vide') % n)
             else: self.sauve_rapide = n
             return pyglet.event.EVENT_HANDLED
         if symbol in (K.LSHIFT, K.RSHIFT) or symbol in self.reg.codes('modif'):      # Maj + touche modificatrice (sans chiffre) : annule le dernier chargement, au relachement

@@ -28,7 +28,8 @@ def menu(ecran, ouvert=True):
 class TestTitre(unittest.TestCase):
     def test_racine_s_appelle_parametres(self):
         src = inspect.getsource(PA.Pause.dessiner)
-        self.assertIn("'racine': 'Paramètres'", src); self.assertNotIn("'racine': 'Pause'", src)
+        self.assertTrue("'racine': 'Paramètres'" in src or "'racine': N_('Paramètres')" in src, 'le titre de la racine')                    # (D-238 : N_() marque le texte, traduit au dessin)
+        self.assertNotIn("'racine': 'Pause'", src); self.assertNotIn("'racine': N_('Pause')", src)
 
 
 class TestPagesFigees(unittest.TestCase):
