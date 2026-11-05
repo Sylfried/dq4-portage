@@ -2513,3 +2513,22 @@ Sylfried (05/11/2026, 01 h 07) : « Revois toute l'organisation du projet pour c
 
 ### À valider sur Windows
 Après `git pull`, double-clic sur `launch_dq4.bat` (ferme d'abord les fenêtres de l'Explorateur ouvertes dans `donnees`) : la console dit « dossiers renommés en anglais », `donnees` est devenu `data` avec le même contenu, le jeu démarre, ta sauvegarde et tes états instantanés sont là.
+
+## Avance #309 : audit complet du 05/11/2026, ce qui manque et ce qui bug (D-240)
+
+### Demande
+Sylfried (05/11/2026, 01 h 07, point 9) : relancer un audit complet, clore les sujets et issues concernés, en créer de nouveaux si de nouveaux problèmes sont trouvés ; « je ne te demande pas de modifier quoique ce soit, juste de faire l'état général du projet pour le comparer à la version mobile ».
+
+### Fait (documents et issues seulement)
+- **Huit relecteurs en lecture seule** (moteur, Unity, services, interface, cartes, sprites, combat, son) sur `main` = `becda5c` ; rapport : `docs/audit/audit_2026-11-05.md` (ce qui manque, ce qui bug, décisions, inventaire, constats du 04/11 revus, verdict sur chacune des 123 issues ouvertes, ce qui n'a pas pu être vérifié).
+- **Issues** : 11 fermées (#71, #74, #83, #101, #122, #146, #167, #168, #173, #233, #243 : recherches terminées, fonctions supprimées par D-226, issue remplacée par #128) ; **17 créées** (#292 à #308 : moteur arrêté sans trace, lanceur et migration, dépendances, états `.dqs`, documents périmés, générique de fin, FSRA, trois décisions, textes de l'outil, cache de cartes, modèles 3D de combat, deux bugs de combat, son) ; 14 commentées (#64, #66, #69, #73, #77, #81, #88, #93, #245, #249, #251, #253, #263, #285) ; #249 en priorité haute ; étiquette `test-windows` ajoutée à #235. Les issues dont le test Windows est demandé restent ouvertes.
+- **Constats principaux** : le générique de fin est le plus gros manque (#297) ; le ciel d'`ev09` se décale quand le plan défile (#249) ; un moteur arrêté ferme la fenêtre sans trace (#292) ; « ERROR 3080 » ne vient pas du patch FR (#81) ; l'angle de caméra sur le toit après la chambre d'Alina vient du script de `cbf3` et non de la visionneuse (#285) ; les FEMV sont du code mort dans Unity (#66, #69) ; aucune régression de comportement dans les PR #196 à #291.
+- **Rien dans le code** : aucun fichier de `dq4_pc/`, `tools/`, `tests/` n'a changé.
+
+### Établi / supposé / non vérifié
+- **Établi** : les essais sur le moteur réel (ancien état relu, écriture refusée, tas épuisé, cinq langues, déterminisme, durée des pas), les balayages (529 cartes, 4 761 passes de sprites, 255 formations, 171 effets, 685 sons), les tests du dépôt relancés sur copie.
+- **Supposé** : ce qui se verrait à l'écran pour FEAN, FSRA, le générique et les fbx de combat ; la taille des panneaux des PNJ (#303).
+- **Non vérifié** : tout ce qui est Windows, GPU, écoute ; le jeu mobile (aucune capture) ; les chapitres 2 et suivants joués de bout en bout ; 14 types de fenêtres jamais ouverts.
+
+### À faire de ton côté
+Aucun test Windows nouveau. Cinq questions à trancher : #299, #303, #302, #307 et #93.

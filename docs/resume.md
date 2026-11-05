@@ -30,6 +30,7 @@
 | Spécifications d'audit (interface de combat, menus, avant-partie, caméra, prologue, texte) | `docs/audit/specs/` |
 | Briefs donnés aux sous-agents (modèle à réutiliser : `common_brief45.md`) | `docs/archives/briefs/` |
 | Licences (Unicorn : GPL v2 à traiter ; choix avant le `.exe`) | `docs/licenses.md` |
+| **Audit complet du 05/11/2026** : ce qui manque et ce qui bug par rapport au mobile, verdict sur chaque issue | `docs/audit/audit_2026-11-05.md` |
 | Plan de test à rejouer avec la sauvegarde du chapitre 2 | `docs/audit/chapter2_test_plan.md` |
 | Rapports finaux des sous-agents (lots #40-#44 : 36 ; lot #45 : 10) | `docs/archives/` |
 | Scripts de la session : PR, worktrees, tests | `tools/session_flow/` (voir `README.md`) |
