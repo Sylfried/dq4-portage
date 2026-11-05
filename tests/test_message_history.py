@@ -918,7 +918,7 @@ class TestPersistence(unittest.TestCase):
     """Point 2 : les favoris (historique_favoris.json) ET l'etat de la case « Favoris seulement » (reglage historique_favoris_seuls dans reglages.json) survivent a la fermeture et a un nouveau lancement. Fichiers temporaires seulement."""
     def setUp(self):
         self.d = tempfile.mkdtemp(prefix='persist_'); self.addCleanup(shutil.rmtree, self.d, True)
-        self.fav = os.path.join(self.d, 'historique_favoris.json'); self.rg = os.path.join(self.d, 'reglages.json')
+        self.fav = os.path.join(self.d, 'history_favorites.json'); self.rg = os.path.join(self.d, 'settings.json')
 
     def session(self):
         """Une « session » du jeu : Historique (fichier des favoris), Reglages (reglages.json) et la fenetre d'historique, comme window.py les cree."""

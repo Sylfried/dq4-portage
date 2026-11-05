@@ -192,7 +192,7 @@ PROJECT_LICENSE = (
     "\n"
     "How it works: the original ARM64 game engine runs unmodified inside a CPU emulator (Unicorn). The Unity layer of the Android game (display, menus, input and sound) is re-implemented in Python (pyglet), following the behavior of the original game code. The 16:9 display, the mouse and keyboard controls, the on-screen buttons, the settings menu, the instant save states and the save export / import tool are additions of this port.\n"
     "\n"
-    "Your save files, save states and settings stay on your computer (in the \"donnees\" folder of this project). This program does not send any data over the Internet; only the launcher downloads the components listed below, once, the first time it runs. The \"Privacy Policy\" button opens the publisher's web page in your browser.\n"
+    "Your save files, save states and settings stay on your computer (in the \"data\" folder of this project). This program does not send any data over the Internet; only the launcher downloads the components listed below, once, the first time it runs. The \"Privacy Policy\" button opens the publisher's web page in your browser.\n"
     "\n"
     "<color=orange>Components used by this port</color>\n"
     "--------------------------------------------------\n"

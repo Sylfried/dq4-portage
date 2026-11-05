@@ -2490,3 +2490,26 @@ Sylfried (05/11/2026, 01 h 07) : « Revois toute l'organisation du projet pour c
 
 ### À valider sur Windows
 Double-clic sur `launch_dq4.bat` : le jeu démarre comme avant ; charger un état instantané enregistré avant ce changement ; ouvrir Paramètres, Historique et Sauvegardes.
+
+
+## Avance #291 : tout le projet en anglais, étape 2 : les dossiers de ton PC (D-239)
+
+### Demande
+Sylfried (05/11/2026, 01 h 07) : « Revois toute l'organisation du projet pour changer la convention de nommage pour avoir tous les dossiers, les fichiers, les variables des fichiers pythons etc, bref tout en anglais » (suite de #290).
+
+### Fait (D-239, étape 2)
+- **Noms créés sur ton PC** : `donnees` → `data`, `sauvegardes` → `saves`, `etats\etat_NN.dqs` → `savestates\state_NN.dqs`, `avant_import_<date>` → `before_import_<date>`, `avant_rangement_<date>` → `before_tidy_<date>`, `reglages\reglages.json` → `settings\settings.json`, `historique_favoris.json` → `history_favorites.json`, `historique_messages.json` → `history_messages.json`, `journaux\erreurs_fenetre.log` → `logs\window_errors.log`, `reprise.json` → `resume.json` (clé `etapes` → `stages`). Variables d'environnement `DQ4_DONNEES` → `DQ4_DATA`, `DQ4_JEUX` → `DQ4_GAMES` (les anciens noms restent reconnus). Table complète : `docs/rename_map.md`.
+- **Renommage sur place au premier démarrage** (`paths.migrate`, avant toutes les autres reprises ; `launch_dq4.bat` l'appelle déjà) : un simple renommage, **sans copie** (le cache et les APK pèsent plusieurs centaines de Mo) ; si un nom existe déjà à la nouvelle place, les deux dossiers sont fusionnés fichier par fichier et un fichier déjà présent n'est jamais écrasé (l'ancien reste où il est, la phrase « NON renomme » le dit) ; rien n'est supprimé (un dossier vidé est retiré, seulement s'il est vide) ; si Windows refuse (dossier ouvert dans l'Explorateur), on essaie fichier par fichier, sinon la phrase dit quoi faire et le renommage est refait au démarrage suivant ; une fois réussi il est noté (`english_names` dans `resume.json`) et ne se refait plus. Avec `DQ4_DATA` / `DQ4_DONNEES`, le dossier est à toi : seul son contenu est renommé.
+- **Reprise des dispositions encore plus anciennes** (`jeux\DQ4`, `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`…) : elle arrive directement sous les nouveaux noms ; les anciens noms d'étapes de `resume.json` / `reprise.json` sont traduits (`sauvegardes_portage` → `saves_pc_port`…).
+- **Export / import** : l'export s'appelle `dq4_saves_<date>.zip` et range `savestates/state_NN.dqs` ; un `.zip` d'avant (`etats/etat_NN.dqs`) ou un `etat_NN.dqs` isolé s'importe toujours et s'écrit sous son nouveau nom.
+- **Textes** : les messages de la console, l'aide de la ligne de commande, le texte de l'écran « Sauvegardes » et celui de la licence citent les nouveaux noms (français et anglais) ; `launch_dq4.bat`, `tools\*.bat`, `.gitignore` (`/data/` ; `donnees/` reste ignoré tant que le dossier n'est pas renommé) et la CI (`^data/` interdit dans le dépôt) aussi.
+- **Resté en l'état, à dessein** : les noms de fichiers *internes* du cache (`carte11_*.pkl`, `plan_monde.npz`, `son_*.npz`… : il se recalcule, les renommer le ferait refaire) ; les variables d'environnement de débogage `DQ_*` (une centaine, pour les essais) ; les options de la ligne de commande ; les identifiants de pages du menu Pause (`etats`, `reglages`…).
+- **Vérifié** : 100 scripts, 1 620 tests (33 pour `test_paths` dont le renommage normal, le conflit, la fusion, le dossier verrouillé, un dossier personnalisé, les phrases en deux langues et l'import d'un ancien `.zip`) ; essai de bout en bout avec ses vrais fichiers (`donnees\sauvegardes\data1.dat`…, `etats\etat_01.dqs`, `reglages\reglages.json`, `portage\`) : tout est au bon endroit, **mêmes empreintes MD5**, `donnees` n'existe plus, un deuxième lancement ne fait rien, le jeu démarre, charge la sauvegarde 1 et relit l'état instantané.
+
+### Établi / supposé / non vérifié
+- **Établi** : tests, essai de bout en bout sur Linux avec ses fichiers.
+- **Supposé** : `os.replace` d'un dossier se comporte comme sous Linux sur son disque Windows (renommage atomique sur le même volume) ; le repli fichier par fichier couvre le cas « dossier ouvert ».
+- **Non vérifié** : le premier démarrage *sur son Windows* après `git pull` (c'est ce qu'il doit valider) ; les raccourcis qui pointaient sur `lancer_dq4.bat`.
+
+### À valider sur Windows
+Après `git pull`, double-clic sur `launch_dq4.bat` (ferme d'abord les fenêtres de l'Explorateur ouvertes dans `donnees`) : la console dit « dossiers renommés en anglais », `donnees` est devenu `data` avec le même contenu, le jeu démarre, ta sauvegarde et tes états instantanés sont là.

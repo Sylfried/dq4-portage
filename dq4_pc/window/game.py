@@ -50,7 +50,7 @@ from dq4_pc.window.helpers import *         # noqa
 
 
 def note_error(text):
-    """Ajoute `text` (lignes finies par un retour a la ligne) au journal des erreurs de la fenetre (erreurs_fenetre.log, dossier des journaux) ; ne leve jamais : -> True si ecrit."""
+    """Ajoute `text` (lignes finies par un retour a la ligne) au journal des erreurs de la fenetre (window_errors.log, dossier des journaux) ; ne leve jamais : -> True si ecrit."""
     try:
         path = CH.FOLDERS.errors_logfile(); os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, 'a', encoding='utf-8') as f: f.write(text)
@@ -516,7 +516,7 @@ class Game(FullScreenMixin, CameraMixin, FieldMixin, BattleMixin, TitleMixin, Me
         lines, core.write_failures = core.write_failures, None
         text = ''.join(tr('--- %s : sauvegarde impossible : %s ---\n') % (time.strftime('%Y-%m-%d %H:%M:%S'), l) for l in lines)
         print(text, end='', flush=True); note_error(text)
-        self.toast(tr('Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)'), duration=6.0)
+        self.toast(tr('Sauvegarde impossible : le jeu continue (détails dans window_errors.log)'), duration=6.0)
 
     def _watch_heap(self, core):
         """Tas du moteur (ENG-01, audit du 04/11/2026 : « Core.malloc » avance toujours, « h_free » ne libere rien, 256 Mo en tout ; environ 480 combats ou 7 000 chargements de carte, soit des heures de jeu) : le moteur s'arreterait d'un coup

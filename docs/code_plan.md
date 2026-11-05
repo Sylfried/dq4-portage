@@ -6,8 +6,8 @@ Ce document dit **où est quoi** depuis le rangement du projet (issue #196 : dos
 
 ```
 dq4-portage\
-  launch_dq4.bat          le SEUL lanceur (double-clic) ; reprend d'abord tes anciens fichiers dans donnees\
-  donnees\                tout ce qui est à toi (jamais envoyé sur GitHub), voir § 2
+  launch_dq4.bat          le SEUL lanceur (double-clic) ; reprend d'abord tes anciens fichiers dans data\
+  data\                  tout ce qui est à toi (jamais envoyé sur GitHub), voir § 2
   dq4_pc\                 le code du portage (rien que du code)
     __main__.py           `python -m dq4_pc` lance le jeu
     main.py               lecture des arguments de la ligne de commande, puis ouverture de la fenêtre
@@ -75,23 +75,25 @@ La classe `Game` (fenêtre pyglet) est assemblée à partir de dix morceaux (« 
 
 Règles : un module de `window\` n'importe jamais `game.py` (pas de cycle) ; il passe par `self`. `from dq4_pc.window import game as F` donne aussi accès aux constantes et fonctions (`F.SPRITE_SCALE`…), pour les tests et les tools.
 
-## 2. Tes fichiers : `donnees\`
+## 2. Tes fichiers : `data\`
 ```
-donnees\
+data\
   apk\                       les 3 APK français (base.apk, split_config.arm64_v8a.apk, split_UnityDataAssetPack.apk)
-  sauvegardes\              UN SEUL dossier (D-232) : le contenu du .zip d'export
+  saves\                    UN SEUL dossier (D-232) : le contenu du .zip d'export
     data1.dat … data5.dat, data9.dat    les journaux du jeu (lus et écrits par le moteur ; ceux du téléphone se copient ici)
-    etats\                   les états instantanés (etat_01.dqs…)
-    avant_import_<date>\     copies de sécurité faites avant chaque import de sauvegardes
-    avant_rangement_<date>\  anciens dossiers portage\ et mobile\ rangés tels quels (sans danger à effacer)
+    savestates\             les états instantanés (state_01.dqs…)
+    before_import_<date>\   copies de sécurité faites avant chaque import de sauvegardes
+    before_tidy_<date>\     anciens dossiers portage\ et mobile\ rangés tels quels (sans danger à effacer)
   cache\                     ce que le portage calcule à partir des APK (sans danger à effacer ; il est refait)
-  reglages\                  reglages.json, historique_favoris.json, historique_messages.json
-  journaux\                  erreurs_fenetre.log
-  reprise.json               les étapes de la reprise de l'ancienne disposition déjà faites (D-235 : elle ne se refait pas)
+  settings\                 settings.json, history_favorites.json, history_messages.json
+  logs\                     window_errors.log
+  resume.json               les étapes de la reprise de l'ancienne disposition déjà faites (D-235 : elle ne se refait pas)
 ```
-Tout est défini dans `dq4_pc\paths.py`. Variables d'environnement : `DQ4_DONNEES` (autre emplacement du dossier `donnees`), `DQ4_JEUX` (ancien fonctionnement : un dossier `jeux\DQ4` avec `patched_apks` et `saves`). Les options `--apk`, `--saves-lecture`, `--saves-ecriture`, `--cache`, `--reglages`, `--historique` restent.
+**Noms en anglais (D-239, 05/11/2026)** : avant cette date les mêmes dossiers s'appelaient `donnees`, `sauvegardes`, `etats` (fichiers `etat_NN.dqs`), `avant_import_<date>`, `avant_rangement_<date>`, `reglages` (`reglages.json`, `historique_favoris.json`, `historique_messages.json`), `journaux` (`erreurs_fenetre.log`) et `reprise.json`. Au premier démarrage `paths.migrate` les **renomme sur place** (étape `english_names` de `resume.json`) : un simple renommage, sans copie ; un nom déjà pris à la nouvelle place n'est jamais écrasé (l'ancien reste où il est et le renommage est refait au démarrage suivant) ; rien n'est supprimé. Les `.zip` d'export d'avant (`etats/etat_NN.dqs`) s'importent toujours. Le cache garde ses noms de fichiers internes (`carte11_*.pkl`, `plan_monde.npz`… : il se recalcule, le renommer l'aurait fait refaire).
 
-**Reprise de l'ancienne disposition** (`paths.migrate`, lancée par `launch_dq4.bat` puis par le jeu ; **une seule fois par étape**, notée dans `donnees\reprise.json`, D-235) : `jeux\DQ4\patched_apks` → `donnees\apk` (copie) ; `jeux\DQ4\saves\<date la plus récente>` et `dq4_pc\sauvegardes` → `donnees\sauvegardes\{data*.dat,etats,avant_import_…}` (copie, un seul dossier depuis D-232) ; `donnees\sauvegardes\portage` et `\mobile\<date>` (disposition du 04/11) → remontés dans `donnees\sauvegardes` puis déplacés dans `avant_rangement_<date>` ; `dq4_pc\reglages.json`, `historique_favoris.json`, `historique_messages.json` → `donnees\reglages` (copie) ; `dq4_pc\erreurs_fenetre.log` → `donnees\journaux` (copie) ; `dq4_pc\cache` → `donnees\cache` (déplacé d'un coup : il pèse plusieurs centaines de Mo). Rien n'est supprimé ni écrasé : les anciens dossiers restent en place et peuvent être effacés à la main quand tu as vérifié.
+Tout est défini dans `dq4_pc\paths.py`. Variables d'environnement : `DQ4_DATA` (autre emplacement du dossier `data` ; ancien nom `DQ4_DONNEES`, toujours reconnu), `DQ4_GAMES` (ancien fonctionnement : un dossier `jeux\DQ4` avec `patched_apks` et `saves` ; ancien nom `DQ4_JEUX`). Les options `--apk`, `--saves-lecture`, `--saves-ecriture`, `--cache`, `--reglages`, `--historique` restent.
+
+**Reprise de l'ancienne disposition** (`paths.migrate`, lancée par `launch_dq4.bat` puis par le jeu ; **une seule fois par étape**, notée dans `data\resume.json`, D-235) : d'abord le renommage en anglais décrit plus haut (D-239), puis `jeux\DQ4\patched_apks` → `data\apk` (copie) ; `jeux\DQ4\saves\<date la plus récente>` et `dq4_pc\sauvegardes` → `data\saves\{data*.dat,savestates,before_import_…}` (copie, un seul dossier depuis D-232, noms mis en anglais au passage) ; `data\saves\portage` et `\mobile\<date>` (disposition du 04/11) → remontés dans `data\saves` puis déplacés dans `before_tidy_<date>` ; `dq4_pc\reglages.json`, `historique_favoris.json`, `historique_messages.json` → `data\settings` (copie, sous leur nom anglais) ; `dq4_pc\erreurs_fenetre.log` → `data\logs` (copie) ; `dq4_pc\cache` → `data\cache` (déplacé d'un coup : il pèse plusieurs centaines de Mo). Rien n'est supprimé ni écrasé : les anciens dossiers restent en place et peuvent être effacés à la main quand tu as vérifié.
 
 ## 3. Correspondance ancien nom → nouveau
 | Avant | Maintenant |
@@ -107,7 +109,7 @@ Tout est défini dans `dq4_pc\paths.py`. Variables d'environnement : `DQ4_DONNEE
 | `dq4_pc\entrees.py`, `screens.py` | `dq4_pc\window\…` |
 | `dq4_pc\sound.py` | inchangé |
 | `tools\test_*.py` | `tests\test_*.py` (lancer depuis la racine : `PYGLET_HEADLESS=1 python3 tests/test_X.py`) |
-| `dq4_pc\cache`, `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`, `dq4_pc\historique_*.json`, `jeux\DQ4\…` | `donnees\…` |
+| `dq4_pc\cache`, `dq4_pc\sauvegardes`, `dq4_pc\reglages.json`, `dq4_pc\historique_*.json`, `jeux\DQ4\…`, puis `donnees\…` | `data\…` |
 
 Les anciens numéros de ligne cités dans les notes (`window.py:1234`) ne valent plus : chercher le nom de la fonction (`grep -rn "def _camera_ville" dq4_pc`).
 

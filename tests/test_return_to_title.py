@@ -36,7 +36,7 @@ class FakeSound:
 class FakeGame:
     """Ce que le menu Pause demande a la fenetre."""
     def __init__(self, possible=True):
-        self.reg = RG.Settings(os.path.join(tempfile.mkdtemp(prefix='retour_titre_'), 'reglages.json'))
+        self.reg = RG.Settings(os.path.join(tempfile.mkdtemp(prefix='retour_titre_'), 'settings.json'))
         self.sound = FakeSound(); self.args = types.SimpleNamespace(cache='/inexistant'); self.width, self.height = 1280, 720; self.mouse = None
         self.calls = []; self.possible = possible
     def window_names(self): return {}

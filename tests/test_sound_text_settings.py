@@ -9,7 +9,7 @@ from dq4_pc.persistence import settings as RG
 
 
 def load(content):
-    f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'reglages.json')
+    f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'settings.json')
     with open(f, 'w', encoding='utf-8') as fh: json.dump(content, fh)
     return RG.Settings(f), f
 

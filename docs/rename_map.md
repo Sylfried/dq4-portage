@@ -406,3 +406,24 @@ La table complète ancien nom → nouveau nom des **identifiants** est dans [`re
 | `desasm.py` | `disasm.py` |
 | `generer_ui.py` | `generate_ui.py` |
 | `entete.py` | `header.py` |
+
+
+## Dossiers et fichiers créés sur ton PC (étape 2)
+
+Renommés **sur place** au premier démarrage (`paths.migrate`, étape `english_names` de `data\resume.json`) : un renommage, sans copie ; un nom déjà pris à la nouvelle place n'est jamais écrasé ; rien n'est supprimé. Les variables d'environnement `DQ4_DONNEES` et `DQ4_JEUX` sont toujours reconnues.
+
+| Avant | Maintenant |
+|---|---|
+| `donnees\` | `data\` (variable `DQ4_DONNEES` → `DQ4_DATA`) |
+| `donnees\sauvegardes\` | `data\saves\` |
+| `donnees\sauvegardes\etats\etat_NN.dqs` | `data\saves\savestates\state_NN.dqs` |
+| `donnees\sauvegardes\avant_import_<date>\` | `data\saves\before_import_<date>\` |
+| `donnees\sauvegardes\avant_rangement_<date>\` | `data\saves\before_tidy_<date>\` |
+| `donnees\reglages\reglages.json` | `data\settings\settings.json` |
+| `donnees\reglages\historique_favoris.json` | `data\settings\history_favorites.json` |
+| `donnees\reglages\historique_messages.json` | `data\settings\history_messages.json` |
+| `donnees\journaux\erreurs_fenetre.log` | `data\logs\window_errors.log` |
+| `donnees\reprise.json` (clé `etapes`) | `data\resume.json` (clé `stages`) |
+| `dq4_sauvegardes_<date>.zip` (export) | `dq4_saves_<date>.zip` (le `.zip` contient `savestates/state_NN.dqs` ; ceux d'avant, `etats/etat_NN.dqs`, s'importent toujours) |
+
+**Inchangés** : `data\apk\`, `data\cache\` (et les noms de fichiers du cache : il se recalcule, les renommer l'aurait fait refaire), `data1.dat` à `data9.dat`, l'extension `.dqs`, les variables d'environnement de débogage `DQ_*`.

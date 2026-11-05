@@ -197,9 +197,9 @@ class CommandLine(unittest.TestCase):
         with entry('fr'): fr = self.helpers()
         with entry('en'): ang = self.helpers()
         self.assertEqual(sorted(fr), sorted(ang)); self.assertGreaterEqual(len(fr), 33)
-        self.assertEqual(fr['--apk'], 'dossier des 3 APK (version francaise) ; par defaut donnees\\apk')                              # le francais d'avant, mot pour mot
+        self.assertEqual(fr['--apk'], 'dossier des 3 APK (version francaise) ; par defaut data\\apk')                              # le francais d'avant, mot pour mot
         self.assertEqual(fr['--sans-son'], 'coupe le son pour cette session (le menu Echap permet de le remettre)')
-        self.assertEqual(ang['--apk'], 'folder of the 3 game APK files; default donnees\\apk')
+        self.assertEqual(ang['--apk'], 'folder of the 3 game APK files; default data\\apk')
         for option in fr:
             self.assertNotEqual(ang[option], fr[option], option)
             self.assertFalse(french(ang[option]), '%s : %r' % (option, ang[option]))
@@ -220,7 +220,7 @@ class CommandLine(unittest.TestCase):
     def test_language_comes_from_setting_not_computer(self):
         self.settings('en'); self.assertEqual(P.set_language([], self.d), 'en')
         self.settings('fr'); self.assertEqual(P.set_language([], self.d), 'fr')
-        other = self.settings('en', os.path.join(self.t, 'autre', 'reglages.json'))
+        other = self.settings('en', os.path.join(self.t, 'autre', 'settings.json'))
         self.assertEqual(P.set_language(['--reglages', other], self.d), 'en')                           # --reglages l'emporte sur le fichier par defaut ('fr')
         os.remove(self.d.settings); self.assertEqual(P.set_language([], self.d), LG.select_language('systeme'))     # pas de fichier : la langue de l'ordinateur
 
@@ -240,10 +240,10 @@ class CommandLine(unittest.TestCase):
     def test_apks_not_found_in_french_and_english(self):
         empty = os.path.join(self.t, 'vide'); os.makedirs(empty)
         self.settings('fr'); text, code = self.main_text(['--apk', empty]); self.assertEqual(code, 1)
-        self.assertEqual(text, 'Jeu : APK dans %s\n\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DONNEES=chemin\\vers\\donnees\n'
+        self.assertEqual(text, 'Jeu : APK dans %s\n\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DATA=chemin\\vers\\data\n'
                          % (empty, os.path.normpath(empty), self.d.saves))
         self.settings('en'); text, code = self.main_text(['--apk', empty]); self.assertEqual(code, 1)
-        self.assertEqual(text, 'Game: APK files in %s\n\nThe game APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DONNEES=path\\to\\donnees\n'
+        self.assertEqual(text, 'Game: APK files in %s\n\nThe game APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DATA=path\\to\\data\n'
                          % (empty, os.path.normpath(empty), self.d.saves))
         self.assertFalse(french(without_paths(text)), text)
 
@@ -268,7 +268,7 @@ class CommandLine(unittest.TestCase):
             self.assertEqual(buf.getvalue().splitlines()[0], att)
 
     def launch(self, *args, env=None):
-        e = dict(os.environ, DQ4_DONNEES=os.path.join(self.t, 'donnees'), PYTHONDONTWRITEBYTECODE='1', PYGLET_HEADLESS='1', PYGLET_AUDIO='silent'); e.update(env or {})
+        e = dict(os.environ, DQ4_DATA=os.path.join(self.t, 'data'), PYTHONDONTWRITEBYTECODE='1', PYGLET_HEADLESS='1', PYGLET_AUDIO='silent'); e.update(env or {})
         return subprocess.run([sys.executable, '-m', 'dq4_pc', *args], cwd=ROOT, env=e, capture_output=True, text=True, timeout=180)
 
     def test_python_m_dq4_pc_help_in_both_languages(self):
@@ -303,16 +303,16 @@ class Resume(unittest.TestCase):
 
     def test_in_french_text_is_as_before(self):
         with entry('fr'): done, lines = self.migrate()
-        for ph in ('cache deplace : dq4_pc\\cache -> donnees\\cache', '1 fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> donnees\\apk',
-                   '1 fichier(s) de reglages copie(s) : dq4_pc -> donnees\\reglages', 'journal des erreurs copie : donnees\\journaux'):
+        for ph in ('cache deplace : dq4_pc\\cache -> data\\cache', '1 fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> data\\apk',
+                   '1 fichier(s) de reglages copie(s) : dq4_pc -> data\\settings', 'journal des erreurs copie : data\\logs'):
             self.assertIn(ph, done)
         self.assertTrue(any(ph.startswith('anciens dossiers ranges : sauvegardes\\mobile, sauvegardes\\portage') or ph.startswith('anciens dossiers ranges : ') for ph in done), done)
         self.assertEqual(lines, ['Migration : ' + ph for ph in done])
 
     def test_in_english_no_french_word_left(self):
         with entry('en'): done, lines = self.migrate()
-        self.assertIn('cache moved: dq4_pc\\cache -> donnees\\cache', done); self.assertIn('1 APK file(s) copied: jeux\\DQ4\\patched_apks -> donnees\\apk', done)
-        self.assertIn('1 settings file(s) copied: dq4_pc -> donnees\\reglages', done); self.assertIn('error log copied: donnees\\journaux', done)
+        self.assertIn('cache moved: dq4_pc\\cache -> data\\cache', done); self.assertIn('1 APK file(s) copied: jeux\\DQ4\\patched_apks -> data\\apk', done)
+        self.assertIn('1 settings file(s) copied: dq4_pc -> data\\settings', done); self.assertIn('error log copied: data\\logs', done)
         self.assertGreaterEqual(len(done), 6); self.assertEqual(lines, ['Migration: ' + ph for ph in done])
         for ph in lines: self.assertFalse(french(ph), ph)
 
@@ -329,9 +329,9 @@ class Resume(unittest.TestCase):
     def test_migration_only_process_takes_language_from_setting(self):
         """`python -m dq4_pc.paths` (lance par launch_dq4.bat avant le jeu) lit la langue dans reglages.json avant de migrer."""
         import runpy
-        data = os.path.join(self.t, 'donnees_neuves'); rg = os.path.join(data, 'reglages', 'reglages.json'); os.makedirs(os.path.dirname(rg))
+        data = os.path.join(self.t, 'new_data'); rg = os.path.join(data, 'settings', 'settings.json'); os.makedirs(os.path.dirname(rg))
         with open(rg, 'w', encoding='utf-8') as f: json.dump({'langue': 'en'}, f)
-        with mock.patch.dict(os.environ, {'DQ4_DONNEES': data}), mock.patch('os.replace'), mock.patch('shutil.copy2'), mock.patch('shutil.copyfile'):
+        with mock.patch.dict(os.environ, {'DQ4_DATA': data}), mock.patch('os.replace'), mock.patch('shutil.copy2'), mock.patch('shutil.copyfile'):
             LG.select_language('fr')
             with warnings.catch_warnings(): warnings.simplefilter('ignore'); output(runpy.run_module, 'dq4_pc.paths', run_name='__main__')
         self.assertEqual(LG.current_language(), 'en')
@@ -372,7 +372,7 @@ class Persistence(unittest.TestCase):
         """Un import qui ecarte un journal trop court, un abime, un qui n'en est pas un, un etat trop petit et un faux .zip, mais qui garde un bon journal."""
         bad = bytearray(logfile(3)); bad[100] ^= 1
         fake_zip = write(os.path.join(self.t, 'broken.zip'), b'ceci n est pas un zip')
-        self.make_zip(**{'data1.dat': logfile(2), 'data2.dat': bytes(bad), 'data3.dat': bytes(FJ.LOGFILE_SIZE), 'data4.dat': b'court', 'etats__etat_01.dqs': b'petit'})
+        self.make_zip(**{'data1.dat': logfile(2), 'data2.dat': bytes(bad), 'data3.dat': bytes(FJ.LOGFILE_SIZE), 'data4.dat': b'court', 'savestates__state_01.dqs': b'petit'})
         return SA.import_saves([self.zip, fake_zip], self.wdir, self.d.mobile)
 
     def test_import_problems_in_french(self):
@@ -380,7 +380,7 @@ class Persistence(unittest.TestCase):
         self.assertEqual((nj, n_savestates), (1, 0))
         txt = '\n'.join(pb)
         for att in ('data4.dat : taille 5 au lieu de 15360 (i.zip)', 'data2.dat : fichier abime (somme de controle incorrecte) (i.zip)', "data3.dat : ce n'est pas un journal du jeu (en-tete inconnu) (i.zip)",
-                    'etat_01.dqs : fichier trop petit (i.zip)', "broken.zip : ce n'est pas un .zip valide"):
+                    'state_01.dqs : fichier trop petit (i.zip)', "broken.zip : ce n'est pas un .zip valide"):
             self.assertIn(att, pb)
         self.assertEqual(len(pb), 5, txt)
 
@@ -388,16 +388,16 @@ class Persistence(unittest.TestCase):
         with entry('en'): nj, n_savestates, copied, pb = self.problemes()
         self.assertEqual((nj, n_savestates), (1, 0))
         for att in ('data4.dat: size 5 instead of 15360 (i.zip)', 'data2.dat: damaged file (checksum mismatch) (i.zip)', 'data3.dat: not a game adventure log (unknown header) (i.zip)',
-                    'etat_01.dqs: file too small (i.zip)', 'broken.zip: not a valid .zip file'):
+                    'state_01.dqs: file too small (i.zip)', 'broken.zip: not a valid .zip file'):
             self.assertIn(att, pb)
         for p in pb: self.assertFalse(french(p), p)
 
     def test_no_file_recognized(self):
         self.make_zip(**{'lisez_moi.txt': b'x'})
         with entry('fr'): m = self.error(SA.import_saves, [self.zip], self.wdir, self.d.mobile)
-        self.assertEqual(m, 'Aucun fichier de sauvegarde reconnu (data1.dat a data5.dat, data9.dat ou etats/etat_NN.dqs attendus).')
+        self.assertEqual(m, 'Aucun fichier de sauvegarde reconnu (data1.dat a data5.dat, data9.dat ou savestates/state_NN.dqs attendus).')
         with entry('en'): m = self.error(SA.import_saves, [self.zip], self.wdir, self.d.mobile)
-        self.assertEqual(m, 'No save file recognized (expected data1.dat to data5.dat, data9.dat or etats/etat_NN.dqs).')
+        self.assertEqual(m, 'No save file recognized (expected data1.dat to data5.dat, data9.dat or savestates/state_NN.dqs).')
 
     def test_write_not_possible(self):
         self.make_zip(**{'data1.dat': logfile(2)})
@@ -444,8 +444,8 @@ class Persistence(unittest.TestCase):
             def attributes(self, *a): pass
             def destroy(self): pass
         fake_tk = types.ModuleType('tkinter'); fake_tk.Tk = Tk; fake_tk.filedialog = fake_fd
-        attendus = {'fr': {'enregistrer': [('Archive zip', '*.zip')], 'ouvrir': [('Sauvegardes (zip, data*.dat, etat_*.dqs)', '*.zip *.dat *.dqs'), ('Tous les fichiers', '*.*')]},
-                    'en': {'enregistrer': [('Zip archive', '*.zip')], 'ouvrir': [('Saves (zip, data*.dat, etat_*.dqs)', '*.zip *.dat *.dqs'), ('All files', '*.*')]}}
+        attendus = {'fr': {'enregistrer': [('Archive zip', '*.zip')], 'ouvrir': [('Sauvegardes (zip, data*.dat, state_*.dqs)', '*.zip *.dat *.dqs'), ('Tous les fichiers', '*.*')]},
+                    'en': {'enregistrer': [('Zip archive', '*.zip')], 'ouvrir': [('Saves (zip, data*.dat, state_*.dqs)', '*.zip *.dat *.dqs'), ('All files', '*.*')]}}
         import time
         for code in ('fr', 'en'):
             seen.clear()
@@ -469,7 +469,7 @@ except Exception as _ex:
 class Window(unittest.TestCase):
     def setUp(self):
         self.t = tempfile.mkdtemp(prefix='lang_fen_'); self.addCleanup(shutil.rmtree, self.t, True); self.addCleanup(LG.select_language, 'fr')
-        self.log = os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(self.t, 'journaux', 'erreurs_fenetre.log'); self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
+        self.log = os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(self.t, 'logs', 'window_errors.log'); self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
         os.environ.pop('DQ_SIM_ECHEC', None); self.addCleanup(os.environ.pop, 'DQ_SIM_ECHEC', None)
 
     def logfile(self):
@@ -488,8 +488,8 @@ class Window(unittest.TestCase):
         self.assertFalse(french(j.msgs[0].replace('disque', '')))
 
     def test_saving_is_impossible(self):
-        for code, att, header in (('fr', 'Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)', 'sauvegarde impossible : data1.dat'),
-                                  ('en', 'Save failed: the game continues (details in erreurs_fenetre.log)', 'save failed: data1.dat')):
+        for code, att, header in (('fr', 'Sauvegarde impossible : le jeu continue (détails dans window_errors.log)', 'sauvegarde impossible : data1.dat'),
+                                  ('en', 'Save failed: the game continues (details in window_errors.log)', 'save failed: data1.dat')):
             with entry(code):
                 j = self.fake(); core = types.SimpleNamespace(write_failures=['data1.dat']); _, text = output(WND.Game._report_write_failures, j, core)
             self.assertEqual(j.msgs, [att]); self.assertIn(header, text); self.assertIn(header, self.logfile())

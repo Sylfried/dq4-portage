@@ -123,7 +123,7 @@ class Saves(Language):
 
     def dataset(self):
         TIS.write(os.path.join(self.wdir, 'data1.dat'), TIS.logfile(1)); TIS.write(os.path.join(self.wdir, 'data2.dat'), TIS.logfile(2))
-        TIS.write(os.path.join(CH.FOLDERS.savestates_folder(self.wdir), 'etat_01.dqs'), b'x' * 2000)
+        TIS.write(os.path.join(CH.FOLDERS.savestates_folder(self.wdir), 'state_01.dqs'), b'x' * 2000)
 
     # -- ce que les boutons demandent
     def test_dialog_boxes_opening(self):
@@ -148,8 +148,8 @@ class Saves(Language):
             def attributes(self, *a): pass
             def destroy(self): pass
         fake_tk = types.SimpleNamespace(Tk=FakeTk, filedialog=FakeFiledialog)
-        for language, att in (('fr', [[('Archive zip', '*.zip')], [('Sauvegardes (zip, data*.dat, etat_*.dqs)', '*.zip *.dat *.dqs'), ('Tous les fichiers', '*.*')]]),
-                            ('en', [[('Zip archive', '*.zip')], [('Saves (zip, data*.dat, etat_*.dqs)', '*.zip *.dat *.dqs'), ('All files', '*.*')]])):
+        for language, att in (('fr', [[('Archive zip', '*.zip')], [('Sauvegardes (zip, data*.dat, state_*.dqs)', '*.zip *.dat *.dqs'), ('Tous les fichiers', '*.*')]]),
+                            ('en', [[('Zip archive', '*.zip')], [('Saves (zip, data*.dat, state_*.dqs)', '*.zip *.dat *.dqs'), ('All files', '*.*')]])):
             LG.select_language(language); seen.clear()
             with mock.patch.dict(sys.modules, {'tkinter': fake_tk, 'tkinter.filedialog': FakeFiledialog}), mock.patch.object(fake_tk, 'filedialog', FakeFiledialog, create=True):
                 for mode in ('enregistrer', 'ouvrir'):
@@ -169,7 +169,7 @@ class Saves(Language):
             self.J.args.saves_write, self.J.args.saves_read = self.wdir, self.rdir
 
     def test_a_single_file_and_a_single_state(self):
-        TIS.write(os.path.join(self.wdir, 'data1.dat'), TIS.logfile(1)); TIS.write(os.path.join(CH.FOLDERS.savestates_folder(self.wdir), 'etat_01.dqs'), b'x' * 2000)
+        TIS.write(os.path.join(self.wdir, 'data1.dat'), TIS.logfile(1)); TIS.write(os.path.join(CH.FOLDERS.savestates_folder(self.wdir), 'state_01.dqs'), b'x' * 2000)
         for language, att in (('fr', 'Exporté : 1 fichier de sauvegarde et 1 état instantané.'), ('en', 'Exported: 1 save file and 1 save state.')):
             LG.select_language(language); self.assertEqual(self.answer('export', [os.path.join(self.t, language + '.zip')])[0], att)
 
@@ -187,7 +187,7 @@ class Saves(Language):
             TIS.write(os.path.join(self.wdir, 'data1.dat'), TIS.logfile(1)); bad = bytearray(TIS.logfile(3)); bad[100] ^= 1
             self.make_zip(**{'data1.dat': TIS.logfile(2), 'data2.dat': bytes(bad)})
             lines = self.answer('import', [self.zip])
-            self.assertEqual(len(lines), 4, language); self.assertEqual(lines[0], ligne1, language); self.assertTrue(lines[1].startswith(copied) and 'avant_import_' in lines[1], lines[1])
+            self.assertEqual(len(lines), 4, language); self.assertEqual(lines[0], ligne1, language); self.assertTrue(lines[1].startswith(copied) and 'before_import_' in lines[1], lines[1])
             self.assertEqual((lines[2], lines[3]), (ignores, do_update), language); self.assertEqual(self.e.msg_clr, ES.GREEN); self.assertTrue(self.e.needs_reload)
 
     def test_import_without_dialog_box(self):
@@ -202,15 +202,15 @@ class Saves(Language):
     def test_import_impossible(self):
         empty_zip = lambda: self.make_zip(**{'lisez_moi.txt': b'rien'})
         fake_zip = os.path.join(self.t, 'z.zip'); TIS.write(fake_zip, b'pas un zip')
-        small = os.path.join(self.t, 'etat_01.dqs'); TIS.write(small, b'x')
+        small = os.path.join(self.t, 'state_01.dqs'); TIS.write(small, b'x')
         short = os.path.join(self.t, 'data1.dat'); TIS.write(short, b'abc')
-        att = {'fr': ('Impossible : Aucun fichier de sauvegarde reconnu (data1.dat a data5.dat, data9.dat ou etats/etat_NN.dqs attendus).',
+        att = {'fr': ('Impossible : Aucun fichier de sauvegarde reconnu (data1.dat a data5.dat, data9.dat ou savestates/state_NN.dqs attendus).',
                       "Impossible : Aucun fichier de sauvegarde reconnu (z.zip : ce n'est pas un .zip valide).",
-                      'Impossible : Aucun fichier de sauvegarde reconnu (etat_01.dqs : fichier trop petit (%s)).',
+                      'Impossible : Aucun fichier de sauvegarde reconnu (state_01.dqs : fichier trop petit (%s)).',
                       'Impossible : Aucun fichier de sauvegarde reconnu (data1.dat : taille 3 au lieu de 15360 (%s)).'),
-               'en': ('Failed: No save file recognized (expected data1.dat to data5.dat, data9.dat or etats/etat_NN.dqs).',
+               'en': ('Failed: No save file recognized (expected data1.dat to data5.dat, data9.dat or savestates/state_NN.dqs).',
                       'Failed: No save file recognized (z.zip: not a valid .zip file).',
-                      'Failed: No save file recognized (etat_01.dqs: file too small (%s)).',
+                      'Failed: No save file recognized (state_01.dqs: file too small (%s)).',
                       'Failed: No save file recognized (data1.dat: size 3 instead of 15360 (%s)).')}
         for language in ('fr', 'en'):
             LG.select_language(language); nothing, bad_zip, too_small, size_value = att[language]
@@ -238,10 +238,10 @@ class Saves(Language):
     def test_screen_drawing(self):
         explanation = {'fr': ['Exporter : enregistre tes journaux (data1 à data5, data9) et tes états instantanés dans un fichier .zip.',
                               'Importer : lit un .zip de ce genre, ou des fichiers data1.dat, data2.dat… (par exemple copiés depuis un téléphone Android).',
-                              "Les fichiers remplacés sont d'abord copiés dans le dossier « avant_import_… » de tes sauvegardes."],
+                              "Les fichiers remplacés sont d'abord copiés dans le dossier « before_import_… » de tes sauvegardes."],
                        'en': ['Export: saves your adventure logs (data1 to data5, data9) and your save states into a .zip file.',
                               'Import: reads a .zip like that, or data1.dat, data2.dat… files (for example copied from an Android phone).',
-                              'Replaced files are first copied to the "avant_import_…" folder in your saves folder.']}
+                              'Replaced files are first copied to the "before_import_…" folder in your saves folder.']}
         titles = {'fr': ('Sauvegardes', 'Exporter', 'Importer'), 'en': ('Saves', 'Export', 'Import')}
         for language in ('fr', 'en'):
             LG.select_language(language); J = FakeGame(); e = ES.SavesScreen(J); e._say(['Un message.'], ES.GREEN)
@@ -259,7 +259,7 @@ class Saves(Language):
             self.assertGreater(len(lines), len(ES.EXPLANATION), 'la fenetre doit etre assez etroite pour couper les phrases')
             recolle = ' '.join(lines)
             for phrase in ES.EXPLANATION: self.assertIn(LG.tr(phrase), recolle, language)
-            if language == 'en': self.assert_no_french(lines, whitelist=('avant_import_…',))
+            if language == 'en': self.assert_no_french(lines, whitelist=('before_import_…',))
 
     def test_start_menu_button(self):
         """Le portage pose son bouton « Sauvegardes » dans le menu de depart (a la place de « Sauv. cloud »)."""

@@ -111,7 +111,7 @@ class Reset(unittest.TestCase):
         self.assertEqual((RG.DEFAULT['interface_fenetres'], RG.DEFAULT['interface_masquees'], RG.DEFAULT['boutons_pos']), ({n: [RG.COMMANDS_WIDTH, 0.0, 0.0] for n in RG.BATTLE_COMMAND_WINDOWS}, [], {}))
 
     def test_storage(self):
-        f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'reglages.json')
+        f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'settings.json')
         r = RG.Settings(f)
         for k, x in OTHER.items(): r[k] = copy.deepcopy(x)
         r.reset_interface('Status'); r.reset_interface(RG.SCREEN_TARGET); r.store()
@@ -174,7 +174,7 @@ class AlwaysCenteredCamera(unittest.TestCase):
     """« Centrer la camera sur le joueur » n'existe plus (#47) : la camera est toujours centree sur le heros, sauf quand le jeu la prend. Un reglages.json qui contient encore `camera_centree` ou `suivi_camera_v`
     se charge sans erreur, ces cles sont ignorees et ne sont pas reecrites a l'enregistrement."""
     def load(self, d):
-        c = os.path.join(tempfile.mkdtemp(prefix='rg_cam_'), 'reglages.json')
+        c = os.path.join(tempfile.mkdtemp(prefix='rg_cam_'), 'settings.json')
         with open(c, 'w', encoding='utf-8') as f: json.dump(d, f)
         return RG.Settings(c), c
 
@@ -195,7 +195,7 @@ class AlwaysCenteredCamera(unittest.TestCase):
 class SpeedButtonMigration(unittest.TestCase):
     """Un ancien reglages.json (le bouton de vitesse de combat faisait partie de « Boutons et croix de l'ecran ») garde l'etat du bouton : affichage, position, taille ; une seule fois."""
     def load(self, d):
-        f = os.path.join(tempfile.mkdtemp(prefix='rg_mig_'), 'reglages.json')
+        f = os.path.join(tempfile.mkdtemp(prefix='rg_mig_'), 'settings.json')
         with open(f, 'w', encoding='utf-8') as h: json.dump(d, h)
         return RG.Settings(f), f
 

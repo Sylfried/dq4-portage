@@ -14,7 +14,7 @@ from dq4_pc.persistence import settings as RG
 
 
 def load(content):
-    f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'reglages.json')
+    f = os.path.join(tempfile.mkdtemp(prefix='rg_test_'), 'settings.json')
     with open(f, 'w', encoding='utf-8') as fh: json.dump(content, fh)
     return RG.Settings(f), f
 
@@ -243,7 +243,7 @@ class Toggle(unittest.TestCase):
 
     def setUp(self):
         os.environ.pop('DQ_SIM_ECHEC', None); os.environ.pop('DQ_BASCULE_SIMPLE', None)
-        self.errors_logfile = os.path.join(tempfile.mkdtemp(prefix='journal_fenetre_'), 'erreurs_fenetre.log'); os.environ['DQ_JOURNAL_FENETRE'] = self.errors_logfile          # (les echecs simules ne s'ecrivent pas dans le depot)
+        self.errors_logfile = os.path.join(tempfile.mkdtemp(prefix='journal_fenetre_'), 'window_errors.log'); os.environ['DQ_JOURNAL_FENETRE'] = self.errors_logfile          # (les echecs simules ne s'ecrivent pas dans le depot)
         self.zone = self.WND.useful_zone; self.WND.useful_zone = lambda: (1904, 1040)          # (un bureau 1920 x 1080 : la taille de l'ecran de test ne compte pas)
 
     def tearDown(self):
@@ -296,7 +296,7 @@ class Toggle(unittest.TestCase):
         self.assertEqual(self.failures(), 1)
 
     def test_full_error_is_noted_in_the_log(self):
-        """Issue #123 : la ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue : la pile d'appels complete, l'etat de la fenetre et des moniteurs vont dans erreurs_fenetre.log (et la console)."""
+        """Issue #123 : la ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue : la pile d'appels complete, l'etat de la fenetre et des moniteurs vont dans window_errors.log (et la console)."""
         f = self.win(full=True, failure='set_fullscreen(False,1280x720)'); self.assertTrue(f.set_full_screen(False))      # (l'echec est unique : le retour a l'etat de depart reussit)
         self.assertEqual(self.failures(), 1)
         txt = open(self.errors_logfile, encoding='utf-8').read()

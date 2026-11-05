@@ -1,7 +1,7 @@
 """Extrait la STRUCTURE du code C# du jeu (classes, champs, methodes, adresses) avec Il2CppDumper.
 
 Entrees (tes fichiers, jamais modifies) : libil2cpp.so et global-metadata.dat, pris dans tes APK.
-Sorties : <racine>/donnees/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignore par git (code du jeu).
+Sorties : <racine>/data/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignore par git (code du jeu).
 """
 import io, json, os, subprocess, sys, urllib.request, zipfile
 

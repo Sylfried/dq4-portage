@@ -25,7 +25,7 @@ jobs:
 
       - name: "Fichiers interdits (motifs du .gitignore : contenu du jeu, sauvegardes, caches)"
         run: |
-          motifs='(^|/)(donnees|jeux|saves|sauvegardes|cache|captures|il2cpp)/|(^|/)(dump\.cs|script\.json)$|\.(apk|so|unity3d|obb|mpt|dat|pkl)$'
+          motifs='(^|/)(donnees|jeux|saves|sauvegardes|cache|captures|il2cpp)/|^data/|(^|/)(dump\.cs|script\.json)$|\.(apk|so|unity3d|obb|mpt|dat|pkl)$'
           interdits=$(git ls-files | grep -E "$motifs" || true)
           if [ -n "$interdits" ]; then
             echo "::error::Fichiers interdits dans le dépôt (contenu du jeu, sauvegardes, caches) :"

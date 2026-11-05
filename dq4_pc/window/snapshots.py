@@ -20,7 +20,7 @@ class SnapshotsMixin:
         return digits.get(symbol)
 
     # ---- etats instantanes (savestates)
-    def state_path(self, n): return os.path.join(CH.FOLDERS.savestates_folder(self.args.saves_write), 'etat_%02d.dqs' % n)
+    def state_path(self, n): return os.path.join(CH.FOLDERS.savestates_folder(self.args.saves_write), 'state_%02d.dqs' % n)
 
     def state_info(self, n):
         """(infos, miniature PNG) de l'etat n, ou None."""

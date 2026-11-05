@@ -30,10 +30,10 @@ def set_language(argv, d):
 def build_parser(d):
     """Le parseur de la ligne de commande, dans la langue courante (voir set_language) : `python -m dq4_pc --help`."""
     ap = argparse.ArgumentParser(prog='dq4_pc')
-    ap.add_argument('--apk', default=d.apk, help=tr('dossier des 3 APK (version francaise) ; par defaut donnees\\apk'))
-    ap.add_argument('--saves-lecture', dest='saves_read', default=None, help=tr('dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans donnees\\sauvegardes)'))
-    ap.add_argument('--saves-ecriture', dest='saves_write', default=d.portage, help=tr('dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut donnees\\sauvegardes (les etats instantanes sont dans donnees\\sauvegardes\\etats)'))
-    ap.add_argument('--cache', default=d.cache, help=tr('dossier des fichiers calcules a partir des APK ; par defaut donnees\\cache'))
+    ap.add_argument('--apk', default=d.apk, help=tr('dossier des 3 APK (version francaise) ; par defaut data\\apk'))
+    ap.add_argument('--saves-lecture', dest='saves_read', default=None, help=tr('dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans data\\saves)'))
+    ap.add_argument('--saves-ecriture', dest='saves_write', default=d.portage, help=tr('dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut data\\saves (les etats instantanes sont dans data\\saves\\savestates)'))
+    ap.add_argument('--cache', default=d.cache, help=tr('dossier des fichiers calcules a partir des APK ; par defaut data\\cache'))
     ap.add_argument('--slot', type=int, default=0, help=tr('numero de sauvegarde a charger directement (1-5) en sautant l\'ecran-titre ; 0 (defaut) = le jeu demarre par ses logos, son titre et son menu de depart'))
     ap.add_argument('--sans-logos', action='store_true', help=tr('saute les logos d\'entree (SQUARE ENIX, ArtePiazza)'))
     ap.add_argument('--logos', action='store_true', help=tr('(test) joue les logos meme pour une capture'))
@@ -52,7 +52,7 @@ def build_parser(d):
     ap.add_argument('--correction-bords', dest='edge_correction', type=int, default=None, choices=range(0, 101), metavar='0-100', help=tr("(debogage) correction de l'inclinaison des sprites des villes pres des bords gauche / droit de l'ecran, en pourcentage : 0 = aucune (le panneau d'origine, penche vers l'exterieur), 100 = complete ; par defaut toujours complete, ce n'est plus un reglage du joueur (variable d'environnement DQ_CORRECTION_BORDS pour la meme chose)"))
     ap.add_argument('--msaa', type=int, default=None, help=tr('anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap'))
     ap.add_argument('--reglages', dest='settings', default=d.settings, help=tr('fichier des reglages du joueur (menu Echap : affichage, son, touches)'))
-    ap.add_argument('--historique', dest='history', default=d.favorites, help=tr('fichier des favoris de l\'historique (dans donnees\\reglages, jamais dans le dossier des sauvegardes) ; le reste de l\'historique n\'est pas conserve'))
+    ap.add_argument('--historique', dest='history', default=d.favorites, help=tr('fichier des favoris de l\'historique (dans data\\settings, jamais dans le dossier des sauvegardes) ; le reste de l\'historique n\'est pas conserve'))
     ap.add_argument('--script-combat', dest='battle_script', default=None, help=tr('(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)'))
     ap.add_argument('--shots-effet', dest='shots_effect', default=None, help=tr('(test) captures a ces images de l\'effet de debut de combat : "1,10,30,..."'))
     ap.add_argument('--shots-combat', dest='shots_battle', default=None, help=tr('(test) captures intermediaires a ces images de combat : "30,60,..."'))
@@ -90,7 +90,7 @@ def main(argv=None):
     if a.sfx_volume is None: a.sfx_volume = reg['volume_bruitages']
     print(tr('Jeu : APK dans %s') % a.apk, flush=True)
     if not os.path.isfile(os.path.join(a.apk, 'base.apk')):
-        print(tr('\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DONNEES=chemin\\vers\\donnees') % (os.path.normpath(a.apk), d.saves), flush=True)
+        print(tr('\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DATA=chemin\\vers\\data') % (os.path.normpath(a.apk), d.saves), flush=True)
         sys.exit(1)
     sys.setswitchinterval(0.001)      # le calcul HD en tache de fond ne doit pas retarder le dessin
     if a.saves_read is None:

@@ -89,7 +89,7 @@ class Border(unittest.TestCase):
 class Migration(unittest.TestCase):
     def load(self, d):
         with tempfile.TemporaryDirectory() as t:
-            c = os.path.join(t, 'reglages.json')
+            c = os.path.join(t, 'settings.json')
             with open(c, 'w', encoding='utf-8') as f: json.dump(d, f)
             return RG.Settings(c)
 

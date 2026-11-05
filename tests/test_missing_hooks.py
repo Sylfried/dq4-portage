@@ -1,5 +1,5 @@
 """#217 (audit ENG-08) : les reglages / crochets que le moteur d'un AUTRE apk ne laisse pas installer ne sont plus silencieux : `Engine.missing_hooks` (ligne de console + liste sans doublon), puis la fenetre
-les note dans `erreurs_fenetre.log` et affiche un message (Game._report_missing_hooks). Sans moteur : faux moteur (memoire simulee). Avec l'APK du jeu (DQ_APK, DQ_SAVES) : le moteur d'origine n'en manque aucun.
+les note dans `window_errors.log` et affiche un message (Game._report_missing_hooks). Sans moteur : faux moteur (memoire simulee). Avec l'APK du jeu (DQ_APK, DQ_SAVES) : le moteur d'origine n'en manque aucun.
     PYGLET_HEADLESS=1 python3 tests/test_missing_hooks.py"""
 import os, shutil, struct, sys, tempfile, types, unittest
 
@@ -67,7 +67,7 @@ class Window(unittest.TestCase):
         try: from dq4_pc.window import game as F
         except Exception as ex: raise unittest.SkipTest('fenetre non importable ici (%r)' % (ex,))
         self.F = F; d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)
-        self.logfile = os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'journaux', 'erreurs_fenetre.log')
+        self.logfile = os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(d, 'logs', 'window_errors.log')
         self.addCleanup(os.environ.pop, 'DQ_JOURNAL_FENETRE', None)
 
     def read(self):

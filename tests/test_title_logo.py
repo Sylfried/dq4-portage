@@ -85,7 +85,7 @@ class TitleRender(unittest.TestCase):
     def setUpClass(cls):
         apk = ARGS.apk if ARGS else os.environ['DQ_APK']; saves = ARGS.saves if ARGS else os.environ['DQ_SAVES']; cache = ARGS.cache if ARGS else os.environ['DQ_UICACHE']
         src = _paths.source('window.py'); cls.zoom = float(re.search(r'^UI_ZOOM = ([0-9.]+)', src, re.M).group(1))
-        cls.tmp = tempfile.mkdtemp(prefix='titre_logo_'); rg = os.path.join(cls.tmp, 'reglages.json'); json.dump({}, open(rg, 'w'))
+        cls.tmp = tempfile.mkdtemp(prefix='titre_logo_'); rg = os.path.join(cls.tmp, 'settings.json'); json.dump({}, open(rg, 'w'))
         def launch(w, h, name_str, extra_env):
             shot = os.path.join(cls.tmp, name_str + '.png')
             cmd = [sys.executable, '-W', 'ignore', '-m', 'dq4_pc', '--apk', apk, '--saves-lecture', saves, '--saves-ecriture', os.path.join(cls.tmp, 'sv'), '--reglages', rg, '--slot', '0', '--sans-logos',

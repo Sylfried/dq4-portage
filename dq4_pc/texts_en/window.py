@@ -43,7 +43,7 @@ EN = {
     '--- %s : %s impossible : %r ---\n': '--- %s: %s failed: %r ---\n',
     '%s impossible : %r': '%s failed: %r',
     '--- %s : sauvegarde impossible : %s ---\n': '--- %s: save failed: %s ---\n',
-    'Sauvegarde impossible : le jeu continue (détails dans erreurs_fenetre.log)': 'Save failed: the game continues (details in erreurs_fenetre.log)',
+    'Sauvegarde impossible : le jeu continue (détails dans window_errors.log)': 'Save failed: the game continues (details in window_errors.log)',
     '--- %s : memoire du moteur a %d %% (%d Mo sur %d Mo) ---\n': '--- %s: engine memory at %d %% (%d MB of %d MB) ---\n',
     '--- %s : reglage du moteur non applique : %s ---\n': '--- %s: engine setting not applied: %s ---\n',
     'État %d enregistré': 'State %d saved',

@@ -5,8 +5,8 @@ title Extraction du code C# du jeu (recherche)
 echo.
 echo  Extraction de la structure du code C# de DQ4 (classes, champs, methodes)
 echo  ------------------------------------------------------------------------
-echo  Lit tes APK dans ..\donnees\apk (jamais modifies).
-echo  Resultat : ..\donnees\cache\il2cpp\dump.cs  (reste sur ton PC, pas envoye sur GitHub).
+echo  Lit tes APK dans ..\data\apk (jamais modifies).
+echo  Resultat : ..\data\cache\il2cpp\dump.cs  (reste sur ton PC, pas envoye sur GitHub).
 echo  Necessite internet la premiere fois (Il2CppDumper, et .NET s'il manque).
 echo.
 if not exist "..\.venv\Scripts\python.exe" (

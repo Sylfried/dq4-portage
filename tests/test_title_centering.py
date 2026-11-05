@@ -42,7 +42,7 @@ class TitleCentering(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         apk = ARGS.apk if ARGS else os.environ['DQ_APK']; saves = ARGS.saves if ARGS else os.environ['DQ_SAVES']; cache = ARGS.cache if ARGS else os.environ['DQ_UICACHE']
-        cls.tmp = tempfile.mkdtemp(prefix='titre_centrage_'); rg = os.path.join(cls.tmp, 'reglages.json')
+        cls.tmp = tempfile.mkdtemp(prefix='titre_centrage_'); rg = os.path.join(cls.tmp, 'settings.json')
         json.dump({}, open(rg, 'w'))             # reglages par defaut (l'option « Centrer la camera » n'existe plus : la camera est toujours centree, le titre en est exempte)
         env = dict(os.environ, PYGLET_HEADLESS='1', PYGLET_AUDIO='silent'); cls.res = {}
         for (w, h) in FORMATS:

@@ -86,7 +86,7 @@ class Launcher(unittest.TestCase):
             if not lookup_key.endswith('_en'): continue
             for x in lg:
                 if x.strip().lower().startswith('title'): x = x[5:]
-                remainder = re.sub(r'"[^"]*"|\^\(|\^\)|\b[\w\\.]+\.(bat|log|py)\b|donnees\\\S*|dq4_pc\\\S*|DQ4_DONNEES|tools\\\S*', '', x)             # chemins et noms propres exclus
+                remainder = re.sub(r'"[^"]*"|\^\(|\^\)|\b[\w\\.]+\.(bat|log|py)\b|data\\\S*|donnees\\\S*|dq4_pc\\\S*|DQ4_DATA|tools\\\S*', '', x)             # chemins et noms propres exclus
                 self.assertIsNone(french.search(remainder), 'mot francais dans %s : %s' % (lookup_key, x.strip()))
 
     def test_ascii_only(self):

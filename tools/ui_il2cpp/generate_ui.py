@@ -1,11 +1,11 @@
-"""Genere donnees/cache/ui_layout.json : la mise en page EXACTE des fenetres de menu du jeu.
+"""Genere data/cache/ui_layout.json : la mise en page EXACTE des fenetres de menu du jeu.
 
 Principe : les fonctions MenuPortItemTable.Make_* du jeu (libil2cpp.so, ARM64) sont executees sous Unicorn avec des
 « faux » appels Unity ; on relit les noeuds, maillages, textes et tables de liaison qu'elles construisent.
 Rien n'est copie ni redistribue : le fichier produit reste dans cache/ (ignore par git).
 
-Entrees : donnees/cache/il2cpp/ (dump.cs, script.json, entrees/libil2cpp.so, entrees/global-metadata.dat : tools/dump_il2cpp.bat)
-          donnees/cache/ui_frameData.bin (extrait des APK automatiquement)
+Entrees : data/cache/il2cpp/ (dump.cs, script.json, entrees/libil2cpp.so, entrees/global-metadata.dat : tools/dump_il2cpp.bat)
+          data/cache/ui_frameData.bin (extrait des APK automatiquement)
 Usage   : python generate_ui.py [apk_folder]"""
 import concurrent.futures as cf, json, os, platform, subprocess, sys, tempfile, time, traceback
 

@@ -58,7 +58,7 @@ class Readable(unittest.TestCase):
 
     def test_complete_file_write_read(self):
         d = {'version': SS.VERSION, 'lib': [(3, b'\x00' * 8)], 'heap': b'abc', 'python': pickle.dumps({'etat': None}), 'viewer': pickle.dumps({'k': np.ones(2)})}
-        f = os.path.join(tempfile.mkdtemp(prefix='dqs_ok_'), 'etat_01.dqs'); SS.write(f, d, {'lieu': 'x'})
+        f = os.path.join(tempfile.mkdtemp(prefix='dqs_ok_'), 'state_01.dqs'); SS.write(f, d, {'lieu': 'x'})
         r = SS.read(f); self.assertEqual(r['heap'], b'abc'); self.assertEqual(r['lib'], [(3, b'\x00' * 8)])
         self.assertEqual(SS._load(r['python']), {'etat': None}); self.assertTrue((SS._load(r['viewer'])['k'] == np.ones(2)).all())
 
@@ -108,7 +108,7 @@ class Refused(unittest.TestCase):
         """Un etat dont la partie `python` ou `viewer` est piegee : `read` rend le dictionnaire (rien d'execute, ce sont des octets), `apply` refuse AVANT d'ecrire dans le moteur (#206)."""
         f = control(); word = control()
         d = {'version': SS.VERSION, 'lib': [], 'heap': b'', 'heap_ptr': 0, 'data': b'', 'tls': b'', 'data_ptr': 0, 'next_file': 0, 'fichiers': {}, 'python': pickle.dumps(Trap(os.system, 'echo x > ' + word)), 'viewer': b''}
-        path = os.path.join(os.path.dirname(f), 'etat_09.dqs'); SS.write(path, d, {})
+        path = os.path.join(os.path.dirname(f), 'state_09.dqs'); SS.write(path, d, {})
         read_value = SS.read(path); self.assertFalse(os.path.exists(word))
         import types
         writes = []
@@ -118,7 +118,7 @@ class Refused(unittest.TestCase):
         self.assertEqual(writes, []); self.assertFalse(os.path.exists(word))
 
     def test_trap_in_external_container(self):
-        f = control(); path = os.path.join(os.path.dirname(f), 'etat_08.dqs')
+        f = control(); path = os.path.join(os.path.dirname(f), 'state_08.dqs')
         with open(path, 'wb') as fh:
             fh.write(SS.MAGIC); ent = b'{}'; fh.write(struct.pack('<I', len(ent))); fh.write(ent); fh.write(struct.pack('<I', 0))
             fh.write(zlib.compress(pickle.dumps(Trap(os.system, 'echo x > ' + f))))
