@@ -15,10 +15,10 @@ def run(n, tag, held=0, fa=0):
             cnt[t] += 1
             if t in (5, 6, 22) and len(ex.setdefault(t, [])) < 3: ex[t].append((m.frames, a[:3]))
     f12 = m.ui.f.get(12, {})
-    print(tag, 'img', m.frames, 'pq', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'cases', {k: v[:20] for k, v in list(f12.get('cases', {}).items())[:6]}, dict(ex), flush=True)
+    print(tag, 'img', m.frames, 'pk', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'cells', {k: v[:20] for k, v in list(f12.get('cases', {}).items())[:6]}, dict(ex), flush=True)
 run(60, 'attente')
 mode = sys.argv[3] if len(sys.argv) > 3 else 'kw'
 for k in range(3):
     if mode == 'kw': run(2, 'A(0x100)#%d' % k, fa=0x100)
     else: run(2, 'viewer(held=0x10,decl=0x10)#%d' % k, held=0x10, fa=0x10)
-    run(120, 'apres#%d' % k)
+    run(120, 'after#%d' % k)

@@ -93,9 +93,9 @@ class Probe:
         return out
 
     def show_windows(self, title_screen=''):
-        print('  == fenetres %s (image %d, partie %s)' % (title_screen, self.m.frames - 1, [hex(x) for x in self.part()]))
+        print('  == windows %s (frame %d, part %s)' % (title_screen, self.m.frames - 1, [hex(x) for x in self.part()]))
         for w in self.windows():
-            print('   port %2d type %-4s vis=%d act=%d cur=%s grille=%s' % (w['port'], w['type'], w['vis'], w['act'], w['cur'], w['grille']))
+            print('   port %2d type %-4s vis=%d act=%d cur=%s grid=%s' % (w['port'], w['type'], w['vis'], w['act'], w['cur'], w['grille']))
             for k, v in w['cases'].items(): print('        case %-8s %r' % (k, v))
             if w['ints']: print('        ints', w['ints'])
             if w['indic']: print('        codes', w['indic'])
@@ -125,7 +125,7 @@ def to_title_menu(s, verbose=True):
     """Demarrage -> titre (ev01, partie 0xc) -> 1er appui (fondu + invite) -> 2e appui (cmd_start_game) -> GameStartPart + MaterielMenu_LOAD.
     Repere (sans sauvegarde et avec) : appuis aux images 63 et 130 ; le menu s'ouvre ~29 images apres le 2e appui."""
     s.advance_time(63)
-    if verbose: s.show_windows('titre, avant appui'); print('  partie', [hex(x) for x in s.part()])
+    if verbose: s.show_windows('title, before the press'); print('  part', [hex(x) for x in s.part()])
     s.image(A, A)
     s.advance_time(66)
     s.image(A, A)
@@ -133,7 +133,7 @@ def to_title_menu(s, verbose=True):
         s.image()
         if s.part()[0] == 3 and any(w['type'] == 53 for w in s.windows()): break
     s.advance_time(40)
-    if verbose: s.show_windows('menu titre'); print('  LOAD', s.load_button_state())
+    if verbose: s.show_windows('title menu'); print('  LOAD', s.load_button_state())
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -146,7 +146,7 @@ YES, NO = 0, 1                                                                  
 def port_type(s, typ, visible=None):
     for w in s.windows():
         if w['type'] == typ and (visible is None or w['vis'] == visible): return w['port']
-    raise RuntimeError('pas de fenetre de type %d (fenetres : %s)' % (typ, [(w['port'], w['type']) for w in s.windows()]))
+    raise RuntimeError('no window of type %d (windows: %s)' % (typ, [(w['port'], w['type']) for w in s.windows()]))
 
 
 def send_name(s, port, name_str, code=2):
@@ -166,7 +166,7 @@ def follow(s, n, title_screen='', ignore=lambda p, a: False, verbose=True, stop=
         st = (s.load_button_state()['etat'], s.state_name()['etat'], tuple(s.part()), s.m._map_name())
         ms = [m for m in s.messages(lambda p, a: p >= 2 and a and a[0] not in (5, 6, 7) and not ignore(p, a))]
         if verbose and (st != last or (ms and k < 40)):
-            print('   %s k=%-3d img %-4d LOAD=%-2d NOM=%-5d partie=%s carte=%s %s' % (title_screen, k, s.m.frames - 1, st[0], st[1], [hex(x) for x in st[2]], st[3],
+            print('   %s k=%-3d frame %-4d LOAD=%-2d NAME=%-5d part=%s map=%s %s' % (title_screen, k, s.m.frames - 1, st[0], st[1], [hex(x) for x in st[2]], st[3],
                   s.summarize_packets(pkt, ignore=(13, 22, 28, 29, 32, 33, 12, 30, 31))[:80]), ms[:4])
         last = st
         if stop and stop(s): break
@@ -180,7 +180,7 @@ def describe_files(s):
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from dq4_save import sieve, analyze
     for f in sorted(os.listdir(s.tmp)):
-        print('   ecrit : %-10s %s' % (f, analyze(sieve(open(os.path.join(s.tmp, f), 'rb').read()))))
+        print('   written: %-10s %s' % (f, analyze(sieve(open(os.path.join(s.tmp, f), 'rb').read()))))
 
 
 def new_engine(read_dir):
@@ -188,65 +188,65 @@ def new_engine(read_dir):
 
 
 def b_title(a):
-    print('== titre : demarrage sans appui (sauvegardes : %s)' % ('aucune' if a.read_dir == '-' else 'exemples'))
+    print('== title: start without a press (saves: %s)' % ('none' if a.read_dir == '-' else 'exemples'))
     s = Probe(read_dir=None if a.read_dir == '-' else a.read_dir)
-    s.advance_time(60); s.show_windows('phase 1 (logos) avant appui')
-    s.image(A, A); s.advance_time(2); print('   appui A -> fondu (cmd_fade_out 30 images, a ~3 images de l\'appui), SetItemCode(0,0) a la fin, fondu entrant 30 images')
-    s.advance_time(70); s.show_windows('phase 2 apres le 1er appui')
+    s.advance_time(60); s.show_windows('phase 1 (logos) before the press')
+    s.image(A, A); s.advance_time(2); print('   press A -> fade (cmd_fade_out 30 frames, ~3 frames after the press), SetItemCode(0,0) at the end, fade in 30 frames')
+    s.advance_time(70); s.show_windows('phase 2 after the 1st press')
     s.image(A, A); follow(s, 90, 'start_game', stop=lambda s: any(w['type'] == 53 for w in s.windows() if w['vis']))
-    s.advance_time(10); s.show_windows('menu titre'); print('   LOAD', s.load_button_state(), ' partie', [hex(x) for x in s.part()])
-    print('   fichiers presents :', sorted(os.listdir(s.tmp)))
+    s.advance_time(10); s.show_windows('title menu'); print('   LOAD', s.load_button_state(), ' part', [hex(x) for x in s.part()])
+    print('   files present:', sorted(os.listdir(s.tmp)))
 
 
 def b_continue(a, cell='continuer', slot=0):
-    print('== %s (case racine %d), banque %d' % (cell, ROOT[cell], slot))
+    print('== %s (root cell %d), slot %d' % (cell, ROOT[cell], slot))
     s = new_engine(None if a.read_dir == '-' else a.read_dir)
     p13 = port_type(s, 53)
     s.menu(p13, ROOT[cell]); s.advance_time(3)
-    s.show_windows('liste (%s)' % cell); print('   LOAD', s.load_button_state())
+    s.show_windows('list (%s)' % cell); print('   LOAD', s.load_button_state())
     p14 = port_type(s, 54)
     s.menu(p14, 0 if cell in ('reprendre', 'auto') else slot)
-    print('   selection de la banque -> ', end=''); follow(s, 420, cell, stop=lambda s: s.part()[0] == 0xc and s.m.frames > 260 and s.load_button_state()['etat'] in (0, 11, 14))
-    print('   carte chargee :', s.m._map_name(), ' LOAD', s.load_button_state())
+    print('   slot selection -> ', end=''); follow(s, 420, cell, stop=lambda s: s.part()[0] == 0xc and s.m.frames > 260 and s.load_button_state()['etat'] in (0, 11, 14))
+    print('   map loaded:', s.m._map_name(), ' LOAD', s.load_button_state())
 
 
 def b_new(a, slot=2, name_str='Sofia', gender='masculin'):
-    print('== nouveau journal : banque %d, nom %r, sexe %s' % (slot, name_str, gender))
+    print('== new diary: slot %d, name %r, gender %s' % (slot, name_str, gender))
     s = new_engine(None if a.read_dir == '-' else a.read_dir)
     s.menu(port_type(s, 53), ROOT['nouveau']); s.advance_time(3)
     s.menu(port_type(s, 54), slot); s.advance_time(5)
     if s.state_name()['etat'] != 1:                                                  # banque occupee : question Oui / Non avant la saisie
-        s.show_windows('confirmation ecrasement'); s.menu(port_type(s, 1, True), YES); s.advance_time(5)
-    s.show_windows('saisie du nom (type 55)'); print('   NOM', s.state_name())
+        s.show_windows('overwrite confirmation'); s.menu(port_type(s, 1, True), YES); s.advance_time(5)
+    s.show_windows('name entry (type 55)'); print('   NAME', s.state_name())
     p15 = port_type(s, 55)
-    send_name(s, p15, name_str); s.advance_time(3); print('   apres le nom : NOM', s.state_name())
-    s.show_windows('choix du sexe'); s.menu(p15, HERO_GENDER[gender]); print('   sexe valide ; suite :')
+    send_name(s, p15, name_str); s.advance_time(3); print('   after the name: NAME', s.state_name())
+    s.show_windows('gender choice'); s.menu(p15, HERO_GENDER[gender]); print('   gender confirmed; next:')
     follow(s, 330, 'creation', stop=lambda s: s.m.frames > 300 and s.part()[0] == 0xc and s.m._map_name() != 'ev01' and s.load_button_state()['etat'] in (11, 0))
-    print('   carte', s.m._map_name(), ' partie', [hex(x) for x in s.part()]); describe_files(s)
-    s.advance_time(520); s.show_windows('prologue (titre de chapitre)')
-    print('   (le script de mlb1a attend ensuite une touche : cmd_key_wait_type_b, puis message + Oui/Non)')
+    print('   map', s.m._map_name(), ' part', [hex(x) for x in s.part()]); describe_files(s)
+    s.advance_time(520); s.show_windows('prologue (chapter title)')
+    print('   (the mlb1a script then waits for a key: cmd_key_wait_type_b, then message + Yes/No)')
 
 
 def b_delete(a, slot=1, rep=YES):
-    print('== supprimer : banque %d, reponse %s' % (slot, 'Oui' if rep == YES else 'Non'))
+    print('== delete: slot %d, answer %s' % (slot, 'Yes' if rep == YES else 'No'))
     s = new_engine(None if a.read_dir == '-' else a.read_dir)
     s.menu(port_type(s, 53), ROOT['supprimer']); s.advance_time(3)
     s.menu(port_type(s, 54), slot); s.advance_time(30)
-    s.show_windows('confirmation (message sur le canevas du port 1 + Oui/Non)'); print('   LOAD', s.load_button_state())
+    s.show_windows('confirmation (message on the canvas of port 1 + Yes/No)'); print('   LOAD', s.load_button_state())
     s.menu(port_type(s, 1, True), rep); follow(s, 60, 'suppr')
     s.press_state(A); s.advance_time(4); follow(s, 20, 'fin')
     print('   LOAD', s.load_button_state()); describe_files(s)
 
 
 def b_license(a):
-    print('== licence')
+    print('== license')
     s = new_engine(None if a.read_dir == '-' else a.read_dir)
     s.menu(port_type(s, 53), ROOT['licence']); follow(s, 60, 'licence'); s.show_windows('licence')
 
 
 def b_quit(a):
-    print('== quitter / portail (messages vers Unity sur le port 0)')
-    for name_str, typ, cell, pad in (('B sur le menu racine', 53, -1, B), ('bouton portail', 74, 0, A)):
+    print('== quit / portal (messages to Unity on port 0)')
+    for name_str, typ, cell, pad in (('B on the root menu', 53, -1, B), ('portal button', 74, 0, A)):
         s = new_engine(None if a.read_dir == '-' else a.read_dir)
         s.m.send_menu(port_type(s, typ), 1, cell, pad); s.image()
         print('   %-22s -> %s' % (name_str, [m for m in s.messages() if m.startswith('port 0')]))

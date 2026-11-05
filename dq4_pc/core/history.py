@@ -284,7 +284,7 @@ class History:
         if not self.path or not os.path.exists(self.path): return
         try:
             with open(self.path, encoding='utf-8') as f: d = json.load(f)
-            if not isinstance(d, dict) or d.get('version') != VERSION or not isinstance(d.get('favoris'), list): raise ValueError('format inconnu')
+            if not isinstance(d, dict) or d.get('version') != VERSION or not isinstance(d.get('favoris'), list): raise ValueError('unknown format')
             seen = set()
             for x in d['favoris']:
                 e = Element.from_dict(x, self._num()) if isinstance(x, dict) else None
@@ -296,7 +296,7 @@ class History:
             self.error = repr(ex); self.favorites = []; self.next_id = 1
             try: os.replace(self.path, self.path + '.corrompu')
             except Exception: pass
-            print(tr("Favoris de l'historique illisibles (%s) : mis de cote, on repart de zero (%r)") % (self.path, ex), flush=True)
+            print("History favorites unreadable (%s): set aside, starting again from scratch (%r)" % (self.path, ex), flush=True)
 
     def store(self, force=False):
         """Ecrit le fichier s'il a change (ecriture atomique : fichier temporaire puis remplacement). Les ecritures sont groupees : au plus une toutes les STORAGE_DELAY secondes, `force` pour la fermeture."""
@@ -312,7 +312,7 @@ class History:
             os.replace(tmp, self.path); self._dirty = False
             return True
         except Exception as ex:
-            self.error = repr(ex); print(tr("Favoris de l'historique non enregistres : %s") % (ex,), flush=True)
+            self.error = repr(ex); print("History favorites not saved: %s" % (ex,), flush=True)
             return False
 
     # ---- listes
@@ -368,7 +368,7 @@ class History:
         for f in self.favorites:
             if f.linked: f.waiting = True
         try: self._resolve()
-        except Exception as ex: self.error = repr(ex); print(tr('Historique : texte des favoris non redemande (%r)') % (ex,), flush=True)
+        except Exception as ex: self.error = repr(ex); print('History: favorites text not requested again (%r)' % (ex,), flush=True)
 
     def remove_favorite(self, ident):
         self.favorites = [f for f in self.favorites if f.fav != ident]
@@ -415,7 +415,7 @@ class History:
             self._resolve()
             self.store()
         except Exception as ex:                                              # l'historique ne doit jamais arreter le jeu
-            if self.error is None: print(tr('Historique : erreur (%r)') % (ex,), flush=True)
+            if self.error is None: print('History: error (%r)' % (ex,), flush=True)
             self.error = repr(ex)
 
     def _store_record(self, r):
@@ -469,13 +469,13 @@ class Sensor:
             c.uc.hook_add(unicorn.UC_HOOK_CODE, self._cat, None, category, category)
             self.active = True
         except Exception as ex:
-            print(tr('Historique : crochets non installes (%r)') % (ex,), flush=True)
+            print('History: hooks not installed (%r)' % (ex,), flush=True)
             return
         try:
             add = c.export(SYM_UI_MSGADD)
             if add: c.uc.hook_add(unicorn.UC_HOOK_CODE, self._add, None, add, add)
         except Exception as ex:
-            print(tr('Historique : numeros de message non captes (%r)') % (ex,), flush=True)
+            print('History: message numbers not captured (%r)' % (ex,), flush=True)
 
     def _add(self, uc, addr, size_value, _):
         """Entree de ui_MsgAdd : le numero du message (1er argument) que TextBuffer::cat va recevoir."""

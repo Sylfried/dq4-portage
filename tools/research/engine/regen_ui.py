@@ -8,7 +8,7 @@ env = dict(os.environ, PYTHONUTF8='1', DQ_IL2='/home/claude/il2', DQ_META='/tmp/
 def launch(args):
     p = subprocess.run(args, cwd=HERE, env=env, capture_output=True); return p.returncode, (p.stdout + p.stderr).decode('utf-8', 'replace')
 tmp = tempfile.mkdtemp(prefix='r3_ui_'); t0 = time.time()
-ent = os.path.join(tmp, 'entete.json'); rc, s = launch([sys.executable, os.path.join(HERE, 'header.py'), ent]); print('entete', rc, time.time() - t0)
+ent = os.path.join(tmp, 'entete.json'); rc, s = launch([sys.executable, os.path.join(HERE, 'header.py'), ent]); print('header', rc, time.time() - t0)
 if rc: print(s[-3000:]); sys.exit(1)
 hdr = json.load(open(ent)); n = hdr['nTypes']
 def one(k):

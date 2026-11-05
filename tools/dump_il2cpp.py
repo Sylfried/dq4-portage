@@ -18,14 +18,14 @@ def find_apk(pattern):
     for f in sorted(os.listdir(APKS)):
         if f.lower().endswith('.apk') and pattern in f.lower():
             return os.path.join(APKS, f)
-    raise SystemExit('APK introuvable (%s) dans %s' % (pattern, APKS))
+    raise SystemExit('APK not found (%s) in %s' % (pattern, APKS))
 
 
 def extract(apk, internal, dest):
     with zipfile.ZipFile(apk) as z:
         with z.open(internal) as src, open(dest, 'wb') as out:
             out.write(src.read())
-    print('  extrait :', internal, '->', dest)
+    print('  extracted:', internal, '->', dest)
 
 
 def download_tool():
@@ -35,7 +35,7 @@ def download_tool():
             exe = os.path.join(root, 'Il2CppDumper.exe')
     if exe:
         return exe
-    print('Telechargement de Il2CppDumper (une seule fois)...')
+    print('Downloading Il2CppDumper (one time only)...')
     req = urllib.request.Request('https://api.github.com/repos/Perfare/Il2CppDumper/releases/latest', headers={'User-Agent': 'dq4-pc'})
     rel = json.load(urllib.request.urlopen(req, timeout=60))
     choice = None
@@ -45,24 +45,24 @@ def download_tool():
                 choice = a; break
         if choice: break
     if not choice:
-        raise SystemExit('Aucune archive Il2CppDumper trouvee dans la derniere version : ' + ', '.join(a['name'] for a in rel.get('assets', [])))
-    print('  version :', rel.get('tag_name'), '/', choice['name'])
+        raise SystemExit('No Il2CppDumper archive found in the latest release: ' + ', '.join(a['name'] for a in rel.get('assets', [])))
+    print('  version:', rel.get('tag_name'), '/', choice['name'])
     data = urllib.request.urlopen(urllib.request.Request(choice['browser_download_url'], headers={'User-Agent': 'dq4-pc'}), timeout=300).read()
     os.makedirs(TOOL, exist_ok=True)
     zipfile.ZipFile(io.BytesIO(data)).extractall(TOOL)
     for root, _, files in os.walk(TOOL):
         if 'Il2CppDumper.exe' in files:
             return os.path.join(root, 'Il2CppDumper.exe')
-    raise SystemExit("Il2CppDumper.exe absent de l'archive (%s)" % choice['name'])
+    raise SystemExit("Il2CppDumper.exe missing from the archive (%s)" % choice['name'])
 
 
 def main():
     os.makedirs(INPUTS, exist_ok=True)
-    print('APK lus dans :', APKS)
+    print('APK files read from:', APKS)
     extract(find_apk('arm64'), 'lib/arm64-v8a/libil2cpp.so', os.path.join(INPUTS, 'libil2cpp.so'))
     extract(find_apk('base'), 'assets/bin/Data/Managed/Metadata/global-metadata.dat', os.path.join(INPUTS, 'global-metadata.dat'))
     exe = download_tool()
-    print('Extraction du code (1 a 3 minutes)...')
+    print('Extracting the code (1 to 3 minutes)...')
     env = dict(os.environ, DOTNET_ROLL_FORWARD='Major')      # l'outil vise .NET 6 : accepte aussi .NET 7/8/9 s'ils sont installes
     logfile = os.path.join(OUTPUT, 'journal.txt')
     lines = []
@@ -75,15 +75,15 @@ def main():
             lines.append(l); print(' ', l)
         p.wait()
     except OSError as ex:
-        lines.append('Impossible de lancer Il2CppDumper : %s' % ex); print(lines[-1])
+        lines.append('Cannot start Il2CppDumper: %s' % ex); print(lines[-1])
     with open(logfile, 'w', encoding='utf-8') as fj: fj.write('\n'.join(lines) + '\n')
     dump = os.path.join(OUTPUT, 'dump.cs')
     if os.path.exists(dump):                                  # un code non nul apres l'ecriture (attente de touche) est sans importance
         print('\nOK : %s (%.1f Mo)' % (dump, os.path.getsize(dump) / 1e6))
-        print('Dis a Claude : "le dump est pret" (il lit le fichier sur ton PC).')
+        print('Tell Claude: "the dump is ready" (it reads the file on your PC).')
     else:
-        print("\nEchec : dump.cs n'a pas ete cree. Journal : " + logfile)
-        print("Cause probable : .NET manque. Installe-le puis relance ce fichier :")
+        print("\nFailed: dump.cs was not created. Log: " + logfile)
+        print("Probable cause: .NET is missing. Install it, then run this file again:")
         print("    winget install Microsoft.DotNet.Runtime.8")
         raise SystemExit(1)
 

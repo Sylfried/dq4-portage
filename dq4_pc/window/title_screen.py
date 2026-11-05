@@ -49,7 +49,7 @@ class TitleMixin:
                             continue
                         self.ext_sky = {'ciel': cl, 'tex': self.tex_gl[(src, key)], 'key': key, 'deb': start_idx, 'vl': None, 'nv': 0}
                         continue
-                    except Exception as ex: print(tr('Ciel du titre : %s (copies decalees a la place)') % ex, flush=True)
+                    except Exception as ex: print('Title sky: %s (using offset copies instead)' % ex, flush=True)
                 cur = self.objects.cur[key][start_idx:start_idx + n]; wid = float(cur[:, 0].max() - cur[:, 0].min())
                 for dx in (-wid, wid):
                     vl = self.prog.vertex_list(n, gl.GL_TRIANGLES, position=('f', CT.cloned_positions(cur, dx).ravel()), tex_coords=('f', self.objects.uv(key)[start_idx:start_idx + n].ravel()), colors=('f', self.objects.col(key)[start_idx:start_idx + n].ravel()))
@@ -93,7 +93,7 @@ class TitleMixin:
             return True
         except Exception as ex:
             self.flat_sky = None; self.prog['mvp'] = tuple(float(x) for x in self._M_town.T.ravel()); gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
-            print(tr('Ciel du titre (a plat) desactive : %s') % ex, flush=True)
+            print('Title sky (flat) disabled: %s' % ex, flush=True)
             return False
 
     def _paint_sky(self, r, sharp_o):
@@ -116,7 +116,7 @@ class TitleMixin:
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
         except Exception as ex:
             gl.glDisable(gl.GL_POLYGON_OFFSET_FILL); self.ext_sky = None
-            print(tr('Ciel du titre (bandes) desactive : %s') % ex, flush=True)
+            print('Title sky (strips) disabled: %s' % ex, flush=True)
 
     def _is_start_menu(self, port):
         """Vrai si ce port est le menu de depart (type 53, Make_StartMenuSecond)."""
@@ -178,7 +178,7 @@ class TitleMixin:
         elif name_str == 'politique':
             self.sound.play_sfx(SFX_BUTTON)
             try: import webbrowser; webbrowser.open(AP.PRIVACY_URL)
-            except Exception as ex: print(tr('Ouverture de la page de la politique de confidentialite impossible : %r') % (ex,), flush=True)
+            except Exception as ex: print('Could not open the privacy policy page: %r' % (ex,), flush=True)
 
     def _draw_saves(self):
         if self.saves_screen is None: return

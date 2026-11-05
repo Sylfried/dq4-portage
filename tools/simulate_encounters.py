@@ -49,7 +49,7 @@ def simulate(apk, saves, location, speed, step, seed=1):
     d = rnd.randrange(4); held = 0; without = 0; prev = tuple(m.state.sprites[0]['pos']); zone = cfg['zone']
     while st['pas'] < step and st['images'] < step * 8:
         m.step(DIRS[d], DIRS[d]); st['images'] += 1; held += 1
-        if 0 not in m.state.sprites: raise RuntimeError('le heros a quitte la carte (image %d)' % st['images'])
+        if 0 not in m.state.sprites: raise RuntimeError('the hero left the map (frame %d)' % st['images'])
         pos = tuple(m.state.sprites[0]['pos'])
         if pos != prev: st['pas'] += 1; without = 0
         else:
@@ -71,20 +71,20 @@ def main():
     ap.add_argument('--lieu', dest='location', choices=sorted(LOCATIONS), default='monde'); ap.add_argument('--pas', dest='step', type=int, default=24000)
     ap.add_argument('--vitesses', default='1,2,4'); ap.add_argument('--graine', dest='seed', type=int, default=1)
     a = ap.parse_args()
-    if not a.apk or not a.saves: sys.exit('DQ_APK et DQ_SAVES (ou --apk / --saves) requis')
+    if not a.apk or not a.saves: sys.exit('DQ_APK and DQ_SAVES (or --apk / --saves) are required')
     res = []
     for v in [float(x) for x in a.vitesses.split(',')]:
         r = simulate(a.apk, a.saves, a.location, v, a.step, a.seed); r['v'] = v; res.append(r)
-        print('x%g : %d rencontres en %d pas (%d images)' % (v, r['rencontres'], r['pas'], r['images']), flush=True)
+        print('x%g : %d encounters in %d steps (%d frames)' % (v, r['rencontres'], r['pas'], r['images']), flush=True)
     base = res[0]; p1 = base['rencontres'] / base['pas']
-    print('\n%s, graine %d, %d pas par vitesse. Reference : %s' % (a.location, a.seed, a.step, 'x%g' % base['v']))
-    print('%6s %12s %12s %14s %12s %14s %12s' % ('vitesse', 'rencontres', 'par pas', 'par pas x a', 'attendu', 'perte/appel', 'attendu'))
+    print('\n%s, seed %d, %d steps per speed. Reference: %s' % (a.location, a.seed, a.step, 'x%g' % base['v']))
+    print('%6s %12s %12s %14s %12s %14s %12s' % ('speed', 'encounters', 'per step', 'per step x a', 'expected', 'loss/call', 'expected'))
     for r in res:
         v = r['v']; pp = r['rencontres'] / r['pas']
         print('%6s %12d %12.5f %14.2f %12.2f %14.3f %12.3f' % ('x%g' % v, r['rencontres'], pp, pp * v / p1 if p1 else float('nan'), (RE.encounters_per_second(v) / RE.encounters_per_second(base['v'])),
               r['perte_appliquee'] / r['perte_jeu'], RE.factor_per_step(v) / RE.factor_per_step(base['v'])))
         err = 1.0 / math.sqrt(max(1, r['rencontres']))
-        print('       (incertitude statistique : +/- %.0f %%)' % (100 * err))
+        print('       (statistical uncertainty: +/- %.0f %%)' % (100 * err))
 
 
 if __name__ == '__main__': main()

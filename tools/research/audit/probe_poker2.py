@@ -11,7 +11,7 @@ def r(n, tag, held=0, fa=0):
     for i in range(n):
         for t, a, f in m.step(held if i == 0 else 0, fa if i == 0 else 0): cnt[t] += 1
     f = m.ui.f.get(12, {}); cs = f.get('cases', {})
-    print(tag, 'img', m.frames, 'msg', m.msg_visible, 'entree', f.get('entree'), 'mise', cs.get((0, 3)), 'btn', cs.get((1, 0)), 'dyn', {k: v for k, v in cnt.items() if k != 22}, 'p22', cnt.get(22, 0), flush=True)
+    print(tag, 'img', m.frames, 'msg', m.msg_visible, 'input', f.get('entree'), 'bet', cs.get((0, 3)), 'btn', cs.get((1, 0)), 'dyn', {k: v for k, v in cnt.items() if k != 22}, 'p22', cnt.get(22, 0), flush=True)
 r(100, 'attente'); r(2, 'A', 0x10, 0x10); r(90, ' ap')
 for k in range(3):
     m.send_menu(12, 1, 1, 0x2); r(2, 'mise+1'); m.send_menu(12, 1, -1, 0); r(3, ' rel')

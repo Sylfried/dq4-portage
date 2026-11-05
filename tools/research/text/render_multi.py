@@ -38,7 +38,7 @@ for mode in ('orig', 'cen'):
         rd.draw_all([f], CX if name_str != 't33' else 402.7, {'t33': 692.0, 't32': 692.0, 't29': -150.0}.get(name_str, CY), S, (W, H))
         im = pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
         a = np.frombuffer(im.get_data('RGBA', W * 4), np.uint8).reshape(H, W, 4)[::-1]
-        Image.fromarray(a[..., :3].copy()).save('%s/%s_%s.png' % (out, name_str, mode)); print('ecrit', name_str, mode, flush=True)
+        Image.fromarray(a[..., :3].copy()).save('%s/%s_%s.png' % (out, name_str, mode)); print('written', name_str, mode, flush=True)
 
 # ---- feuilles de contact : fenetres variees (portrait 450 x 800, echelle 1), textes d'exemple dans toutes les cases texte
 EX = ['Ragnar', 'Épée de fer', 'PV  44', 'Potion', 'Objets', 'Quitter', 'Guérir', 'Alena']
@@ -63,5 +63,5 @@ for typ in TYPES:
             im = pyglet.image.get_buffer_manager().get_color_buffer().get_image_data()
             a = np.frombuffer(im.get_data('RGBA', W2 * 4), np.uint8).reshape(H2, W2, 4)[::-1]
             Image.fromarray(a[..., :3].copy()).save('%s/g%d_%s.png' % (out, typ, mode))
-        except Exception as e: print('erreur', typ, mode, repr(e), flush=True)
-    print('ecrit g', typ, flush=True)
+        except Exception as e: print('error', typ, mode, repr(e), flush=True)
+    print('written g', typ, flush=True)

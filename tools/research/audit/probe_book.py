@@ -11,6 +11,6 @@ for i in range(240):
     for t, a, f in m.step(0, 0):
         cnt[t] += 1
         if t in (0, 10, 11, 21, 22) and len(ex.setdefault(t, [])) < 2: ex[t].append((m.frames, a[:3]))
-print('partie', hex(m.state.part), 'carte', m.state.game_map, 'paquets', dict(sorted(cnt.items())), ex)
-print('ports', {p: (f.get('type'), f.get('entree')) for p, f in m.ui.f.items() if f.get('act') and p >= 2}, 'menu_actif', m.active_menu(), 'msg', m.msg_visible)
-print('maillages', {k: (len(v['v']), v['pos']) for k, v in list(m.state.meshes.items())[:6]}, 'modeles', dict(list(m.state.models.items())[:6]))
+print('part', hex(m.state.part), 'map', m.state.game_map, 'packets', dict(sorted(cnt.items())), ex)
+print('ports', {p: (f.get('type'), f.get('entree')) for p, f in m.ui.f.items() if f.get('act') and p >= 2}, 'active_menu', m.active_menu(), 'msg', m.msg_visible)
+print('meshes', {k: (len(v['v']), v['pos']) for k, v in list(m.state.meshes.items())[:6]}, 'models', dict(list(m.state.models.items())[:6]))

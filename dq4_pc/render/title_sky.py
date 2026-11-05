@@ -180,23 +180,23 @@ class Row:
 def analyze(pos, uv, col):
     """Rangees du ciel a partir des sommets de l'objet (N sommets, N multiple de 6 : triangles de quadrilateres alignes sur x et y). ValueError si la structure n'est pas celle attendue."""
     pos = np.asarray(pos, float); uv = np.asarray(uv, float); col = np.asarray(col, float)
-    if len(pos) == 0 or len(pos) % 6: raise ValueError('ciel : %d sommets' % len(pos))
+    if len(pos) == 0 or len(pos) % 6: raise ValueError('sky: %d vertices' % len(pos))
     P, U, C = pos.reshape(-1, 6, 3), uv.reshape(-1, 6, 2), col.reshape(-1, 6, 4)
     rank = {}
     for p, u, c in zip(P, U, C):
         xg, xd = float(p[:, 0].min()), float(p[:, 0].max()); yb, yh = float(p[:, 1].min()), float(p[:, 1].max())
-        if xd - xg < 1e-6 or yh - yb < 1e-6: raise ValueError('ciel : quadrilatere degenere')
+        if xd - xg < 1e-6 or yh - yb < 1e-6: raise ValueError('sky: degenerate quad')
         g, d, b, h = (np.abs(p[:, 0] - xg) < 1e-4), (np.abs(p[:, 0] - xd) < 1e-4), (np.abs(p[:, 1] - yb) < 1e-4), (np.abs(p[:, 1] - yh) < 1e-4)
-        if not (np.all(g | d) and np.all(b | h)): raise ValueError('ciel : quadrilatere non aligne')
+        if not (np.all(g | d) and np.all(b | h)): raise ValueError('sky: quad not aligned')
         corner = lambda m: (float(p[m, 1].mean()), float(p[m, 2].mean()), float(u[m, 1].mean()), c[m].mean(0))
         bottom, topmost = corner(b), corner(h)
         rank.setdefault((round(yb, 2), round(yh, 2)), {'bas': bottom, 'haut': topmost, 'q': []})['q'].append((xg, xd, float(u[g, 0].mean()), float(u[d, 0].mean())))
     out = []
     for k in sorted(rank):
         r = rank[k]; q = np.array(sorted(r['q']), float)
-        if len(q) < 2 or len(q) % 2 or np.abs(q[1:, 0] - q[:-1, 1]).max() > 1e-3: raise ValueError('ciel : rangee non contigue')
+        if len(q) < 2 or len(q) % 2 or np.abs(q[1:, 0] - q[:-1, 1]).max() > 1e-3: raise ValueError('sky: row not contiguous')
         ra = Row(r['bas'], r['haut'], q)
-        if len(q) > 2 and np.abs(q[2:, 2:] - q[:-2, 2:]).max() > 0.01: raise ValueError('ciel : rangee non periodique')
+        if len(q) > 2 and np.abs(q[2:, 2:] - q[:-2, 2:]).max() > 0.01: raise ValueError('sky: row not periodic')
         out.append(ra)
     return out
 

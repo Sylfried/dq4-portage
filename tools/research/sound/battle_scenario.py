@@ -10,7 +10,7 @@ if sc == 'niveau':
     for i in (3, 12):
         hs = orig + PLAYER_STRIDE * i + OFF_HS
         need = struct.unpack_from('<I', c.mem(hs, 0x30), 0x18)[0]
-        print('membre', i, 'xp requise', need)
+        print('member', i, 'xp required', need)
         if need > 0: c.mem_w(hs + 8, struct.pack('<I', need - 1))
 tr.evt.clear(); eng.sensor.drain()
 cb = Battle(eng, tr, monsters=[(3, 1)] if sc != 'fuite' else [(3, 4), (4, 4)], hp=None, verbose=True)

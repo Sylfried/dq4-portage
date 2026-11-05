@@ -40,13 +40,13 @@ class Replay:
         def lb(ident, r, restart=False):
             n0 = s.bgm
             o_bgm(ident, r, restart)
-            if s.bgm is not n0 and s.bgm is not None: self.note('JOUE musique/jingle BGM%02d (%s, %.1f s%s, vol %.2f)' % (ident, s.bgm_category, len(r['pcm']) / r['frequence'], ', boucle' if r['boucle'] else '', s.bgm.volume))
+            if s.bgm is not n0 and s.bgm is not None: self.note('PLAY music/jingle BGM%02d (%s, %.1f s%s, vol %.2f)' % (ident, s.bgm_category, len(r['pcm']) / r['frequence'], ', loop' if r['boucle'] else '', s.bgm.volume))
         def ls(ident, r):
             n0 = len(s.sfx); o_sfx(ident, r)
-            if len(s.sfx) > n0: self.note('JOUE SE%04d (%s, %.2f s, vol %.2f)' % (ident, s.sfx[-1].category, len(r['pcm']) / r['frequence'], s.sfx[-1].p.volume))
-            else: self.note('SE%04d NON JOUE (categorie coupee ?)' % ident)
+            if len(s.sfx) > n0: self.note('PLAY SE%04d (%s, %.2f s, vol %.2f)' % (ident, s.sfx[-1].category, len(r['pcm']) / r['frequence'], s.sfx[-1].p.volume))
+            else: self.note('SE%04d NOT PLAYED (category muted?)' % ident)
         def sb():
-            if s.bgm is not None: self.note('ARRET musique BGM%s' % s.bgm_id)
+            if s.bgm is not None: self.note('STOP music BGM%s' % s.bgm_id)
             o_stopb()
         s._launch_bgm, s._launch_sfx, s.stop_bgm = lb, ls, sb
     def note(self, txt): self.lines.append((now(), txt)); self.talk('  t=%7.2f  %s' % (now(), txt))
@@ -55,7 +55,7 @@ class Replay:
     def image(self, evts, dt=1.0 / 30, e=None):
         """une image : les ordres du moteur, puis tick, puis le temps avance de dt"""
         if evts:
-            self.talk('  t=%7.2f  ordres moteur %s' % (now(), evts))
+            self.talk('  t=%7.2f  engine orders %s' % (now(), evts))
             if e is not None and 'image_moteur' in SOUND.Sound.events.__code__.co_varnames: self.s.events(evts, engine_frame=e)
             else: self.s.events(evts)
             if not RT: self.wait_decoding()

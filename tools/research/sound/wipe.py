@@ -8,7 +8,7 @@ for _ in range(200): eng.step(0, 0)
 gs = c.export('_ZN6status7g_StoryE')
 if chapter > 1:
     c.call(c.export('_ZN6status11StoryStatus10setChapterEi'), gs, chapter, label='setChapter')
-print('chapitre', struct.unpack('<I', c.mem(gs + 4, 4))[0], 'carte', eng.state.game_map, 'membres', members(eng))
+print('chapter', struct.unpack('<I', c.mem(gs + 4, 4))[0], 'map', eng.state.game_map, 'members', members(eng))
 tr.evt.clear(); eng.sensor.drain()
 cb = Battle(eng, tr, monsters=[(3, 4), (4, 4), (5, 4)], hp=[1, 1, 1, 1, 1], verbose=True)
 end = cb.launch(max_step=maxp, after_battle=500)

@@ -81,7 +81,7 @@ def resolve(x):
     if x in NAME: return NAME[x]
     c = [a for a, s in SYM.items() if x in s]
     if len(c) == 1: return c[0]
-    if not c: raise SystemExit('introuvable : ' + x)
+    if not c: raise SystemExit('not found: ' + x)
     for a in c: print('# candidat', hex(a), SYM[a])
     raise SystemExit(1)
 def xref(target, lo=0x1000, hi=0x230000):

@@ -93,7 +93,7 @@ class FieldMixin:
         del self.hd_jobs[lookup_key]
         try: atlas, cl, ch = fut.result()
         except Exception as ex:
-            print(tr('lissage HD impossible (%s, h%d) : %s') % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[lookup_key] = orig; return orig
+            print('HD smoothing failed (%s, h%d): %s' % (HD.MODES[mode][0], ident, ex), flush=True); self.sprite_tex[lookup_key] = orig; return orig
         r = self.sprite_tex[lookup_key] = dict(t=self._tex(atlas, False, HD_LEVELS), tw=atlas.shape[1], th=atlas.shape[0], nl=orig['nl'], cols=orig['cols'], pw=orig['pw'], ph=orig['ph'], cl=cl, ch=ch, g=HD_GUTTER, hd=True)
         if not self.smoothing: self._filter_texture(r['t'], False)
         return r
@@ -231,13 +231,13 @@ class FieldMixin:
             try: c = self.data.game_map(cand)
             except KeyError as ex: error = ex; continue
             except Exception as ex: error = ex
-            if c is not None and cand != src: print(tr('decor %s absent des donnees : %s a la place') % (src, cand), flush=True); src = cand
+            if c is not None and cand != src: print('scenery %s missing from the data: %s used instead' % (src, cand), flush=True); src = cand
             break
         if c is None:
-            print(tr('carte non chargee :'), error, flush=True); self.map_name = name_str; return
+            print('map not loaded:', error, flush=True); self.map_name = name_str; return
         if not os.environ.get('DQ_SANS_DECALAGE'):
             try: DP.shift(c)                                               # massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir flat_sceneries.py)
-            except Exception as ex: print('decors_plats :', ex, flush=True)
+            except Exception as ex: print('flat_sceneries:', ex, flush=True)
         self.map_src = src; self.scenery_arr = {k: v for k, v in c['textures'].items() if k in c['groupes']}       # textures du decor (agrandies selon le mode de F2, voir _decor_tex)
         self.objects = OC.MapObjects(c)                                   # portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
         self.palettes = OC.MapPalettes(c)                               # surfaces dont la texture change d'image en image (eau qui scintille, marais...)
@@ -265,8 +265,8 @@ class FieldMixin:
         self.bounds_x = (float(np.percentile(allp[:, 0], 0.5)), float(np.percentile(allp[:, 0], 99.5)))
         self.map_name = name_str
         self.scenery_background = self._battle_background(c) if name_str.startswith('btl_') else None
-        print(tr('carte %s : %d groupes') % (name_str, len(self.map_vl)), flush=True)
-        SV.note('carte chargee', name_str=name_str, groups=len(self.map_vl), ms=round(1000 * (time.perf_counter() - t_load)))
+        print('map %s: %d groups' % (name_str, len(self.map_vl)), flush=True)
+        SV.note('map loaded', name_str=name_str, groups=len(self.map_vl), ms=round(1000 * (time.perf_counter() - t_load)))
 
     def _calc_hd_scenery(self, arrs, algo):
         """(tache de fond) textures de decor agrandies par l'algorithme HD du mode de F2 (x8, plafonne a 4096 px de cote). Le bord est repete en boucle avant l'agrandissement : les textures se raccordent."""
@@ -292,7 +292,7 @@ class FieldMixin:
         del self.hd_jobs[jc]
         try: arrs = fut.result()
         except Exception as ex:
-            print(tr('lissage HD du decor impossible (%s) : %s') % (self.map_src, ex), flush=True); arrs = {}
+            print('HD smoothing of the scenery failed (%s): %s' % (self.map_src, ex), flush=True); arrs = {}
         r = self.scenery_hd[lookup_key] = {}
         for k, a in arrs.items():
             r[k] = t = self._tex(a, True, 99); self._filter_texture(t, self.smoothing)
@@ -371,7 +371,7 @@ class FieldMixin:
             r = self.fbx_cache[no] = {'etat': 'lecture', 'm': None}
             def task():
                 try: r['m'] = FX.FbxModel(self.data.fbx_model(no)); r['etat'] = 'lu'
-                except Exception as ex: r['etat'] = 'erreur'; print(tr('Modele 3D %d non affiche : %s') % (no, ex), flush=True)
+                except Exception as ex: r['etat'] = 'erreur'; print('3D model %d not displayed: %s' % (no, ex), flush=True)
             threading.Thread(target=task, daemon=True).start()
         if r['etat'] == 'lu':                                       # objets OpenGL : dans le fil du dessin
             try:
@@ -380,7 +380,7 @@ class FieldMixin:
                 r['uv'] = m.uv[m.tri_indices.ravel()].ravel().astype(np.float32); r['n'] = nt * 3
                 r['vl'] = self.prog.vertex_list(r['n'], gl.GL_TRIANGLES, position=('f', np.zeros(r['n'] * 3, np.float32)), tex_coords=('f', r['uv']), colors=('f', np.ones(r['n'] * 4, np.float32)))
                 r['etat'] = 'pret'
-            except Exception as ex: r['etat'] = 'erreur'; print(tr('Modele 3D %d non affiche : %s') % (no, ex), flush=True)
+            except Exception as ex: r['etat'] = 'erreur'; print('3D model %d not displayed: %s' % (no, ex), flush=True)
         return r if r['etat'] == 'pret' else None
 
     def _paint_fbx(self, e):
@@ -499,7 +499,7 @@ class FieldMixin:
                 try:
                     a = self.data.texture(wnd.map_name)
                     if a is not None: hd_a = self.plans[wnd.map_name] = HD.upscale_plan(a, epx=wnd.map_name.startswith('dsdq4w'))
-                except Exception as ex: print(tr('Plan %s illisible : %r') % (wnd.map_name, ex), flush=True)
+                except Exception as ex: print('Map image %s unreadable: %r' % (wnd.map_name, ex), flush=True)
             if hd_a is not None:
                 if lookup_key:                                            # carte du monde : voile (silhouette grisee) sur les blocs de 10 x 10 pixels non explores (16 x 16 blocs a partir de x = 48, y = 16 du plan de 256 x 192)
                     src = self.data.world_veil()
@@ -522,7 +522,7 @@ class FieldMixin:
         flag = f['indic'].get(0, 0) & 0xffff; x, y = f['indic'].get(1), f['indic'].get(2)
         if getattr(wnd, '_plane_flag', None) != flag or wnd.game_map is None:
             try: pl = self.data.world_plan()
-            except Exception as ex: pl = None; print(tr('Plan du monde illisible : %r') % (ex,), flush=True)
+            except Exception as ex: pl = None; print('World map image unreadable: %r' % (ex,), flush=True)
             if pl is None: return
             im = pl['base'].copy()
             for bit, px, py, a in pl['pieces']:

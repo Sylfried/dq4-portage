@@ -2,7 +2,7 @@ import sys, re
 def read(f):
     ev = []
     for l in open(f):
-        m = re.match(r'T=([\d.]+) img=(\d+) effet=(\d) attente=(\d) fondu=(\d) fond=(\d) partie=(0x\w+) fa=([\d.]+) fn=(\d+)', l)
+        m = re.match(r'T=([\d.]+) img=(\d+) effect=(\d) waiting=(\d) fade=(\d) background=(\d) part=(0x\w+) fa=([\d.]+) fn=(\d+)', l)
         if m: ev.append(dict(T=float(m[1]), img=int(m[2]), effet=int(m[3]), att=int(m[4]), fondu=int(m[5]), fond=int(m[6]), partie=int(m[7], 16), fa=float(m[8]), fn=int(m[9])))
     return ev
 def phases(ev):
@@ -36,4 +36,4 @@ def phases(ev):
 for f in sys.argv[1:]:
     ev = read(f)
     print(f)
-    for k, (a, b, t) in phases(ev).items(): print('   %-14s images moteur %s -> %s = %s images ; temps reel %s s ; %s images/s' % (k, a, b, None if b is None else b - a, None if t is None else '%.2f' % t, None if (b is None or t is None or t == 0) else '%.1f' % ((b - a) / t)))
+    for k, (a, b, t) in phases(ev).items(): print('   %-14s engine frames %s -> %s = %s frames ; real time %s s ; %s frames/s' % (k, a, b, None if b is None else b - a, None if t is None else '%.2f' % t, None if (b is None or t is None or t == 0) else '%.1f' % ((b - a) / t)))

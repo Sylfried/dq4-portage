@@ -10,7 +10,7 @@ for a,n in d.PLT.items():
     if n.startswith('_ZN8MenuItem5setupE') or n.startswith('_ZN8MenuItem6Setup2E') or n.startswith('_ZN8MenuItem5SetupE'): tg[a]=n
 for a,n in d.syms.items():
     if n.startswith('MenuItem::setup(') or n.startswith('MenuItem::Setup2('): tg[a]=n
-print('cibles', {hex(a):n for a,n in tg.items()}, file=sys.stderr)
+print('targets', {hex(a):n for a,n in tg.items()}, file=sys.stderr)
 res = collections.defaultdict(set)
 unk = []
 for k,ins in enumerate(insns):
@@ -25,4 +25,4 @@ for k,ins in enumerate(insns):
         if isinstance(imm,int): res[imm].add(fn)
         else: unk.append((fn, hex(ins.address)))
 for t in sorted(res): print(t, '; '.join(sorted(res[t])))
-print('NON RESOLUS', unk)
+print('UNRESOLVED', unk)

@@ -125,10 +125,10 @@ class Refused(unittest.TestCase):
         with self.assertRaises(pickle.UnpicklingError): SS.read(path)
         self.assertFalse(os.path.exists(f))
 
-    def test_french_message_and_class_name(self):
+    def test_message_and_class_name(self):
         try: SS._load(pickle.dumps(Trap(os.system, 'x')))
         except pickle.UnpicklingError as ex: msg = str(ex)
-        self.assertIn('refusé', msg); self.assertIn('system', msg); self.assertIn('pas été exécuté', msg)
+        self.assertIn('refused', msg); self.assertIn('system', msg); self.assertIn('was not executed', msg)
 
 
 @unittest.skipUnless(APK and SAVES, 'moteur reel : DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes>')

@@ -48,7 +48,7 @@ class SnapshotsMixin:
         """Recharge l'emplacement n ; l'etat d'avant le chargement est gardé en memoire (cancel_loading)."""
         d = SS.read(self.state_path(n))
         try: self.undo_state = self._complete_savestate()
-        except Exception as ex: self.undo_state = None; print(tr('etat avant chargement non garde :'), ex, flush=True)
+        except Exception as ex: self.undo_state = None; print('state before loading not kept:', ex, flush=True)
         self._apply_savestate(d)
 
     def cancel_loading(self):
@@ -90,7 +90,7 @@ class SnapshotsMixin:
             gl.glBindTexture(t.target, t.id); gl.glCopyTexSubImage2D(t.target, 0, 0, 0, 0, 0, w, h)
             return t
         except Exception as ex:
-            print(tr('miniature impossible :'), ex, flush=True); return None
+            print('thumbnail failed:', ex, flush=True); return None
 
     def _png_thumbnail(self, t):
         """Texture de _clone_thumbnail -> PNG reduit (miniature des etats)."""
@@ -102,4 +102,4 @@ class SnapshotsMixin:
             a = np.frombuffer(img.get_data('RGB', img.width * 3), np.uint8).reshape(img.height, img.width, 3)[::-1]
             im = Image.fromarray(np.ascontiguousarray(a)); im.thumbnail((320, 180)); b = io.BytesIO(); im.save(b, 'PNG'); return b.getvalue()
         except Exception as ex:
-            print(tr('miniature impossible :'), ex, flush=True); return b''
+            print('thumbnail failed:', ex, flush=True); return b''

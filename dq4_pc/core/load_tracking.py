@@ -22,7 +22,7 @@ def clock():
 def note(event_code, **fields):
     """Une ligne de journal (sans effet si DQ_SUIVI n'est pas defini)."""
     if not ACTIVE: return
-    line = 'SUIVI +%.3fs %s' % (clock(), event_code)
+    line = 'TRACE +%.3fs %s' % (clock(), event_code)
     if fields: line += ' ' + ' '.join('%s=%s' % (k, v) for k, v in fields.items())
     try:
         if _FILE:

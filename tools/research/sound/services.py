@@ -10,7 +10,7 @@ eng.load_save(slot)
 for _ in range(250): eng.step(0, 0)
 party = c.export('_ZN6status7g_PartyE')
 for i in deaths: set_hp(eng, i, 0)
-print('membres', members(eng), [hit_points(eng, i)[0] for i in members(eng)])
+print('members', members(eng), [hit_points(eng, i)[0] for i in members(eng)])
 PARTY_GOLD = 1
 c.mem_w(party + 0x2e0, struct.pack('<I', 3000))
 tr.evt.clear(); eng.sensor.drain()
@@ -31,17 +31,17 @@ for i in range(LOOP_COUNT):
             if port is None and att_msg: p = d = ENGINE.A
             elif k < len(key_list):
                 t = key_list[k]; k += 1
-                print('%5d TOUCHE %s sur port %s type %s cases %s cur %s' % (eng.frames, t, port, eng.ui.f[port].get('type'), {a: b[:14] for a, b in list(eng.ui.f[port]['cases'].items())[:8]}, eng.ui.f[port].get('cur')))
+                print('%5d KEY %s on port %s type %s cells %s cur %s' % (eng.frames, t, port, eng.ui.f[port].get('type'), {a: b[:14] for a, b in list(eng.ui.f[port]['cases'].items())[:8]}, eng.ui.f[port].get('cur')))
                 if t.startswith('#'): eng.send_menu(port, 1, int(t[1:]), 0x10)
                 else: eng.send_menu(port, 1, -1, BT[t])
                 rel = port
     else: waiting = 0
-    if i % 100 == 0 and os.environ.get('DBGM'): print('   dbg', eng.frames, 'port', port, 'msg', eng.msg_visible, 'att_msg', att_msg, 'actifs', [(q, f.get('type'), f['vis'], f.get('entree')) for q, f in eng.ui.f.items() if q > 1 and f.get('act')])
+    if i % 100 == 0 and os.environ.get('DBGM'): print('   dbg', eng.frames, 'port', port, 'msg', eng.msg_visible, 'att_msg', att_msg, 'active', [(q, f.get('type'), f['vis'], f.get('entree')) for q, f in eng.ui.f.items() if q > 1 and f.get('act')])
     prev = eng.state.part; pkt = eng.step(p, d)
-    for t, v in pkt_sounds(pkt): print('%5d  SON %s' % (eng.frames, {35: 'SE %d', 36: 'stopSE %d', 37: 'BGM %#x'}[t] % v))
-    for e in tr.evt[ev0:]: print('%5d  appel %s(%d) <- %s' % (e[0], e[1], e[2], ' < '.join(x.split('+')[0] for x in e[3][:4])))
+    for t, v in pkt_sounds(pkt): print('%5d  SOUND %s' % (eng.frames, {35: 'SE %d', 36: 'stopSE %d', 37: 'BGM %#x'}[t] % v))
+    for e in tr.evt[ev0:]: print('%5d  call %s(%d) <- %s' % (e[0], e[1], e[2], ' < '.join(x.split('+')[0] for x in e[3][:4])))
     ev0 = len(tr.evt)
-    for s in eng.sensor.drain(): print('%5d  texte %r' % (eng.frames, s['texte'][:100]))
+    for s in eng.sensor.drain(): print('%5d  text %r' % (eng.frames, s['texte'][:100]))
     pp = [hit_points(eng, j)[0][0] for j in members(eng)]
     if pp != ph0: ph0 = pp; print('%5d  pv %s' % (eng.frames, pp))
-    if eng.state.part != prev: print('%5d  partie %#x -> %#x' % (eng.frames, prev, eng.state.part))
+    if eng.state.part != prev: print('%5d  part %#x -> %#x' % (eng.frames, prev, eng.state.part))

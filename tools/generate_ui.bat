@@ -1,16 +1,16 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Mise en page d'origine des fenetres de menu
+title Original layout of the menu windows
 echo.
-echo  Lecture de la mise en page EXACTE des fenetres de menu du jeu
+echo  Reading the EXACT layout of the game's menu windows
 echo  -------------------------------------------------------------
-echo  Execute le code d'origine (Make_*) du jeu sous emulation et ecrit
-echo  ..\data\cache\ui_layout.json  (reste sur ton PC, pas envoye sur GitHub).
-echo  Prerequis : tools\dump_il2cpp.bat deja lance. Quelques minutes, une seule fois.
+echo  Runs the game's original code (Make_*) under emulation and writes
+echo  ..\data\cache\ui_layout.json  (stays on your PC, not sent to GitHub).
+echo  Prerequisite: tools\dump_il2cpp.bat already run. A few minutes, one time only.
 echo.
 if not exist "..\.venv\Scripts\python.exe" (
-  echo  Lance d'abord launch_dq4.bat ^(a la racine du projet^) une fois pour creer l'environnement Python.
+  echo  First run launch_dq4.bat ^(at the project root^) once to create the Python environment.
   pause
   exit /b 1
 )

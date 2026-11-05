@@ -238,7 +238,7 @@ class Toggle(unittest.TestCase):
     def failures(self):
         """Nombre d'echecs de bascule notes dans le journal des erreurs (depuis #267 la fenetre n'affiche plus de message : console et journal seulement)."""
         try:
-            with open(self.errors_logfile, encoding='utf-8') as fh: return fh.read().count('impossible ---')
+            with open(self.errors_logfile, encoding='utf-8') as fh: return fh.read().count('failed ---')
         except OSError: return 0
 
     def setUp(self):
@@ -253,13 +253,13 @@ class Toggle(unittest.TestCase):
 
     def test_to_full_screen_in_one_step(self):
         f = self.win(); self.assertTrue(f.set_full_screen(True))
-        self.assertEqual(f.logfile, ['visible(False)', 'set_fullscreen(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'journal(plein écran)'])
+        self.assertEqual(f.logfile, ['visible(False)', 'set_fullscreen(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1920x1080)', 'flip', 'journal(full screen)'])
         self.assertEqual((f.win_mode, f.reg['mode_fenetre'], f.window_size), (1, 1, (1280, 720)))         # (la taille de la fenetre est gardee pour le retour)
         self.assertEqual(f.post.lookup_key, ('cle', 1))                                                              # (les tampons du rendu hors ecran ne sont pas invalides de force : refaits seulement si la taille change)
 
     def test_return_to_window_in_one_step_at_remembered_size(self):
         f = self.win(); f.set_full_screen(True); f.logfile.clear(); self.assertFalse(f.set_full_screen(False))
-        self.assertEqual(f.logfile, ['visible(False)', 'set_fullscreen(False,1280x720)', 'switch_to', 'on_draw(1280x720)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(fenêtre)'])
+        self.assertEqual(f.logfile, ['visible(False)', 'set_fullscreen(False,1280x720)', 'switch_to', 'on_draw(1280x720)', 'flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(window)'])
         self.assertEqual((f.win_mode, f.reg['mode_fenetre'], f.width, f.height), (0, 0, 1280, 720))
 
     def test_no_double_set_fullscreen(self):
@@ -288,7 +288,7 @@ class Toggle(unittest.TestCase):
         self.assertFalse(f.fullscreen); self.assertTrue(f._visible); self.assertEqual((f.win_mode, f.reg['mode_fenetre']), (0, 0))
         self.assertEqual(self.failures(), 1)
         self.assertEqual([e for e in f.logfile if e.startswith('set_fullscreen')], ['set_fullscreen(True)', 'set_fullscreen(False,1280x720)'])      # (changement puis retour a l'etat de depart)
-        self.assertEqual(f.logfile[-6:], ['flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(fenêtre)'])                       # (une image complete est dessinee avant et apres l'affichage de la fenetre)
+        self.assertEqual(f.logfile[-6:], ['flip', 'visible(True)', 'switch_to', 'on_draw(1280x720)', 'flip', 'journal(window)'])                       # (une image complete est dessinee avant et apres l'affichage de la fenetre)
 
     def test_return_to_window_failure_stays_full_screen(self):
         f = self.win(); f.set_full_screen(True); os.environ['DQ_SIM_ECHEC'] = '0'
@@ -300,11 +300,11 @@ class Toggle(unittest.TestCase):
         f = self.win(full=True, failure='set_fullscreen(False,1280x720)'); self.assertTrue(f.set_full_screen(False))      # (l'echec est unique : le retour a l'etat de depart reussit)
         self.assertEqual(self.failures(), 1)
         txt = open(self.errors_logfile, encoding='utf-8').read()
-        self.assertIn('passage en fenêtre impossible', txt); self.assertIn('Traceback', txt); self.assertIn('RuntimeError', txt); self.assertIn('echec de set_fullscreen(False,1280x720)', txt)
+        self.assertIn('switch to windowed mode failed', txt); self.assertIn('Traceback', txt); self.assertIn('RuntimeError', txt); self.assertIn('echec de set_fullscreen(False,1280x720)', txt)
         self.assertIn('_apply_full_screen', txt)                                                                          # la pile : ou ca a echoue
-        self.assertIn('fenêtre : plein écran = ', txt); self.assertIn('moniteurs : 1920 x 1080 en (0, 0) (principal)', txt); self.assertIn('pyglet ', txt)
+        self.assertIn('window: full screen = ', txt); self.assertIn('monitors: 1920 x 1080 at (0, 0) (primary)', txt); self.assertIn('pyglet ', txt)
         f2 = self.win(full=True, failure='visible(False)'); f2.set_full_screen(False)
-        self.assertEqual(open(self.errors_logfile, encoding='utf-8').read().count('impossible ---'), 2)             # (une entree de plus, a la suite : le journal n'est jamais ecrase)
+        self.assertEqual(open(self.errors_logfile, encoding='utf-8').read().count('failed ---'), 2)             # (une entree de plus, a la suite : le journal n'est jamais ecrase)
 
     def test_a_log_error_does_not_hinder_the_toggle(self):
         os.environ['DQ_JOURNAL_FENETRE'] = os.path.join(self.errors_logfile, 'dossier', 'inexistant', 'x.log')       # (inecrivable)
@@ -353,7 +353,7 @@ class Toggle(unittest.TestCase):
         f, main, _ = self.stale_win(failure='set_fullscreen(False,1280x720)')
         self.assertTrue(f.set_full_screen(False)); self.assertTrue(f.fullscreen); self.assertEqual(self.failures(), 1)
         self.assertIs(f._screen, main)
-        self.assertNotIn('Retour à l\'état de départ impossible', open(self.errors_logfile, encoding='utf-8').read())
+        self.assertNotIn('Return to the starting state failed', open(self.errors_logfile, encoding='utf-8').read())
 
     def test_unplugged_monitor_window_takes_current_or_main(self):
         """L'ancien moniteur n'existe plus (aucun de meme position) : le moniteur gardé devient celui ou se trouve la fenetre, a defaut le principal."""
@@ -373,7 +373,7 @@ class Toggle(unittest.TestCase):
 
     def test_simple_debug_toggle(self):
         os.environ['DQ_BASCULE_SIMPLE'] = '1'
-        f = self.win(); f.set_full_screen(True); self.assertEqual(f.logfile, ['set_fullscreen(True)', 'journal(plein écran)'])
+        f = self.win(); f.set_full_screen(True); self.assertEqual(f.logfile, ['set_fullscreen(True)', 'journal(full screen)'])
 
 
 class DisplayPage(unittest.TestCase):

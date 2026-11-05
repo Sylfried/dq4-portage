@@ -255,7 +255,7 @@ class CameraMixin:
         """(debogage, DQ_CAMV=n) etat de la camera du jeu toutes les n images."""
         e = eng.state; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
         r = lambda v: None if v is None else tuple(round(float(x), 1) for x in v)
-        print('CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s' % (self.n, e.game_map, e.part, eng.camera_town(), eng.camera_game(), eng.flags(), eng.msg_visible, r(hp), r(e.cam_target), r(e.cam_pos), e.cam_free), flush=True)
+        print('CAMV n=%d map=%s part=%#x cam=%s game=%s flag=%#x msg=%d hero=%s target=%s pos=%s free=%s' % (self.n, e.game_map, e.part, eng.camera_town(), eng.camera_game(), eng.flags(), eng.msg_visible, r(hp), r(e.cam_target), r(e.cam_pos), e.cam_free), flush=True)
         if os.environ.get('DQ_CAMV_SPR'):                                  # (debogage) + tous les sprites et les bulles d'icone
 
-            print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icones', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icons.items()}, flush=True)
+            print('   sprites', {k: (r(s_.get('pos')), s_.get('id'), s_.get('vis', True)) for k, s_ in e.sprites.items()}, 'icons', {k: (i['id'], r(i['pos']), round(i['alpha'], 2)) for k, i in e.icons.items()}, flush=True)

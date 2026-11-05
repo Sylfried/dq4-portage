@@ -76,7 +76,7 @@ class TzKeys:
                 def worker():
                     try: self._ids = compute(self.data)
                     except Exception as ex:
-                        self.log(tr('Teinte des cartes : textures « tz_ » illisibles (%s) : toute la carte sera teintee') % str(ex)[:80]); self._ids = set()
+                        self.log('Map tint: "tz_" textures unreadable (%s): the whole map will be tinted' % str(ex)[:80]); self._ids = set()
                 self._fil = threading.Thread(target=worker, daemon=True, name='teinte-tz'); self._fil.start()
         return self._ids
 
@@ -150,6 +150,6 @@ class Backgrounds:
                 def worker():
                     try: self._backgrounds = compute_backgrounds(self.data)
                     except Exception as ex:
-                        self.log(tr('Fonds des decors de combat illisibles (%s) : fond estime') % str(ex)[:80]); self._backgrounds = {}
+                        self.log('Battle scenery backgrounds unreadable (%s): background estimated' % str(ex)[:80]); self._backgrounds = {}
                 self._fil = threading.Thread(target=worker, daemon=True, name='fonds-decor'); self._fil.start()
         return (self._backgrounds or {}).get(name_str)

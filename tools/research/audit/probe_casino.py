@@ -8,7 +8,7 @@ for _ in range(60): m.step(0, 0)
 c = m.core; L = m.L
 G = m._global()
 slotobj = struct.unpack('<Q', c.mem(L + 0x23db38, 8))[0]
-print('Global', hex(G), 'objet SLOT', hex(slotobj), 'partie avant', hex(m.state.part))
+print('Global', hex(G), 'SLOT object', hex(slotobj), 'part before', hex(m.state.part))
 c.call(m.E('_ZN6Global11setMinigameEi'), G, game, label='setMinigame')
 c.call(m.E('_ZN17MaterielMenu_SLOT11setSlotTypeEi'), slotobj, machine, label='setSlotType')
 c.call(m.E('_ZN6Global11startCasinoEv'), G, label='startCasino')
@@ -22,9 +22,9 @@ try:
             if t in (6, 0, 10, 11, 21, 31, 3, 4) and len(xs.setdefault(t, [])) < 6: xs[t].append((i, a[:6], [round(x, 3) for x in f[:6]]))
         ports = tuple(sorted((p, f['type']) for p, f in m.ui.f.items() if f.get('act') and p >= 2))
         state = (hex(m.state.part), m.state.game_map, ports, m.msg_visible)
-        if state != last: last = state; print('image', i, 'partie/carte/ports/msg', state, flush=True)
+        if state != last: last = state; print('frame', i, 'part/map/ports/msg', state, flush=True)
 except Exception as ex:
-    print('EXCEPTION a l image', i, str(ex)[:500])
-print('paquets', dict(sorted(cnt.items())))
-for k, v in sorted(seen.items()): print('  type', k, 'premier a', v)
+    print('EXCEPTION at frame', i, str(ex)[:500])
+print('packets', dict(sorted(cnt.items())))
+for k, v in sorted(seen.items()): print('  type', k, 'first at', v)
 for t, v in sorted(xs.items()): print('  type', t, v)

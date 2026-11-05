@@ -4,7 +4,7 @@ import dasm_core as d
 target = sys.argv[1]
 if target.startswith('0x'): targets = {int(target, 16)}
 else: targets = {a for a, n in d.syms.items() if target in n} | {a for a, n in d.PLT.items() if target in n}
-print('cibles', [hex(t) for t in targets])
+print('targets', [hex(t) for t in targets])
 code = d.data[:0x233960]
 for i in range(0, len(code) - 3, 4):
     w = struct.unpack_from('<I', code, i)[0]

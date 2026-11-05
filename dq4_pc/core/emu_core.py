@@ -51,10 +51,10 @@ R_ABS64, R_GLOB_DAT, R_JUMP_SLOT, R_RELATIVE = 257, 1025, 1026, 1027
 class Elf:
     def __init__(self, data):
         if data[:4] != b'\x7fELF' or data[4] != 2:
-            raise ValueError("ce fichier n'est pas un ELF 64 bits")
+            raise ValueError("this file is not a 64-bit ELF")
         e_machine = struct.unpack_from('<H', data, 18)[0]
         if e_machine != 183:
-            raise ValueError("ce n'est pas du code ARM 64 bits")
+            raise ValueError("this is not 64-bit ARM code")
         e_phoff = struct.unpack_from('<Q', data, 0x20)[0]
         e_phentsize, e_phnum = struct.unpack_from('<HH', data, 0x36)
         segs = []
@@ -67,7 +67,7 @@ class Elf:
             self.img[va:va + fsz] = data[off:off + fsz]
         dyn = [s for s in segs if s[0] == 2]
         if not dyn:
-            raise ValueError('pas de section dynamique')
+            raise ValueError('no dynamic section')
         self.dyn = {}
         p = dyn[0][3]
         while True:
@@ -123,7 +123,7 @@ class Elf:
         """Applique les relocations dans l'image. stub_for(nom, liaison) -> adresse d'un import externe."""
         d = self.dyn
         if DT_RELR in d:
-            raise ValueError('relocations RELR non gerees')
+            raise ValueError('RELR relocations not supported')
         st = {'ABS64': 0, 'GLOB_DAT': 0, 'JUMP_SLOT': 0, 'RELATIVE': 0, 'inconnues': {},
               'internes': 0, 'externes': set()}
         tables = []
@@ -374,7 +374,7 @@ class Core:
         n = (max(int(n), 1) + 15) & ~15
         p = self.heap_ptr
         if p + n > self.HEAP_BASE + self.HEAP_SIZE:
-            raise MemoryError('tas epuise')
+            raise MemoryError('heap exhausted')
         self.heap_ptr += n
         return p
 
@@ -415,7 +415,7 @@ class Core:
             if h is None:
                 self.unimpl[name] = self.unimpl.get(name, 0) + 1
                 if self.unimpl[name] == 1:
-                    self.log('  [import non gere] %s appele depuis %s' % (
+                    self.log('  [unhandled import] %s called from %s' % (
                         name, self.where(uc.reg_read(self.XREG[30]))))
                 ret = 0
             else:
@@ -468,11 +468,11 @@ class Core:
             self.report_fault(e, label)
             return None
         if self.hook_error:
-            self.log('!!! erreur dans un import emule pendant %s :\n%s' % (label, self.hook_error))
+            self.log('!!! error in an emulated import during %s:\n%s' % (label, self.hook_error))
             return None
         pc = uc.reg_read(C.UC_ARM64_REG_PC)
         if pc != self.RET:
-            self.log('!!! %s interrompu (duree max %ss ?) PC=%s' % (label, timeout_s, self.where(pc)))
+            self.log('!!! %s interrupted (max duration %ss?) PC=%s' % (label, timeout_s, self.where(pc)))
             return None
         self.last_dt = time.time() - t0
         return uc.reg_read(self.XREG[0])
@@ -480,19 +480,19 @@ class Core:
     def report_fault(self, e, label):
         C, uc = self.C, self.uc
         pc = uc.reg_read(C.UC_ARM64_REG_PC)
-        self.log('!!! ERREUR D EMULATION dans %s : %s' % (label, e))
+        self.log('!!! EMULATION ERROR in %s: %s' % (label, e))
         self.log('    PC = %#x  (%s)' % (pc, self.where(pc)))
         try:
-            self.log('    octets a PC : %s' % self.mem(pc, 4).hex())
+            self.log('    bytes at PC: %s' % self.mem(pc, 4).hex())
         except Exception:
             pass
         if self.last_fault:
-            kind = {16: 'lecture', 17: 'ecriture', 18: 'execution'}.get(self.last_fault[0], str(self.last_fault[0]))
-            self.log('    acces invalide : %s a l adresse %#x (%d octets)' % (kind, self.last_fault[1], self.last_fault[2]))
+            kind = {16: 'read', 17: 'write', 18: 'execution'}.get(self.last_fault[0], str(self.last_fault[0]))
+            self.log('    invalid access: %s at address %#x (%d bytes)' % (kind, self.last_fault[1], self.last_fault[2]))
         self.log('    LR = %s   SP = %#x' % (self.where(uc.reg_read(self.XREG[30])), uc.reg_read(C.UC_ARM64_REG_SP)))
-        self.log('    x0-x8 : ' + ' '.join('%x' % uc.reg_read(self.XREG[i]) for i in range(9)))
+        self.log('    x0-x8: ' + ' '.join('%x' % uc.reg_read(self.XREG[i]) for i in range(9)))
         fp = uc.reg_read(self.XREG[29])
-        self.log('    pile d appels (chaine FP) :')
+        self.log('    call stack (FP chain):')
         for _ in range(14):
             try:
                 nxt = int.from_bytes(self.mem(fp, 8), 'little')
@@ -508,11 +508,11 @@ class Core:
         fns = self.elf.init_functions(self.LIB_BASE)
         ok = 0
         for f in fns:
-            r = self.call(f, label='constructeur %s' % self.where(f))
+            r = self.call(f, label='constructor %s' % self.where(f))
             if r is None:
                 return False
             ok += 1
-        self.log('constructeurs executes : %d / %d' % (ok, len(fns)))
+        self.log('constructors run: %d / %d' % (ok, len(fns)))
         return True
 
     # -- fichiers virtuels
@@ -716,7 +716,7 @@ class Core:
 
     def h___android_log_write(self, prio, tag, text, *a):
         t = self.read_cstr(text).decode('utf-8', 'replace')
-        self.log('  [log jeu] %s: %s' % (self.read_cstr(tag).decode('utf-8', 'replace'), t[:300]))
+        self.log('  [game log] %s: %s' % (self.read_cstr(tag).decode('utf-8', 'replace'), t[:300]))
         return 0
 
     # -- OpenGL (comptage seulement)
@@ -757,26 +757,26 @@ def summarize_buffer(core, name, ptr, nbytes, kind):
     else:
         vals = struct.unpack('<%di' % (nbytes // 4), data)
         nz = [(i, v) for i, v in enumerate(vals) if v != 0]
-    core.log('  tampon %-12s : %d valeurs non nulles' % (name, len(nz)))
+    core.log('  buffer %-12s: %d non-zero values' % (name, len(nz)))
     if nz:
-        core.log('      premieres : ' + ', '.join('[%d]=%s' % (i, ('%.4g' % v) if kind == 'f' else v) for i, v in nz[:24]))
+        core.log('      first: ' + ', '.join('[%d]=%s' % (i, ('%.4g' % v) if kind == 'f' else v) for i, v in nz[:24]))
 
 
 def run_dq(core, args):
     L = core.log
     e = core.elf
-    L('--- 1. Chargement : %d symboles, %d fonctions exportees, %d constructeurs' % (
+    L('--- 1. Loading: %d symbols, %d exported functions, %d constructors' % (
         e.nsyms, len(e.funcs), len(e.init_functions(0))))
     st = core.stats
-    L('    relocations : %d RELATIVE, %d ABS64, %d GLOB_DAT, %d JUMP_SLOT ; inconnues : %s' % (
-        st['RELATIVE'], st['ABS64'], st['GLOB_DAT'], st['JUMP_SLOT'], st['inconnues'] or 'aucune'))
-    L('    imports externes (%d) : %s' % (len(st['externes']), ' '.join(sorted(st['externes']))))
+    L('    relocations: %d RELATIVE, %d ABS64, %d GLOB_DAT, %d JUMP_SLOT ; unknown: %s' % (
+        st['RELATIVE'], st['ABS64'], st['GLOB_DAT'], st['JUMP_SLOT'], st['inconnues'] or 'none'))
+    L('    external imports (%d): %s' % (len(st['externes']), ' '.join(sorted(st['externes']))))
     absent = [n for n in st['externes'] if not hasattr(core, 'h_' + n)]
-    L('    imports SANS emulation : %s' % (' '.join(sorted(absent)) or 'aucun'))
-    L('--- 2. Constructeurs C++')
+    L('    imports WITHOUT emulation: %s' % (' '.join(sorted(absent)) or 'none'))
+    L('--- 2. C++ constructors')
     if not core.run_init():
         return False
-    L('--- 3. Appels du jeu')
+    L('--- 3. Game calls')
     f = core.export('IsLoadNativeCode')
     if f:
         L('IsLoadNativeCode() -> %s' % core.call(f, label='IsLoadNativeCode'))
@@ -784,7 +784,7 @@ def run_dq(core, args):
     if f:
         core.call(f, 0, label='SetAmazonFlg')
     f = core.export('DevInit')
-    L('DevInit(assets, save, langue=%d)' % args.lang)
+    L('DevInit(assets, save, language=%d)' % args.lang)
     # Le 1er argument de DevInit est le chemin de l'ARCHIVE (APK de donnees) : le moteur lit son contenu lui-meme
     apk_virtual = next(iter(core.real_files), core.assets_dir)
     r = core.call(f, core.cstr(apk_virtual), core.cstr(core.save_dir), args.lang, label='DevInit')
@@ -796,7 +796,7 @@ def run_dq(core, args):
     f = core.export('MenuPortInit')
     if f:
         ubuf, nbuf = core.malloc(0x2000), core.malloc(0x2000)
-        L('MenuPortInit(32, tampon_unity, 129, tampon_natif, 1089)')
+        L('MenuPortInit(32, unity_buffer, 129, native_buffer, 1089)')
         r = core.call(f, 32, ubuf, 129, nbuf, 1089, label='MenuPortInit')
         L('   -> %s' % r)
         core.menu_bufs = (ubuf, nbuf)
@@ -812,19 +812,19 @@ def run_dq(core, args):
         return False
     frames_ok = True
     for i in range(args.frames):
-        r = core.call(core.export('GameUpdate'), 0, 0, label='GameUpdate (image %d)' % (i + 1))
+        r = core.call(core.export('GameUpdate'), 0, 0, label='GameUpdate (frame %d)' % (i + 1))
         if r is None:
-            L('   arret a l image %d' % (i + 1))
+            L('   stopped at frame %d' % (i + 1))
             frames_ok = False
             break
         if i < 3 or i == args.frames - 1:
-            L('GameUpdate(0,0) image %d -> %s  (%.3f s)' % (i + 1, r, core.last_dt))
-    L('--- 4. Etat des tampons de sortie')
+            L('GameUpdate(0,0) frame %d -> %s  (%.3f s)' % (i + 1, r, core.last_dt))
+    L('--- 4. State of the output buffers')
     summarize_buffer(core, 'output', outp, BUFFER_SIZE, 'i')
     summarize_buffer(core, 'output_float', outf, BUFFER_SIZE, 'f')
     s = core.read_cstr(strb, 0x10000)
-    L('  tampon str : %r' % s[:200])
-    L('--- 4b. Sondes : le moteur dessine-t-il lui-meme ?')
+    L('  str buffer: %r' % s[:200])
+    L('--- 4b. Probes: does the engine draw by itself?')
     f = core.export('GetMessageCanvas')
     if f:
         r = core.call(f, label='GetMessageCanvas')
@@ -834,7 +834,7 @@ def run_dq(core, args):
         for ev in (0, 1, 2):
             n0 = core.gl_count.get('glTexSubImage2D', 0)
             r = core.call(f, ev, label='UnityRenderEvent(%d)' % ev)
-            L('UnityRenderEvent(%d) -> %s ; mises a jour de texture : %d' % (
+            L('UnityRenderEvent(%d) -> %s ; texture updates: %d' % (
                 ev, r, core.gl_count.get('glTexSubImage2D', 0) - n0))
             if r is None:
                 break
@@ -843,22 +843,22 @@ def run_dq(core, args):
 
 def final_report(core):
     L = core.log
-    L('--- 5. Bilan')
-    L('imports appeles : ' + ', '.join('%s x%d' % kv for kv in sorted(core.import_calls.items(), key=lambda kv: -kv[1])))
+    L('--- 5. Summary')
+    L('imports called: ' + ', '.join('%s x%d' % kv for kv in sorted(core.import_calls.items(), key=lambda kv: -kv[1])))
     if core.unimpl:
-        L('imports NON GERES (a ajouter) : ' + ', '.join(core.unimpl))
+        L('UNHANDLED imports (to be added): ' + ', '.join(core.unimpl))
     from collections import Counter
     ok = Counter(p for p, f in core.fopen_log if f)
     ko = Counter(p for p, f in core.fopen_log if not f)
-    L('fichiers ouverts : %d trouves, %d introuvables' % (sum(ok.values()), sum(ko.values())))
+    L('files opened: %d found, %d not found' % (sum(ok.values()), sum(ko.values())))
     for p, n in list(ok.items())[:40]:
         L('   ok  %s  (x%d)' % (p, n))
     for p, n in list(ko.items())[:40]:
         L('   !!  %s  (x%d)' % (p, n))
     if core.gl_count:
-        L('appels OpenGL : %s' % core.gl_count)
+        L('OpenGL calls: %s' % core.gl_count)
         for c in core.gl_calls[:15]:
-            L('   glTexSubImage2D cible=%#x niveau=%d x=%d y=%d %dx%d format=%#x type=%#x' % c[:8])
+            L('   glTexSubImage2D target=%#x level=%d x=%d y=%d %dx%d format=%#x type=%#x' % c[:8])
 
 
 def main():
@@ -876,30 +876,29 @@ def main():
         pass
     here = os.path.dirname(os.path.abspath(__file__))
     L = Log(os.path.join(here, 'rapport_test.txt'))
-    L('Test de faisabilite - portage PC de DQ4 - %s' % time.strftime('%Y-%m-%d %H:%M:%S'))
+    L('Feasibility test - DQ4 PC port - %s' % time.strftime('%Y-%m-%d %H:%M:%S'))
     L('Python %s' % sys.version.split()[0])
     fs = None
     real_files = {}
     if args.lib:
         libdata = open(args.lib, 'rb').read()
-        L('Bibliotheque : %s' % args.lib)
+        L('Library: %s' % args.lib)
     else:
         d = find_apks(args.apks, here)
         if not d:
-            L("APK introuvables : lance ce test depuis DQ Patch\\portage_pc\\test_faisabilite, "
-              "ou donne --apks <dossier contenant split_config.arm64_v8a.apk>")
+            L("APK files not found: run this test from DQ Patch\\portage_pc\\test_faisabilite, or give --apks <folder containing split_config.arm64_v8a.apk>")
             return 2
         L('APK : %s' % d)
         zname = 'lib/arm64-v8a/libdq4core%s.so' % (('_' + args.variant) if args.variant else '')
         libdata = zipfile.ZipFile(os.path.join(d, 'split_config.arm64_v8a.apk')).read(zname)
-        L('Bibliotheque : %s (%d octets)' % (zname, len(libdata)))
+        L('Library: %s (%d bytes)' % (zname, len(libdata)))
         zl = [os.path.join(d, n) for n in ('split_UnityDataAssetPack.apk', 'base.apk')]
         zl = [z for z in zl if os.path.isfile(z)]
         fs = ApkFs(zl) if zl else None
         if os.path.isfile(zl[0] if zl else ''):
             real_files = {'/dq/assets.apk': zl[0]}
         if not zl:
-            L("ATTENTION : split_UnityDataAssetPack.apk introuvable, les fichiers de donnees ne seront pas lus")
+            L("WARNING: split_UnityDataAssetPack.apk not found, the data files will not be read")
     if args.dry:
         elf = Elf(libdata)
         fake = {}
@@ -908,27 +907,27 @@ def main():
             fake.setdefault(name, 0x08000000 + 4 * (len(fake) + 1))
             return fake[name]
         st = elf.relocate(Core.LIB_BASE, stub)
-        L('[dry] %d symboles, relocations : %s' % (elf.nsyms, {k: v for k, v in st.items() if k != 'externes'}))
-        L('[dry] imports : ' + ' '.join(sorted(st['externes'])))
-        L('[dry] constructeurs : %d' % len(elf.init_functions(Core.LIB_BASE)))
+        L('[dry] %d symbols, relocations: %s' % (elf.nsyms, {k: v for k, v in st.items() if k != 'externes'}))
+        L('[dry] imports: ' + ' '.join(sorted(st['externes'])))
+        L('[dry] constructors: %d' % len(elf.init_functions(Core.LIB_BASE)))
         return 0
     try:
         import unicorn
     except Exception:
-        L("Le module 'unicorn' n'est pas installe (pip install unicorn).")
+        L("The 'unicorn' module is not installed (pip install unicorn).")
         return 3
     core = Core(libdata, fs, L, real_files=real_files)
     success = False
     try:
         success = run_dq(core, args)
     except Exception:
-        L('!!! exception Python :\n' + traceback.format_exc())
+        L('!!! Python exception:\n' + traceback.format_exc())
     final_report(core)
     L('')
-    L('VERDICT : ' + ('REUSSI - le moteur du jeu s execute sur PC, sans Unity (voie A viable)' if success else
-                      'ECHEC - voir le message d erreur plus haut'))
+    L('VERDICT: ' + ('SUCCESS - the game engine runs on PC, without Unity (route A is viable)' if success else
+                      'FAILURE - see the error message above'))
     L('')
-    L('Rapport complet : %s' % os.path.join(here, 'rapport_test.txt'))
+    L('Full report: %s' % os.path.join(here, 'rapport_test.txt'))
     return 0
 
 

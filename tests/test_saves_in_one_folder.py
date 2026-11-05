@@ -74,7 +74,7 @@ class Resume(unittest.TestCase):
 
     def test_logfiles_moved_up_into_saves(self):
         self.sylfried_case(); done = self.migrate()
-        self.assertTrue(any('anciens dossiers ranges' in ph for ph in done), done)
+        self.assertTrue(any('old folders moved' in ph for ph in done), done)
         for name_str in ('data1.dat', 'data5.dat', 'data9.dat'): self.assertEqual(content(self.sv, name_str), b'portage_' + name_str.encode(), name_str)                  # le portage (ce que le jeu ecrivait) passe devant
         for name_str in ('data2.dat', 'data3.dat', 'data4.dat'): self.assertEqual(content(self.sv, name_str), b'portage_vieux_' + name_str.encode(), name_str)            # ... meme plus ancien : comme avant (aucun choix a la date)
         self.assertEqual(sorted(f for f in os.listdir(self.sv) if f.endswith('.dat')), sorted(NAMES))
@@ -132,17 +132,17 @@ class Resume(unittest.TestCase):
             return actual(src, dst)
         with mock.patch('dq4_pc.paths.os.replace', side_effect=refuse_folders):
             done = self.migrate()
-        self.assertTrue(any('NON ranges' in ph and 'fichier ouvert' in ph for ph in done), done)
+        self.assertTrue(any('NOT moved' in ph and 'fichier ouvert' in ph for ph in done), done)
         self.assertTrue(os.path.isdir(self.d.old_port_dir) and os.path.isdir(self.d.mobile))                                                            # rien n'a bouge
         self.assertEqual(content(self.sv, 'data1.dat'), b'portage_data1.dat')                                                                           # (le jeu lit deja sauvegardes : copie faite avant le deplacement)
         done = self.migrate()                                                                                                                           # puis la reprise suivante termine
-        self.assertTrue(any('anciens dossiers ranges' in ph for ph in done), done); self.assertFalse(os.path.exists(self.d.old_port_dir))
+        self.assertTrue(any('old folders moved' in ph for ph in done), done); self.assertFalse(os.path.exists(self.d.old_port_dir))
 
     def test_a_file_that_cannot_be_placed_stops_the_tidy_up(self):
         """Un dossier nomme `data1.dat` occupe la place : le journal du portage n'a pas pu etre copie, donc l'ancien dossier ne bouge pas."""
         write(os.path.join(self.d.old_port_dir, 'data1.dat'), b'portage1'); os.makedirs(os.path.join(self.sv, 'data1.dat'))
         done = self.migrate()
-        self.assertTrue(any('NON ranges' in ph and 'data1.dat' in ph for ph in done), done); self.assertTrue(os.path.isfile(os.path.join(self.d.old_port_dir, 'data1.dat')))
+        self.assertTrue(any('NOT moved' in ph and 'data1.dat' in ph for ph in done), done); self.assertTrue(os.path.isfile(os.path.join(self.d.old_port_dir, 'data1.dat')))
 
     def test_dq4_games_phone_copy_is_not_touched(self):
         games = os.path.join(self.t, 'ailleurs', 'DQ4'); d = CH.Folders(self.t, env={'DQ4_GAMES': games})

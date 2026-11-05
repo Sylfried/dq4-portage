@@ -70,7 +70,7 @@ class Window(unittest.TestCase):
         self.assertIsNone(core.write_failures)                                       # vide : un seul message par echec
         self.assertEqual(len(toasts), 1); self.assertIn('Sauvegarde impossible', toasts[0][0])
         with open(os.environ['DQ_JOURNAL_FENETRE'], encoding='utf-8') as f: txt = f.read()
-        self.assertIn('data1.dat', txt); self.assertIn('sauvegarde impossible', txt)
+        self.assertIn('data1.dat', txt); self.assertIn('save failed', txt)
 
 
 if __name__ == '__main__': unittest.main(verbosity=1)

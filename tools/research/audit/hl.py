@@ -21,5 +21,5 @@ if __name__ == '__main__':
     c = ExampleCounter(); t0 = time.time()
     for i in range(N):
         pkt = m.step(0, 0); c.note(pkt, i)
-    print('%d images en %.1fs ; carte=%s partie=%#x sprites=%d' % (N, time.time() - t0, m.state.game_map, m.state.part, len(m.state.sprites)))
+    print('%d frames in %.1fs ; map=%s part=%#x sprites=%d' % (N, time.time() - t0, m.state.game_map, m.state.part, len(m.state.sprites)))
     for t in sorted(c.n): print(t, c.n[t], c.ex[t])

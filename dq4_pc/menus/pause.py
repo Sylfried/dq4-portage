@@ -123,7 +123,7 @@ class Pause:
             f = os.path.join(self.J.args.cache, 'ui_font.otf')
             if os.path.exists(f):
                 try: pyglet.font.add_file(f); self._pol = ('FOT-GMaruGo Pro', 'FOT-GMaruGo Pro M', 'GMaruGoPro-M')
-                except Exception as ex: print(tr('police du jeu non chargee :'), ex, flush=True)
+                except Exception as ex: print('game font not loaded:', ex, flush=True)
         return self.J._lbl(tr(text), size_value * (1.0 if not self._pol else GAME_SIZE), color, self._pol)          # (D-238 : tout texte dessiné par les pages passe par la traduction ; un texte sans traduction reste tel quel)
 
     # ---- sprites des menus du jeu

@@ -27,7 +27,7 @@ class WithoutRealEngine(unittest.TestCase):
     def test_other_library_refused_without_writing(self):
         wdir = []; m = fake_engine(wdir)
         with self.assertRaises(ValueError) as cm: savestates.apply(m, empty_state(lib_sha='0' * 16))
-        self.assertIn('bibliotheque', str(cm.exception)); self.assertEqual(wdir, [])
+        self.assertIn('library', str(cm.exception)); self.assertEqual(wdir, [])
 
     def test_unreadable_python_does_not_touch_engine(self):
         wdir = []; m = fake_engine(wdir)

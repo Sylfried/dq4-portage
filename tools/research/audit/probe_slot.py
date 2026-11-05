@@ -15,12 +15,12 @@ def run(n, tag, fa=0):
             cnt[t] += 1
             if t in (5, 6, 7, 3, 4, 2, 33, 34, 35) and len(ex.setdefault(t, [])) < 5: ex[t].append((m.frames, a[:4], [round(x, 2) for x in f[:4]]))
     f12 = m.ui.f.get(12, {})
-    print(tag, 'images', m.frames, 'paquets', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'cases', {k: v[:40] for k, v in list(f12.get('cases', {}).items())[:8]}, 'indic', f12.get('indic'), 'ints', {k: v for k, v in list(f12.get('ints', {}).items())[:12]})
+    print(tag, 'frames', m.frames, 'packets', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'cells', {k: v[:40] for k, v in list(f12.get('cases', {}).items())[:8]}, 'indic', f12.get('indic'), 'ints', {k: v for k, v in list(f12.get('ints', {}).items())[:12]})
     for t, v in sorted(ex.items()): print('     ', t, v)
 run(60, 'attente')
-print('boutons: menu_actif', m.active_menu(), 'entree', m.ui.f[12].get('entree'))
-m.send_menu(12, 1, 1, 0x10); run(3, 'mise +'); m.send_menu(12, 1, -1, 0); run(5, 'rel')
+print('buttons: active menu', m.active_menu(), 'input', m.ui.f[12].get('entree'))
+m.send_menu(12, 1, 1, 0x10); run(3, 'bet +'); m.send_menu(12, 1, -1, 0); run(5, 'rel')
 m.send_menu(12, 1, 0, 0x10); run(3, 'lancer'); m.send_menu(12, 1, -1, 0)
 run(200, 'rotation')
 for k in range(4):
-    m.send_menu(12, 1, -1, 0x10); run(2, 'A%d' % k); m.send_menu(12, 1, -1, 0); run(80, 'apres A%d' % k)
+    m.send_menu(12, 1, -1, 0x10); run(2, 'A%d' % k); m.send_menu(12, 1, -1, 0); run(80, 'after A%d' % k)

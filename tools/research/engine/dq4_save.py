@@ -24,9 +24,9 @@ def analyze(plain):
     n = len(plain); r = {'taille': n}
     w0, w1, ck = struct.unpack_from('<III', plain, 0)
     r['mot0'] = '%08x' % w0
-    if n < 0x3000: r['etat'] = 'data9 : mot0 = banque la plus recente = %d' % (0 if w0 == NEW else w0); return r
-    if w0 == NEW: r['etat'] = 'vide (DWEN)'; return r
-    if w0 == DEL: r['etat'] = 'supprimee (DLED)'; return r
+    if n < 0x3000: r['etat'] = 'data9: word0 = most recent slot = %d' % (0 if w0 == NEW else w0); return r
+    if w0 == NEW: r['etat'] = 'empty (DWEN)'; return r
+    if w0 == DEL: r['etat'] = 'deleted (DLED)'; return r
     r['valide'] = (w0 == MAGIE1 and w1 == MAGIE2)
     tmp = bytearray(plain); tmp[8:12] = b'\0\0\0\0'
     calc = sum(tmp[:0x3660]) & 0xffffffff

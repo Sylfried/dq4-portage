@@ -62,7 +62,7 @@ def prepare(apk_folder, cache, log=print):
     try:
         import UnityPy, zipfile
         os.makedirs(cache, exist_ok=True)
-        log(tr('Lecture des images du titre (une seule fois)...'))
+        log('Reading the title images (once)...')
         archives = {}
         for lookup_key in {RESOURCES[n][0] for n in missing}:
             if lookup_key == 'base': archives[lookup_key] = UnityPy.load(os.path.join(apk_folder, 'base.apk'))
@@ -79,7 +79,7 @@ def prepare(apk_folder, cache, log=print):
                 break
         return all(os.path.exists(p) for p in dest.values())
     except Exception as ex:
-        log(tr('Images du titre indisponibles : %r') % (ex,)); return False
+        log('Title images unavailable: %r' % (ex,)); return False
 
 
 def paths(cache):

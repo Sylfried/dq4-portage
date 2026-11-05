@@ -26,5 +26,5 @@ for v, o, s in d.segs:
                 k = bisect.bisect_right(addrs, pc) - 1
                 res[tgt].append((pc, 'bl' if op == 0x25 else 'b', d.names.get(addrs[k], '?'), addrs[k]))
 for t, l in res.items():
-    print('== appelants de %#x (%s)' % (t, d.names.get(t, '?')))
-    for pc, k, nm, a in l: print('   %#x %s dans %s (%#x)' % (pc, k, nm, a))
+    print('== callers of %#x (%s)' % (t, d.names.get(t, '?')))
+    for pc, k, nm, a in l: print('   %#x %s in %s (%#x)' % (pc, k, nm, a))

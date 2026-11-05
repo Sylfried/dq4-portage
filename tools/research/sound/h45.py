@@ -22,7 +22,7 @@ class Trace:
         for n in self.FN:
             try: a = c.export(n)
             except Exception: a = None
-            if not a: print('absent', n); continue
+            if not a: print('missing', n); continue
             c.uc.hook_add(unicorn.UC_HOOK_CODE, self._h, n.split('SoundManager')[1], a, a)
     def _h(self, uc, addr, sz, name_str):
         c = self.c
@@ -84,19 +84,19 @@ class Battle:
             if port is not None and not eng.msg_visible:
                 st['att'] += 1
                 if st['att'] % 4 == 0:
-                    bt = self.button.get(eng.ui.f[port].get('type'), -1); eng.send_menu(port, 1, bt, 0x10); st['rel'] = port; self.log('menu', 'A (bouton %s) sur port %s %s' % (bt, port, eng.ui.f[port].get('type')))
+                    bt = self.button.get(eng.ui.f[port].get('type'), -1); eng.send_menu(port, 1, bt, 0x10); st['rel'] = port; self.log('menu', 'A (button %s) on port %s %s' % (bt, port, eng.ui.f[port].get('type')))
             elif eng.msg_visible and (eng.ui.msg.get('feed') or eng.message_state()[1] in (3, 5)):
                 st['att'] += 1
                 if st['att'] % 4 == 0: p = d = ENGINE.A
             else: st['att'] = 0
             if before_loop: before_loop(self, k)
             prev = eng.state.part; pkt = eng.step(p, d); eng.ui.damage = []
-            for t, v in pkt_sounds(pkt): self.log('son', {35: 'SE %d', 36: 'stopSE %d', 37: 'BGM %#x'}[t] % v)
-            for e in self.tr.evt[ev0:]: self.log('appel', '%s(%d) <- %s' % (e[1], e[2], ' < '.join(x.split('+')[0] for x in e[3][:4])))
+            for t, v in pkt_sounds(pkt): self.log('sound', {35: 'SE %d', 36: 'stopSE %d', 37: 'BGM %#x'}[t] % v)
+            for e in self.tr.evt[ev0:]: self.log('call', '%s(%d) <- %s' % (e[1], e[2], ' < '.join(x.split('+')[0] for x in e[3][:4])))
             ev0 = len(self.tr.evt)
-            for s in eng.sensor.drain(): self.log('texte', str({k: (v if k != 'texte' else v[:90]) for k, v in s.items() if k in ('texte', 'genre', 'val', 'cat')}))
+            for s in eng.sensor.drain(): self.log('text', str({k: (v if k != 'texte' else v[:90]) for k, v in s.items() if k in ('texte', 'genre', 'val', 'cat')}))
             ph = [hit_points(eng, i)[0][0] for i in members(eng)]
-            if ph != getattr(self, '_ph', None): self._ph = ph; self.log('pv', ph)
-            if eng.state.part != ENGINE.PART_BATTLE and prev == ENGINE.PART_BATTLE: end = eng.frames; self.log('fin', 'partie %#x' % eng.state.part)
+            if ph != getattr(self, '_ph', None): self._ph = ph; self.log('hp', ph)
+            if eng.state.part != ENGINE.PART_BATTLE and prev == ENGINE.PART_BATTLE: end = eng.frames; self.log('end', 'part %#x' % eng.state.part)
             if end is not None and eng.frames - end > after_battle: break
         return end

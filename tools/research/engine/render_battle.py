@@ -27,7 +27,7 @@ for i in range(3000):
     eng.step(0, a)
     f = eng.ui.f.get(12)
     if f and f['cases'].get((0, 4)) and f['vis']: found = True; break
-print('texte d action trouve', found, 'image', eng.frames)
+print('action text found', found, 'frame', eng.frames)
 W, H = 450, 800
 win = pyglet.window.Window(W, H, visible=False)
 cache = '/tmp/r3_res'
@@ -35,9 +35,9 @@ ml = UI.PageLayout('/tmp/r3_layout/ui_layout.json', cache + '/ui_frameData.bin')
 wnd = {0: np.array(Image.open(cache + '/ui_MenuTexture.png').convert('RGBA')), 1: np.array(Image.open(cache + '/ui_Button.png').convert('RGBA'))}
 rd = UI.Render(ml, wnd, cache + '/ui_font.otf'); g = UI.Manager(ml); g.replay(eng.ui)
 entries = sorted((f['ordre'], p) for p, f in eng.ui.f.items() if f['vis'] and p in g.f)
-print('ports visibles', [(p, eng.ui.f[p]['type']) for _, p in entries])
+print('visible ports', [(p, eng.ui.f[p]['type']) for _, p in entries])
 wins = [g.f[p] for _, p in entries]; rd.neighbors = wins
 win.switch_to(); gl.glClearColor(0.18, 0.25, 0.4, 1); win.clear()
 rd.draw_all(wins, W / 2, H / 2, 1.0, (W, H))
 pyglet.image.get_buffer_manager().get_color_buffer().save(output)
-print('ecrit', output)
+print('written', output)

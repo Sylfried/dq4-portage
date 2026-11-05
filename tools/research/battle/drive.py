@@ -67,20 +67,20 @@ def play(eng, scenario='attaque', scroll=2, max_frames=4000, verbose=False):
         prev = eng.state.part; pkt = eng.step(p, d)
         m = eng.active_menu()
         if m != st['menu']:
-            if m is not None: j('MENU ouvre type %s %s' % (eng.ui.win(m)['type'], sorted(eng.ui.win(m)['cases'].values())[:4]))
-            else: j('MENU ferme')
+            if m is not None: j('MENU opens type %s %s' % (eng.ui.win(m)['type'], sorted(eng.ui.win(m)['cases'].values())[:4]))
+            else: j('MENU closed')
             st['menu'] = m
         em = eng.message_state(); k = (em[0], em[1] == 2, eng.msg_visible)
-        for dg in eng.ui.damage: j('NOMBRE %s' % (dg,))
+        for dg in eng.ui.damage: j('NUMBER %s' % (dg,))
         eng.ui.damage = []
         for t, a, f in pkt:
             if t == 35: j('SE %d' % a[0])
-            elif t == 21 and a[1] > 5000: j('EFFET modele %d (emplacement %d)' % (a[1], a[0]))
-            elif t == 9: j('FONDU %d' % a[0])
-            elif t == 34: j('ECRAN effet %d' % a[0])
-        if em[1] == 2 and st['msg'] != 'ecrit': st['msg'] = 'ecrit'; j('MSG ecriture')
-        elif em[1] == 5 and st['msg'] != 'attente': st['msg'] = 'attente'; j('MSG attente')
+            elif t == 21 and a[1] > 5000: j('EFFECT model %d (slot %d)' % (a[1], a[0]))
+            elif t == 9: j('FADE %d' % a[0])
+            elif t == 34: j('SCREEN effect %d' % a[0])
+        if em[1] == 2 and st['msg'] != 'ecrit': st['msg'] = 'ecrit'; j('MSG writing')
+        elif em[1] == 5 and st['msg'] != 'attente': st['msg'] = 'attente'; j('MSG waiting')
         elif em[1] not in (2, 5): st['msg'] = None
-        if prev == ENGINE.PART_BATTLE and eng.state.part != ENGINE.PART_BATTLE: end = eng.frames; j('FIN partie')
+        if prev == ENGINE.PART_BATTLE and eng.state.part != ENGINE.PART_BATTLE: end = eng.frames; j('END part')
         if end and eng.frames > end + 40: break
     return ev

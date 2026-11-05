@@ -34,4 +34,4 @@ for t in sorted(ml.types, key=int):
     a = np.frombuffer(img.get_data('RGBA', W * 4), np.uint8)
     res[t] = hashlib.md5(a.tobytes()).hexdigest(); Image.fromarray(a.reshape(H, W, 4)[::-1]).save('%s/t%s.png' % (out, t))
 open(out + '/hashes.txt', 'w').write('\n'.join('%s %s' % (k, v) for k, v in res.items()))
-print(len(res), 'types rendus ->', out)
+print(len(res), 'types rendered ->', out)

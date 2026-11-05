@@ -8,4 +8,4 @@ print('party+0x304', struct.unpack('<13I', c.mem(party + 0x304, 52)))
 for i in range(14):
     b = c.mem(orig + PLAYER_STRIDE * i, PLAYER_STRIDE)
     hs = b[OFF_HS:OFF_HS + 0x30]
-    print(i, 'presence', b[0x67], 'id', struct.unpack_from('<H', hs, 0)[0], 'niv', struct.unpack_from('<H', hs, 0xe)[0], 'pv', struct.unpack_from('<4H', hs, 0x22))
+    print(i, 'present', b[0x67], 'id', struct.unpack_from('<H', hs, 0)[0], 'lvl', struct.unpack_from('<H', hs, 0xe)[0], 'hp', struct.unpack_from('<4H', hs, 0x22))

@@ -17,13 +17,13 @@ def run(n, tag):
             cnt[t] += 1; every[t] += 1
             if t in (5, 6, 7, 22, 35) and len(ex.setdefault(t, [])) < 3: ex[t].append((m.frames, a[:2]))
     f12 = m.ui.f.get(12, {})
-    print(tag, 'img', m.frames, 'pq', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'menu', m.active_menu(), 'cases', {k: v[:10] for k, v in list(f12.get('cases', {}).items())[:7]}, dict(ex), flush=True)
+    print(tag, 'img', m.frames, 'pk', dict(sorted(cnt.items())), 'msg', m.msg_visible, 'menu', m.active_menu(), 'cells', {k: v[:10] for k, v in list(f12.get('cases', {}).items())[:7]}, dict(ex), flush=True)
 run(80, 'attente')
 for k in range(3):
     m.send_menu(12, 1, 1, 0x2); run(2, 'mise+'); m.send_menu(12, 1, -1, 0); run(3, ' rel')
 m.send_menu(12, 1, 0, 0x10); run(3, 'Lancer'); m.send_menu(12, 1, -1, 0); run(3, ' rel')
 run(150, 'rotation')
 for k in range(3):
-    m.send_menu(12, 1, 0, 0x10); run(3, 'Stop%d' % k); m.send_menu(12, 1, -1, 0); run(60, ' apres')
+    m.send_menu(12, 1, 0, 0x10); run(3, 'Stop%d' % k); m.send_menu(12, 1, -1, 0); run(60, ' after')
 run(300, 'fin')
-print('TOTAL paquets', dict(sorted(every.items())))
+print('TOTAL packets', dict(sorted(every.items())))

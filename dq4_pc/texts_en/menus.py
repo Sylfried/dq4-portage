@@ -82,17 +82,6 @@ EN = {
     'Monstre': 'Monster',
     'Objet n°%d': 'Item #%d',
     # messages de la console
-    "Favoris de l'historique illisibles (%s) : mis de cote, on repart de zero (%r)": 'History favorites unreadable (%s): set aside, starting again from scratch (%r)',
-    "Favoris de l'historique non enregistres : %s": 'History favorites not saved: %s',
-    'Historique : texte des favoris non redemande (%r)': 'History: favorites text not requested again (%r)',
-    'Historique : crochets non installes (%r)': 'History: hooks not installed (%r)',
-    'Historique : numeros de message non captes (%r)': 'History: message numbers not captured (%r)',
-    'Historique : erreur (%r)': 'History: error (%r)',
-    'Historique des combats : moteur inattendu, capture desactivee': 'Battle history: unexpected engine, capture disabled',
-    'Historique des combats : crochets non installes (%r)': 'Battle history: hooks not installed (%r)',
-    'Historique des combats : %s introuvable, capture desactivee': 'Battle history: %s not found, capture disabled',
-    'Historique des combats : %s inattendu (+%#x), « %s » non suivi': 'Battle history: unexpected %s (+%#x), "%s" not tracked',
-    'Historique des combats : erreur (%r)': 'Battle history: error (%r)',
 
     # ---- saisie du nom, licence
     'Saisir un nom': 'Enter a name',
@@ -120,22 +109,6 @@ EN = {
     # ---- infos F1
     '%.0f images/s | moteur %.1f pas/s (%.1f ms) | pire image %.0f ms | dessin Python %.1f ms': '%.0f frames/s | engine %.1f steps/s (%.1f ms) | worst frame %.0f ms | Python drawing %.1f ms',
 
-    # ---- notifications et etats instantanes
 
-    # ---- messages de la console (ressources du menu, polices, titre)
-    'Lecture des ressources de menu du jeu (une seule fois)...': 'Reading the game menu resources (once)...',
-    'Ressources de menu indisponibles : %r': 'Menu resources unavailable: %r',
-    'Police des messages non extraite : %r': 'Message font not extracted: %r',
-    'Police des messages non extraite (%r) : police de menu SE-GARRIR a la place.': 'Message font not extracted (%r): using the SE-GARRIR menu font instead.',
-    'Police des messages illisible (%r) : SE-GARRIR a la place.': 'Message font unreadable (%r): using SE-GARRIR instead.',
-    'Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.': 'SE-GARRIR font unreadable (%r): using the Japanese GMaruGoPro-M font instead.',
-    'Police SE-GARRIR non extraite : %r': 'SE-GARRIR font not extracted: %r',
-    'Lecture des images du titre (une seule fois)...': 'Reading the title images (once)...',
-    'Images du titre indisponibles : %r': 'Title images unavailable: %r',
-    'Ciel du titre : %s (copies decalees a la place)': 'Title sky: %s (using offset copies instead)',
-    'Ciel du titre (a plat) desactive : %s': 'Title sky (flat) disabled: %s',
-    'Ciel du titre (bandes) desactive : %s': 'Title sky (strips) disabled: %s',
-    'Ouverture de la page de la politique de confidentialite impossible : %r': 'Could not open the privacy policy page: %r',
 
-    # ---- textes probablement aussi traduits par le lot « pages Parametres » (menus\pause.py) : meme traduction ; a dedoublonner a la fusion (test_language : pas de doublon entre fichiers)
 }

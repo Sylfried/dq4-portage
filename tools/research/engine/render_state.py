@@ -14,7 +14,7 @@ wnd = {0: np.array(Image.open(cache + '/ui_MenuTexture.png').convert('RGBA')), 1
 rd = UI.Render(ml, wnd, cache + '/ui_font.otf')
 def render_texture(f, name_str):
     rd.neighbors = [f]; win.switch_to(); gl.glClearColor(0.18, 0.25, 0.4, 1); win.clear(); rd.draw_all([f], W / 2, H / 2, 1.0, (W, H))
-    pyglet.image.get_buffer_manager().get_color_buffer().save(name_str); print('ecrit', name_str)
+    pyglet.image.get_buffer_manager().get_color_buffer().save(name_str); print('written', name_str)
 VALS = [0, 1 | (2 << 16), 2 | (1 << 16), 2 | 4 | (0 << 16)]            # sain ; mort (croix, nom rouge) ; poison a l'article de la mort (tete de mort, nom jaune) ; poison + sort scelle (oeil)
 for typ, no in ((4, 7), (20, 5)):
     f = UI.Window(ml, typ)

@@ -72,5 +72,5 @@ def shift(c, log=None):
     g2 = dict(groups)
     for lookup_key, T in new_ones.items(): g2[lookup_key] = (T.reshape(-1, 3), groups[lookup_key][1], groups[lookup_key][2])
     c['groupes'] = g2
-    if log: log(tr('décor : %d triangles plats superposés relevés (%d groupes)') % (len(level), len(new_ones)))
+    if log: log('scenery: %d overlapping flat triangles raised (%d groups)' % (len(level), len(new_ones)))
     return len(level)

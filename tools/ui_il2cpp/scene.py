@@ -34,9 +34,9 @@ def dump(typ, show=True):
 if __name__ == '__main__':
     typ = int(sys.argv[1])
     nm, err, out = dump(typ)
-    print(nm, err, len(out), 'objets')
+    print(nm, err, len(out), 'objects')
     for e in out:
         m = e.get('mesh')
-        print(e['id'], e['name'], 'pos', e['pos'], 'sc', e['scale'], 'par', e['par'], 'mats', e.get('mats'), 'text', e.get('text'), 'parts', e.get('parts'),
+        print(e['id'], e['name'], 'pos', e['pos'], 'sc', e['scale'], 'parent', e['par'], 'mats', e.get('mats'), 'text', e.get('text'), 'parts', e.get('parts'),
               ('mesh nv=%d' % len(m['vtx']) + ' bbox=%s' % ((min(v[0] for v in m['vtx']), max(v[0] for v in m['vtx']), min(v[2] for v in m['vtx']), max(v[2] for v in m['vtx'])),)) if m and m['vtx'] else '')
     for e in T.log[:0]: print(e)

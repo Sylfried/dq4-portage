@@ -72,7 +72,7 @@ class Failures(unittest.TestCase):
         s, j, a = new_sound(); Outage.broken = True
         for i in (300, 316, 400): s.play_sfx(i)
         self.assertFalse(s.ok); self.assertIsNotNone(s.retry); self.assertEqual(len(a), 1); self.assertIn('interrompu', a[0])
-        self.assertTrue(any('interrompu' in l for l in j)); self.assertAlmostEqual(s.retry - time.time(), SOUND.RETRY_DELAYS[0], delta=0.5)
+        self.assertTrue(any('interrupted' in l for l in j)); self.assertAlmostEqual(s.retry - time.time(), SOUND.RETRY_DELAYS[0], delta=0.5)
         s.tick(); self.assertFalse(s.ok)                                            # trop tot : rien
         s.retry = time.time() - 1; s.tick()                                       # delai ecoule : le son est rouvert
         self.assertTrue(s.ok); self.assertIsNone(s.retry); self.assertEqual(s.failures, SOUND.FAILURES_MAX - 1)
@@ -80,7 +80,7 @@ class Failures(unittest.TestCase):
         self.assertFalse(s.ok); self.assertAlmostEqual(s.retry - time.time(), SOUND.RETRY_DELAYS[1], delta=0.5)
         s.retry = time.time() - 1; s.tick(); Outage.broken = False              # la sortie est revenue
         s.play_sfx(300)
-        self.assertTrue(s.ok); self.assertEqual(s.failures, 0); self.assertEqual(len(a), 3); self.assertIn('rétabli', a[-1]); self.assertTrue(any('retabli' in l for l in j))
+        self.assertTrue(s.ok); self.assertEqual(s.failures, 0); self.assertEqual(len(a), 3); self.assertIn('rétabli', a[-1]); self.assertTrue(any('restored' in l for l in j))
         s.play_sfx(316); self.assertEqual(len(a), 3)                                # le retour n'est annonce qu'une fois
 
     def test_increasing_then_constant_delays(self):
@@ -138,7 +138,7 @@ class SwallowedErrors(unittest.TestCase):
         s, j, a = new_sound(); s.play_bgm(2)
         s.set_paused(True); Outage.broken = True
         s.set_paused(False); s.set_paused(True); s.set_paused(False)
-        self.assertEqual(len([l for l in j if 'reprise' in l]), 1)
+        self.assertEqual(len([l for l in j if 'resume' in l]), 1)
 
     def test_log_capped(self):
         s, j, a = new_sound()

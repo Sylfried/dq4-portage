@@ -46,7 +46,7 @@ class KeyboardMouseMixin:
                 self.combo[1] = True
                 if self.state_info(n):
                     try: self.load_state(n); self.toast(tr('État %d chargé') % n)
-                    except Exception as ex: self._note_state_failure(tr('Chargement de l\'état %d') % n, ex)
+                    except Exception as ex: self._note_state_failure(tr('Chargement de l\'état %d') % n, 'Loading savestate %d' % n, ex)
                 else: self.toast(tr('État %d vide') % n)
             else: self.quick_save = n
             return pyglet.event.EVENT_HANDLED
@@ -215,7 +215,7 @@ class KeyboardMouseMixin:
             else: v = self._held(a)
             r[a] = v and not self.prev_action.get(a, False); self.prev_action[a] = v
         if self.alt_tap: r['discussion'] = True; self.alt_tap = False
-        if r['discussion'] and os.environ.get('DQ_DEBUG'): print('FRONT discussion n=%d' % self.n, flush=True)
+        if r['discussion'] and os.environ.get('DQ_DEBUG'): print('FRONT party chat n=%d' % self.n, flush=True)
         if self.swallowed: self.swallowed = {c for c in self.swallowed if k[c]}          # (une touche avalee relachee hors de la fenetre : la liste se vide)
         if self.alt_cand and not (k[K.LALT] or k[K.RALT]): self.alt_cand = False
         return r

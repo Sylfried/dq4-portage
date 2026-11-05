@@ -32,6 +32,6 @@ def measure(p):
 for p in sys.argv[1:]:
     r, c = measure(p); print(p)
     for k, v in r.items(): print('  ', k, v)
-    print('   base_rat sous le centre : %.1f px = %.2f u' % (r['base_rat'] - c, (r['base_rat'] - c) / SCALE))
-    print('   base_onglet au-dessus du trait : %d px' % r['marge_onglet'])
-    gd = r['groupes_denses']; print('   bases scar/x2 sous le centre (u) :', [round((g[1] - c) / SCALE, 2) for g in gd])
+    print('   base_rat below the center: %.1f px = %.2f u' % (r['base_rat'] - c, (r['base_rat'] - c) / SCALE))
+    print('   base_onglet above the line: %d px' % r['marge_onglet'])
+    gd = r['groupes_denses']; print('   scar/x2 bases below the center (u):', [round((g[1] - c) / SCALE, 2) for g in gd])

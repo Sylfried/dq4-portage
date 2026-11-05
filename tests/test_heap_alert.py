@@ -56,12 +56,12 @@ class Alert(unittest.TestCase):
 
     def test_one_message_per_tier(self):
         for u in (100, 200, 205, 230, 239.9): self.j._watch_heap(core(u))
-        self.assertEqual(len(self.logfile), 1); self.assertIn('200 Mo sur 256 Mo', self.logfile[0]); self.assertIn('a 78 %', self.logfile[0])
+        self.assertEqual(len(self.logfile), 1); self.assertIn('200 MB of 256 MB', self.logfile[0]); self.assertIn('at 78 %', self.logfile[0])
         for u in (240, 245, 255): self.j._watch_heap(core(u))
-        self.assertEqual(len(self.logfile), 2); self.assertIn('a 94 %', self.logfile[1])
+        self.assertEqual(len(self.logfile), 2); self.assertIn('at 94 %', self.logfile[1])
 
     def test_direct_jump_beyond_240(self):
-        self.j._watch_heap(core(250)); self.assertEqual(len(self.logfile), 1); self.assertIn('a 98 %', self.logfile[0])
+        self.j._watch_heap(core(250)); self.assertEqual(len(self.logfile), 1); self.assertIn('at 98 %', self.logfile[0])
         self.j._watch_heap(core(252)); self.assertEqual(len(self.logfile), 1)
 
     def test_heap_dropping_back_rearms(self):

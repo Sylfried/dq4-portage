@@ -135,39 +135,22 @@ class Couverture(unittest.TestCase):
             unlinked += ['%s:%d %s' % (p, n.lineno, n.id) for n in ast.walk(a) if isinstance(n, ast.Name) and n.id in ('tr', 'N_', 'LG') and isinstance(n.ctx, ast.Load) and n.id not in lies]
         self.assertEqual(unlinked, [])
 
-    # liste blanche : (fichier, debut du texte) des messages de console que le joueur ne voit pas (traces des options de test et des variables DQ_*, journal interne du moteur)
-    DEBUG = (
-        ('sound.py', 'Son : image '),                                    # DQ_SON : ordres du moteur
-        ('engine.py', 'fopen '), ('engine.py', 'MSGDBG '), ('engine.py', 'ENVOI '), ('engine.py', 'MSG image '), ('engine.py', 'FBX image '),          # DQ_SAVEDBG, DQ_MSGDBG, DQ_MENUDBG, DQ_FBXLOG
-        ('camera.py', 'PROJ n='), ('camera.py', 'CAMV n='), ('camera.py', '   sprites'),                                                              # DQ_PROJ, DQ_CAMV
-        ('keyboard_mouse.py', 'FRONT discussion'),
-        ('game.py', 'SPRITES'), ('game.py', 'n=%d p='), ('game.py', 'FLAG n='), ('game.py', 'ETAT n='), ('game.py', 'combat'), ('game.py', 'capture :'),     # DQ_SPR, DQ_DEBUG, --shot, --shots-combat
-        ('game.py', 'OPTION %s'), ('game.py', 'PAS moteur='),                                                                                          # --options-test, DQ_PAS
-        ('full_screen.py', 'pyglet %s, Python'),                       # versions des logiciels dans le journal d'une bascule ratee : des noms propres
-        ('field.py', 'decors_plats :'),                                # nom du module + exception : un identifiant, pas une phrase
-        ('fld.py', 'nobj'),                                            # outil en ligne de commande de lecture des FLD
-        ('savestates.py', 'etat : fichier ouvert non restaure'),            # journal du moteur d'origine (Silencieux), pas la console
-    )
+    CONSOLE = {'print', 'log', '_record_missing', '_note', '_failure', '_note_once', 'note_error', '_log_window', '_wait'}
 
-    def test_no_console_message_left_in_french_without_tr(self):
-        """Un `print(...)` / `log(...)` / `toast(...)` dont le texte est un litteral (ou un litteral formate) doit passer par tr() ; sinon il est dans la liste blanche DEBUG. emu_core.py (journal de l'emulateur,
-        outil de developpement) n'est pas balaye."""
-        names = {'print', 'log', '_manque', 'toast', '_noter', '_echec', 'add_note', 'noter_erreur'}
-        nus = []; seen = set()
+    def test_console_messages_are_literal_english(self):
+        """Ce qu'une fonction de console recoit (print, log, _wait...) est un litteral anglais, sans tr() : la langue de l'outil ne change que le texte de la fenetre. Un toast litteral francais doit passer par tr()."""
+        in_french = []; with_tr = []
         for p in PERIMETRE:
             for n in ast.walk(tree(p)):
                 if not isinstance(n, ast.Call) or not n.args: continue
                 name_str = call_name(n)
-                if name_str == 'append' and not (isinstance(n.func.value, ast.Name) and n.func.value.id in ('done', 'pb', 'state')): continue
-                if name_str not in names and name_str != 'append': continue
+                if name_str not in self.CONSOLE and name_str != 'toast': continue
                 a = n.args[0]
-                while isinstance(a, ast.BinOp): a = a.left                             # 'texte %s' % x, 'debut' + x
-                if isinstance(a, ast.Constant) and isinstance(a.value, str) and len(a.value) > 1:
-                    base = os.path.basename(p); ok = [d for d in self.DEBUG if d[0] == base and a.value.startswith(d[1])]
-                    if ok: seen.add(ok[0])
-                    else: nus.append('%s:%d %r' % (p, n.lineno, a.value[:80]))
-        self.assertEqual(nus, [], 'messages de console en francais sans tr()')
-        self.assertEqual([d for d in self.DEBUG if d not in seen], [], 'entree de la liste blanche qui ne correspond plus a rien')
+                while isinstance(a, ast.BinOp): a = a.left                             # 'text %s' % x, 'start' + x
+                if isinstance(a, ast.Call) and call_name(a) in ('tr', 'N_') and name_str != 'toast': with_tr.append('%s:%d' % (p, n.lineno))
+                elif isinstance(a, ast.Constant) and isinstance(a.value, str) and french(a.value): in_french.append('%s:%d %r' % (p, n.lineno, a.value[:80]))
+        self.assertEqual(in_french, [], 'console messages (or toasts without tr()) in French')
+        self.assertEqual(with_tr, [], 'console messages that go through tr()')
 
 
 # ======================================================================================================================================================
@@ -193,18 +176,16 @@ class CommandLine(unittest.TestCase):
         """{option: texte d'aide} de l'analyseur construit dans la langue courante."""
         return {a.option_strings[0]: a.help for a in P.build_parser(self.d)._actions if a.help and a.option_strings[0] != '-h'}
 
-    def test_help_text_is_in_the_chosen_language(self):
+    def test_help_text_is_english_in_every_language(self):
         with entry('fr'): fr = self.helpers()
         with entry('en'): ang = self.helpers()
-        self.assertEqual(sorted(fr), sorted(ang)); self.assertGreaterEqual(len(fr), 33)
-        self.assertEqual(fr['--apk'], 'dossier des 3 APK (version francaise) ; par defaut data\\apk')                              # le francais d'avant, mot pour mot
-        self.assertEqual(fr['--sans-son'], 'coupe le son pour cette session (le menu Echap permet de le remettre)')
-        self.assertEqual(ang['--apk'], 'folder of the 3 game APK files; default data\\apk')
+        self.assertEqual(fr, ang); self.assertGreaterEqual(len(fr), 33)                                                  # (l'aide est un texte de console : anglais, quelle que soit la langue de l'outil)
+        self.assertEqual(fr['--apk'], 'folder of the 3 APK files (French version); default data\\apk')
+        self.assertEqual(fr['--sans-son'], 'turns the sound off for this session (the Esc menu can turn it back on)')
         for option in fr:
-            self.assertNotEqual(ang[option], fr[option], option)
-            self.assertFalse(french(ang[option]), '%s : %r' % (option, ang[option]))
-            self.assertNotIn('%', ang[option].replace('%%', ''), option)                  # (argparse formate l'aide avec % : un pourcentage nu la casserait)
-        self.assertEqual(sorted(o for o in fr if fr[o].startswith('(test) ')), sorted(o for o in ang if ang[o].startswith('(test) ')))          # les options de test restent annoncees comme telles
+            self.assertFalse(french(fr[option]), '%s : %r' % (option, fr[option]))
+            self.assertNotIn('%', fr[option].replace('%%', ''), option)                  # (argparse formate l'aide avec % : un pourcentage nu la casserait)
+        self.assertEqual(sorted(o for o in fr if fr[o].startswith('(test) ')), sorted(o for o in fr if fr[o].startswith('(test) ')))
 
     def test_format_help_does_not_crash_in_both_languages(self):
         for code in ('fr', 'en'):
@@ -239,13 +220,11 @@ class CommandLine(unittest.TestCase):
 
     def test_apks_not_found_in_french_and_english(self):
         empty = os.path.join(self.t, 'vide'); os.makedirs(empty)
-        self.settings('fr'); text, code = self.main_text(['--apk', empty]); self.assertEqual(code, 1)
-        self.assertEqual(text, 'Jeu : APK dans %s\n\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DATA=chemin\\vers\\data\n'
-                         % (empty, os.path.normpath(empty), self.d.saves))
-        self.settings('en'); text, code = self.main_text(['--apk', empty]); self.assertEqual(code, 1)
-        self.assertEqual(text, 'Game: APK files in %s\n\nThe game APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DATA=path\\to\\data\n'
-                         % (empty, os.path.normpath(empty), self.d.saves))
-        self.assertFalse(french(without_paths(text)), text)
+        for code in ('fr', 'en'):                                                                                        # (la console est en anglais, quelle que soit la langue de l'outil)
+            self.settings(code); text, code_ = self.main_text(['--apk', empty]); self.assertEqual(code_, 1)
+            self.assertEqual(text, 'Game: APK files in %s\n\nThe French APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DATA=path\\to\\data\n'
+                             % (empty, os.path.normpath(empty), self.d.saves))
+            self.assertFalse(french(without_paths(text)), text)
 
     def test_language_is_set_before_migration(self):
         """Les messages de la migration (chemins.migrer) sont dans la langue du reglage : reglages.json par defaut, ou celui de --reglages ; et la langue ne depend pas de celle de l'ordinateur."""
@@ -253,13 +232,13 @@ class CommandLine(unittest.TestCase):
         self.settings('en'); views, _, _ = self.main(['--apk', empty]); self.assertEqual(views, ['en'])
         self.settings('fr'); views, _, _ = self.main(['--apk', empty]); self.assertEqual(views, ['fr'])
         other = self.settings('en', os.path.join(self.t, 'autre.json')); views, text, _ = self.main(['--apk', empty, '--reglages', other])
-        self.assertEqual(views, ['en']); self.assertIn('The game APK files were not found.', text)
+        self.assertEqual(views, ['en']); self.assertIn('The French APK files were not found.', text)
 
     def test_migration_impossible(self):
         CH.FOLDERS = self.d
         def breaks(d=None, log=print): raise RuntimeError('boum')
         CH.migrate = breaks
-        for code, att in (('fr', "Migration des fichiers impossible (RuntimeError('boum')) : le jeu continue avec les dossiers actuels."),
+        for code, att in (('fr', "File migration failed (RuntimeError('boum')): the game continues with the current folders."),
                           ('en', "File migration failed (RuntimeError('boum')): the game continues with the current folders.")):
             self.settings(code)
             with self.assertRaises(SystemExit): _, text = output(P.main, ['--apk', os.path.join(self.t, 'vide')])
@@ -277,9 +256,8 @@ class CommandLine(unittest.TestCase):
             r = self.launch('--reglages', self.settings(code, os.path.join(self.t, code + '.json')), '--help')
             if r.returncode != 0 and 'ModuleNotFoundError' in r.stderr: self.skipTest('dependances absentes : ' + r.stderr.strip().splitlines()[-1])
             self.assertEqual(r.returncode, 0, r.stderr); self.assertEqual(r.stderr, '')
-            if code == 'fr': self.assertIn('dossier des 3 APK (version francaise)', r.stdout)
-            else:
-                self.assertIn('folder of the 3 game APK files', r.stdout)
+            if True:                                                                                         # (l'aide est en anglais dans les deux langues)
+                self.assertIn('folder of the 3 APK files (French version)', r.stdout)
                 text = re.sub(r'--[\w-]+|\{[^}]*\}|\b[A-Z][A-Z_]{2,}\b', ' ', r.stdout)                  # sans les noms d'options, leurs valeurs et les listes de choix
                 self.assertFalse(french(text), [m for m in re.findall(r"[a-zA-Z']+", text.lower().replace("'", ' ')) if m in TL.FRENCH_WORDS])
 
@@ -301,13 +279,13 @@ class Resume(unittest.TestCase):
     def migrate(self):
         lines = []; done = CH.migrate(self.d, log=lines.append); return done, lines
 
-    def test_in_french_text_is_as_before(self):
-        with entry('fr'): done, lines = self.migrate()
-        for ph in ('cache deplace : dq4_pc\\cache -> data\\cache', '1 fichier(s) APK copie(s) : jeux\\DQ4\\patched_apks -> data\\apk',
-                   '1 fichier(s) de reglages copie(s) : dq4_pc -> data\\settings', 'journal des erreurs copie : data\\logs'):
+    def test_in_french_the_text_is_english_too(self):
+        with entry('fr'): done, lines = self.migrate()                                                                    # (les phrases de la migration sont des messages de console : anglais, quelle que soit la langue)
+        for ph in ('cache moved: dq4_pc\\cache -> data\\cache', '1 APK file(s) copied: jeux\\DQ4\\patched_apks -> data\\apk',
+                   '1 settings file(s) copied: dq4_pc -> data\\settings', 'error log copied: data\\logs'):
             self.assertIn(ph, done)
-        self.assertTrue(any(ph.startswith('anciens dossiers ranges : sauvegardes\\mobile, sauvegardes\\portage') or ph.startswith('anciens dossiers ranges : ') for ph in done), done)
-        self.assertEqual(lines, ['Migration : ' + ph for ph in done])
+        self.assertTrue(any(ph.startswith('old folders moved: ') for ph in done), done)
+        self.assertEqual(lines, ['Migration: ' + ph for ph in done])
 
     def test_in_english_no_french_word_left(self):
         with entry('en'): done, lines = self.migrate()
@@ -318,13 +296,11 @@ class Resume(unittest.TestCase):
 
     def test_tidy_up_impossible(self):
         """Un dossier nomme data1.dat occupe la place : l'ancien dossier ne bouge pas, et la phrase le dit (avec la raison)."""
-        write(os.path.join(self.d.old_port_dir, 'data1.dat'), b'portage1'); os.makedirs(os.path.join(self.d.saves, 'data1.dat'))
-        with entry('fr'): done, _ = self.migrate()
-        self.assertTrue(any(ph.startswith('anciens dossiers de sauvegardes NON ranges (') and 'data1.dat' in ph and ph.endswith(') : ils restent en place') for ph in done), done)
-        shutil.rmtree(self.t); self.setUp(); write(os.path.join(self.d.old_port_dir, 'data1.dat'), b'portage1'); os.makedirs(os.path.join(self.d.saves, 'data1.dat'))
-        with entry('en'): done, _ = self.migrate()
-        phrase = [ph for ph in done if ph.startswith('old save folders NOT moved (')]
-        self.assertEqual(len(phrase), 1, done); self.assertTrue(phrase[0].endswith('): they stay in place')); self.assertFalse(french(without_paths(phrase[0])), phrase[0])
+        for language in ('fr', 'en'):                                                                                     # (meme phrase anglaise dans les deux langues)
+            shutil.rmtree(self.t); self.setUp(); write(os.path.join(self.d.old_port_dir, 'data1.dat'), b'portage1'); os.makedirs(os.path.join(self.d.saves, 'data1.dat'))
+            with entry(language): done, _ = self.migrate()
+            phrase = [ph for ph in done if ph.startswith('old save folders NOT moved (')]
+            self.assertEqual(len(phrase), 1, done); self.assertTrue(phrase[0].endswith('): they stay in place')); self.assertFalse(french(without_paths(phrase[0])), phrase[0])
 
     def test_migration_only_process_takes_language_from_setting(self):
         """`python -m dq4_pc.paths` (lance par launch_dq4.bat avant le jeu) lit la langue dans reglages.json avant de migrer."""
@@ -421,17 +397,15 @@ class Persistence(unittest.TestCase):
         trap = pickle.dumps(os.getcwd, protocol=4)
         fake_engine = types.SimpleNamespace(core=types.SimpleNamespace(uc=None, elf=types.SimpleNamespace(img=b'abc')))
         f = write(os.path.join(self.t, 'pas_un_etat.dqs'), b'DQ4ETATX' + bytes(100))
-        attendus = {'fr': ("fichier d'état refusé : il demande « os.getcwd »", "etat d'une autre version (99)",
-                           'etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge', "ce n'est pas un etat du portage"),
-                    'en': ('state file refused: it asks for "posix.getcwd"', 'state from another version (99)',
-                           'state saved with another version of the engine library (different APK): it cannot be loaded', 'this is not a state file of this port')}
+        attendus = ('state file refused: it asks for "posix.getcwd"', 'state from another version (99)',
+                    'state saved with another version of the engine library (different APK): it cannot be loaded', 'this is not a state file of this port')       # (messages d'erreur de savestates.py : anglais dans les deux langues)
         for code in ('fr', 'en'):
             with entry(code):
                 m1 = self.error(SS._load, trap); m2 = self.error(SS.apply, fake_engine, {'version': 99})
                 m3 = self.error(SS.apply, fake_engine, {'version': SS.VERSION, 'lib_sha': 'pas_la_bonne'}); m4 = self.error(SS.read, f)
-            self.assertTrue(m1.startswith(attendus[code][0].replace('posix', 'nt') if os.name == 'nt' else attendus[code][0].replace('os.getcwd', 'posix.getcwd') if code == 'fr' else attendus[code][0]), (code, m1))
-            self.assertEqual((m2, m3, m4), attendus[code][1:])
-            if code == 'en': self.assertFalse(french(m1) or french(m2) or french(m3) or french(m4), (m1, m2, m3, m4))
+            self.assertTrue(m1.startswith(attendus[0].replace('posix', 'nt') if os.name == 'nt' else attendus[0]), (code, m1))
+            self.assertEqual((m2, m3, m4), attendus[1:])
+            self.assertFalse(french(m1) or french(m2) or french(m3) or french(m4), (m1, m2, m3, m4))
 
     def test_file_dialog_boxes(self):
         """Les types de fichiers des boites « Enregistrer sous » / « Ouvrir » (tkinter, remplace ici par un faux)."""
@@ -481,14 +455,15 @@ class Window(unittest.TestCase):
         j = types.SimpleNamespace(msgs=[]); j.toast = lambda t, duration=1.8: j.msgs.append(LG.tr(t)); return j                                   # (comme Game.toast : le texte est traduit a l'affichage)
 
     def test_savestate_failure(self):
-        for code, att in (('fr', "Chargement de l'état 3 impossible : OSError('disque')"), ('en', "Loading state 3 failed: OSError('disque')")):
+        for code, att in (('fr', "Chargement de l'état 3 impossible : OSError('disque')"), ('en', "Loading state 3 failed: OSError('disque')")):                  # (le petit message de la fenetre suit la langue)
             with entry(code):
-                j = self.fake(); _, text = output(WND.Game._note_state_failure, j, LG.tr("Chargement de l'état %d") % 3, OSError('disque'))
-            self.assertEqual(j.msgs, [att]); self.assertIn(att + ' ---\n', text); self.assertTrue(self.logfile().endswith(att + ' ---\n'))
+                j = self.fake(); _, text = output(WND.Game._note_state_failure, j, LG.tr("Chargement de l'état %d") % 3, 'Loading savestate 3', OSError('disque'))
+            console = "Loading savestate 3 failed: OSError('disque') ---\n"                                                                                        # (la console et le journal : anglais dans les deux langues)
+            self.assertEqual(j.msgs, [att]); self.assertIn(console, text); self.assertTrue(self.logfile().endswith(console)); self.assertFalse(french(text.replace('disque', '')))
         self.assertFalse(french(j.msgs[0].replace('disque', '')))
 
     def test_saving_is_impossible(self):
-        for code, att, header in (('fr', 'Sauvegarde impossible : le jeu continue (détails dans window_errors.log)', 'sauvegarde impossible : data1.dat'),
+        for code, att, header in (('fr', 'Sauvegarde impossible : le jeu continue (détails dans window_errors.log)', 'save failed: data1.dat'),
                                   ('en', 'Save failed: the game continues (details in window_errors.log)', 'save failed: data1.dat')):
             with entry(code):
                 j = self.fake(); core = types.SimpleNamespace(write_failures=['data1.dat']); _, text = output(WND.Game._report_write_failures, j, core)
@@ -497,7 +472,7 @@ class Window(unittest.TestCase):
     def test_engine_memory_and_missing_settings(self):
         note = []
         with mock.patch.object(WND, 'note_error', note.append):
-            for code, memory, setting in (('fr', 'memoire du moteur a 98 % (250 Mo sur 256 Mo) ---\n', 'reglage du moteur non applique : a ---\n'),
+            for code, memory, setting in (('fr', 'engine memory at 98 % (250 MB of 256 MB) ---\n', 'engine setting not applied: a ---\n'),
                                            ('en', 'engine memory at 98 % (250 MB of 256 MB) ---\n', 'engine setting not applied: a ---\n')):
                 note.clear()
                 with entry(code):
@@ -505,20 +480,21 @@ class Window(unittest.TestCase):
                     WND.Game._watch_heap(j, core)
                     eng = types.SimpleNamespace(missing_hooks=['a']); j2 = types.SimpleNamespace(_reported_hooks=0); WND.Game._report_missing_hooks(j2, eng)
                 self.assertEqual(len(note), 2); self.assertTrue(note[0].endswith(memory), note[0]); self.assertTrue(note[1].endswith(setting), note[1])
-                if code == 'en': self.assertFalse(french(note[0]) or french(note[1]), note)
+                self.assertFalse(french(note[0]) or french(note[1]), note)
 
     def test_startup_loading(self):
-        for code, att in (('fr', ['Chargement du moteur...', 'Chargement de la sauvegarde...', 'Chargement de la carte...']), ('en', ['Loading the engine...', 'Loading the save...', 'Loading the map...'])):
+        att = ['Loading the engine...', 'Loading the save...', 'Loading the map...']                                      # (texte de console : anglais dans les deux langues)
+        for code in ('fr', 'en'):
             with entry(code):
                 j = types.SimpleNamespace(switch_to=lambda: None, clear=lambda: None, flip=lambda: None, dispatch_events=lambda: None)
-                _, text = output(lambda: [WND.Game._wait(j, t) for t in ('Chargement du moteur...', 'Chargement de la sauvegarde...', 'Chargement de la carte...')])
+                _, text = output(lambda: [WND.Game._wait(j, t) for t in att])
             self.assertEqual(text.splitlines(), att)
 
     def test_sound_focus_loss(self):
         def boum(yes): raise OSError('carte son')
         j = types.SimpleNamespace(_ready=True, sound=types.SimpleNamespace(lose_focus=boum), wheel=types.SimpleNamespace(cancel=lambda: None), hud=types.SimpleNamespace(dpad_drop=lambda: None, press_state=None), press_state=None, hovered=None,
                                   acc=0.0, t_loop=None, _camera_oublier=lambda: None, pad=lambda: 0, _held=lambda a: False, mouse_guard=types.SimpleNamespace(keyboard=lambda s: None), mouse=(0, 0))
-        for code, a1, a2 in (('fr', "Son : pause a la perte du focus impossible (OSError('carte son'))", "Son : reprise au retour du focus impossible (OSError('carte son'))"),
+        for code, a1, a2 in (('fr', "Sound: pausing on focus loss failed (OSError('carte son'))", "Sound: resuming on focus return failed (OSError('carte son'))"),
                              ('en', "Sound: pausing on focus loss failed (OSError('carte son'))", "Sound: resuming on focus return failed (OSError('carte son'))")):
             with entry(code):
                 _, t1 = output(WND.Game.on_deactivate, j); _, t2 = output(WND.Game.on_activate, j)
@@ -539,7 +515,7 @@ class Window(unittest.TestCase):
     def test_preparation_process_speaks_received_language(self):
         """Vrai processus `python -m dq4_pc.world.data` (APK absent : « interrompue »)."""
         cache = os.path.join(self.t, 'cache'); os.makedirs(cache)
-        for code, begin in (('fr', 'Preparation du cache interrompue : '), ('en', 'Cache preparation interrupted: ')):
+        for code, begin in (('fr', 'Cache preparation interrupted: '), ('en', 'Cache preparation interrupted: ')):
             e = dict(os.environ, DQ4_LANGUE=code, PYTHONDONTWRITEBYTECODE='1')
             r = subprocess.run([sys.executable, '-m', 'dq4_pc.world.data', os.path.join(self.t, 'inexistant.apk'), cache], cwd=ROOT, env=e, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
             self.assertTrue(any(l.startswith(begin) for l in r.stdout.splitlines()), (r.stdout, r.stderr))
@@ -554,7 +530,7 @@ class Window(unittest.TestCase):
 
     def test_window_size_too_large(self):
         with mock.patch.object(AI, 'useful_zone', lambda: (1904, 1040)):
-            for code, model in (('fr', "Fenêtre 3840 x 2160 trop grande pour l'écran : %d x %d"), ('en', 'Window 3840 x 2160 too large for the screen: %d x %d')):
+            for code, model in (('fr', 'Window 3840 x 2160 too large for the screen: %d x %d'), ('en', 'Window 3840 x 2160 too large for the screen: %d x %d')):
                 with entry(code): (nw, nh), text = output(AI.adjust_size, 3840, 2160)
                 self.assertEqual(text.strip(), model % (nw, nh))
 
@@ -564,58 +540,51 @@ class Window(unittest.TestCase):
 
     def test_toggle_failure(self):
         with mock.patch.object(WND, 'useful_zone', lambda: (1904, 1040)):
-            for code, line, header, lines in (
-                    ('fr', "Plein écran impossible (RuntimeError('echec de set_fullscreen(True)')) : fenêtre conservé", 'passage en plein écran impossible ---',
-                     ['fenêtre : plein écran = False, 1280 x 720, ', 'écran de la fenêtre pour pyglet : 1920 x 1080 en (0, 0)', 'moniteurs : 1920 x 1080 en (0, 0) (principal)']),
-                    ('en', "Fullscreen failed (RuntimeError('echec de set_fullscreen(True)')): windowed mode kept", 'switch to fullscreen failed ---',
-                     ['window: fullscreen = False, 1280 x 720, ', 'window screen according to pyglet: 1920 x 1080 at (0, 0)', 'monitors: 1920 x 1080 at (0, 0) (primary)'])):
+            for code in ('fr', 'en'):                                                                                        # (console et journal des erreurs : anglais dans les deux langues)
+                line = "Full screen failed (RuntimeError('echec de set_fullscreen(True)')): windowed mode kept"; header = 'switch to full screen failed ---'
+                lines = ['window: full screen = False, 1280 x 720, ', 'window screen according to pyglet: 1920 x 1080 at (0, 0)', 'monitors: 1920 x 1080 at (0, 0) (primary)']
                 if os.path.exists(self.log): os.remove(self.log)
                 f = self.win(failure='set_fullscreen(True)')
                 with entry(code): render, text = output(f.set_full_screen, True)
                 self.assertFalse(render)
                 self.assertIn(line, text.splitlines())
                 for att in [header] + lines: self.assertIn(att, text); self.assertIn(att, self.logfile())
-                if code == 'en': self.assertFalse(french(without_paths(re.sub(r'Traceback.*?\n(?=\w)', '', text, flags=re.S))), text)
+                self.assertFalse(french(without_paths(re.sub(r'Traceback.*?\n(?=\w)', '', text, flags=re.S))), text)
 
     def test_return_to_window_failure(self):
         with mock.patch.object(WND, 'useful_zone', lambda: (1904, 1040)):
-            for code, line in (('fr', "Fenêtre impossible (RuntimeError('echec de set_fullscreen(False,1280x720)')) : plein écran conservé"),
-                                ('en', "Windowed mode failed (RuntimeError('echec de set_fullscreen(False,1280x720)')): fullscreen kept")):
+            for code in ('fr', 'en'):
+                line = "Windowed mode failed (RuntimeError('echec de set_fullscreen(False,1280x720)')): full screen kept"
                 f = self.win(full=True, failure='set_fullscreen(False,1280x720)')
                 with entry(code): render, text = output(f.set_full_screen, False)
                 self.assertTrue(render); self.assertIn(line, text.splitlines())
 
     def test_window_logfile_line(self):
-        for code, att in (('fr', 'Fenêtre (création) : fenêtre, 1280 x 720, zone de dessin 1280 x 720, écran 1920 x 1080 (écran 1)'),
-                          ('en', 'Window (creation): window, 1280 x 720, drawing area 1280 x 720, screen 1920 x 1080 (screen 1)')):
+        for code in ('fr', 'en'):                                                                                        # (ligne de console et du journal : anglais dans les deux langues)
             f = self.win()
-            with entry(code): _, text = output(f._log_window, 'création')
-            self.assertEqual(text.strip(), att)
-        for code, att in (('fr', 'Fenêtre (plein écran) : PLEIN ÉCRAN [INCOHÉRENT : fullscreen=False], '), ('en', 'Window (fullscreen): FULLSCREEN [INCONSISTENT: fullscreen=False], ')):
+            with entry(code): _, text = output(f._log_window, 'creation')
+            self.assertEqual(text.strip(), 'Window (creation): window, 1280 x 720, drawing area 1280 x 720, screen 1920 x 1080 (screen 1)')
             f = self.win(full=True); f.fullscreen = False; f.win_mode = 1
-            with entry(code): _, text = output(f._log_window, 'plein écran')
-            self.assertTrue(text.startswith(att), text)
-        for code, att in (('fr', 'Fenêtre (1re image du jeu) : état illisible ('), ('en', 'Window (1st game frame): state unreadable (')):
+            with entry(code): _, text = output(f._log_window, 'full screen')
+            self.assertTrue(text.startswith('Window (full screen): FULL SCREEN [INCONSISTENT: fullscreen=False], '), text)
             f = self.win(); f.screen_ = None; del_f = types.SimpleNamespace()
-            with entry(code): _, text = output(WND.Game._log_window, del_f, '1re image du jeu')
-            self.assertTrue(text.startswith(att), text)
+            with entry(code): _, text = output(WND.Game._log_window, del_f, '1st game frame')
+            self.assertTrue(text.startswith('Window (1st game frame): state unreadable ('), text)
 
     def test_unreadable_monitors(self):
-        for code, att in (('fr', "Moniteurs illisibles (OSError('plus de moniteurs'))"), ('en', "Monitors unreadable (OSError('plus de moniteurs'))")):
+        for code in ('fr', 'en'):
             f = self.win(); f.display = types.SimpleNamespace(get_screens=lambda: (_ for _ in ()).throw(OSError('plus de moniteurs')))
             with entry(code): _, text = output(f._read_screens, True)
-            self.assertEqual(text.strip(), att)
+            self.assertEqual(text.strip(), "Monitors unreadable (OSError('plus de moniteurs'))")
 
     def test_window_title(self):
         self.assertEqual(WND.Game.WINDOW_TITLE, 'Dragon Quest IV - portage PC (essai)')           # (constante de module marquee N_ : traduite a la creation de la fenetre)
         with entry('en'): self.assertEqual(LG.tr(WND.Game.WINDOW_TITLE), 'Dragon Quest IV - PC port (trial)')
 
     def test_slot_text_on_the_command_line(self):
-        """`--slot N` : l'etat du chargement direct, dans les deux langues (les deux phrases entieres du catalogue)."""
-        for code, a, b in (('fr', 'sauvegarde 2 chargee : oui', 'sauvegarde 2 chargee : NON (fichier data2.dat introuvable ou invalide dans x)'),
-                           ('en', 'save 2 loaded: yes', 'save 2 loaded: NO (file data2.dat not found or invalid in x)')):
-            with entry(code):
-                self.assertEqual(LG.tr('sauvegarde %d chargee : oui') % 2, a); self.assertEqual(LG.tr('sauvegarde %d chargee : NON (fichier data%d.dat introuvable ou invalide dans %s)') % (2, 2, 'x'), b)
+        """`--slot N` : l'etat du chargement direct est un message de console (les deux phrases entieres, en anglais dans game.py)."""
+        with open(os.path.join(ROOT, 'dq4_pc', 'window', 'game.py'), encoding='utf-8') as f: code = f.read()
+        for att in ("'save %d loaded: yes'", "'save %d loaded: NO (file data%d.dat not found or invalid in %s)'"): self.assertIn(att, code)
 
 
 # ======================================================================================================================================================
@@ -628,16 +597,15 @@ class Engine(unittest.TestCase):
 
     def test_locations_window_and_settings_button(self):
         other = (self.TC.ORIGINAL[0], self.TC.ORIGINAL[1], 0x11000120 | (0x555 << 10))
-        for code, locations, button in (('fr', "fenetre des lieux non elargie : FieldData::drawSymbol inattendu, les lieux de la carte du monde n'apparaissent que dans la fenetre d'origine",
-                                     "bouton Paramètres : comparaison du menu Divers inattendue, le bouton ouvre les reglages d'origine du jeu et non le menu Pause"),
-                                    ('en', "places window not widened: unexpected FieldData::drawSymbol, world map places only appear in the original window",
-                                     "Settings button: unexpected comparison in the Misc menu, the button opens the game's original settings instead of the Pause menu")):
+        locations = "places window not widened: unexpected FieldData::drawSymbol, world map places only appear in the original window"
+        button = "Settings button: unexpected comparison in the Misc menu, the button opens the game's original settings instead of the Pause menu"
+        for code in ('fr', 'en'):                                                                                        # (alertes du moteur : console en anglais dans les deux langues)
             with entry(code):
                 m = self.TC.fake_engine(other); _, text = output(m._widen_symbols); self.assertEqual((text.strip(), m.missing_hooks), (locations, [locations]))
                 m = self.TC.fake_engine(cmp_param=0xd503201f); _, text = output(m.patch_params); self.assertEqual((text.strip(), m.missing_hooks), (button, [button]))
 
     def test_all_installers_speak_the_tool_language(self):
-        """Un moteur dont les fonctions sont introuvables : chaque installateur le dit, en francais comme avant (`KeyError`) et en anglais sans un mot de francais."""
+        """Un moteur dont les fonctions sont introuvables : chaque installateur le dit (`KeyError`), en anglais dans les deux langues de l'outil (messages de console), sans un mot de francais."""
         def not_found(n): raise KeyError(n)
         names = ('_text_hooks', '_fade_hooks', '_level_hooks', '_encounter_hooks', '_day_clock_hooks', '_game_time_hooks', '_magic_hooks', '_divert_params', '_widen_symbols')
         resultats = {}
@@ -646,10 +614,8 @@ class Engine(unittest.TestCase):
                 resultats[code] = []
                 for name_str in names:
                     m = self.TC.fake_engine(); m.core.export = not_found; output(getattr(m, name_str)); resultats[code] += m.missing_hooks
-        self.assertEqual(len(resultats['fr']), len(resultats['en'])); self.assertGreaterEqual(len(resultats['fr']), len(names))
-        for fr, ang in zip(resultats['fr'], resultats['en']):
-            self.assertNotEqual(fr, ang); self.assertFalse(french(ang), ang)
-        self.assertIn('vitesse du texte non installee : KeyError(\'DevInit\')'.split(':')[0], '\n'.join(resultats['fr']))
+        self.assertEqual(resultats['fr'], resultats['en']); self.assertGreaterEqual(len(resultats['fr']), len(names))
+        for ang in resultats['en']: self.assertFalse(french(ang), ang)
 
 
 # ======================================================================================================================================================
@@ -665,32 +631,29 @@ class Sound(unittest.TestCase):
     def setUp(self): self.tmp = tempfile.mkdtemp(prefix='lang_son_'); self.addCleanup(shutil.rmtree, self.tmp, True); self.addCleanup(LG.select_language, 'fr')
 
     def test_sound_unavailable(self):
-        with entry('fr'): s, lines, _, _ = self.new()
-        self.assertEqual(lines[0], 'Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.'); self.assertTrue(lines[1].startswith('Son indisponible ('))
-        with entry('en'): s, lines, _, _ = self.new()
-        self.assertEqual(lines[0], 'Music unavailable: "soundfile" module missing (pip install soundfile). Sound effects stay active.'); self.assertTrue(lines[1].startswith('Sound unavailable ('))
-        self.assertFalse(french(lines[0]))
+        for code in ('fr', 'en'):                                                                                        # (console : anglais dans les deux langues)
+            with entry(code): s, lines, _, _ = self.new()
+            self.assertEqual(lines[0], 'Music unavailable: "soundfile" module missing (pip install soundfile). Sound effects stay active.'); self.assertTrue(lines[1].startswith('Sound unavailable ('))
+            self.assertFalse(french(lines[0]))
 
     def test_failures_cut_and_restoration(self):
-        attendus = {'fr': ["bruitage 5 impossible (OSError('x')), echec 1", "bruitage 5 impossible (OSError('x')), echec 2", "bruitage 5 impossible (OSError('x')), echec 3", 'son interrompu, nouvel essai dans 2 s',
-                           "volume de la musique impossible (OSError('v')), note une seule fois", 'son retabli'],
-                    'en': ["sound effect 5 failed (OSError('x')), failure 1", "sound effect 5 failed (OSError('x')), failure 2", "sound effect 5 failed (OSError('x')), failure 3", 'sound interrupted, retrying in 2 s',
-                           "music volume failed (OSError('v')), logged only once", 'sound restored']}
-        alerts_expected = {'fr': ['Son interrompu : nouvel essai automatique', 'Son rétabli'], 'en': ['Sound interrupted: automatic retry', 'Sound restored']}
+        attendus = ["sound effect 5 failed (OSError('x')), failure 1", "sound effect 5 failed (OSError('x')), failure 2", "sound effect 5 failed (OSError('x')), failure 3", 'sound interrupted, retrying in 2 s',
+                    "music volume failed (OSError('v')), logged only once", 'sound restored']
+        alerts_expected = {'fr': ['Son interrompu : nouvel essai automatique', 'Son rétabli'], 'en': ['Sound interrupted: automatic retry', 'Sound restored']}                  # (les alertes a l'ecran suivent la langue)
         for code in ('fr', 'en'):
             with entry(code):
                 s, lines, logfile, alerts = self.new(); lines.clear()
-                for _ in range(3): s._failure(LG.tr('bruitage %d') % 5, OSError('x'))
-                s._note_once(LG.N_('volume de la musique'), OSError('v')); s._note_once(LG.N_('volume de la musique'), OSError('v'))       # (une seule fois)
+                for _ in range(3): s._failure('sound effect 5', OSError('x'))
+                s._note_once('music volume', OSError('v')); s._note_once('music volume', OSError('v'))                    # (une seule fois)
                 s._success()
-            self.assertEqual(logfile, attendus[code]); self.assertEqual(alerts, alerts_expected[code])
-            self.assertEqual(lines, [('Sound: ' if code == 'en' else 'Son : ') + t for t in attendus[code]])
+            self.assertEqual(logfile, attendus); self.assertEqual(alerts, alerts_expected[code])
+            self.assertEqual(lines, ['Sound: ' + t for t in attendus])
         self.assertEqual(lines[0], 'Sound: sound effect 5 failed (OSError(\'x\')), failure 1')
 
     def test_music_and_resume(self):
         with entry('en'):
             s, lines, logfile, alerts = self.new()
-            s._failure(LG.tr('musique %d') % 12, OSError('m')); s._note_once(LG.N_('volume des bruitages'), OSError('b')); s._note_once(LG.N_('reprise apres la pause'), OSError('p'))
+            s._failure('music track 12', OSError('m')); s._note_once('sound effects volume', OSError('b')); s._note_once('resume after pause', OSError('p'))
         self.assertEqual(logfile, ["music track 12 failed (OSError('m')), failure 1", "sound effects volume failed (OSError('b')), logged only once", "resume after pause failed (OSError('p')), logged only once"])
 
 
