@@ -1,0 +1,362 @@
+"""Test de la logique pure du ciel de l'ecran-titre en format large (`dq4_pc/title_sky.py` : sans fenetre, sans moteur, sans APK) :
+
+  1. zone portrait (colonne 9:16 du milieu) : 1280 x 720 -> 405 px de large, centree ; 720 x 1280 -> toute la fenetre ; demi-largeur normalisee ;
+  2. deformation de la texture : G(0) = 0, pente 1 au bord, pente toujours entre 0,52 et 1,48 (jamais de retournement), echelle d'ensemble conservee, deterministe, differente a gauche et a droite,
+     et le motif ne revient pas identique un carreau plus loin (c'est tout l'objet : « on voit trop le pattern repetitif ») ;
+  3. analyse de l'objet « kumo » (reconstitue ici a l'identique : 4 rangees de 3 carreaux de 11,5, decalees d'un demi-carreau) : rangees, periode, u exact, refus des structures inattendues ;
+  4. bandes : aucun sommet dans la zone portrait (le ciel d'origine y reste intact), raccord continu au bord (u et v du ciel d'origine, a toute position du defilement), memes sommets / couleurs que les rangees,
+     meme sens de parcours des triangles que les quadrilateres d'origine, rien a ajouter en portrait, plus de bandes quand la fenetre s'elargit.
+
+  5. essai #130 (ciel agrandi au lieu de bandes) : `screen_zoom` (1 en portrait, 16/9 : x 3,16, 21/9 : x 4,15, `DQ_CIEL_ZOOM` force une valeur) et `zoom_matrix` (x et y d'ecran multiplies, profondeur intacte) : la fenetre
+     entiere ne montre alors que la largeur de la zone portrait d'origine, donc moins d'un carreau ;
+  6. rendu a plat par defaut (#174) : la texture a la hauteur de la fenetre (v de 0,998 a 0,002 sur toute la hauteur, a tout format), se repete sur la largeur (u s'etend de `aspect` carreaux), effet de vague (`stretch_plate`,
+     `flat_sliding`) fixe a l'ecran et jamais retourne, defilement = decalage de u seul, degrade de teinte des rangees d'origine (`screen_gradient`), triangles tous de meme sens, sans trou.
+
+    python3 tools/test_title_sky.py
+"""
+import math, os, sys, unittest
+
+import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from dq4_pc.render import title_sky as CT
+
+
+def matrix(cam, target, fov, aspect, n=1.0, f=200.0, topmost=(0, 1, 0)):
+    """Meme forme que `window.matrix` (reecrite ici : pas de pyglet)."""
+    pos = np.array(cam, float); fw = np.array(target, float) - pos; fw /= np.linalg.norm(fw)
+    right = np.cross(topmost, fw); right /= np.linalg.norm(right); topmost = np.cross(fw, right)
+    th = math.tan(math.radians(fov) / 2)
+    M = np.zeros((4, 4))
+    M[0, :3] = right / (th * aspect); M[0, 3] = -pos @ right / (th * aspect)
+    M[1, :3] = topmost / th; M[1, 3] = -pos @ topmost / th
+    k = (f + n) / (f - n)
+    M[2, :3] = fw * k; M[2, 3] = -pos @ fw * k - 2 * f * n / (f - n)
+    M[3, :3] = fw; M[3, 3] = -pos @ fw
+    return M
+
+
+def camera_title(aspect):
+    """Camera du titre telle que la calcule le portage (valeurs relevees dans le moteur a l'image 400 : position (0, 27,70, -34,18), cible (0, 0, 0), fov 10, tangage 3,019 ; SceneCamera.Update)."""
+    pos, target_pos = np.array([0.0, 27.7041015625, -34.181640625]), np.zeros(3)
+    th_v = math.tan(math.radians(10.0 * 4.0 / 3.0) / 2) / CT.ASPECT_PORTRAIT
+    fw = target_pos - pos; fw /= np.linalg.norm(fw)
+    yaw = math.atan2(fw[0], fw[2]); tang = math.asin(-fw[1]) - math.radians(3.019360065460205)
+    fw = np.array([math.sin(yaw) * math.cos(tang), -math.sin(tang), math.cos(yaw) * math.cos(tang)])
+    pos = pos + fw * 4.0
+    return matrix(pos, pos + fw * 10, math.degrees(2 * math.atan(th_v)), aspect, n=1.0, f=150.0)
+
+
+def synthetic_sky():
+    """Sommets (positions, uv, couleurs) du ciel du titre (objet 000_kumo2) : 4 rangees (y, z, couleur de sommet comme dans l'original), 3 carreaux de 11,5 par rangee coupes en deux quadrilateres de 5,75,
+    u de 0,002 a 0,998 sur le carreau ; deux rangees sur quatre sont decalees d'un demi-carreau (u de 0,502 d'abord)."""
+    whitelist, tint = (1.0, 1.0, 1.0, 1.0), (1.0, 0.796, 0.6, 1.0)
+    lines = [(-33.56, 10.10, tint, -22.75, 14.03, whitelist, 1), (-22.75, 14.03, whitelist, -11.95, 17.97, whitelist, 0), (-11.95, 17.97, whitelist, -1.14, 21.90, tint, 1), (-1.14, 21.90, tint, 9.67, 25.83, tint, 0)]
+    P, U, C = [], [], []
+    for yb, zb, cb, yh, zh, ch, dec in lines:
+        for k in range(6):
+            xg = -12.75 + 5.75 * k; xd = xg + 5.75
+            half = (k + dec) % 2
+            ug, ud = (0.002, 0.502) if half == 0 else (0.502, 0.998)
+            for (x, y, z, u, v, c) in ((xg, yb, zb, ug, 0.998, cb), (xg, yh, zh, ug, 0.002, ch), (xd, yh, zh, ud, 0.002, ch), (xg, yb, zb, ug, 0.998, cb), (xd, yh, zh, ud, 0.002, ch), (xd, yb, zb, ud, 0.998, cb)):
+                P.append((x, y, z)); U.append((u, v)); C.append(c)
+    return np.array(P, np.float32), np.array(U, np.float32), np.array(C, np.float32)
+
+
+def ndc_x(M, p):
+    c = M @ np.array([p[0], p[1], p[2], 1.0]); return c[0] / c[3]
+
+
+def area(p):
+    """Aire signee (dans le plan x, y) d'un triangle de 3 points."""
+    return (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[2][0] - p[0][0]) * (p[1][1] - p[0][1])
+
+
+class TestZonePortrait(unittest.TestCase):
+    def test_zone(self):
+        x0, w = CT.zone_portrait(1280, 720); self.assertAlmostEqual(w, 405.0); self.assertAlmostEqual(x0, 437.5)
+        x0, w = CT.zone_portrait(720, 1280); self.assertEqual((x0, w), (0.0, 720.0))             # fenetre portrait : tout est la zone
+        x0, w = CT.zone_portrait(1920, 820); self.assertAlmostEqual(w, 461.25); self.assertAlmostEqual(x0 + w / 2, 960.0)
+        x0, w = CT.zone_portrait(1920, 400); self.assertAlmostEqual(w, 225.0)
+
+    def test_half_ndc(self):
+        self.assertAlmostEqual(CT.half_zone_ndc(16 / 9), 0.5625 / (16 / 9)); self.assertEqual(CT.half_zone_ndc(0.5625), 1.0); self.assertEqual(CT.half_zone_ndc(0.3), 1.0)
+        x0, w = CT.zone_portrait(1280, 720); self.assertAlmostEqual(w / 1280, CT.half_zone_ndc(1280 / 720))        # meme zone en pixels et en coordonnees d'ecran (la zone fait 2 x demi de la largeur de la fenetre / 2)
+
+
+class TestDeformation(unittest.TestCase):
+    d = np.linspace(0.0, 80.0, 8001)
+
+    def test_seam(self):
+        for side in (0, 1):
+            G, dv = CT.deformation(self.d, side); self.assertEqual(G[0], 0.0); self.assertEqual(dv[0], 0.0)
+            self.assertAlmostEqual(float(G[1] / self.d[1]), 1.0, places=3); self.assertLess(abs(dv[1]), 1e-6)       # pente 1 et glissement nul avec pente nulle au bord de la zone : raccord sans cassure
+
+    def test_bounded_slope(self):
+        for side in (0, 1):
+            G, _ = CT.deformation(self.d, side); p = np.diff(G) / np.diff(self.d)
+            self.assertGreater(p.min(), 1 - 0.48 - 0.01); self.assertLess(p.max(), 1 + 0.48 + 0.01)       # jamais de retournement du motif, etirure de 0,52 a 1,48 au plus
+
+    def test_overall_scale(self):
+        for side in (0, 1):
+            G, _ = CT.deformation(self.d, side); self.assertLess(abs(G[-1] / self.d[-1] - 1.0), 0.03)       # meme echelle que l'original en moyenne
+
+    def test_deterministic_and_independent_of_array(self):
+        a = CT.deformation(np.array([3.0, 17.5, 40.0]), 0); b = CT.deformation(self.d, 0)
+        for k in (0, 1): self.assertAlmostEqual(float(a[k][1]), float(np.interp(17.5, self.d, b[k])), places=3)
+        self.assertTrue(all(np.array_equal(x, y) for x, y in zip(CT.deformation(self.d, 1), CT.deformation(self.d, 1))))
+
+    def test_different_sides(self):
+        (g0, v0), (g1, v1) = CT.deformation(self.d, 0), CT.deformation(self.d, 1)
+        self.assertGreater(np.abs(g0 - g1).max(), 0.5); self.assertGreater(np.abs(v0 - v1).max(), 0.02)                                                  # pas de symetrie gauche / droite
+
+    def test_pattern_does_not_return_identical(self):
+        """Un carreau (11,5) plus loin, le motif est lu a une abscisse de texture differente : sans etirure G(d + 11,5) - G(d) = 11,5 partout (repetition exacte)."""
+        P = 11.5; i = self.d <= 60.0
+        for side in (0, 1):
+            G, _ = CT.deformation(self.d, side); spacing = np.interp(self.d[i] + P, self.d, G) - G[i] - P
+            self.assertGreater(np.abs(spacing).max(), 1.0)                                                 # ecart de plus d'un dixieme de carreau en plusieurs endroits
+            self.assertGreater((np.abs(spacing) > 0.4).mean(), 0.5)                                       # et presque partout : le motif est decale d'au moins 3 % de carreau sur plus de la moitie de la bande
+
+
+class TestAnalysis(unittest.TestCase):
+    def test_rows(self):
+        r = CT.analyze(*synthetic_sky())
+        self.assertEqual(len(r), 4)
+        for ra in r:
+            self.assertAlmostEqual(ra.period, 11.5, places=3); self.assertEqual(len(ra.quads), 6); self.assertAlmostEqual(ra.rate, 0.996 / 11.5, places=3)
+        self.assertEqual([round(ra.bottom[0], 2) for ra in r], [-33.56, -22.75, -11.95, -1.14])           # tries de bas en haut
+        self.assertAlmostEqual(r[1].topmost[0], r[2].bottom[0], places=2)                                    # rangees contigues
+
+    def test_u_exact(self):
+        P, U, C = synthetic_sky(); r = CT.analyze(P, U, C)
+        # u(x) = celui des quadrilateres de la rangee, partout dans l'objet, et il se repete au-dela
+        for ra in r:
+            for xg, xd, ug, ud in ra.quads:
+                for f in (0.0, 0.25, 0.5, 0.9):
+                    x = xg + f * (xd - xg); self.assertAlmostEqual(float(ra.u(x)), ug + f * (ud - ug), places=6)
+                    self.assertAlmostEqual(float(ra.u(x + 11.5 * 4)), ug + f * (ud - ug), places=5); self.assertAlmostEqual(float(ra.u(x - 11.5 * 3)), ug + f * (ud - ug), places=5)
+        self.assertNotAlmostEqual(float(r[0].u(0.0)), float(r[1].u(0.0)), places=2)                      # rangees decalees d'un demi-carreau
+
+    def test_colors_and_edges(self):
+        r = CT.analyze(*synthetic_sky())
+        self.assertEqual(tuple(np.round(r[0].bottom[3], 3)), (1.0, 0.796, 0.6, 1.0)); self.assertEqual(tuple(r[0].topmost[3]), (1.0, 1.0, 1.0, 1.0))
+        self.assertAlmostEqual(r[0].bottom[2], 0.998, places=3); self.assertAlmostEqual(r[0].topmost[2], 0.002, places=3)
+        self.assertAlmostEqual(r[0].bottom[1], 10.10, places=2); self.assertAlmostEqual(r[0].topmost[1], 14.03, places=2)
+
+    def test_unexpected_structure(self):
+        P, U, C = synthetic_sky()
+        for args in ((P[:-1], U[:-1], C[:-1]), (P[:0], U[:0], C[:0])):
+            with self.assertRaises(ValueError): CT.analyze(*args)
+        P2 = P.copy(); P2[1, 0] += 0.5                                                                  # sommet hors de l'alignement des quadrilateres
+        with self.assertRaises(ValueError): CT.analyze(P2, U, C)
+        U2 = U.copy(); U2[12:, 0] = 0.3                                                                 # motif non periodique
+        with self.assertRaises(ValueError): CT.analyze(P, U2, C)
+
+
+class TestBands(unittest.TestCase):
+    def setUp(self):
+        self.P, self.U, self.C = synthetic_sky(); self.sky = CT.WideSky(self.P, self.U, self.C)
+
+    def test_portrait_nothing_to_add(self):
+        self.assertIsNone(self.sky.bands(camera_title(0.5625), 0.5625, 0.0)); self.assertIsNone(self.sky.bands(camera_title(0.4), 0.4, 0.0))
+
+    def test_intact_zone(self):
+        """Aucun point de la zone portrait (|x d'ecran| <= demi, dans le champ) n'est recouvert par une bande : on projette les triangles et on teste un quadrillage de la zone."""
+        for asp in (16 / 9, 21 / 9, 32 / 9):
+            M = camera_title(asp); half = CT.half_zone_ndc(asp)
+            P, U, C = self.sky.bands(M, asp, 0.0)
+            self.assertEqual(len(P) % 6, 0)
+            ex = M @ np.c_[P, np.ones(len(P))].T; xs = ex[0] / ex[3]; ys = ex[1] / ex[3]
+            visible_ones = np.abs(ys) <= 1.0
+            self.assertGreater(np.abs(xs[visible_ones]).min(), half - 0.15, 'asp %.2f : bande trop pres du bord de la zone' % asp)           # sommets des bandes : hors de la zone, a la marge des rangees inclinees pres
+            for ra in self.sky.rows:                                                               # points de la zone sur la rangee, de bas en haut : leur abscisse monde est entre les bandes
+                b = CT.zone_edges(M, self.sky.rows, half, self.sky.x_mil)
+                self.assertIsNotNone(b)
+                zb, zh, eb, eh = b
+                self.assertLess(eb, zb); self.assertLess(zh, eh)
+                for t in np.linspace(0, 1, 9):
+                    y = ra.bottom[0] + t * (ra.topmost[0] - ra.bottom[0]); z = ra.bottom[1] + t * (ra.topmost[1] - ra.bottom[1])
+                    for xn in np.linspace(-half, half, 7):
+                        # abscisse monde qui projette en xn (dichotomie) : doit etre dans [zb, zh]
+                        lo, hi = -80.0, 80.0
+                        for _ in range(60):
+                            mid = (lo + hi) / 2
+                            if ndc_x(M, (mid, y, z)) < xn: lo = mid
+                            else: hi = mid
+                        c = M @ np.array([lo, y, z, 1.0])
+                        if abs(c[1] / c[3]) <= 1.0: self.assertTrue(zb - 1e-3 <= lo <= zh + 1e-3, (asp, t, xn, lo, zb, zh))
+
+    def test_seam_at_edge(self):
+        """Sommets de chaque bande au bord de la zone : u = celui du ciel d'origine a cette abscisse (decale du defilement de l'objet), v = celui du bord de la rangee, a toute position du defilement."""
+        asp = 16 / 9; M = camera_title(asp)
+        zb, zh, eb, eh = CT.zone_edges(M, self.sky.rows, CT.half_zone_ndc(asp), self.sky.x_mil)
+        for phi in (0.0, -0.0192 * 100, -5.77, -11.49):
+            P, U, C = self.sky.bands(M, asp, phi)
+            for start_idx, end, ri, xs in self.sky._ref:                                                    # chaque bande (rangee, cote) a ses propres sommets (les rangees voisines partagent un bord y, z)
+                ra = self.sky.rows[ri]; Pb, Ub = P[start_idx:end], U[start_idx:end]
+                for y, z, v in ((ra.bottom[0], ra.bottom[1], ra.bottom[2]), (ra.topmost[0], ra.topmost[1], ra.topmost[2])):
+                    m = np.isclose(Pb[:, 0], xs, atol=1e-3) & np.isclose(Pb[:, 1], y, atol=1e-4) & np.isclose(Pb[:, 2], z, atol=1e-4)
+                    self.assertTrue(m.any()); self.assertIn(xs, (zb, zh))
+                    self.assertTrue(np.allclose(Ub[m, 0], ra.u(xs - phi), atol=2e-4), (phi, xs, Ub[m, 0][:3], ra.u(xs - phi)))
+                    self.assertTrue(np.allclose(Ub[m, 1], v, atol=1e-6))
+
+    def test_scroll_follows_the_object(self):
+        """Positions et couleurs des bandes ne dependent pas du defilement ; leur u en depend d'un decalage constant par bande (au bord de la zone la texture glisse comme l'objet : taux x dx)."""
+        asp = 16 / 9; M = camera_title(asp)
+        a = self.sky.bands(M, asp, 0.0); b = self.sky.bands(M, asp, -3.0)
+        self.assertTrue(np.array_equal(a[0], b[0])); self.assertTrue(np.array_equal(a[2], b[2])); self.assertTrue(np.array_equal(a[1][:, 1], b[1][:, 1]))
+        du = b[1][:, 0] - a[1][:, 0]
+        for start_idx, end, ri, xs in self.sky._ref:
+            self.assertLess(np.ptp(du[start_idx:end]), 1e-5)                                                  # decalage identique sur toute la bande (une rangee, un cote) : la texture glisse d'un bloc
+            att = 3.0 * self.sky.rows[ri].rate                                                      # le motif de l'objet avance de 3 unites : u change de taux x 3 (modulo un carreau, 0,996 : le u d'origine est replie dans [0,002 ; 0,998])
+            self.assertLess(abs((du[start_idx] - att + 0.498) % 0.996 - 0.498), 0.01)
+
+    def test_colors_like_the_rows(self):
+        asp = 16 / 9; P, U, C = self.sky.bands(camera_title(asp), asp, 0.0)
+        for ra in self.sky.rows:
+            bottom = np.isclose(P[:, 1], ra.bottom[0], atol=1e-4) & np.isclose(P[:, 2], ra.bottom[1], atol=1e-4)
+            topmost = np.isclose(P[:, 1], ra.topmost[0], atol=1e-4) & np.isclose(P[:, 2], ra.topmost[1], atol=1e-4)
+            self.assertTrue(np.allclose(C[bottom], ra.bottom[3], atol=1e-6)); self.assertTrue(np.allclose(C[topmost], ra.topmost[3], atol=1e-6))
+
+    def test_triangle_winding(self):
+        """Tous les triangles des bandes tournent dans le meme sens que ceux du ciel d'origine (face visible identique)."""
+        asp = 21 / 9; P, U, C = self.sky.bands(camera_title(asp), asp, -2.0)
+        s0 = {np.sign(area(self.P[i:i + 3, :2])) for i in range(0, len(self.P), 3)}
+        s1 = {np.sign(area(P[i:i + 3, :2])) for i in range(0, len(P), 3)}
+        self.assertEqual(len(s0), 1); self.assertEqual(s0, s1)
+
+    def test_wider_more_bands(self):
+        n = [len(self.sky.bands(camera_title(a), a, 0.0)[0]) for a in (16 / 9, 21 / 9, 32 / 9)]
+        self.assertLess(n[0], n[1]); self.assertLess(n[1], n[2])
+        a = self.sky.bands(camera_title(16 / 9), 16 / 9, 0.0)
+        for t in a: self.assertTrue(np.isfinite(t).all())
+
+    def test_covers_whole_window(self):
+        """A chaque abscisse d'ecran (hors zone) et chaque hauteur visible, le point du ciel est couvert par une bande : l'etendue des bandes depasse le bord de la fenetre."""
+        for asp in (16 / 9, 21 / 9, 32 / 9):
+            M = camera_title(asp); P, U, C = self.sky.bands(M, asp, 0.0)
+            b = CT.zone_edges(M, self.sky.rows, CT.half_zone_ndc(asp), self.sky.x_mil); zb, zh, eb, eh = b
+            self.assertLessEqual(P[:, 0].min(), eb - 0.5 * self.sky.step); self.assertGreaterEqual(P[:, 0].max(), eh + 0.5 * self.sky.step)
+
+    def test_seams_between_rows_intact(self):
+        """Le glissement vertical est nul sur les bords haut / bas de chaque rangee (ils lisent la texture de v = 0 a 1 comme l'original : sinon couture visible entre les rangees decalees d'un demi-carreau) et agit a l'interieur."""
+        asp = 21 / 9; P, U, C = self.sky.bands(camera_title(asp), asp, 0.0); interior = 0.0
+        for start_idx, end, ri, xs in self.sky._ref:
+            ra = self.sky.rows[ri]; Pb, Ub = P[start_idx:end], U[start_idx:end]
+            bottom = np.isclose(Pb[:, 1], ra.bottom[0], atol=1e-4) & np.isclose(Pb[:, 2], ra.bottom[1], atol=1e-4)
+            topmost = np.isclose(Pb[:, 1], ra.topmost[0], atol=1e-4) & np.isclose(Pb[:, 2], ra.topmost[1], atol=1e-4)
+            self.assertTrue(np.allclose(Ub[bottom, 1], ra.bottom[2], atol=1e-5)); self.assertTrue(np.allclose(Ub[topmost, 1], ra.topmost[2], atol=1e-5))
+            mil = ~(bottom | topmost); interior = max(interior, float(np.abs(Ub[mil, 1] - np.interp(Pb[mil, 1], [ra.bottom[0], ra.topmost[0]], [ra.bottom[2], ra.topmost[2]])).max()))
+        self.assertGreater(interior, 0.015); self.assertLess(interior, 0.04)
+
+    def test_cache_key(self):
+        asp = 16 / 9; M = camera_title(asp)
+        a = self.sky.bands(M, asp, 0.0); b = self.sky.bands(M, asp, 0.0); self.assertTrue(np.array_equal(a[1], b[1]))
+        c = self.sky.bands(camera_title(21 / 9), 21 / 9, 0.0); self.assertNotEqual(len(a[0]), len(c[0]))
+
+
+class TestScreenZoom(unittest.TestCase):
+    def test_zoom_by_format(self):
+        self.assertEqual(CT.screen_zoom(9 / 16), 1.0); self.assertEqual(CT.screen_zoom(0.4), 1.0)                  # portrait (ou plus etroit) : ciel d'origine, rien a agrandir
+        self.assertAlmostEqual(CT.screen_zoom(16 / 9), (16 / 9) / CT.ASPECT_PORTRAIT); self.assertAlmostEqual(CT.screen_zoom(16 / 9), 3.1605, 3)
+        self.assertAlmostEqual(CT.screen_zoom(21 / 9), 4.148, 3)
+        self.assertLess(CT.screen_zoom(16 / 10), CT.screen_zoom(16 / 9))                                              # plus la fenetre est large, plus le zoom est fort
+
+    def test_whole_window_fits_in_portrait_zone(self):
+        for aspect in (16 / 9, 16 / 10, 21 / 9, 32 / 9):
+            z = CT.screen_zoom(aspect); self.assertAlmostEqual(1.0 / z, CT.half_zone_ndc(aspect))              # la demi-fenetre agrandie = la demi-zone portrait d'origine : pas de repetition horizontale
+
+    def test_trial_variable(self):
+        old = os.environ.get('DQ_CIEL_ZOOM')
+        try:
+            os.environ['DQ_CIEL_ZOOM'] = '2.5'; self.assertEqual(CT.screen_zoom(16 / 9), 2.5)
+            os.environ['DQ_CIEL_ZOOM'] = '0.3'; self.assertEqual(CT.screen_zoom(16 / 9), 1.0)                  # (jamais un zoom arriere)
+            os.environ['DQ_CIEL_ZOOM'] = 'abc'; self.assertAlmostEqual(CT.screen_zoom(16 / 9), 3.1605, 3)      # valeur illisible : calcul normal
+        finally:
+            if old is None: os.environ.pop('DQ_CIEL_ZOOM', None)
+            else: os.environ['DQ_CIEL_ZOOM'] = old
+
+    def test_zoom_matrix(self):
+        M = matrix((3.0, 5.0, -20.0), (3.0, 4.0, 0.0), 40.0, 16 / 9); Mz = CT.zoom_matrix(M, 3.0)
+        p = np.array([2.0, 3.0, 4.0, 1.0]); h, hz = M @ p, Mz @ p
+        self.assertAlmostEqual(hz[0], 3.0 * h[0]); self.assertAlmostEqual(hz[1], 3.0 * h[1])                    # x et y d'ecran multiplies
+        self.assertAlmostEqual(hz[2], h[2]); self.assertAlmostEqual(hz[3], h[3])                                # profondeur et w intacts
+        self.assertTrue(np.allclose(CT.zoom_matrix(M, 1.0), M))
+        self.assertTrue(np.allclose(M, matrix((3.0, 5.0, -20.0), (3.0, 4.0, 0.0), 40.0, 16 / 9)))               # (M n'est pas modifiee)
+
+
+class TestFlatSky(unittest.TestCase):
+    """Rendu a plat (#174) : texture a la hauteur de la fenetre, repetition sur la largeur, effet de vague."""
+    def test_flat_stretch(self):
+        d = np.linspace(0.0, 12.0, 4801); G = CT.stretch_plate(d)
+        self.assertAlmostEqual(float(G[0]), 0.0)                                                                  # G(0) = 0 : pas de decalage au bord gauche
+        slope = np.diff(G) / np.diff(d)
+        self.assertGreater(slope.min(), 0.51); self.assertLess(slope.max(), 1.49)                                 # comme l'etirure des bandes : jamais de retournement, 0,52 a 1,48
+        self.assertLess(float(np.abs(G - d).max()), 0.75)                                                         # echelle d'ensemble 1 : la vague oscille autour de l'identite, sans derive
+        self.assertAlmostEqual(float(G[-1] - d[-1]), float(G[0] - d[0]), delta=0.75)
+        self.assertFalse(np.allclose(G[400:] - G[400], G[:-400] - G[0], atol=1e-3))                               # le motif ne revient pas identique une tuile plus loin
+        self.assertTrue(np.allclose(CT.stretch_plate(np.array([0.3, 1.7])), CT.stretch_plate(np.array([0.3, 1.7]))))    # deterministe
+
+    def test_flat_sliding(self):
+        d = np.linspace(0.0, 12.0, 1201); g = CT.flat_sliding(d)
+        self.assertLessEqual(float(np.abs(g).max()), sum(a for a, _, _ in CT.SLIDE) + 1e-9)
+        self.assertGreater(float(np.abs(g).max()), 0.01)                                                          # (la vague verticale existe)
+
+    def test_texture_height_equals_window_height(self):
+        for aspect in (16 / 9, 16 / 10, 21 / 9, 32 / 9, 4 / 3, 1.0, 9 / 16):
+            P, U, C = CT.screen_sky(aspect, 0.0)
+            self.assertAlmostEqual(float(P[:, 1].min()), -1.0); self.assertAlmostEqual(float(P[:, 1].max()), 1.0)    # le ciel couvre toute la hauteur
+            self.assertAlmostEqual(float(U[:, 1].max()), 0.998, 3); self.assertAlmostEqual(float(U[:, 1].min()), 0.002, 3)   # et toute la hauteur de la texture (pas de zoom supplementaire)
+            self.assertGreaterEqual(float(P[:, 0].max()), 1.0 - 1e-6); self.assertAlmostEqual(float(P[:, 0].min()), -1.0)    # toute la largeur
+
+    def test_repeat_happens_across_the_width(self):
+        for aspect in (16 / 9, 21 / 9, 32 / 9, 4 / 3):
+            P, U, C = CT.screen_sky(aspect, 0.0)
+            left, right = U[P[:, 0] < -1.0 + 1e-6, 0], U[(P[:, 0] > 1.0 - 1e-6), 0]
+            extent = float(right.max() - left.min())
+            self.assertAlmostEqual(extent, aspect / CT.TILE_WIDTH, delta=0.8)                                  # ~ `aspect` tuiles sur la largeur (texture carree), a la vague pres
+            self.assertGreater(extent, 0.9 * aspect / CT.TILE_WIDTH - 0.5)
+        P, U, C = CT.screen_sky(21 / 9, 0.0); P2, U2, C2 = CT.screen_sky(16 / 9, 0.0)
+        self.assertGreater(float(U[:, 0].max() - U[:, 0].min()), float(U2[:, 0].max() - U2[:, 0].min()))          # plus la fenetre est large, plus la texture se repete (jamais etiree)
+        P, U, C = CT.screen_sky(9 / 16, 0.0)
+        self.assertLess(float(U[:, 0].max() - U[:, 0].min()), 1.0)                                                # portrait : moins d'une tuile
+
+    def test_scroll_shifts_only_u(self):
+        P0, U0, C0 = CT.screen_sky(16 / 9, 0.0); P1, U1, C1 = CT.screen_sky(16 / 9, 0.37)
+        self.assertTrue(np.array_equal(P0, P1)); self.assertTrue(np.allclose(C0, C1))                              # la vague est fixe a l'ecran
+        self.assertTrue(np.allclose(U0[:, 0] - U1[:, 0], 0.37, atol=1e-5)); self.assertTrue(np.array_equal(U0[:, 1], U1[:, 1]))
+        P2, U2, _ = CT.screen_sky(16 / 9, 599.0)                                                                  # periode 1 tuile : (texture en REPEAT) rien a recaler
+        self.assertTrue(np.allclose(U0[:, 0] - U2[:, 0], 599.0, atol=1e-3))
+
+    def test_triangles_without_holes_and_same_winding(self):
+        for aspect in (16 / 9, 21 / 9, 9 / 16):
+            P, U, C = CT.screen_sky(aspect, 0.2)
+            self.assertEqual(len(P) % 6, 0); self.assertEqual(P.shape[1], 3); self.assertEqual(U.shape, (len(P), 2)); self.assertEqual(C.shape, (len(P), 4))
+            areas = np.array([area(P[i:i + 3]) for i in range(0, len(P), 3)])
+            self.assertTrue((areas > 0).all() or (areas < 0).all())                                                # aucun triangle retourne
+            self.assertAlmostEqual(float(np.abs(areas).sum()) / 2.0, (float(P[:, 0].max()) - float(P[:, 0].min())) * 2.0, places=3)   # l'aire totale = rectangle couvert : pas de trou ni de recouvrement
+            self.assertTrue(np.allclose(P[:, 2], CT.BACKGROUND_Z))                                                          # au fond
+
+    def test_tint_gradient_of_original_rows(self):
+        cl = CT.WideSky(*synthetic_sky()); M = camera_title(16 / 9)
+        y, c = CT.screen_gradient(M, cl.rows, cl.x_mil)
+        self.assertTrue((np.diff(y) > 0).all()); self.assertEqual(c.shape, (len(y), 4))                            # ordonnees d'ecran strictement croissantes
+        self.assertGreaterEqual(float(c.min()), 0.0); self.assertLessEqual(float(c.max()), 1.0 + 1e-6)
+        green = c[:, 1]
+        self.assertAlmostEqual(float(green[0]), 0.8, delta=0.05); self.assertAlmostEqual(float(green[-1]), 0.8, delta=0.05)    # orange en bas et en haut, comme les rangees d'origine
+        self.assertAlmostEqual(float(green.max()), 1.0, delta=1e-3)                                                    # blanc au milieu
+        P, U, C = CT.screen_sky(16 / 9, 0.0, (y, c))
+        expected = np.interp(P[:, 1], y, green)
+        self.assertLess(float(np.abs(C[:, 1] - expected).max()), 0.03)                                                 # chaque sommet a la couleur du degrade a son ordonnee
+        self.assertAlmostEqual(float(C[:, 1].max()), 1.0, delta=1e-3); self.assertLess(float(C[:, 1].min()), 0.85)    # blanc au milieu, orange en haut de la fenetre
+        _, _, C0 = CT.screen_sky(16 / 9, 0.0); self.assertTrue(np.allclose(C0, 1.0))                                  # sans degrade : blanc
+
+    def test_gradient_ignores_what_is_behind_camera(self):
+        cl = CT.WideSky(*synthetic_sky()); M = camera_title(16 / 9).copy(); M[3] = [0.0, 0.0, 0.0, -1.0]          # w < 0 partout
+        y, c = CT.screen_gradient(M, cl.rows, cl.x_mil)
+        self.assertEqual(len(y), 2); self.assertTrue(np.allclose(c, 1.0))                                             # repli : degrade blanc (jamais d'erreur)
+
+
+if __name__ == '__main__':
+    unittest.main()
