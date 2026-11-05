@@ -10,6 +10,8 @@ Les anciens états instantanés (`.dqs`) et les anciens réglages se relisent to
 
 La table complète ancien nom → nouveau nom des **identifiants** est dans [`rename_identifiers.tsv`](rename_identifiers.tsv).
 
+**Correction du 05/11/2026 (D-241)** : la méthode `_cachee` de la fenêtre du jeu avait été renommée `_hidden`, nom déjà pris par la fenêtre Windows de pyglet (`Win32Window._hidden = False`) : le jeu plantait au premier dessin d'un menu sous Windows. Elle s'appelle `_menu_hidden`. Règle pour la suite (DQ5, DQ6) : un nom de la fenêtre du jeu (`dq4_pc/window/`) ne doit jamais être un nom de la fenêtre de pyglet, sur aucune plateforme ; `tests/test_window_name_collisions.py` le vérifie en lisant le code de pyglet pour Windows, X11, macOS et Wayland.
+
 ## Dossiers
 
 | Avant | Maintenant |

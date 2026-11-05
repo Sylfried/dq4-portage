@@ -67,7 +67,7 @@
 
 **E. Plus lointain** : packaging `.exe` (#87), **modificateurs et triches à décider, tout à la fin (#105, D-205 ; sa liste reste à fournir)**, DQ5 et DQ6 (#88, dont la priorité du jeu sur le réglage de vitesse du texte pour les dialogues du terrain), piste Unity (en pause).
 
-**F. Rappels** : tout ce qui a été vu par Claude l'a été sous Linux (Mesa), sauf ce que Sylfried a validé (A). Les chapitres 2 et suivants n'ont jamais été joués. La session cloud **ne peut pas supprimer de branche ni changer les réglages du dépôt** (proxy, 403).
+**F. Rappels** : tout ce qui a été vu par Claude l'a été sous Linux (Mesa), sauf ce que Sylfried a validé (A). **Piège connu (D-241, #310)** : la fenêtre Windows de pyglet a des attributs que Linux n'a pas (`_hidden`...) ; un nom de la fenêtre du jeu qui les reprend ne plante que sous Windows. `tests/test_window_name_collisions.py` le vérifie ; à rejouer pour DQ5 et DQ6. Les chapitres 2 et suivants n'ont jamais été joués. La session cloud **ne peut pas supprimer de branche ni changer les réglages du dépôt** (proxy, 403).
 
 ## 7. Démarrer la nouvelle conversation
 1. Ouvrir le Projet « Dragon Quest 4-5-6 Android > PC » (ce document est son doc `claude/reprise-nouvelle-conversation.md`).

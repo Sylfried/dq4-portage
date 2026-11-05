@@ -122,7 +122,7 @@ class Anchor(unittest.TestCase):
         def window(typ, rects): return types.SimpleNamespace(typ=typ, rects=lambda: rects)
         j = types.SimpleNamespace(engine=types.SimpleNamespace(state=types.SimpleNamespace(part=part)), ui_msg=msg, battle_anchor=None, ui_followers=set(), reg={'interface_fenetres': {}}, ui_tf={},
                                   ui_g=types.SimpleNamespace(f={29: window(29, [(-219.0, 255.0, -107.0, 375.0)]), 32: window(32, [(-225.0, -402.0, 234.0, -144.0), (156.0, -397.0, 220.0, -335.0)])}))
-        j._hidden = lambda typ: False; j._type_name = lambda typ: {29: 'BattleUpStatus', 32: 'BattleAction'}.get(typ)
+        j._menu_hidden = lambda typ: False; j._type_name = lambda typ: {29: 'BattleUpStatus', 32: 'BattleAction'}.get(typ)
         j._ui_custom = lambda mode, s, v: (640.0, 400.0 * s * v[0], s * v[0])
         j.call = lambda entries, msg, dz: F.Game._anchor_battle_speed(j, entries, msg, dz, 1.0, 640.0, lambda lookup_key: (400.0, 1.0), None)
         return j

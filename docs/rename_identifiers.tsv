@@ -1007,7 +1007,7 @@ _bouton_muet	_mute_button
 _bouton_retour	_back_button
 _bouton_sous	_button_under
 _bruit_hud	_hud_sfx
-_cachee	_hidden
+_cachee	_menu_hidden
 _cadre	_border
 _cadre_depart	_initial_border
 _cadre_jeu	_game_border

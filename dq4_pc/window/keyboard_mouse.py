@@ -92,8 +92,8 @@ class KeyboardMouseMixin:
 
     def on_mouse_press(self, x, y, button, modifiers):
         """Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler."""
+        if not self._ready: self._logo_touched = True; return        # (pendant les logos, le moteur se charge encore : `self.engine` n'existe pas)
         M = pyglet.window.mouse; eng = self.engine
-        if not self._ready: self._logo_touched = True; return
         self.last_device = 'souris'; self.mouse_guard.click(); self.mouse = (x, y)             # un clic agit toujours, aussitot : la souris a la main
         if button == M.MIDDLE: self._wheel_press(x, y); return                                           # bouton du milieu : la camera seulement (jamais un clic de menu, de message ou de bouton)
         if self.pause.opened: self.pause.click(x, y, button); return

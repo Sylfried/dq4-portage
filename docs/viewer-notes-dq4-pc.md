@@ -2522,7 +2522,7 @@ Sylfried (05/11/2026, 01 h 07, point 9) : relancer un audit complet, clore les s
 ### Fait (documents et issues seulement)
 - **Huit relecteurs en lecture seule** (moteur, Unity, services, interface, cartes, sprites, combat, son) sur `main` = `becda5c` ; rapport : `docs/audit/audit_2026-11-05.md` (ce qui manque, ce qui bug, décisions, inventaire, constats du 04/11 revus, verdict sur chacune des 123 issues ouvertes, ce qui n'a pas pu être vérifié).
 - **Issues** : 11 fermées (#71, #74, #83, #101, #122, #146, #167, #168, #173, #233, #243 : recherches terminées, fonctions supprimées par D-226, issue remplacée par #128) ; **17 créées** (#292 à #308 : moteur arrêté sans trace, lanceur et migration, dépendances, états `.dqs`, documents périmés, générique de fin, FSRA, trois décisions, textes de l'outil, cache de cartes, modèles 3D de combat, deux bugs de combat, son) ; 14 commentées (#64, #66, #69, #73, #77, #81, #88, #93, #245, #249, #251, #253, #263, #285) ; #249 en priorité haute ; étiquette `test-windows` ajoutée à #235. Les issues dont le test Windows est demandé restent ouvertes.
-- **Constats principaux** : le générique de fin est le plus gros manque (#297) ; le ciel d'`ev09` se décale quand le plan défile (#249) ; un moteur arrêté ferme la fenêtre sans trace (#292) ; « ERROR 3080 » ne vient pas du patch FR (#81) ; l'angle de caméra sur le toit après la chambre d'Alina vient du script de `cbf3` et non de la visionneuse (#285) ; les FEMV sont du code mort dans Unity (#66, #69) ; aucune régression de comportement dans les PR #196 à #291.
+- **Constats principaux** : le générique de fin est le plus gros manque (#297) ; le ciel d'`ev09` se décale quand le plan défile (#249) ; un moteur arrêté ferme la fenêtre sans trace (#292) ; « ERROR 3080 » ne vient pas du patch FR (#81) ; l'angle de caméra sur le toit après la chambre d'Alina vient du script de `cbf3` et non de la visionneuse (#285) ; les FEMV sont du code mort dans Unity (#66, #69) ; aucune régression de comportement dans les PR #196 à #291 (**rectifié en #310 : le renommage D-239 plantait sous Windows, voir plus bas**).
 - **Rien dans le code** : aucun fichier de `dq4_pc/`, `tools/`, `tests/` n'a changé.
 
 ### Établi / supposé / non vérifié
@@ -2532,3 +2532,26 @@ Sylfried (05/11/2026, 01 h 07, point 9) : relancer un audit complet, clore les s
 
 ### À faire de ton côté
 Aucun test Windows nouveau. Cinq questions à trancher : #299, #303, #302, #307 et #93.
+
+## Avance #310 : plantage au démarrage sous Windows, `_hidden` pris par pyglet (D-241)
+
+### Demande
+Sylfried (05/11/2026, 10 h 09) : journal de la console collé, sans texte, du premier lancement de `launch_dq4.bat` après `git pull` : le jeu s'arrête (code 1) sur `TypeError: 'bool' object is not callable` (`dq4_pc/window/menu_display.py`, `_draw_menus`), après « Rendu hors écran : 1920 x 1200 (x1), anticrénelage x8 ». Un clic de souris pendant « Chargement du moteur... » avait aussi laissé `AttributeError: 'Game' object has no attribute 'engine'` (affiché, non fatal).
+
+### Cause (établie en lisant le code de pyglet 2.1.19)
+- Le renommage D-239 (#290) a fait de la méthode `_cachee(typ)` de `Game` une méthode `_hidden(typ)`. La fenêtre Windows de pyglet (`Win32Window`, `pyglet/window/win32/__init__.py`, ligne 125) a un **attribut de classe `_hidden = False`** (fenêtre cachée ou non) : il masque la méthode, et `self._hidden(wnd.typ)` devient `False(...)`, d'où `'bool' object is not callable`.
+- Sous Linux, ni la fenêtre sans tête ni X11 n'ont cet attribut : les 1 620 tests, les captures et l'audit D-240 n'ont rien vu. Le contrôle de collisions de D-239 ne regardait que les noms du projet, pas ceux des classes de bibliothèques.
+- Le clic pendant les logos : `on_mouse_press` lisait `self.engine` **avant** de tester `self._ready`, alors que le moteur est créé plus tard (défaut ancien : l'ancien code lisait `self.moteur` dans le même ordre ; sous Windows une exception d'une fonction de rappel est seulement affichée).
+
+### Fait
+- Méthode renommée `_menu_hidden` (`window/menu_display.py`, `window/battle_scene.py`, deux tests qui la simulent, `docs/rename_identifiers.tsv`). `on_mouse_press` teste `_ready` d'abord.
+- **Nouveau test** `tests/test_window_name_collisions.py` : lit le code de pyglet pour Windows, X11, macOS, Wayland et sans tête, et refuse tout nom de `dq4_pc/window/*.py` (méthode, attribut de classe, `self.x = ...`) déjà pris par la fenêtre de pyglet, sauf `_width`, `_height`, `_screen` (écrits exprès dans `full_screen.py`) et les `on_*` (vrais événements, vérifiés). Il échoue sur l'ancien code (3 échecs) et passe avec la correction.
+- **Autres collisions cherchées, aucune trouvée** : toutes les classes héritant d'une classe de bibliothèque ou du projet (`pickle.Unpickler`, `unittest.TestCase`, `pyglet.media.Source`, les classes du projet qui en héritent), les variables locales dont le nom masque un module, une fonction globale ou un builtin utilisé plus haut dans la même fonction, les noms d'attributs écrits dans des chaînes (`getattr`, `setattr`, `hasattr` : 0 ancien nom), les attributs posés sur des objets de pyglet ou de numpy (tous sur des objets du projet).
+
+### Établi / supposé / non vérifié
+- **Établi** : la cause (code de pyglet lu, erreur du journal identique) ; le test de non-régression échoue sans le correctif et passe avec ; suite complète du dépôt relancée sous Linux.
+- **Supposé** : que ce soit la seule collision de ce genre (les contrôles ci-dessus ne couvrent que ce qui s'analyse dans le code, pas ce qui se fait par `exec` ou noms construits).
+- **Non vérifié** : le jeu sous Windows après la correction (rendu des menus, combat, plein écran) : Claude ne peut pas le lancer.
+
+### À faire de ton côté
+`git pull`, puis relancer `launch_dq4.bat` (le raccourci doit pointer sur `launch_dq4.bat`, plus sur `lancer_dq4.bat`). **#289 reste ouverte** : à valider quand le jeu tourne.
