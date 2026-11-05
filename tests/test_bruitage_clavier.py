@@ -117,6 +117,7 @@ class SurLeJeu(unittest.TestCase):
         j._zones = lambda p: zones if p == port else []; j._carte_ports = lambda: {}; j._terrain_libre = lambda: False
         j._port_pour_manette = lambda p, pad: p; j._port_depart = lambda p: False; j._port_clavier = lambda p: p
         j._saisie_nom_en_cours = lambda: False; j._cachee = lambda t: False
+        j._bits_camera = lambda: 0; j._camera_oublier = lambda: None            # (la camera du jeu n'a rien a voir avec les bruitages : test_entrees.py et test_camera_moteur.py)
         for nom in ('_saisie_menu', '_saisie_pas', '_pas_colonnes', '_pas_actif', '_voisin', '_fleche_page', '_bouton_sous', 'on_mouse_press', '_bruit_hud', '_entrees', '_survol_pas', '_quitter_seul'):
             f = inspect.getattr_static(FE.Jeu, nom, None)
             if isinstance(f, staticmethod): setattr(j, nom, f.__func__)

@@ -188,8 +188,8 @@ class ClavierSourisMixin:
             if f: f['cur'] = b
 
     def pad(self):
-        """Manette du jeu d'apres les touches reglees : directions, A (action / valider), B (annuler). Sur le terrain, les directions suivent la camera (rotation) et les fleches gauche / droite sont celles de la camera ;
-        dans un menu, un message ou un combat, les fleches deviennent des directions."""
+        """Manette du jeu d'apres les touches reglees : directions, A (action / valider), B (annuler). Sur le terrain, les fleches gauche / droite sont celles de la camera (boutons de camera du jeu, voir _bits_camera) et les directions
+        sont celles de l'ecran : c'est le jeu qui les tourne selon sa camera, comme sur mobile ; dans un menu, un message ou un combat, les fleches deviennent des directions."""
         p = 0; libre = self._terrain_libre()
         for act, bit in (('haut', MO.HAUT), ('bas', MO.BAS), ('gauche', MO.GAUCHE), ('droite', MO.DROITE)):
             if self._tenue(act): p |= bit
@@ -198,20 +198,9 @@ class ClavierSourisMixin:
                 if self._tenue(act): p |= bit
         else:
             p |= self.hud.croix_bits()                                                                        # croix a l'ecran tenue a la souris : une direction de plus (relative a l'ecran, comme les touches)
-            if p and self._lacet_eff(): p = self._tourner_dir(p, int(round(self._lacet_eff() / 45.0)))
         if self._tenue('A'): p |= MO.A
         if self._tenue('B'): p |= MO.B
         return p
-
-    def _etat_axe(self, cle, moins, plus):
-        """Une paire de fleches opposees : -1 / 0 / +1 = sens demande a la main. Les deux ensemble lancent le recentrage anime (`cam_axe[cle][0]`) ; tant qu'il en reste une enfoncee
-        apres cette pression double, rien ne se passe (le relachement n'est jamais exactement simultane) ; une nouvelle pression seule annule le recentrage."""
-        s = self.cam_axe[cle]
-        if moins and plus: s[0] = True; s[1] = True; return 0
-        if not (moins or plus): s[1] = False; return 0
-        if s[1]: return 0
-        s[0] = False
-        return 1 if plus else -1
 
     def _bruit_hud(self, nom):
         """Touche Commandes / Discussion / Carte sur le terrain : le bruitage 300 du bouton a l'ecran, dans les memes situations qu'au doigt (#60, D-156 ; le bouton est-il permis par le moteur, qu'il soit affiche ou non)."""
@@ -233,7 +222,7 @@ class ClavierSourisMixin:
     def _entrees(self, p):
         """Touches et clics de ce pas du moteur -> (p, decl) : boutons tenus et boutons qui viennent d'etre presses, tels que le moteur les veut (menu qui a la saisie : tout passe par `_saisie_menu`, p = decl = 0).
         Seulement dans les pas « reels » : un pas supplementaire d'un combat accelere (`tick(muet=True)`) n'en lit aucune, pour que la cadence des touches (repetition des fleches, premier appui) ne change pas."""
-        mo = self.moteur
+        mo = self.moteur; terrain = False
         if self.clic_a: p |= MO.A; self.clic_a = False                  # clics de souris : page suivante / annuler
         if self.clic_b: p |= MO.B; self.clic_b = False
         decl = p & ~self.pad_prec                      # boutons qui viennent d'etre presses
@@ -287,5 +276,7 @@ class ClavierSourisMixin:
             elif fr['discussion']: decl = BTN_DISCUSSION; self._bruit_hud('discussion')
             elif fr['carte']: decl = BTN_CARTE; self._bruit_hud('carte')
             p &= ~(MO.A | MO.B)
+            terrain = True; p |= self._bits_camera()                          # (sur le terrain, les bits 4 et 5 des touches tenues sont les boutons de camera du jeu : gauche, droite, les deux = retour au nord)
         elif decl & MO.A: p, decl = EN.toucher_pour_le_moteur(p, decl, MO.A, MO.B, BTN_PAROLE, mo.attend_toucher())          # message ouvert : A tourne la page (0x10) ; le menu du don d'experience, a son dernier etat, attend le toucher d'ecran (0x100 seul)
+        if not terrain: self._camera_oublier()          # (ni menu, ni message, ni titre : une rotation demandee a la souris ou un retour au nord en attente ne partent pas apres coup)
         return p, decl

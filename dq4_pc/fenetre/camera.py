@@ -1,17 +1,17 @@
-"""Camera : camera des villes (celle du jeu + la rotation gauche / droite du joueur), de la carte du monde, du combat et du titre, correction des bords des sprites. Le joueur ne regle que la rotation (fleches gauche / droite, clic molette) :
-plus de zoom, d'inclinaison, de centrage ni de lissage de hauteur (retires en #264), et plus d'acceleration de la camera (D-233)."""
-import math, os, time
+"""Camera : camera des villes (celle du jeu, que le joueur tourne avec les boutons de camera DU JEU), de la carte du monde, du combat et du titre, correction des bords des sprites. Le joueur ne regle que la rotation (fleches gauche / droite, clic molette) :
+plus de zoom, d'inclinaison, de centrage ni de lissage de hauteur (retires en #264), plus d'acceleration de la camera (D-233) et plus de rotation faite par la visionneuse a cote du jeu (D-234) : elle est celle du jeu, comme sur mobile."""
+import math, os
 import numpy as np
 import pyglet
 from dq4_pc.fenetre import entrees as EN
 from dq4_pc.noyau import moteur as MO
-from dq4_pc.fenetre.constantes import (ASPECT_PORTRAIT, BAS_DEF, CAM_LACET_VIT, CAM_MENE_DIST, CAM_RECENTRE_LACET, CAM_SAUT_VILLE, CAM_SCENE_TAU, CARTE_TITRE, CB_DEC_Z, CB_ECHELLE_DECOR,
+from dq4_pc.fenetre.constantes import (ASPECT_PORTRAIT, BAS_DEF, CAM_GLISSE_MAX, CAM_GLISSE_PAS, CARTE_TITRE, CB_DEC_Z, CB_ECHELLE_DECOR,
     CB_FAR, CB_FOV_NOM, CB_NEAR, CB_YOFFSET, CH_ECHELLE, CH_PX, CH_VUE_HAUT, CORRECTION_BORDS_DEF, DIST_ADJ_VILLE, FOV_VILLE_DEF, MODE_PP, VILLE_FAR, VILLE_NEAR)
 from dq4_pc.fenetre.aides import camera_libre, matrice, rot_unity
 
 
 class CameraMixin:
-    """Camera : camera des villes (celle du jeu, tournee autour de sa cible par le joueur), de la carte du monde, du combat et du titre, correction des bords des sprites."""
+    """Camera : camera des villes (celle du jeu : le joueur la tourne par les boutons de camera du jeu), de la carte du monde, du combat et du titre, correction des bords des sprites."""
 
     def _camera_champ(self, e, aspect):
         """Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
@@ -28,15 +28,65 @@ class CameraMixin:
         return M, np.array([1.0, 0.0, 0.0]), 24 / CH_PX * ech, 32 / CH_PX * ech
 
     def _camera_pilotable(self):
-        """La camera se tourne a la main (fleches gauche / droite, glisser du clic molette) : terrain libre d'une ville, d'un donjon ou d'une tour (pas la carte du monde, pas l'ecran-titre), sauf lieu ou le jeu interdit de la tourner (cam_bloquee)
-        et scene ou le jeu tient la camera (cam_jeu, camera libre : le jeu l'emporte). Memes conditions que _maj_camera."""
+        """Les boutons de camera du jeu (fleches gauche / droite, clic molette) sont-ils envoyes au moteur ? Terrain libre d'une ville, d'un donjon ou d'une tour : ni la carte du monde, ni l'ecran-titre, ni un message, un menu, une carte ou un effet.
+        Le reste (joueur verrouille par un evenement, camera tenue par une scene, lieu qui interdit de la tourner, limites de rotation) est decide par le jeu lui-meme, comme sur mobile : il refuse alors le bouton (Moteur.camera_attente)."""
         e = self.moteur.etat
-        return (self._terrain_libre() and e.partie == MO.PARTIE_VILLE and getattr(self, 'carte_nom', None) != CARTE_TITRE and not self.cam_bloquee and not self.cam_jeu and not (e.cam_libre and e.cam_rot is not None)
-                and self.licence is None and self.sauv is None and not self._saisie_nom_en_cours())
+        return (self._terrain_libre() and e.partie == MO.PARTIE_VILLE and getattr(self, 'carte_nom', None) != CARTE_TITRE and self.licence is None and self.sauv is None and not self._saisie_nom_en_cours())
 
     def recentrer_camera(self):
-        """Remet la rotation de la camera par defaut (celle du jeu) par l'animation de recentrage : les deux fleches ensemble, ou clic molette."""
-        self.cam_axe['lacet'][0] = True; self.cam_axe['lacet'][1] = True
+        """Clic molette, ou les deux fleches ensemble : les deux boutons de camera du jeu ensemble au prochain pas = le jeu ramene la camera au nord (TownPlayerManager::setCameraRotToNorth : il anime le retour et tient le joueur pendant ce temps)."""
+        self.cam_recentre = True
+
+    def _etat_axe(self, moins, plus):
+        """Les deux fleches de la camera : -1 (gauche) / 0 / +1 (droite) = sens demande a la main. Les deux ensemble demandent le retour au nord, une seule fois ; tant qu'il en reste une enfoncee apres cette pression double, rien ne se passe
+        (le relachement n'est jamais exactement simultane)."""
+        if moins and plus:
+            if not self.cam_deux: self.cam_recentre = True
+            self.cam_deux = True; return 0
+        if not (moins or plus): self.cam_deux = False; return 0
+        if self.cam_deux: return 0
+        return 1 if plus else -1
+
+    def _bits_camera(self):
+        """Boutons de camera du jeu a envoyer a ce pas du moteur (MO.CAM_G / MO.CAM_D ; les deux ensemble : retour au nord), d'apres les fleches, le clic molette et le glissement du clic molette (rotation encore a faire : `cam_demande`).
+        Hors du terrain libre rien n'est envoye et les demandes en attente sont oubliees. Le sens envoye est garde pour Jeu._camera_apres_pas."""
+        self.cam_sens = (0, False)
+        g, d = self._tenue('cam_gauche'), self._tenue('cam_droite')
+        if not self._camera_pilotable(): self._camera_oublier(); return 0
+        sens = self._etat_axe(g, d); glisse = False
+        if self.cam_recentre: self.cam_recentre = False; self.cam_demande = 0.0; return MO.CAM_G | MO.CAM_D
+        if not sens and not (g or d) and abs(self.cam_demande) >= MO.CAM_PAS / 2: sens = 1 if self.cam_demande > 0 else -1; glisse = True
+        if not sens: return 0
+        self.cam_sens = (sens, glisse)
+        return MO.CAM_D if sens > 0 else MO.CAM_G
+
+    def _camera_oublier(self):
+        """Rien n'est envoye a la camera du jeu a ce pas (menu, message, titre, carte du monde...) : les demandes en attente (retour au nord, rotation de la souris) sont oubliees, et deux fleches deja tenues ne comptent pas comme une pression double
+        au retour sur le terrain."""
+        self.cam_recentre = False; self.cam_demande = 0.0; self.cam_sens = (0, False); self.cam_deux = bool(self._tenue('cam_gauche') and self._tenue('cam_droite'))
+
+    def _camera_apres_pas(self, mo):
+        """Apres un pas du moteur envoye avec un bouton de camera : le jeu l'a-t-il pris (Moteur.camera_attente) ? Il tourne alors d'un cran (MO.CAM_PAS degres) au pas suivant ; au-dela d'un cran par pas, on lui en fait faire les autres tout de suite
+        (Moteur.camera_tourner) : reglage « Vitesse de camera » aux fleches (x2 = deux crans par pas ; la vitesse non entiere se repartit d'un pas a l'autre), jusqu'a CAM_GLISSE_PAS crans pour que le glissement du clic molette suive le pointeur.
+        S'il refuse (verrou du joueur, scene, lieu qui interdit de la tourner, limite atteinte), la rotation demandee a la souris est abandonnee : la camera reste ou le jeu la met."""
+        (sens, glisse), self.cam_sens = self.cam_sens, (0, False)
+        if not sens: return
+        genre = MO.ROT_CAM_DROITE if sens > 0 else MO.ROT_CAM_GAUCHE
+        if mo.camera_attente() != genre:
+            if glisse: self.cam_demande = 0.0
+            return
+        if glisse:
+            n = max(1, min(CAM_GLISSE_PAS, int(round(abs(self.cam_demande) / MO.CAM_PAS))))
+            self.cam_demande -= sens * n * MO.CAM_PAS
+        else:
+            self.cam_acc += float(self.reg['vitesse_camera']); n = max(1, int(self.cam_acc)); self.cam_acc = max(0.0, self.cam_acc - n)
+        if n > 1: mo.camera_tourner(genre, n)
+
+    def _lacet_moteur(self):
+        """Cap de la camera du jeu en degres (0 = le cap d'origine des villes, vers +Z ; positif vers +X, comme la fleche droite), pour l'affichage de F1."""
+        e = self.moteur.etat
+        if e.cam_pos is None or e.cam_cible is None: return 0.0
+        return math.degrees(math.atan2(e.cam_cible[0] - e.cam_pos[0], e.cam_cible[2] - e.cam_pos[2]))
 
     def on_mouse_scroll(self, x, y, sx, sy):
         """Molette : fait defiler le menu Echap ou la licence ; sur le terrain elle ne fait plus rien (plus de zoom, #264)."""
@@ -45,20 +95,20 @@ class CameraMixin:
         if self.licence is not None: self.licence.defiler(-sy * 60.0)
 
     def _molette_appui(self, x, y):
-        """Bouton du milieu enfonce : un clic (la camera se recentre) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
+        """Bouton du milieu enfonce : un clic (la camera revient au nord) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien."""
         if self.hud.croix_on or self.appui or not self._camera_pilotable(): self.molette.annuler(); return
         self.molette.appui(x, y)
 
     def _molette_glisse(self, x, y):
-        """Bouton du milieu maintenu et pointeur deplace : la camera tourne (a gauche / a droite seulement ; le deplacement vertical ne fait rien), memes sens par defaut, bornes que les fleches (entrees.pivoter) ;
-        le reglage « Inverser gauche / droite » inverse le sens du glissement (jamais celui des fleches du clavier). Le lacet n'est pas enregistre."""
+        """Bouton du milieu maintenu et pointeur deplace : la camera tourne (a gauche / a droite seulement ; le deplacement vertical ne fait rien), memes sens par defaut que les fleches (entrees.pivoter) ;
+        le reglage « Inverser gauche / droite » inverse le sens du glissement (jamais celui des fleches du clavier). Le jeu tourne par crans (voir _camera_apres_pas)."""
         dx = self.molette.deplacer(x, y)
         if not dx or not self._camera_pilotable(): return
-        self.cam_axe['lacet'][0] = False                                      # un glissement annule le recentrage anime en cours
-        self.lacet = EN.pivoter(self.lacet, dx, self.height, self.cam_limite, bool(self.reg['camera_inverser_gd']))
+        self.cam_recentre = False                                             # un glissement annule le retour au nord demande et pas encore envoye
+        self.cam_demande = EN.pivoter(self.cam_demande, dx, self.height, bool(self.reg['camera_inverser_gd']), CAM_GLISSE_MAX)
 
     def _molette_relache(self):
-        """Bouton du milieu relache sans avoir glisse : clic = camera recentree, par l'animation de recentrage (sur le terrain libre d'une ville seulement)."""
+        """Bouton du milieu relache sans avoir glisse : clic = la camera revient au nord (sur le terrain libre d'une ville seulement)."""
         if self.molette.relacher() and self._camera_pilotable(): self.recentrer_camera()
 
     def on_mouse_drag(self, x, y, dx, dy, boutons, modifiers):
@@ -80,23 +130,14 @@ class CameraMixin:
 
     def _camera_ville(self, e, aspect):
         """Camera d'une ville comme Unity (SceneCamera.Update, mode avec cible) : LookAt(position, cible), tangage - lookDownAdjust, puis avance de distanceAdjust le long de l'axe. Celle du jeu (#264) : position, cible,
-        champ, decalage vertical et rotation envoyes par le moteur, sans zoom, inclinaison, centrage sur le heros ni lissage de hauteur de la visionneuse (TownCamera::execute suit le joueur et borne sa cible aux bords de la carte) ;
-        la SEULE chose que le joueur y change est la rotation autour de la cible (fleches gauche / droite, clic molette : `_lacet_eff`, D-233), qui s'efface en douceur quand le jeu tient la camera (scene, lieu qui interdit de la tourner).
+        champ, decalage vertical et rotation envoyes par le moteur, sans zoom, inclinaison, centrage sur le heros ni lissage de hauteur de la visionneuse (TownCamera::execute suit le joueur et borne sa cible aux bords de la carte).
+        La rotation que le joueur lui donne est celle du jeu aussi (boutons de camera envoyes au moteur, D-234) : position et cible l'ont deja, rien n'y est ajoute ici, et le jeu la reprend dans ses scenes comme sur mobile.
         Projection : champ HORIZONTAL fov x 4/3 fixe, hauteur deduite de l'ecran portrait d'origine (0,5625). En 16/9 on garde la meme hauteur de champ que sur mobile et on montre plus de decor sur les cotes : la bande
         centrale de la fenetre est exactement l'image du telephone."""
         pos, cib = np.array(e.cam_pos, float), np.array(e.cam_cible, float)
         libre = camera_libre(e)
         fov_h = math.radians((e.cam_fov if e.cam_fov is not None else FOV_VILLE_DEF) * 4.0 / 3.0)
         th_v = math.tan(fov_h / 2) / ASPECT_PORTRAIT                      # tangente du demi-champ vertical de l'original
-        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_centre is None else min(0.1, t - self.t_centre)); self.t_centre = t
-        # Scene ou le jeu tient la camera (cam_jeu : travelling, plan fixe, cible = un personnage ; verrou de la TownCamera ; lieu qui interdit de la tourner ; camera libre d'une scene) : la rotation du joueur s'efface en douceur
-        # (CAM_SCENE_TAU) et revient de meme a la fin, sans a-coup ; immediatement apres une coupure (changement de carte, plan de scene : cam_saut).
-        w_jeu = 1.0 if (self.cam_jeu or self.cam_bloquee or (libre and e.cam_rot is not None)) else 0.0
-        self.cam_w = w_jeu if self.cam_saut else self.cam_w + (w_jeu - self.cam_w) * (1.0 - math.exp(-CAM_SCENE_TAU * dt)); self.cam_saut = False
-        lacet_a = self._lacet_eff()
-        if lacet_a and not (libre and e.cam_rot is not None):           # fleches gauche / droite : la camera tourne autour de la cible du jeu (le cap avance vers +X quand le lacet est positif)
-            c_, s_ = math.cos(math.radians(lacet_a)), math.sin(math.radians(lacet_a)); d_ = pos - cib
-            pos = cib + np.array([d_[0] * c_ + d_[2] * s_, d_[1], -d_[0] * s_ + d_[2] * c_])
         if libre and e.cam_rot is not None:                         # camera libre (paquet 11, bit 7) : position + angles, comme en combat
             R = self._rot_camera(e); fw = R @ np.array([0.0, 0.0, 1.0]); haut = R @ np.array([0.0, 1.0, 0.0])
         else:
@@ -109,8 +150,7 @@ class CameraMixin:
         if yoff:
             Ty = np.eye(4); Ty[1, 3] = yoff; M = Ty @ M              # SceneCamera.s_yOffset
         self._cadre_vue = (np.array(pos, float), droite, np.cross(fw, droite), fw)
-        # Repere des sprites (#184) : le panneau d'un personnage prend la rotation de la camera DU JEU (Chara.normalBillboard) ; la rotation autour de la cible (lacet) est suivie (le panneau reste de face, comme dans le jeu a cette orientation)
-        self._cadre_sprites = (droite, np.cross(fw, droite), fw)
+        # Repere des sprites (#184) : le panneau d'un personnage prend la rotation de la camera DU JEU (Chara.normalBillboard) : celle de la vue
         return M, (droite, np.cross(fw, droite), fw)
 
 
@@ -126,43 +166,6 @@ class CameraMixin:
             pos = pos + fw * DIST_ADJ_VILLE
         droite = np.cross(haut, fw); droite /= np.linalg.norm(droite)
         return pos, droite, np.cross(fw, droite), fw
-
-    def _maj_camera(self):
-        """Fleches gauche / droite sur le terrain (a chaque image affichee) : elles tournent la camera autour de sa cible (villes, donjons, tours seulement, pas la carte du monde) ; les deux ensemble la remettent par defaut par une animation,
-        par le chemin le plus court (le lacet est gardé entre -180 et 180 degres : 359 degres revient par +1). Vitesse : reglage « Vitesse de caméra » (x1 par defaut) ; la touche d'accelerateur n'y change rien (D-233). Haut / bas ne font rien sur le terrain."""
-        t = time.perf_counter(); dt = 1.0 / 60.0 if self.fixe_test else (0.0 if self.t_cam is None else min(0.1, t - self.t_cam)); self.t_cam = t
-        if not self._terrain_libre(): return
-        g, d = self._tenue('cam_gauche'), self._tenue('cam_droite')
-        if not self._camera_pilotable():                                                                           # carte du monde, lieu qui interdit de tourner la camera, scene du jeu : les fleches ne tournent rien
-            self.cam_axe['lacet'][0] = False; self.cam_axe['lacet'][1] = bool(g or d)
-            return
-        vit = float(self.reg['vitesse_camera']); sl = self._etat_axe('lacet', g, d)
-        if sl:
-            self.lacet = (self.lacet + sl * CAM_LACET_VIT * vit * dt + 180.0) % 360.0 - 180.0
-            if self.cam_limite is not None: self.lacet = max(-self.cam_limite, min(self.cam_limite, self.lacet))
-        elif self.cam_axe['lacet'][0]:
-            err = -self.lacet; pas = max(CAM_RECENTRE_LACET, abs(err) * 5.0) * vit * dt
-            if abs(err) <= pas: self.lacet = 0.0; self.cam_axe['lacet'][0] = False
-            else: self.lacet += math.copysign(pas, err)
-
-    def _camera_menee(self, mo):
-        """La TownCamera verrouillee va-t-elle AILLEURS que sur le joueur ? Mode de cible 1 a 4 (deplacements : travelling, retour) ou 5 (un personnage : la grenouille du prologue...), deplacement en cours, ou cible du jeu a plus de CAM_MENE_DIST du heros
-        (plan fixe, heros hors champ). Mode 6 (le joueur) et verrou sans cible a cote du heros : le jeu tient le joueur comme hors scene : AUCUN changement de regime, donc pas de glissement au declenchement."""
-        try: _, mode, _, deplace = mo.camera_jeu()
-        except Exception: return True
-        if 1 <= mode <= 5 or deplace: return True
-        e = mo.etat; sp = e.sprites.get(0); hp = sp.get('pos') if sp else None
-        if mode == 6: return False
-        if hp is None or e.cam_cible is None: return True
-        return math.hypot(hp[0] - e.cam_cible[0], hp[2] - e.cam_cible[2]) > CAM_MENE_DIST
-
-    def _coupure_camera(self, e):
-        """Pendant ce pas du moteur, la cible de la camera du jeu a-t-elle saute (coupure de scene, changement de carte) ? self.prec = etat du pas precedent."""
-        pr = self.prec
-        if pr is None or pr['cle'] != (e.partie, e.carte): return True
-        a, b = pr['cam_cible'], e.cam_cible
-        if a is None or b is None or len(a) != len(b): return True
-        return max(abs(x - y) for x, y in zip(a, b)) > CAM_SAUT_VILLE
 
     def _camera_combat(self, e, aspect):
         R = self._rot_camera(e)
@@ -199,11 +202,9 @@ class CameraMixin:
         return CORRECTION_BORDS_DEF if v is None else min(1.0, max(0.0, float(v) / 100.0))
 
     def _repere_sprites(self, cam3d, corr):
-        """(droite, haut, avant) qui oriente le panneau d'un personnage de ville. Panneau d'origine (correction des bords nulle, defaut depuis #184) : le repere de la camera DU JEU (Chara.normalBillboard prend la rotation de la camera
-        du jeu) : meme inclinaison que sur le mobile, rotation autour du heros (lacet) suivie ; l'inclinaison que la visionneuse ajoute avec Haut / Bas ne change plus le panneau : un personnage ne « s'aligne » pas sur la vue quand on monte
-        ou descend la camera. Correction des bords active (essai #134) : le repere de la vue, dont elle a besoin (reconstruction a l'ecran). DQ_SPRITES_SUR_VUE : l'ancien alignement du panneau d'origine sur la vue."""
-        if cam3d is None or corr > 0.0 or os.environ.get('DQ_SPRITES_SUR_VUE'): return cam3d
-        return getattr(self, '_cadre_sprites', None) or cam3d
+        """(droite, haut, avant) qui oriente le panneau d'un personnage de ville : le repere de la camera DU JEU (Chara.normalBillboard prend la rotation de la camera du jeu, celle que le joueur lui donne comprise : meme inclinaison que sur le mobile,
+        et un personnage ne « s'aligne » pas sur la vue quand on monte ou descend la camera), qui est celui de la vue depuis que la visionneuse ne tourne plus la camera a cote du jeu (D-234). `corr` : intensite de la correction des bords (voir _correction_bords)."""
+        return cam3d
 
     INCLINAISON_SPRITES_DEF = 0.0                                       # part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux (defaut depuis #180 : l'essai #134 a 0,5 deformait les sprites pres des bords), 1 = parallele aux murs
 

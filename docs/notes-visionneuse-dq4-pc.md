@@ -2329,6 +2329,8 @@ Sylfried (04/11/2026, 23 h 55) : « Tu ne pourrais juste pas stocker tous les fi
 
 ## Avance #278 : Caméra : rotation gauche / droite et recentrage rétablis (rien d'autre)
 
+> **Remplacé par l'avance #286 (D-234)** pour tout ce qui touche à la façon de tourner : la rotation n'est plus ajoutée par la visionneuse (`lacet`, `cam_w`, `_camera_menee`, `_coupure_camera`, marche et sprites tournés par pas de 45°, `CAM_SCENE_TAU`, effacement en ≈ 0,4 s) mais faite par le jeu lui-même. Restent valables : les touches, les gestes, les réglages, ce qui reste retiré (zoom, inclinaison, centrage) et la liste des cas non vérifiés sur Windows.
+
 ### Demande
 Sylfried (05/11/2026, 00 h 00), après D-226 (#264) : « Quand je parlais de retourner sur le fonctionnement de la caméra de la version mobile il faut donc garder le fait de pouvoir la tourner à gauche et à droite et la recentrer... Donc remets ces possibilités là uniquement avec toutes les options à l'identique dans les commandes avec par défaut : Gauche > Flèche gauche, Droite > Flèche droite, Gauche + Droite > Recentre la caméra, Maintiens clic molette + direction > contrôler la caméra (gauche/droite uniquement), Clic molette > recentrer la caméra, Vitesse de caméra : x1, plus la possibilité d'accélérer la caméra comme avant. »
 
@@ -2404,3 +2406,37 @@ Sylfried (05/11/2026, 01 h 07) : « Regroupe toutes les options de caméra direc
 
 ### Non vérifié
 - Windows : l'aspect de la page (le groupe tient-il sans défilement ? les deux lignes d'information au milieu du groupe sont affichées comme avant : geste à gauche, effet en gris à droite).
+
+## Avance #286 : Caméra : la rotation est celle du jeu (compagnons d'Alina), angle du toit
+
+### Demande
+Sylfried (05/11/2026, 01 h 07) : « Il y a encore un bug dans la caméra lorsque les compagnons rejoignent Alina, elle va tourner un peu puis se téléporter sur ses compagnons pour ensuite suivre la scène, comme je t'ai dis reprend le comportement de la caméra comme sur la version mobile, dans les moments où on peut la contrôler comme dans les moments où le jeu la controle », puis « Profites-en aussi pour regarder si l'angle d'origine de la caméra une fois qu'on est sorti de la chambre d'Alina c'est celui actuellement proposé par le jeu ou bien si c'est un bug, pour t'aider tu peux charger l'état 1 qui est directement le moment où tu atterris sur le toit ».
+
+### Cause (établie, mesurée avec le vrai moteur)
+- D-233 (#278) faisait tourner la caméra **dans la visionneuse, à côté du jeu** : la vue montrée était le cap du moteur + un « lacet » du joueur, et un poids `cam_w` faisait glisser ce lacet vers 0 en ≈ 0,4 s dès que le jeu prenait la caméra (`cam_jeu`).
+- La scène des compagnons (début du chapitre 2, cartes `ev01` puis `cbout`, journal pas à pas de la caméra du jeu) : le jeu fixe un cap **absolu** de 180 ° (≈ 2,8 ° par pas, pas 114 à 158 environ), puis mène la **cible** vers les compagnons (≈ (4 ; 6 ; 4,5), au plus 0,46 par pas, pas 164 à 178 environ), puis revient. Avec un lacet du joueur non nul, la visionneuse montrait le cap du jeu **plus** le lacet, puis le faisait glisser : la vue « tournait un peu » puis sautait avec la cible = ce que décrit Sylfried. Avec un lacet nul, la visionneuse montrait déjà exactement la caméra du moteur (vérifié).
+- Ce n'est donc pas une erreur de la scène du jeu, c'est la rotation ajoutée par la visionneuse.
+
+### Fait (D-234)
+- **Plus aucune rotation à côté du jeu.** Sur le terrain libre d'une ville, d'un donjon ou d'une tour (`Jeu._camera_pilotable`), les flèches ← → (« Caméra (Gauche) » / « Caméra (Droite) »), le clic molette et son glissement envoient au moteur **les boutons de caméra du jeu** : les bits 4 et 5 (0x10, 0x20) des touches tenues, qui sont A et B ailleurs mais que `window::NormalControl::checkCamera` lit comme boutons de caméra sur le terrain d'une ville (1 = gauche, 2 = droite, 3 = les deux = retour au nord). `Moteur.CAM_G`, `CAM_D`, `CAM_PAS`, `ROT_CAM_*`.
+- **Le jeu fait tout le reste** : `TownPlayerManager::setCameraRot` tourne d'un cran (0x200 sur 65536 par tour = 2,8125 °) par pas, borne selon les limites du lieu, refuse sous verrou, en scène ou dans un lieu qui l'interdit, tient le joueur pendant le retour au nord (animation du jeu, ≈ 5,6 ° par pas), tourne lui-même les directions de marche et garde la rangée des sprites (vérifié : le héros marche vers le fond de l'écran après un quart de tour, même rangée de sprite). `champ.py` ne tourne plus rien, `Jeu.pad()` n'a plus de rotation. À l'entrée d'une carte le jeu remet le cap à 0.
+- **« Vitesse de caméra »** (x1 à x4) : le jeu ne tourne que d'un cran par pas ; pour x2 à x4, la visionneuse fait faire au moteur les crans de plus tout de suite (`Moteur.camera_tourner`, appelé après un pas dont `Moteur.camera_attente()` — `TownPlayerManager + 0x698` — montre que le jeu a pris le bouton ; sinon rien : verrou, scène…). Vitesse non entière répartie d'un pas à l'autre. Le glissement du clic molette suit le pointeur par crans (jusqu'à `CAM_GLISSE_PAS` = 6 par pas), 180 ° pour un déplacement égal à la hauteur de la fenêtre (200 px sur 720 : +50,6 °) ; la rotation restante à faire est abandonnée si le jeu refuse.
+- **Image** : `Jeu._interpoler_camera` interpole la caméra entre deux pas du moteur (30 Hz) comme un couple : la cible suit le déplacement, la position tourne **en arc autour de la cible** (cap par le plus court chemin, distance et hauteur à part). Sans cela un cran de rotation (1,7 unité à 34 de distance) dépassait le seuil de saut (`CAM_SAUT_VILLE`, 1,5) et la rotation s'affichait à 30 images par seconde. Une coupure (cible qui saute, angle posé d'un coup par un script, plus de `CAM_SAUT_ROT` = 0,35 de la distance par pas, ≈ 20 °) n'est pas interpolée.
+- **Inchangé** : touches, gestes, réglages (`vitesse_camera`, `camera_inverser_gd`), pas d'accélération, ni sur la carte du monde ni sur l'écran-titre ; F1 donne le cap du moteur. `Jeu.on_deactivate` abandonne la rotation demandée à la souris et le retour au nord en attente.
+- **Retirés** : `CAM_LACET_VIT`, `CAM_RECENTRE_LACET`, `CAM_MENE_DIST`, `CAM_SCENE_TAU`, `DIR_BITS`, `_maj_camera`, `_camera_menee`, `_coupure_camera`, `_lacet_eff`, `_tourner_dir`, `t_cam`, les états `lacet` et `cam_w`.
+- Tests : `test_camera_moteur.py` (nouveau, **vrai moteur**, sauvegarde 1 : un cran de 2,8125 ° par pas dans chaque sens, bouton gardé en attente, n crans de plus exacts, x2 / x4 en marche continue, les deux boutons = retour au nord sans à-coup avec joueur tenu puis rendu, marche relative à la caméra et même rangée du sprite ; ignoré sans `DQ_APK` / `DQ_SAVES`), `test_entrees.py` (geste, boutons envoyés, vitesse, glissement par crans, refus du jeu, pression double, retour au nord, hors terrain), `test_camera_ville.py` (la vue ne dépend que du moteur, interpolation en arc, coupures), `test_perte_focus.py`, `test_chargement.py`, `test_bruitage_clavier.py` adaptés.
+
+### Établi
+- La scène des compagnons au pas près (journal du vrai moteur) et la cause ci-dessus ; avec la caméra tournée à 105 ° **avant** la scène, la scène démarre au même pas et le jeu tourne de 105 ° à 180 ° (cap absolu), puis mène la cible et revient : aucun saut dans les images enregistrées (montage), rendu en temps réel fluide.
+- x2 / x4 : 5,6 ° / 11,25 ° par pas ; un glissement de 200 px : +50,6 ° ; un clic molette à 110,7 ° : retour à 0 en 20 pas.
+- 49 mutations du code nouveau (sens, bits, garde du jeu, type en attente, vitesse, crans de plus, glissement, pression double, hors terrain, oubli après un menu, interpolation et coupures, perte du focus…) : 7 avaient survécu, chacune a reçu son test ; toutes tuées.
+- **Angle du toit (état 1)** : 60,05 ° est bien la valeur du **moteur** à cet instant (cap lu dans le moteur). La visionneuse ne l'écrit jamais (elle n'écrit plus la caméra du tout) ; sans action du joueur le jeu part de 0 à l'entrée d'une carte et le retour au nord ramène à 0. Ce n'est pas un bug de la visionneuse.
+
+### Supposé
+- Cet angle est posé par un script du jeu au moment de l'atterrissage / de la sortie de la chambre (candidats dans le code : `cmd_map_camera_default_angle` à 0x21fe20, `__cmd_map_camera_move::initialize` à 0x221aa0, `__cmd_map_camera_angle::initialize` à 0x221bec, `__cmd_set_camera_angle_abs::initialize` à 0x222360) : script exact non identifié.
+
+### Non vérifié
+- Windows : clavier et clic molette réels ; sensation de la vitesse x1 (84,4 °/s ; D-233 : 100 °/s ; celle du mobile n'est pas mesurée).
+- Ce que montre le mobile à cet endroit (seul l'état 1 était disponible) : si l'angle de 60 ° y est le même, c'est le jeu qui le décide, la visionneuse n'y change rien.
+- Les autres scènes que celle des compagnons, DQ5 / DQ6 (non regardés).
+- **À faire valider par Sylfried** (ce que la caméra du jeu impose, voir D-234) : vitesse x1 = 84,4 °/s ; recentrer = retour au **nord** (cap 0), pas à « la vue du jeu » (sur le toit : 60 ° → 0), animé par le jeu, joueur tenu pendant ce temps et non interrompable par les flèches ; la rotation vit dans l'état du moteur (elle n'est toujours pas enregistrée par la visionneuse).
