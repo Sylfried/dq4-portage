@@ -95,8 +95,12 @@ if not exist "donnees\cache\ui_layout.json" (
   )
 )
 
-rem --- 3. lancement
+rem --- 3. lancement : la console se ferme toute seule quand la fenetre du jeu se ferme ; elle reste ouverte seulement si le jeu s'arrete sur une erreur (pour lire le message)
 ".venv\Scripts\python.exe" -m dq4_pc %*
-echo.
-echo  Fin du programme.
-pause
+set "CODE=%errorlevel%"
+if not "%CODE%"=="0" (
+  echo.
+  echo  Le jeu s'est arrete sur une erreur ^(code %CODE%^) : lis les lignes ci-dessus ^(details dans donnees\journaux^).
+  pause
+)
+exit /b %CODE%
