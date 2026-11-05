@@ -2374,3 +2374,20 @@ Sylfried (05/11/2026, 01 h 07) : « Pourquoi dans le dossier des sauvegardes le 
 
 ### Non vérifié
 - Windows : relancer le jeu deux fois après avoir effacé `avant_import_…` : il ne revient pas, `reprise.json` apparaît dans `donnees\`.
+
+## Avance #282 : la console du lanceur se ferme avec la fenêtre du jeu
+
+### Demande
+Sylfried (05/11/2026, 01 h 07) : « Fais en sorte que le CMD qui s'ouvre lors du lancement du jeu se ferme automatiquement en fermant la fenêtre du jeu »
+
+### Cause (établie dans le fichier)
+`lancer_dq4.bat` finissait par `echo Fin du programme.` puis `pause` : la console attendait une touche après chaque fermeture du jeu.
+
+### Fait (D-236)
+- Après la ligne qui lance `python -m dq4_pc`, le lanceur lit le code de sortie (`set "CODE=%errorlevel%"`). **Code 0** (fermeture normale de la fenêtre, y compris le menu Quitter) : plus de pause, `exit /b 0`, la console se ferme. **Autre code** (le jeu a planté, Python lève une exception) : message « Le jeu s'est arrêté sur une erreur (code N) », `pause`, puis `exit /b N` ; l'erreur reste donc lisible.
+- Les pauses d'avant le lancement (Python introuvable, création de l'environnement ou installation des modules échouée, lecture de la mise en page des fenêtres échouée) sont gardées : elles expliquent pourquoi le jeu ne démarre pas.
+- Fins de ligne CRLF conservées (fichier réécrit en binaire).
+- `tests/test_lanceur.py` (3 tests sans Windows, dans la CI) : CRLF, aucune `pause` hors du bloc d'erreur après la ligne de lancement, `exit /b %CODE%` en dernière ligne, chaque pause d'avant suit un message ; 3 mutations (pause ajoutée, `exit /b` retiré, LF) toutes tuées.
+
+### Non vérifié
+- Windows : fermer la fenêtre du jeu par la croix, Alt + F4 et le menu Quitter ferme la console ; le comportement sur une erreur (garder la console ouverte) n'a pas été vu non plus. Un processus du jeu qui ne se terminerait pas (fil non démon) garderait la console ouverte : rien de tel n'est connu.
