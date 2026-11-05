@@ -51,7 +51,7 @@ de jarre, de coffre. **Rejeté** (établi : trace `Flag = 0x1c/0x1d` en prologue
 
 ### 2.3 Trace du prologue (slot 2, carte `mlb1a`, nouvelle partie)
 
-Relevée avec `DQ_CAMV=6` (affichage de l'état toutes les 6 images ; `_camv` dans `fenetre.py`) et avec la sonde sans fenêtre `sonde_prologue4.py` :
+Relevée avec `DQ_CAMV=6` (affichage de l'état toutes les 6 images ; `_camv` dans `window.py`) et avec la sonde sans fenêtre `sonde_prologue4.py` :
 
 - `ev01` (images 0-11) : verrou 0, pas de héros.
 - `mlb1a`, image 12 → ~368 : `camera_jeu() = (1, 5, 0, 0)` : verrou 1, mode 5 (cible = un personnage), `Flag` 0x1c / 0x1d.
@@ -62,7 +62,7 @@ Relevée avec `DQ_CAMV=6` (affichage de l'état toutes les 6 images ; `_camv` da
 
 ### 2.4 Ce que fait la visionneuse maintenant (`_camera_ville`, `tick`)
 
-> **État au 03/11/2026 (#47, #48)** : l'option `camera_centree` n'existe plus (clé abandonnée, `reglages.py:99-100`). Le centrage est actif dès que `not libre and not mini and not cam_jeu and not titre` (`fenetre.py:1171-1172`) ; le reste de cette section décrit le principe, qui est inchangé (verrou `TownCamera`, bornes 16/9, transition sans saut). Les puces qui parlent de « l'option » valent comme « le centrage ».
+> **État au 03/11/2026 (#47, #48)** : l'option `camera_centree` n'existe plus (clé abandonnée, `settings.py:99-100`). Le centrage est actif dès que `not libre and not mini and not cam_jeu and not titre` (`window.py:1171-1172`) ; le reste de cette section décrit le principe, qui est inchangé (verrou `TownCamera`, bornes 16/9, transition sans saut). Les puces qui parlent de « l'option » valent comme « le centrage ».
 
 - `self.cam_jeu` = verrou `TownCamera` lu à chaque pas moteur (`camera_ville()[2]`, déjà lu pour `cam_bloquee`).
 - Centrage actif seulement si `option and not cam_libre and not cam_jeu`. Hors centrage, le jeu applique sa caméra telle quelle, **avec les bornes
@@ -84,7 +84,7 @@ Relevée avec `DQ_CAMV=6` (affichage de l'état toutes les 6 images ; `_camv` da
 | exploration libre (église → porte → `maout`), 5 captures (225, 235, 300, 420, 470) | **identiques au pixel** avant/après modification (caméra centrée, porte, changement de carte) |
 | message de PNJ à l'église (3 captures, 230/260/330) | **identiques au pixel** avant/après modification |
 | décalage artificiel de la cible (variable `DQ_DECTEST`, retirée) simulant le bornage du moteur près d'un bord | corrigé par le centrage quand verrou = 0 ; conservé quand option désactivée |
-| `python3 -m pyflakes fenetre.py moteur.py` | un seul avertissement, ancien : `sel` inutilisé (≈ ligne 1700) |
+| `python3 -m pyflakes window.py engine.py` | un seul avertissement, ancien : `sel` inutilisé (≈ ligne 1700) |
 
 ### 2.6 Non vérifié / inconnu
 
@@ -130,7 +130,7 @@ Normal et voulu par le moteur. C'est le bruitage **SE 300** (paquet 35, fichier 
   Un message de PNJ donne SE 300 à l'ouverture puis 300 à chaque page (images 621, 669, 693).
 - Côté Unity (désassemblage IL2CPP) : `cmd_se_play` (0xD150A8) → `Sound.PlaySE` (0xD15128) → `SoundControl.Play("SE"+no, s_seVolume, no)`, sans condition.
   Unity ne joue lui-même le 300 que pour les boutons de menu (`MenuPortItem.Update`, `TouchPad.internalUpdate`, `InputName.Update`).
-- Côté visionneuse : `son.py` `jouer_se(ident)` → fichier `SE%04d`, volume `vol_b * r['volume']` ; les seuls `jouer_se(SE_BOUTON)` de `fenetre.py` accompagnent des
+- Côté visionneuse : `sound.py` `jouer_se(ident)` → fichier `SE%04d`, volume `vol_b * r['volume']` ; les seuls `jouer_se(SE_BOUTON)` de `window.py` accompagnent des
   clics / validations de menu et de boutons d'écran (miroir de `MenuPortItem.Update`), jamais l'ouverture d'un message. **Pas de double lecture** (un seul paquet 35 → un seul `jouer_se`),
   bon fichier, aucune modification du code.
 - Piège d'analyse : un crochet Unicorn posé sur une plage de 2 instructions se déclenche deux fois par appel ; ce n'est pas un double bruitage réel.

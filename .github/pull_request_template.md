@@ -6,10 +6,10 @@
 
 ## Suivi à jour
 - [ ] issues fermées (`Closes #n`) ou commentées, nouvelles issues ouvertes pour tout reste
-- [ ] décisions (`docs/audit/decisions.md`), lacunes, notes et `docs/reprise.md` à jour
+- [ ] décisions (`docs/audit/decisions.md`), lacunes, notes et `docs/resume.md` à jour
 
 ## Testé sur le PC de test
-- [ ] `lancer_dq4.bat` démarre
+- [ ] `launch_dq4.bat` démarre
 - [ ] marche, porte, changement de carte
 - [ ] message et menu s'ouvrent / se ferment
 - [ ] aucun fichier du jeu ajouté au dépôt

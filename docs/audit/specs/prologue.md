@@ -16,14 +16,14 @@ Conventions : RVA = adresses de `libil2cpp.so` (octet fichier = RVA − 0x4000),
 1. Le prologue enchaîne quatre choses : un titre de chapitre (bandeau doré à fond bleu portant « Prologue », sur écran noir), une attente noire, des coups d'épée (modèles `5303` / `5311` + bruitages `412`, `416`, `403`) vus par une caméra qui regarde le vide, puis un travelling qui ramène la caméra sur le héros et révèle la salle. Il se termine sur `cmd_key_wait_type_b` (attend un appui) puis le message « Eh bien alors, [nom] ? ».
 2. Le portage perdait trois éléments : (a) **un seul plan de fondu** dessiné *derrière* les fenêtres, alors que le moteur en pilote **deux** (bit 14 du paquet 9) ; (b) la **texture du bandeau** (`Menu/map/hyodai1`, créée par code, absente de l'export de mise en page) ; (c) les coups d'épée étaient hors de l'écran à cause du recentrage de la caméra sur le héros (option « centrer la caméra », corrigé par l'agent caméra, commit `75eae46`, fusionné dans `retours-18h02`).
 3. La boîte violette est un **message reçu après la fermeture** d'une fenêtre : `[N, 2]` détruit le port côté Unity, les messages qui suivent dans la même image n'ont plus de destinataire ; le portage les appliquait à la fenêtre fermée qui revivait une image en « fenêtre simple ». Corrigé (`Interface.appliquer`), vérifié image par image sur les transitions voisines.
-4. **Correction d'une note du dépôt** : `docs/notes-technique-portage-dq4.md` et le commentaire de `moteur.py` disaient « bit 14 = plan devant l'interface » ; la lecture d'IL2CPP donne l'inverse (§3).
+4. **Correction d'une note du dépôt** : `docs/technical-notes-dq4-port.md` et le commentaire de `engine.py` disaient « bit 14 = plan devant l'interface » ; la lecture d'IL2CPP donne l'inverse (§3).
 5. L'appui qui termine l'attente de touche n'est **pas** bloqué par `tick` : `cmd_key_wait_type_b::isEnd` lit le 2ᵉ argument de `GameUpdate` (`decl`), n'importe quelle valeur non nulle convient, `BTN_PAROLE` (Espace) en est une (§6).
 
 ---
 
 ## 2. Ce que le moteur envoie (journal `DQ_PKTALL`, paquets 22 / 28 / 29 exclus)
 
-Scénario : Nouveau jeu → emplacement 3 → nom « Sylfried » → sexe masculin (mêmes clics que `moteur_avant_partie.md`). Deux relevés : réglage « vitesse des transitions » = 2 (valeur par défaut du portage : les fondus au noir sont raccourcis de moitié, **le moteur attend la fin du fondu** par le bit 0 du mot d'état, donc sa propre chronologie change) et = 1 (durées d'origine, colonne « d'origine »).
+Scénario : Nouveau jeu → emplacement 3 → nom « Sylfried » → sexe masculin (mêmes clics que `engine_pre_game.md`). Deux relevés : réglage « vitesse des transitions » = 2 (valeur par défaut du portage : les fondus au noir sont raccourcis de moitié, **le moteur attend la fin du fondu** par le bit 0 du mot d'état, donc sa propre chronologie change) et = 1 (durées d'origine, colonne « d'origine »).
 
 | Image (vitesse 2) | Image (d'origine) | Paquet | Sens |
 |---|---|---|---|
@@ -67,7 +67,7 @@ Côté moteur : `cmd_event_chapter_title` (0x21a708) → `__cmd_event_chapter_ti
 
 ### 3.2 Conséquence et correction de la note du dépôt
 
-Le plan 0 (bit 14 = 0) est dessiné dans la file Overlay : **devant tout, fenêtres et messages compris**. Le plan 1 (bit 14 = 1) est dans la file Background de la caméra qui porte aussi l'interface : **devant la scène, derrière les fenêtres**. La note « bit 14 = plan devant l'interface » (`docs/notes-technique-portage-dq4.md`, commentaire de `Etat._fondu`) était donc inversée ; en revanche la note sur l'écran Licence (« `[20510]` : bit 14, l'interface reste visible ») était juste. Le portage dessinait un seul plan, derrière les fenêtres, quel que soit le bit.
+Le plan 0 (bit 14 = 0) est dessiné dans la file Overlay : **devant tout, fenêtres et messages compris**. Le plan 1 (bit 14 = 1) est dans la file Background de la caméra qui porte aussi l'interface : **devant la scène, derrière les fenêtres**. La note « bit 14 = plan devant l'interface » (`docs/technical-notes-dq4-port.md`, commentaire de `Etat._fondu`) était donc inversée ; en revanche la note sur l'écran Licence (« `[20510]` : bit 14, l'interface reste visible ») était juste. Le portage dessinait un seul plan, derrière les fenêtres, quel que soit le bit.
 
 Valeurs vues : `4126` = 0x101E (devant, sortie 30), `30` (devant, entrée 30), `20481` = 0x5001 et `20483` (fond, sortie 1 / 3), `16429` = 0x402D (fond, entrée 45), `16387` = 0x4003 (fond, entrée 3, début de combat), `20510` = 0x501E (fond, sortie 30 : licence et mort du héros).
 
@@ -113,7 +113,7 @@ Valeurs vues : `4126` = 0x101E (devant, sortie 30), `30` (devant, entrée 30), `
 
 ### 7.2 Correctif
 
-`Interface.appliquer` (`moteur.py`) : une fenêtre marquée `ferme` ignore ses messages (et vide `attente`) jusqu'à sa recréation par `[N, 1, cat, type]`. Commit `152b967`.
+`Interface.appliquer` (`engine.py`) : une fenêtre marquée `ferme` ignore ses messages (et vide `attente`) jusqu'à sa recréation par `[N, 1, cat, type]`. Commit `152b967`.
 
 ### 7.3 Vérifications image par image (xvfb, 1280 × 720, `--touches-test`)
 

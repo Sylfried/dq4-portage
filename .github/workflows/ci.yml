@@ -21,7 +21,7 @@ jobs:
           python-version: '3.12'
 
       - name: "Compilation du code (syntaxe de dq4_pc, tests et outils)"
-        run: python -m compileall -q dq4_pc tests outils
+        run: python -m compileall -q dq4_pc tests tools
 
       - name: "Fichiers interdits (motifs du .gitignore : contenu du jeu, sauvegardes, caches)"
         run: |
@@ -39,37 +39,37 @@ jobs:
 
       - name: "Tests sans fenêtre ni jeu (dossiers, migration, états, rencontres, écriture des sauvegardes, décodage du son, priorité des décors, ordre de chargement des états, découpage des feuilles de sprites, ombre du ballon, import des sauvegardes, nom de carte sans données, réglages du moteur non installés, échecs de lecture du son, effet plein écran en 16/9, règle du bruitage des boutons, arrêt de la musique pendant un jingle, lecture circulaire du message, console du lanceur qui se ferme avec le jeu et ses messages en deux langues, catalogue de la version anglaise)"
         run: |
-          python tests/test_chemins.py
-          python tests/test_rencontres.py
-          python tests/test_ecriture_sauvegarde.py
-          python tests/test_son_decodage.py
-          python tests/test_fld_priorite.py
-          python tests/test_etats_ordre.py
-          python tests/test_feuilles_speciales.py
-          python tests/test_ombre_ballon.py
-          python tests/test_import_sauvegardes.py
-          python tests/test_carte_inconnue.py
-          python tests/test_crochets_manques.py
-          python tests/test_son_echecs.py
-          python tests/test_effets_plein_ecran.py
-          python tests/test_bruitage_clavier.py
-          python tests/test_son_musique_limites.py
-          python tests/test_message_repli.py
-          python tests/test_perte_focus.py
-          python tests/test_son_volumes.py
-          python tests/test_temps_de_jeu.py
-          python tests/test_etats_liste_blanche.py
-          python tests/test_alerte_tas.py
-          python tests/test_poker_police.py
-          python tests/test_ciel_etendu.py
-          python tests/test_ballon_echelle.py
-          python tests/test_sepia_decor.py
-          python tests/test_effets_capture.py
-          python tests/test_don_exp_toucher.py
-          python tests/test_historique_cle.py
-          python tests/test_police_messages.py
-          python tests/test_notifications_sauvegardes.py
-          python tests/test_oui_non_empile.py
-          python tests/test_sauvegardes_un_dossier.py
-          python tests/test_lanceur.py
-          python tests/test_langue.py
+          python tests/test_paths.py
+          python tests/test_encounters.py
+          python tests/test_save_writing.py
+          python tests/test_sound_decoding.py
+          python tests/test_fld_priority.py
+          python tests/test_savestates_order.py
+          python tests/test_special_sheets.py
+          python tests/test_balloon_shadow.py
+          python tests/test_saves_import.py
+          python tests/test_unknown_map.py
+          python tests/test_missing_hooks.py
+          python tests/test_sound_failures.py
+          python tests/test_full_screen_effects.py
+          python tests/test_keyboard_sfx.py
+          python tests/test_sound_music_limits.py
+          python tests/test_message_fallback.py
+          python tests/test_focus_loss.py
+          python tests/test_sound_volumes.py
+          python tests/test_play_time.py
+          python tests/test_savestates_whitelist.py
+          python tests/test_heap_alert.py
+          python tests/test_poker_font.py
+          python tests/test_extended_sky.py
+          python tests/test_balloon_scale.py
+          python tests/test_sepia_scenery.py
+          python tests/test_capture_effects.py
+          python tests/test_exp_gift_touch.py
+          python tests/test_history_key.py
+          python tests/test_message_font.py
+          python tests/test_save_notifications.py
+          python tests/test_stacked_yes_no.py
+          python tests/test_saves_in_one_folder.py
+          python tests/test_launcher.py
+          python tests/test_language.py
