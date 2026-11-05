@@ -165,7 +165,7 @@ class Interpolation(unittest.TestCase):
     def faux(self, retenu_avant, retenu_apres):
         e = types.SimpleNamespace(partie=0xc, carte='x', chargement={'n': 1} if retenu_apres else None, sprites={}, cam_pos=(0.0, 10.0, -20.0), cam_cible=(0.0, 0.0, 0.0), champ=None)
         pr = dict(cle=(0xc, 'x'), ret=retenu_avant, sp={}, cam_pos=(0.5, 10.0, -20.0), cam_cible=(0.0, 0.0, 0.0), champ=None)
-        return types.SimpleNamespace(prec=pr, alpha=0.5, moteur=types.SimpleNamespace(etat=e))
+        j = types.SimpleNamespace(prec=pr, alpha=0.5, moteur=types.SimpleNamespace(etat=e)); j._interpoler_camera = types.MethodType(F.Jeu._interpoler_camera, j); return j
 
     def test_pas_d_interpolation_a_la_levee(self):
         j = self.faux(True, False)
@@ -175,7 +175,7 @@ class Interpolation(unittest.TestCase):
     def test_interpolation_ordinaire(self):
         j = self.faux(False, False)
         sauve = F.Jeu._interpoler(j)
-        self.assertTrue(sauve and j.moteur.etat.cam_pos[0] == 0.25, 'camera a mi-chemin entre les deux pas')
+        self.assertTrue(sauve); self.assertAlmostEqual(j.moteur.etat.cam_pos[0], 0.25, places=3, msg='camera a mi-chemin entre les deux pas')
 
 
 class DWM(unittest.TestCase):

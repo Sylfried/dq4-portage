@@ -44,6 +44,10 @@ DECOMPTE_SORTIE = 0x258254                  # octet de la bibliotheque lu par Gl
 
 # touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
 HAUT, BAS, GAUCHE, DROITE, A, B = 0x1, 0x2, 0x4, 0x8, 0x10, 0x20
+CAM_G, CAM_D = 0x10, 0x20                  # sur le terrain d'une ville, les bits 4 et 5 des touches tenues ne sont pas A / B mais les boutons de camera du jeu (window::NormalControl::checkCamera lit (Global + 0xe0) >> 4 & 3) : 1 tourne a gauche,
+                                           # 2 a droite, 3 (les deux) ramene la camera au nord ; le moteur applique lui-meme limites, verrous et scenes (TownPlayerManager::setCameraRot) et tourne les directions de marche et les rangees des sprites
+CAM_PAS = 360.0 * 0x200 / 65536.0          # degres d'une rotation de camera du jeu (TownCamera::rotateL / rotateR : 0x200 sur 65536 par tour), une par pas du moteur tant que le bouton est tenu : 84,4 degres par seconde
+ROT_CAM_DROITE, ROT_CAM_GAUCHE, ROT_CAM_NORD, ROT_CAM_FINI = 1, 2, 3, 4      # CAMERA_ROT_TYPE : TownPlayerManager + 0x698 (rotation demandee, en attente du prochain setCameraRot) ; 3 / 4 = retour au nord en cours / fini
 OBJ_MESSAGE = 0x252330                     # objet SDrawCTRL (canevas de texte des messages) dans la bibliotheque
 CANEVAS_L, CANEVAS_H = 512, 512            # texture du canevas de message d'Unity (MenuMessage : Texture2D(512, 512)) ; le moteur y ecrit en boucle
 PILE_SHORTS = 4096                         # taille reelle allouee pour la file des messages (Unity en annonce 1089)
@@ -912,6 +916,21 @@ class Moteur:
         c = self.core; ad = c.export('_ZN10TownCamera11m_singletonE')
         if ad is None: return 0, 0, 0, 0
         b = c.mem(ad + 0x3e, 6); return b[0], struct.unpack('<i', c.mem(ad + 0x48, 4))[0], b[2], b[5]
+
+    def camera_attente(self):
+        """Rotation de camera que le jeu vient d'accepter (TownPlayerManager + 0x698, CAMERA_ROT_TYPE) : ROT_CAM_DROITE ou ROT_CAM_GAUCHE tant que le bouton tenu a ce pas n'a pas encore tourne la camera (verrou du joueur, scene, lieu qui interdit
+        de la tourner : le jeu n'y touche pas et la valeur reste 0), ROT_CAM_NORD pendant le retour au nord."""
+        c = self.core; ad = c.export('_ZN17TownPlayerManager11m_singletonE')
+        return 0 if ad is None else struct.unpack('<i', c.mem(ad + 0x698, 4))[0]
+
+    def camera_tourner(self, sens, fois):
+        """`fois` rotations de plus de la camera du jeu (sens : ROT_CAM_DROITE ou ROT_CAM_GAUCHE), chacune exactement celle d'un pas du moteur (setCameraRotType puis TownPlayerManager::setCameraRot : TownCamera::rotateL / rotateR, qui borne selon les limites
+        du lieu, et rotation de la direction du groupe pour que le heros garde son cap a l'ecran). Sert au reglage « Vitesse de camera » (le jeu ne tourne que d'un cran par pas) et au glissement du clic molette. Appelee apres un pas qui a pris le bouton (camera_attente)
+        : les rotations de ce pas SONT ces `fois` appels (le premier consomme celle que le bouton a mise en attente)."""
+        c = self.core; ad = c.export('_ZN17TownPlayerManager11m_singletonE')
+        if ad is None: return
+        a, b = self.E('_ZN17TownPlayerManager16setCameraRotTypeE15CAMERA_ROT_TYPE'), self.E('_ZN17TownPlayerManager12setCameraRotEv')
+        for _ in range(fois): c.call(a, ad, sens, label='camera'); c.call(b, ad, label='camera')
 
     def taille_croix(self):
         """Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite."""

@@ -1,6 +1,6 @@
 """Entrees souris / clavier de la visionneuse : la logique pure (sans fenetre ni OpenGL), pour la tester (outils/test_entrees.py).
 - souris_active / GardeSouris : quand le pointeur reprend la main apres un usage du clavier (survol et selection) ;
-- GesteMolette / pivoter : clic molette (clic simple = camera recentree, glisser a gauche / a droite = rotation de la camera, sens reglable) ;
+- GesteMolette / pivoter : clic molette (clic simple = camera ramenee au nord par le jeu, glisser a gauche / a droite = rotation de la camera, sens reglable) ;
 - zone_infos : ou se pose le bloc d'infos de F1 (en haut a droite)."""
 import math
 
@@ -73,12 +73,12 @@ class GesteMolette:
         return bool(etait and not glissait)
 
 
-def pivoter(lacet, dx, hauteur, limite=None, inverser_gd=False):
-    """Glissement horizontal de dx pixels -> lacet de la camera en degres : meme grandeur que les fleches. Le lacet reste entre -180 et 180 (et entre -limite et +limite si le lieu borne la rotation). `inverser_gd` (reglage
-    « Inverser gauche / droite ») : le sens du glissement est inverse ; les fleches du clavier ne passent pas par ici."""
+def pivoter(demande, dx, hauteur, inverser_gd=False, maxi=180.0):
+    """Glissement horizontal de dx pixels -> rotation de la camera a faire, en degres (positif : vers la droite, comme la fleche droite) : meme grandeur que les fleches. `demande` : ce qui restait a tourner (le jeu ne tourne que par crans,
+    voir Jeu._camera_apres_pas) ; le total reste entre -maxi et +maxi. `inverser_gd` (reglage « Inverser gauche / droite ») : le sens du glissement est inverse ; les fleches du clavier ne passent pas par ici.
+    Les limites du lieu, les verrous et les scenes sont ceux du jeu : il refuse la rotation (Moteur.camera_attente) et la demande est abandonnee."""
     if inverser_gd: dx = -dx
-    lacet += dx / max(1.0, float(hauteur)) * CAM_SOURIS_LACET
-    return max(-limite, min(limite, lacet)) if limite is not None else (lacet + 180.0) % 360.0 - 180.0          # (lieu borne : on s'arrete a la limite, on ne fait pas le tour ; sinon le lacet boucle comme celui des fleches)
+    return max(-maxi, min(maxi, demande + dx / max(1.0, float(hauteur)) * CAM_SOURIS_LACET))
 
 
 # ---- bloc d'infos de F1

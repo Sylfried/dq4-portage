@@ -29,7 +29,7 @@ dq4-portage\
 | Module | Rôle |
 |---|---|
 | `emu_core.py` | chargeur ELF AArch64 + Unicorn qui exécute `libdq4core.so` (jamais modifié) |
-| `moteur.py` | pilotage du moteur : `Moteur` (pas, crochets), `Etat` (ce qu'on décode des paquets : caméra, sprites, fondus…), `Interface` (mémoire des fenêtres de menu) |
+| `moteur.py` | pilotage du moteur : `Moteur` (pas, crochets, boutons de caméra du jeu : `camera_attente`, `camera_tourner`), `Etat` (ce qu'on décode des paquets : caméra, sprites, fondus…), `Interface` (mémoire des fenêtres de menu) |
 | `pktlog.py` | journal des paquets moteur → Unity |
 | `rencontres.py` | rencontres aléatoires, horloge jour / nuit, vitesse de marche |
 | `priorite_jeu.py` | « le jeu l'emporte sur les réglages du joueur » (valeur imposée par un script) |
@@ -59,7 +59,7 @@ La classe `Jeu` (fenêtre pyglet) est assemblée à partir de dix morceaux (« m
 |---|---|
 | `jeu.py` | le cœur : constructeur, boucle du moteur (`_boucle`, `tick`), `on_draw`, dessin de la scène, démarrage, fermeture, retour au titre |
 | `plein_ecran.py` | plein écran / fenêtre, résolution, moniteurs, journal des erreurs de bascule |
-| `camera.py` | caméra des villes (celle du jeu + la rotation gauche / droite du joueur : flèches, clic molette, recentrage, effacée en douceur dans les scènes : D-233) / du combat / du titre, bords des sprites ; plus de zoom ni d'inclinaison (D-226) |
+| `camera.py` | caméra des villes (celle du jeu, rotation comprise : flèches, clic molette et recentrage envoient au moteur les boutons de caméra du jeu, qui tourne lui-même : D-234 ; entre deux pas, interpolation en arc autour de la cible) / du combat / du titre, bords des sprites ; plus de zoom ni d'inclinaison (D-226) |
 | `champ.py` | terrain : cartes, décors, sprites, ombres, carte du monde, icônes de lieux |
 | `scene_combat.py` | combat : monstres, fond, effets, nombres de dégâts, vitesse et pas du moteur en combat |
 | `titre.py` | écran-titre (ciel, logo), ciel prolongé de `dpout` et `ev09`, licence, saisie du nom, écran Sauvegardes |
