@@ -10,10 +10,14 @@ ni pour le poker ni ailleurs (avec SE-GARRIR).
 import os, sys, unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _text_render as TR
-UM = TR.UM
+try:
+    import _text_render as TR           # a besoin de pyglet (absent de la CI : les tests sont alors ignores)
+    UM = TR.UM
+except ImportError:
+    TR = UM = None
 
 
+@unittest.skipIf(TR is None, 'pyglet absent (CI)')
 class Poker(unittest.TestCase):
     def test_label_wider_than_its_plate_is_not_compressed(self):
         for typ in (48, 3, 44, 46, 47, 49, 53, 54):                       # le poker, et les fenetres qui ne comprimaient pas non plus
@@ -27,6 +31,7 @@ class Poker(unittest.TestCase):
         for name in ('compress_label', 'BUTTON_COMPRESSION_TYPES', 'COMPRESSION_MIN'): self.assertFalse(hasattr(UM, name), name)
 
 
+@unittest.skipIf(TR is None, 'pyglet absent (CI)')
 class RealPoker(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
