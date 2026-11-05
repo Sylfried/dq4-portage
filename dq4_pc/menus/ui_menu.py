@@ -34,7 +34,6 @@ void main() {
 LINE_HEIGHT = 1.246     # (police de repli GMaruGoPro-M, utilisee seulement sans ui_garrir.*) hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/MF (28 px) et le centrage des boutons
 FONT_SIZE = 19.0        # (repli GMaruGoPro-M) taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
 TEXT_MARKS = {0: (1.0, None), 1: (1.0, 8.0), 2: (1.0, 'base'), 3: (1.0, 9.0), 4: (1.0, 6.25), 5: ('x14', 'base')}   # "^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
-TEXT_CENTERING = os.environ.get('DQ_TEXTE_ORIGINAL', '') not in ('1', 'true')      # DQ_TEXTE_ORIGINAL=1 (test) : placement vertical exact du jeu d'origine, sans le recentrage optique (voir text_recentering)
 
 
 def first_line_baseline(zp, row, n, step, asc):
@@ -43,13 +42,6 @@ def first_line_baseline(zp, row, n, step, asc):
     Verifie sur la capture du mobile (ecran4 : « Rat volant » 1 ligne, « Scarapince / x2 » 3 lignes, onglet « Ragnar »), a 0,3 unite pres."""
     hb = n * step
     return zp + (hb if row == 2 else hb / 2 if row == 1 else 0.0) - asc
-
-
-def text_recentering(leading, u, ls):
-    """Remontee (unites) a appliquer au texte pour centrer l'encre dans sa ligne. Le jeu a regle lineSpacing (0,441 cibles, 0,481 plaques de monstres, 0,801 onglets / boutons / noms...) pour la police japonaise : la boite de ligne
-    est raccourcie de (1 - ls) mais la ligne de base reste a `ascent` du haut de la ligne, donc avec SE-GARRIR (encre centree dans sa boite naturelle de 23,5 px) le texte descend de (1 - ls) x interligne x u / 2 sous le centre de sa boite
-    (6,5 unites pour « Rat volant » et les plaques : texte colle au bas du cadre). Applique aux trois ancrages verticaux (l'ecart encre / boite ne depend pas de l'ancrage ; seul le cas milieu a une reference mobile, ecran4). lineSpacing >= 1 (PV / PM / Nv., regles sur les jauges) : 0. ECART VOLONTAIRE avec le jeu d'origine, qui a le meme defaut."""
-    return leading * u * (1.0 - ls) / 2 if TEXT_CENTERING and ls < 1.0 else 0.0
 
 
 # Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
@@ -159,23 +151,6 @@ class PageLayout:
 # (`<Make_NameButton>b__0`, 0xD08BE8 : les rangees 0 a nombre - 1 sont activees et posees en `initial - step x rank`, les autres sont desactivees jusqu'a la 6e). L'exporteur ne peut pas jouer cette fonction (« List index »).
 NAMES_PRESETS = ((4, 382.0, 67.0), (5, 382.0, 67.0), (5, 434.0, 67.0), (6, 434.0, 67.0), (5, 412.0, 67.0))
 NAMES_START, NAMES_STEP = 382.0, 67.0         # mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
-CARD_COST_X_MAX = 214.0              # fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
-CARD_DESC_X_MAX = 148.0              # fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
-BATTLE_DESC_X_MAX = 56.0              # infos d'un objet en combat (type 38) : bord droit utile de la description (cellule de gauche : x -226 a 64,7, mesure sur une capture du moteur reel, moins la marge) ; la cellule n'a que 2 lignes de haut, la cellule « Attaque E 24 » est a sa droite
-# Descriptions d'objets et de sorts : (type de fenetre, port, numero de chaine) -> bord droit utile (unites d'interface) de leur cadre, qui ne montre que 2 lignes. Le port est dans la cle : la fenetre du casino (type 46)
-# a quatre autres cellules de texte au meme numero de chaine (les listes, port 0 a 3) qui ne sont pas des descriptions. Le texte francais du patch a des lignes de 38 caracteres, ou une seule ligne de 50
-# (« Peut aussi etre utilisee comme objet au / combat. », « Au combat, ils peuvent inverser le cours du temps. ») : il sortait du cadre et recouvrait « Attaque E 74 » (type 38) ou le bouton du sac (type 10). Render._texte le recoupe a cette largeur puis, si
-# 2 lignes ne suffisent pas, le comprime (Render._adjust_description).
-DESCRIPTIONS = {(7, 0, 1): CARD_DESC_X_MAX, (10, 0, 4): CARD_DESC_X_MAX, (38, 2, 3): BATTLE_DESC_X_MAX,
-                (46, 4, 3): CARD_DESC_X_MAX, (60, 4, 4): CARD_DESC_X_MAX, (61, 4, 4): CARD_DESC_X_MAX, (63, 0, 4): CARD_DESC_X_MAX, (70, 0, 3): CARD_DESC_X_MAX}      # 46, 60, 61, 63, 70 : barre du bas des boutiques et du casino (meme cadre que la fiche d'un sort ; Suppose : fenetres non ouvertes dans le moteur, #219)
-BUTTON_COMPRESSION_TYPES = (48,)       # fenetres dont les etiquettes de bouton sont comprimees pour tenir dans leur plaque MEME avec la police d'origine : le poker du casino (type 48, SVC-03 : « Abandonner » sortait des 5 boutons sous les cartes et se chevauchait ; choix du joueur : police reduite)
-COMPRESSION_MIN = 0.7                 # compression horizontale maximale d'une description qui ne tient pas en 2 lignes
-
-
-def compress_label(original_font, fit_x, window_type):
-    """Un texte plus large que sa plaque est-il comprime pour y tenir ? Toujours avec la police de repli ; avec la police d'origine (SE-GARRIR) seulement quand la fenetre pose une limite (`fit_x` : ligne de cout de la fiche d'un sort) ou
-    pour les etiquettes de bouton des fenetres de BUTTON_COMPRESSION_TYPES (poker). Ailleurs un texte francais plus long que son bouton depasse comme sur le mobile (choix du joueur, audit UI-05)."""
-    return (not original_font) or fit_x is not None or window_type in BUTTON_COMPRESSION_TYPES
 
 
 def uv_icon(info, no, scroll_offset):
@@ -366,8 +341,6 @@ class Window:
                     elif cs == 'base': node['text']['characterSize'] = ib.get('fsize', base['cs'])
                 s = s[:j] + s[j + 2:]
         elif ib.get('variant') == 1 and ib.get('fsize'): node['text']['characterSize'] = ib['fsize']
-        if (self.typ, i, no) in DESCRIPTIONS: node['wrap_x'] = DESCRIPTIONS[(self.typ, i, no)]; node['wrap_n'] = 2        # description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Render._adjust_description)
-        if self.typ == 7 and no == 2: node['fit_x'] = CARD_COST_X_MAX                # fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Render._texte
         s = expand_tabs(s, node['text'].get('tabSize'))                              # voir tabuler : toutes les cellules a tabSize (types 8, 20, 31, 33, 34, 35, 39), plus seulement la liste des magies (#208, audit UI-03)
         node['text']['text'] = s; node['vu'] = True
 
@@ -564,7 +537,7 @@ class Window:
         """Code 3 : IFrame.Change(0xDB + code) choisit le cadre (219 : 316 de haut, 220 : 262, 221 : 260) ; code 2 : un seul bouton, plus bas, les deux autres caches."""
         if not 0 <= c <= 2: return
         border_part = next((ib for pt in self.parts for ib in pt['ib'] if ib['k'] == 'frame'), None)
-        if border_part is not None: self._border(border_part, 0xDB + c); self._tab_title(border_part, c)
+        if border_part is not None: self._border(border_part, 0xDB + c)
         bt = sorted((n for n in self.N.values() if n['buttonId'] is not None and n['buttonId'] >= 0 and n['pad'] == 0x10 and n['mats'] and n['mats'][0].get('part') == 7), key=lambda n: n['buttonId'])
         if not bt: return
         for node in self.N.values():
@@ -573,21 +546,6 @@ class Window:
         for node in self.N.values():
             if node['id'] == bt[0]['id'] or node['par'] == bt[0]['id']: node['pos'][2] = node['_z0'] + dz
         for node in bt[1:]: node['act'] = (c != 2)
-
-    def _tab_title(self, border_part, c):
-        """Titre du type 54 : le texte est pose pour le cadre 219 (onglet de 241,5 de large, 316 de haut) ; les cadres 220 (sans onglet) et 221 (onglet de 301,5, 260 de haut) changent la hauteur
-        et la largeur de l'onglet : le titre le suit (en bas : la hauteur perdue ; au centre : la moitie de la largeur gagnee), sinon il flotte au-dessus de l'onglet (liste « Reprendre » / « Auto »).
-        Choix du portage : le code d'origine (0xD0A604) ne deplace que les boutons, mais le texte envoye au code 2 est bien le titre de l'onglet."""
-        tx = next((n for n in self.N.values() if n['par'] == border_part.get('go') and n['text'] is not None), None)
-        if tx is None: return
-        if '_x0' not in tx: tx['_x0'] = tx['pos'][0]; tx['_z0'] = tx['pos'][2]
-        def tab(v):
-            if not 0 <= v < len(self.ml.borders): return None
-            vt = self.ml.borders[v]['vtx']; h = max(p[1] for p in vt); xs = [p[0] for p in vt if p[1] >= h - 12.5]
-            return (h, max(xs)) if max(xs) < 400.0 else None             # pas d'onglet : toute la largeur
-        o0, oc = tab(0xDB), tab(0xDB + c)
-        if o0 is None or oc is None: return
-        tx['pos'][0] = tx['_x0'] + (oc[1] - o0[1]) / 2.0; tx['pos'][2] = tx['_z0'] + (oc[0] - o0[0])
 
     def selection(self, button):
         """Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye »."""
@@ -875,9 +833,6 @@ class MessageWindow:
         return [(c['pos'][0] + min(v[0] for v in c['vtx']), c['pos'][2] + min(v[1] for v in c['vtx']), c['pos'][0] + max(v[0] for v in c['vtx']), c['pos'][2] + max(v[1] for v in c['vtx']))]
 
 
-THIN_SPACES = '\u00a0\u202f\u2009'                       # espaces que la police du jeu dessine plus larges (U+00A0 : 11 px au lieu de 5) ou n'a pas (U+202F, U+2009)
-
-
 class BitmapFont:
     """Police bitmap Unity du jeu pour la langue anglaise (et le patch FR) : « SE-GARRIR » (Font « Garrick », 20 px, 218 glyphes) ; elle remplace GMaruGoPro-M, la police japonaise.
     Les donnees (ui_garrir.json : metriques et rectangles des glyphes ; ui_garrir.png : atlas 256 x 256, alpha) sont extraites de base.apk par prepare_resources.
@@ -899,7 +854,6 @@ class BitmapFont:
         self.tex = {}; self.wid = {}; self.fallback = None
 
     def _glyph(self, c):
-        if c in THIN_SPACES and 32 in self.G: return self.G[32]      # espace insecable (U+00A0), fine (U+202F) ou mince (U+2009) = l'espace normale (5 px) : le glyphe 160 de la police a un advance de 11 px (le patch FR met U+00A0 avant « ! », « ? » et « : »)
         g = self.G.get(ord(c))
         if g is not None: return g
         if c < ' ': return (0, 0, 0, np.zeros((0, 0), np.uint8))       # caracteres de controle (« \r » en fin de ligne) : ni largeur ni dessin
@@ -986,7 +940,7 @@ class Texts:
 class Render:
     """Dessine des Fenetre sur l'ecran : prog GL maison, feuilles 0 (MenuTexture) et 1 (Button)."""
     def __init__(self, ml, sheets, font):
-        self.ml = ml; self.neighbors = []                      # voisins : fenetres visibles de l'image (leurs cadres servent a compresser les textes d'une fenetre sans cadre)
+        self.ml = ml; self.neighbors = []                      # voisins : fenetres visibles de l'image (leurs cadres servent a compresser les textes d'une fenetre sans cadre, avec la police de repli seulement)
         self.prog = ShaderProgram(Shader(VERTEX, 'vertex'), Shader(FRAG, 'fragment'))
         self._white = None                                  # texture blanche de 1 pixel (carres de couleur unie : lieux de la carte du monde)
         self.tex = {}
@@ -1167,36 +1121,6 @@ class Render:
         if col == 1: return r[1] - r[0] - 2 * self.PLATE_MARGIN                                      # texte centre : la plaque entiere
         return (r[1] - self.PLATE_MARGIN - xa) if col == 0 else (xa - r[0] - self.PLATE_MARGIN)      # texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
 
-    def _adjust_description(self, node, lines, layout, nmax, bm, u, ts, s, emy):
-        """Description dont le cadre montre `nmax` lignes sur `layout` unites de large : (lignes, facteur de compression). Un texte qui tient deja (au plus `nmax` lignes, aucune plus large que le cadre) est laisse tel quel, avec les retours a la ligne du patch.
-        Sinon les retours a la ligne sont remplaces par des espaces et le texte est recoupe a la largeur du cadre ; s'il faut encore plus de `nmax` lignes, il est comprime en largeur (jusqu'a COMPRESSION_MIN) pour tenir en `nmax` lignes."""
-        lookup_key = (tuple(lines), layout, nmax, u, ts, s)
-        c = node.get('_adj')
-        if c is not None and c[0] == lookup_key: return c[1]
-        px = max(6, int(round(emy * s)))
-        def wid(x):
-            x = re.sub(r'@c\d', '', x)
-            return bm.width_px(x) * u * ts if bm else (self.texts.line(x, px)[1] - 4) / s * ts
-        useful = list(lines)
-        while useful and not useful[-1].strip(): useful.pop()
-        if not useful or (len(useful) <= nmax and all(wid(l.strip()) <= layout + 0.5 for l in useful)): res = (lines, 1.0)
-        else:
-            words = ' '.join(l.strip() for l in useful).split()
-            def cut(d):
-                out = []; cur = ''
-                for w in words:
-                    attempt = cur + ' ' + w if cur else w
-                    if cur and wid(attempt) > d: out.append(cur); cur = w
-                    else: cur = attempt
-                if cur: out.append(cur)
-                return out
-            f = 1.0; out = cut(layout)
-            while not (len(out) <= nmax and max(wid(l) for l in out) <= layout / f + 0.5) and f > COMPRESSION_MIN + 1e-9:
-                f = max(COMPRESSION_MIN, round(f - 0.05, 4)); out = cut(layout / f)
-            res = (out, f)
-        node['_adj'] = (lookup_key, res)
-        return res
-
     def _text(self, win, node, cx, cy, s):
         t = node['text']; lang = self.ml.hdr['lang']
         lines = t['text'].split('\n')
@@ -1206,12 +1130,9 @@ class Render:
         else: emy = FONT_SIZE * u; step = LINE_HEIGHT * emy * t['lineSpacing']; asc = 0.88 * emy
         zp = node['pos'][2] - lang['dy']                                  # le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
         ts = node['tscale']
-        if node.get('wrap_x') is not None:                                # description plus large ou plus haute que son cadre : recoupee, puis comprimee si 2 lignes ne suffisent pas
-            lines, f = self._adjust_description(node, lines, node['wrap_x'] - node['pos'][0], node.get('wrap_n', 2), bm, u, ts, s, emy); ts *= f
         N = len(lines)
         row = t['anchor'] // 3; col = t['anchor'] % 3
-        base0 = first_line_baseline(zp, row, N, step, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
-        if bm: base0 += text_recentering(bm.leading, u, t['lineSpacing'])      # (police d'origine seulement : les reglages du jeu sont calcules pour la police japonaise, GMaruGoPro-M, quand elle sert de repli)
+        base0 = first_line_baseline(zp, row, N, step, asc)               # TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte ; position, interligne et tabulations exactement ceux du jeu (D-243 : ni recentrage, ni recoupe, ni compression avec SE-GARRIR)
         px = max(6, int(round(emy * s)))
         def tint(i):
             pal = self.ml.colors[i] if 0 <= i < len(self.ml.colors) else (1, 1, 1, 1)
@@ -1227,22 +1148,22 @@ class Render:
         if bm: wid = [sum(bm.width_px(t) * u * ts for t, _ in segs) for segs in segs_l]
         else: wid = [sum((self.texts.line(t, px)[1] - 4) / s * ts for t, _ in segs) for segs in segs_l]
         bl = max(wid) if wid else 0.0
-        layout = self._plate_width(win, node, zp)
-        if layout is None and win.extent_x() is None and not win.rects():              # fenetre sans cadre propre (titre et etiquettes d'un reglage) : le cadre est dans une autre fenetre visible, on prend le plus petit rectangle qui contient le point d'ancrage
-            xa = node['pos'][0]; z_a = node['pos'][2] - lang['dy']; r_min = None
-            for v in self.neighbors:
-                for (x0, z0, x1, z1) in v.rects():
-                    if x0 <= xa <= x1 and z0 <= z_a <= z1 and (r_min is None or (x1 - x0) * (z1 - z0) < (r_min[2] - r_min[0]) * (r_min[3] - r_min[1])): r_min = (x0, z0, x1, z1)
-            if r_min:
-                layout = {0: r_min[2] - self.PLATE_MARGIN - xa, 1: 2 * min(xa - r_min[0], r_min[2] - xa) - 2 * self.PLATE_MARGIN, 2: xa - r_min[0] - self.PLATE_MARGIN}[col]
-        if layout is None and bl > 0:                                     # hors plaque de bouton : le texte doit tenir dans la largeur de sa fenetre (a partir de son point d'ancrage, avec la meme marge)
-            ex = win.extent_x(); xa = node['pos'][0]
-            if ex and ex[0] <= xa <= ex[1]:
-                layout = {0: ex[1] - self.PLATE_MARGIN - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.PLATE_MARGIN, 2: xa - ex[0] - self.PLATE_MARGIN}[col]
-                if layout < 0.4 * bl: layout = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
-        if node.get('fit_x') is not None and col == 0: layout = node['fit_x'] - node['pos'][0]      # limite posee par la fenetre (ligne de cout de la fiche d'un sort) : le cadre n'est pas un element de la fenetre
-        if layout and bl > layout and compress_label(bool(bm), node.get('fit_x'), win.typ):      # texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
-            f = max(0.7, layout / bl); ts *= f; wid = [w * f for w in wid]; bl *= f
+        if not bm:                                                        # police de repli (GMaruGoPro-M, sans ui_garrir.*) seulement : un texte plus large que sa plaque ou que sa fenetre est comprime en largeur pour y tenir. Avec SE-GARRIR (police du jeu) rien n'est comprime ni recoupe : le texte depasse comme sur le mobile (D-243)
+            layout = self._plate_width(win, node, zp)
+            if layout is None and win.extent_x() is None and not win.rects():              # fenetre sans cadre propre (titre et etiquettes d'un reglage) : le cadre est dans une autre fenetre visible, on prend le plus petit rectangle qui contient le point d'ancrage
+                xa = node['pos'][0]; z_a = node['pos'][2] - lang['dy']; r_min = None
+                for v in self.neighbors:
+                    for (x0, z0, x1, z1) in v.rects():
+                        if x0 <= xa <= x1 and z0 <= z_a <= z1 and (r_min is None or (x1 - x0) * (z1 - z0) < (r_min[2] - r_min[0]) * (r_min[3] - r_min[1])): r_min = (x0, z0, x1, z1)
+                if r_min:
+                    layout = {0: r_min[2] - self.PLATE_MARGIN - xa, 1: 2 * min(xa - r_min[0], r_min[2] - xa) - 2 * self.PLATE_MARGIN, 2: xa - r_min[0] - self.PLATE_MARGIN}[col]
+            if layout is None and bl > 0:                                     # hors plaque de bouton : le texte doit tenir dans la largeur de sa fenetre (a partir de son point d'ancrage, avec la meme marge)
+                ex = win.extent_x(); xa = node['pos'][0]
+                if ex and ex[0] <= xa <= ex[1]:
+                    layout = {0: ex[1] - self.PLATE_MARGIN - xa, 1: 2 * min(xa - ex[0], ex[1] - xa) - 2 * self.PLATE_MARGIN, 2: xa - ex[0] - self.PLATE_MARGIN}[col]
+                    if layout < 0.4 * bl: layout = None                         # (ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
+            if layout and bl > layout:
+                f = max(0.7, layout / bl); ts *= f; wid = [w * f for w in wid]; bl *= f
         for i, segs in enumerate(segs_l):
             if not segs: continue
             lw = wid[i]

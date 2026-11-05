@@ -22,7 +22,7 @@ dq4-portage\
     menus\                fenêtres d'origine, menu Paramètres, historique, boutons à l'écran, avant la partie
     persistence\          réglages, sauvegardes, états instantanés
     window\               la fenêtre pyglet : classe `Game` en plusieurs modules par thème
-  tests\                  les tests (test_*.py) et leur petite aide (_paths.py)
+  tests\                  les tests (test_*.py) et leurs petites aides (_paths.py, _text_render.py : le vrai `Render._text` sans GL)
   tools\                 outils de travail : lecture de la mise en page des menus, scripts de session, recherche non maintenue
   docs\                   notes, audit, décisions, ce plan
 ```

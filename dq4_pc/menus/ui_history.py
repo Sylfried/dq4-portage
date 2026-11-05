@@ -42,6 +42,16 @@ EMPTY_FAVORITES = {'dialogues': N_('Aucun dialogue en favori : décoche « Favor
                  'combats': N_('Aucun combat en favori : décoche « Favoris seulement », choisis un combat et appuie sur Entrée (ou clique son étoile) pour le garder.')}            # (traduits au dessin, en entier avant d'etre coupes aux mots)
 
 
+THIN_SPACES = '\u00a0\u202f\u2009'          # espace insecable (U+00A0), fine (U+202F) et mince (U+2009) : le patch FR met U+00A0 avant « ! », « ? » et « : »
+NORMAL_SPACE = str.maketrans({c: ' ' for c in THIN_SPACES})
+
+
+def normal_spaces(font, text):
+    """Historique seulement (#161, D-243) : avec la police SE-GARRIR, l'espace insecable (glyphe 160 : 11 px d'avance), la fine et la mince sont dessinees comme l'espace normale du jeu (5 px) : sinon l'espace avant « ! », « ? » et « : » est presque doublee.
+    Les autres menus (ui_menu.py) gardent la largeur que la police donne a ces caracteres, comme le jeu d'origine ; la police des messages (MessageFont) aussi (c'est celle du moteur : son U+00A0 fait 5 px)."""
+    return text.translate(NORMAL_SPACE) if isinstance(font, UM.BitmapFont) else text
+
+
 def wrap_words(text, width_px, max_width):
     """Coupe `text` en lignes aux espaces pour qu'aucune ne depasse `max_width` (largeur(t) = largeur d'une ligne t, dans l'unite de max_width). Un mot seul plus large que la limite reste seul sur sa ligne (il ne peut pas etre coupe). -> liste de lignes, jamais vide."""
     lines = []; cur = ''
@@ -435,14 +445,14 @@ class HistoryView:
         return getattr(t, 'messages', None)
 
     def _text_width(self, bm, text, sc, size_value):
-        if bm: return bm.width_px(text) * sc
+        if bm: return bm.width_px(normal_spaces(bm, text)) * sc
         return self.P._label(text, size_value).content_width
 
     def _line(self, bm, text, x, ybase, sc, clr, size_value):
         """Une ligne de texte dont la ligne de base est en ybase : police bitmap du jeu (une texture par ligne, teintee), sinon police du systeme."""
         if not text.strip(): return
         if bm:
-            tex, w, h, base = bm.line(text)
+            text = normal_spaces(bm, text); tex, w, h, base = bm.line(text)
             lookup_key = (text, clr); sp = self._spr.get(lookup_key)
             if sp is None or sp.image is not tex:
                 if len(self._spr) > 600: self._spr.clear()
@@ -463,7 +473,7 @@ class HistoryView:
         r = self._lines.get(lookup_key)
         if r is None:
             if len(self._lines) > 4000: self._lines.clear()
-            if bm: mes = lambda t: bm.width_px(t) * B.text_scale
+            if bm: mes = lambda t: bm.width_px(normal_spaces(bm, t)) * B.text_scale
             else: mes = lambda t: self.P._label(t, size_value).content_width * 0.9 / s
             battle = e.type == HI.BATTLE_TYPE
             r = self._lines[lookup_key] = paginate(rows_of(e, mes, B.text_width(), self._bmm()), battle, MAX_BATTLE_LINES if battle else B.LINES)

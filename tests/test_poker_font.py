@@ -1,37 +1,55 @@
-"""Etiquettes du poker (SVC-03, choix du joueur : police reduite) : « Abandonner » sortait des cinq boutons sous les cartes et se chevauchait (le francais est plus long que l'anglais du bouton).
+"""Etiquettes du poker du casino (type 48) a la largeur EXACTE du jeu (D-243, 05/11/2026, issue #311). Avant : « Abandonner » sortait des cinq boutons sous les cartes et se chevauchait (le francais est plus long que l'anglais du bouton) ;
+SVC-03 avait fait comprimer ces etiquettes (jusqu'a x0,70 : choix « police reduite »). Sylfried a repris : tout revient a la position et a la taille exactes du jeu, les debordements sont a corriger dans le projet de traduction. Il n'y a plus de compression,
+ni pour le poker ni ailleurs (avec SE-GARRIR).
 
-  `ui_menu.compress_label` : un texte plus large que sa plaque est comprime pour y tenir avec la police de repli, avec la police d'origine seulement si la fenetre pose une limite (fiche d'un sort) ou si c'est la fenetre du
-  poker (type 48) ; ailleurs il depasse comme sur le mobile (choix du joueur, audit UI-05 : on ne touche pas a ces debordements).
+  1. plaque de bouton (partie 7) de 80 unites et etiquette centree plus large qu'elle : echelle 1, centree sur la plaque, la meme que pour n'importe quel autre type de fenetre ;
+  2. avec la VRAIE mise en page et la vraie police (cache de l'interface : DQ_UI_CACHE) : les etiquettes des cinq boutons « Abandonner », « Doubler », « Changer », « Garder » gardent leur largeur naturelle.
 
     python3 tests/test_poker_font.py
 """
 import os, sys, unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    import pyglet
-    if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.options['headless'] = True; pyglet.options['shadow_window'] = False
-    from dq4_pc.menus import ui_menu as UM
-except Exception as ex:          # ui_menu a besoin de pyglet (absent de la CI) : les tests sont alors ignores
-    UM = None
+    import _text_render as TR           # a besoin de pyglet (absent de la CI : les tests sont alors ignores)
+    UM = TR.UM
+except ImportError:
+    TR = UM = None
 
 
-@unittest.skipIf(UM is None, 'ui_menu non importable ici (pyglet absent)')
+@unittest.skipIf(TR is None, 'pyglet absent (CI)')
 class Poker(unittest.TestCase):
-    def test_poker_compressed_even_with_original_font(self):
-        self.assertIn(48, UM.BUTTON_COMPRESSION_TYPES)
-        self.assertTrue(UM.compress_label(True, None, 48))
+    def test_label_wider_than_its_plate_is_not_compressed(self):
+        for typ in (48, 3, 44, 46, 47, 49, 53, 54):                       # le poker, et les fenetres qui ne comprimaient pas non plus
+            wnd = TR.make_window(typ, [dict(pos=[0.0, 4.0, 0.0], anchor=4, alignment=1)], plates=[dict(pos=[0.0, 0.0], w=80.0, h=40.0)]); wnd.param_str(0, 0, 'Abandonner')
+            q = TR.draw(wnd, wnd.N[10])[0]
+            self.assertAlmostEqual(q.ts, 1.0, places=6, msg=typ); self.assertAlmostEqual(q.width, (8 * 10 + 4) * 0.9945, delta=0.01)
+            self.assertGreater(q.width, 80.0 - 14.0)                      # (plus large que la plaque moins ses marges : c'est bien le cas qui etait comprime)
+            self.assertAlmostEqual(q.x + (q.width - 4 * 0.9945) / 2, 0.0, delta=0.01)       # centree sur l'ancre, comme dans le jeu
 
-    def test_other_windows_keep_their_overflow(self):
-        for typ in (0, 1, 2, 3, 4, 5, 44, 45, 46, 47, 49, 53, 54):
-            self.assertFalse(UM.compress_label(True, None, typ), typ)
+    def test_no_compression_machinery_left(self):
+        for name in ('compress_label', 'BUTTON_COMPRESSION_TYPES', 'COMPRESSION_MIN'): self.assertFalse(hasattr(UM, name), name)
 
-    def test_behaviors_already_there(self):
-        self.assertTrue(UM.compress_label(False, None, 3))             # police de repli : toujours
-        self.assertTrue(UM.compress_label(True, 120.0, 3))             # limite posee par la fenetre (cout d'un sort)
 
-    def test_only_poker(self):
-        self.assertEqual(tuple(UM.BUTTON_COMPRESSION_TYPES), (48,))        # (casino : machine a sous 44-47 et pari de l'arene : inchanges)
+@unittest.skipIf(TR is None, 'pyglet absent (CI)')
+class RealPoker(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.font = TR.real_font(); j = os.path.join(TR.CACHE, 'ui_layout.json'); b = os.path.join(TR.CACHE, 'ui_frameData.bin')
+        if cls.font is None or not os.path.exists(j): raise unittest.SkipTest('cache de l\'interface absent (DQ_UI_CACHE : ui_layout.json, ui_garrir.json / .png)')
+        cls.ml = UM.PageLayout(j, b if os.path.exists(b) else None)
+
+    def test_labels_keep_their_natural_width(self):
+        n = 0
+        for (i, no) in ((4, 0), (4, 2), (2, 0), (0, 5)):
+            wnd = UM.Window(self.ml, 48)
+            if (i, no) not in wnd.params: continue
+            for s in ('Abandonner', 'Doubler', 'Garder', 'Changer'):
+                wnd = UM.Window(self.ml, 48); wnd.param_str(i, no, s); pt, ib = wnd._ib(wnd.params[(i, no)])
+                q = TR.draw(wnd, wnd.N[ib['go']], r=TR.render(self.font, ml=self.ml))[0]
+                self.assertAlmostEqual(q.ts, 1.0, places=5, msg=(i, no, s)); n += 1
+        self.assertGreaterEqual(n, 8)
+        self.assertGreater(self.font.width_px('Abandonner') * 0.9945, 100.0)               # « Abandonner » fait 103 unites : plus que la plaque de 72 (il depasse, comme sur le mobile)
 
 
 if __name__ == '__main__':

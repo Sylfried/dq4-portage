@@ -1,4 +1,4 @@
-"""Rend plusieurs fenetres (33 cible, 29 etat, 31 plaques, 32 commandes) a l'echelle 1.688 (celle des captures de Sylfried), en mode « original » (sans recentrage) puis « recentre » :
+"""Rend plusieurs fenetres (33 cible, 29 etat, 31 plaques, 32 commandes) a l'echelle 1.688 (celle des captures de Sylfried), en mode « original » (le seul depuis D-243 du 05/11/2026 : le recentrage et `UI.TEXT_CENTERING` n'existent plus ; le mode « cen » est retire, ses images seraient identiques) :
 xvfb-run python3 render_multi.py <dossier_sortie> [dq4_pc]"""
 import sys, os
 out = sys.argv[1]; src = sys.argv[2] if len(sys.argv) > 2 else '/home/claude/wt45-texte/dq4_pc'
@@ -30,8 +30,7 @@ def win31():
     return f
 CX = float(os.environ.get('CX', '405')); CY = float(os.environ.get('CY', '240'))
 os.makedirs(out, exist_ok=True)
-for mode in ('orig', 'cen'):
-    UI.TEXT_CENTERING = (mode == 'cen')
+for mode in ('orig',):
     for name_str, mk in (('t33', win33), ('t32', win32), ('t29', win29), ('t31', win31)):
         f = mk(); rd.neighbors = [f]
         win.switch_to(); gl.glClearColor(0.1, 0.4, 0.1, 1); win.clear()
@@ -54,8 +53,7 @@ win2 = pyglet.window.Window(W2, H2, visible=False)
 rd2 = UI.Render(ml, wnd, cache + '/ui_font.otf')
 TYPES = [3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 19, 20, 21, 24, 28, 30, 34, 35, 36, 44, 46, 53, 54, 57, 58, 60, 62, 66]
 for typ in TYPES:
-    for mode in ('orig', 'cen'):
-        UI.TEXT_CENTERING = (mode == 'cen')
+    for mode in ('orig',):
         try:
             f = generic_win(typ); rd2.neighbors = [f]
             win2.switch_to(); gl.glClearColor(0.1, 0.4, 0.1, 1); win2.clear()

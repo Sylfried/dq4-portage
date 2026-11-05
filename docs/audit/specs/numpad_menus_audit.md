@@ -39,7 +39,7 @@ La boule (`m_siMovePad`) suit le doigt à `colMove.position + décalage` borné 
 
 **États** (`ePadState`) : `NONE 0, MOVE_BEGIN 1, MOVE 2, ROT_OR_FLICK 3`. Un tap court sans mouvement envoie `PAD_ANY = 256` (0x100). Barre de rotation de la caméra `l_RotBar` (objet de la croix, activé/désactivé dans `MoveCheck`), constantes `c_RotThreshold = 8`, `ROT_PRESS_HIT_X = 160`, `c_rotResetWidth = 20` (dump.cs) ; sémantique (rotation de la caméra par glissement hors de la croix) supposée.
 
-**Visibilité** : `SetVisibleColMove` (0xD2359C) : `CurNormal = b & ~l_padBlink` ; `CurLight` et `CurBS` activés **seulement si `l_padBlink`** (statique 0x8C, posé par `SetPadBlink`, c'est le clignotement du **tutoriel**, halo pulsant de 1.0 à 1.5 sur 1 s) ; `Dirs = b` ; `DirLight = ((m_press & 0xF) != 0) & b` ; `DirNormal = ((m_press & 0xF) == 0) & b`.
+**Visibilité** : `SetVisibleColMove` (0xD2359C) : `CurNormal = b & ~l_padBlink` ; `CurLight` et `CurBS` activés **seulement si `l_padBlink`** (statique 0x8C, posé par `SetPadBlink`, c'est le clignotement du **tutoriel**, mais aussi, sur la carte du monde, celui qui se déclenche près du ballon et à l'atterrissage (`g_field_pad_blink`, paquet 19 emplacement 16 : le moteur l'émet, la visionneuse le reproduit déjà), halo pulsant de 1.0 à 1.5 sur 1 s) ; `Dirs = b` ; `DirLight = ((m_press & 0xF) != 0) & b` ; `DirNormal = ((m_press & 0xF) == 0) & b`.
 `IconVisible(b)` (0xD23254) : PadPos, Command, Talk = `b` ; Map = `IsTouchMap & b` (`Global.Flag` : `IsTouchDir = IsEnable(8)`, `IsTouchRot = IsEnable(0x10)`, `IsTouchMap = IsEnable(0x20)`, `IsEnable(a) = (Flag & (0x30047 | a)) == a`).
 
 **Transparence** : `MOVE_WAIT_TIME = 0.5` et `MOVE_LIMIT_ALPHA = 0.4` sont déclarées (dump.cs) mais **aucun code de `TouchPad` (0xD227A4..0xD25A00) ne charge un littéral 0.4 ni n'appelle `set_color`** : constantes mortes. L'anneau est toujours opaque.
@@ -60,7 +60,7 @@ La boule (`m_siMovePad`) suit le doigt à `colMove.position + décalage` borné 
 | Prise de la croix | collider de 95 x sc = 1.178 R | appui « dans l'anneau » (R) (`croix_glisser`) | approché : zone de prise 1.178 R |
 | Secteurs | 8 secteurs de 45 degrés | idem (l.222-233) | **fidèle** |
 | Fondu à 40 % après 0.5 s | **absent** (constantes mortes) | `ATTENTE_CROIX, ALPHA_CROIX = 0.5, 0.4` (l.31, 285) ; alpha 0.95 tenue | **inventé** (déduit des noms de constantes inutilisées) |
-| Boule orange + halo quand une direction est tenue | boule orange et halo **seulement en clignotement tutoriel** ; seule la pastille de la direction devient orange | `poser('halo')` + `boule_on` dès qu'un secteur est tenu (l.296-297) | **faux** : garder `boule` normale, pas de halo (sauf éventuel mode tutoriel) |
+| Boule orange + halo quand une direction est tenue | boule orange et halo **seulement en clignotement (tutoriel, carte du monde près du ballon et à l'atterrissage)** ; seule la pastille de la direction devient orange | `poser('halo')` + `boule_on` dès qu'un secteur est tenu (l.296-297) | **faux** : garder `boule` normale, pas de halo (sauf clignotement : tutoriel, carte du monde près du ballon et à l'atterrissage) |
 | Pastille orange | 1 pastille (secteur tenu), les 7 autres normales | `pastille_on` sur le secteur tenu (l.295) | fidèle |
 | Position par défaut | `g_pad_pos = 1` : centre-bas, x = 0 | en bas à droite, `g_pad_pos` ignoré | choix assumé (retour du 01/11/2026 : boutons à gauche) ; non fidèle |
 | Barre de rotation caméra `l_RotBar` | rotation au doigt hors croix | absente | absent (sans objet à la souris) |
@@ -217,7 +217,7 @@ Dans `Fenetre.param_int` : si `cu['cls']` finit par `ItemNumCTRL`, prendre `p = 
 1. **Bug du pipeline `tools/ui_il2cpp/layout.py:99`** : passer `type - premier indice du même délégué` (preuve : `sub w2, w21, w0` en 0xCE43DC). Régénérer `ui_layout.json`. Effets immédiats : type 22 (bouton Mode dans la fenêtre), puis groupes 13..17, 35..37, 58/59, 60/61, 75/76 à contrôler.
 2. **ItemNumCTRL (type 9) absent** : implémenter `Changer(v)` dans `ui_menu.Fenetre.param_int` (quantités des listes d'objets : actuellement jamais affichées). Règle : v < 2 -> vides ; sinon dizaines = `(v / 10) % 10` (icône 16 x d, ou 1), unités = 16 x (v % 10).
 3. **Géométrie de la croix** : `ECHELLE_CROIX = (1.225, 1.0, 0.775)` ; `DIAM_CROIX = 161.28` ; `RAYON_PASTILLE = 104/256 = 0.40625` ; `ZONE_MORTE = 0.124` ; `COURSE_BOULE = 0.4526` ; zone de prise 1.178 x le rayon.
-4. **Boule orange et halo** : pas en cours de déplacement, seulement en clignotement tutoriel ; seule la pastille du secteur tenu s'allume.
+4. **Boule orange et halo** : pas en cours de déplacement, seulement en clignotement (tutoriel, carte du monde près du ballon et à l'atterrissage) ; seule la pastille du secteur tenu s'allume.
 5. **Fondu de la croix à 40 %** : **inventé** (constantes mortes `MOVE_WAIT_TIME` / `MOVE_LIMIT_ALPHA`), à retirer ou à garder comme option PC assumée (non fidèle).
 6. **Icône du bouton Mode** : 19 / 20 / 2 selon le moteur (petite carte du monde, grande carte, ville) ; position d'origine dans la fenêtre (187.5, -300), plaque 64 x 55.5, touche `PAD_U`.
 7. **Plan et marqueur de la carte** : rectangle x -223..222.5, z 398..63.875 ; marqueur `-223 + 1.740234 px`, `398 - 1.740234 py` (écart <= 2.5 unités : correction mineure).

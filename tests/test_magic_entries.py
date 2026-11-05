@@ -10,7 +10,8 @@ visible et cliquable : un toucher y envoyait au moteur un sort inexistant (<ERR 
   3. le code 6 rejoue (ou arrive apres les codes de rangee) ne decale pas deux fois ; un preset inconnu est ignore ; revenir au preset 0 remet les rangees en place ;
   4. la ligne de cout « Cout en PM:<tab>  2 » (TextMesh.tabSize 8) : la tabulation devient 8 espaces dans la liste des magies seulement (un texte sans tabulation ou sans tabSize ne change pas).
 
-  4 bis. la ligne de cout de la fiche d'un sort (type 7, texte 2) porte la limite droite de son cadre (Render._texte la comprime pour qu'elle y tienne) ; les autres textes de la fiche ne le sont pas.
+  4 bis. la fiche d'un sort (type 7) est a la position et a la taille exactes du jeu (D-243, 05/11/2026) : la ligne de cout (texte 2) n'est plus comprimee pour tenir dans son cadre et la description (texte 1, 3 ou 4 lignes en francais) n'est plus recoupee ;
+     elles debordent comme sur le mobile (les chaines seront raccourcies dans le projet de traduction).
 
 Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seule, le moteur ecrit dans un dossier temporaire ; groupe de l'emplacement 1 : Ragnar sans PM et Doc, 30 PM, qui sait « Premiers secours ») :
   5. liste de Doc : une seule rangee, « Premiers secours », code de rangee 2, rangees 1 a 3 cachees ;
@@ -28,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import pyglet
 if sys.platform.startswith('linux') and not os.environ.get('DISPLAY'): pyglet.options['headless'] = True; pyglet.options['shadow_window'] = False
 from dq4_pc.menus import ui_menu as UM
+import _text_render as TR          # (aide des tests : le vrai Render._text sans GL)
 
 APK, SAVES = os.environ.get('DQ_APK'), os.environ.get('DQ_SAVES')
 
@@ -136,51 +138,48 @@ class TestCostLine(unittest.TestCase):
 
 
 class TestSpellCard(unittest.TestCase):
-    """Fiche d'un sort (Make_MagicInfo, type 7) : « Cout en PM 10/ 30 » (FR) est plus long que « MP Cost 10/ 30 » et sortait de son cadre : la ligne de cout (texte 2) porte la limite droite de son cadre (fit_x) : Render._texte la comprime pour qu'elle y tienne
-    meme avec la police d'origine ; le nom, la description et « Lancer » gardent leur mise en page."""
+    """Fiche d'un sort (Make_MagicInfo, type 7) a la position exacte du jeu (D-243). Avant : « Cout en PM 10/ 30 » (FR, plus long que « MP Cost 10/ 30 ») portait la limite droite de son cadre (fit_x 214, compression x0,90) et la description francaise
+    de 3 ou 4 lignes (cadre de 2) etait recoupee a 148 unites. Maintenant le rendu les dessine telles quelles : ni limite posee sur la cellule, ni recoupe, ni compression ; le nom, la description, la ligne de cout et « Lancer » gardent leur mise en page."""
+    TEXTS = ('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')
+
     def window(self):
         def text(nid, anchor): return {'id': nid, 'par': 1, 'pos': [75.0, 12.0, 103.0], 'act': True, 'text': {'font': 'font', 'characterSize': 9.945, 'text': None, 'anchor': anchor, 'alignment': 0, 'lineSpacing': 0.88}, 'mats': []}
         t = {'name': 'Make_MagicInfo()', 'err': None, 'nodes': [{'id': 1, 'par': None, 'pos': [0.0, 0.0, 0.0], 'act': True, 'mats': []}] + [text(10 + k, 0) for k in range(4)],
              'parts': [{'node': 1, 'ib': [{'k': 'text', 'go': 10 + k, 'variant': 0} for k in range(4)]}], 'params': [{'id': 0, 'no': k, 'parts': 0, 'base': k} for k in range(4)], 'codes': [], 'builds': []}
         return UM.Window(types.SimpleNamespace(types={'7': t}, info=[], borders=[], hdr={'lang': {'hiro': 1.0}}, pushed=(0.0, 0.0)), 7)
 
-    def test_only_the_cost_line_is_marked(self):
+    def test_no_cell_carries_a_limit(self):
         wnd = self.window()
-        for no, s in enumerate(('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')): wnd.param_str(0, no, s)
-        self.assertEqual([wnd.N[10 + k].get('fit_x') for k in range(4)], [None, None, UM.CARD_COST_X_MAX, None])
-        self.assertEqual(wnd.N[12]['text']['text'], 'Coût en PM  2/ 30')           # le texte lui-meme n'est pas modifie
+        for no, s in enumerate(self.TEXTS): wnd.param_str(0, no, s)
+        for k in range(4): self.assertFalse({'fit_x', 'wrap_x', 'wrap_n'} & set(wnd.N[10 + k]), k)
+        self.assertEqual(wnd.N[12]['text']['text'], 'Coût en PM  2/ 30')                  # le texte lui-meme n'est pas modifie
+        self.assertEqual(wnd.N[11]['text']['text'], "Restaure au moins 30\r\nPV d'un seul allié.")
 
-    def test_description_carries_its_border_width(self):
+    def test_drawn_as_the_game_gives_it(self):
         wnd = self.window()
-        for no, s in enumerate(('Premiers secours', "Restaure au moins 30\r\nPV d'un seul allié.", 'Coût en PM  2/ 30', 'Lancer')): wnd.param_str(0, no, s)
-        self.assertEqual([(wnd.N[10 + k].get('wrap_x'), wnd.N[10 + k].get('wrap_n')) for k in range(4)], [(None, None), (UM.CARD_DESC_X_MAX, 2), (None, None), (None, None)])
-        self.assertEqual(wnd.N[11]['text']['text'], "Restaure au moins 30\r\nPV d'un seul allié.")           # le texte du moteur n'est pas modifie (c'est le rendu qui recoupe)
+        for no, s in enumerate(self.TEXTS): wnd.param_str(0, no, s)
+        for k in range(4):
+            quads = TR.draw(wnd, wnd.N[10 + k]); self.assertEqual([q.text for q in quads], [l for l in self.TEXTS[k].split('\n') if l], k)
+            for q in quads: self.assertAlmostEqual(q.ts, 1.0, places=6); self.assertAlmostEqual(q.x, 75.0, delta=0.01)       # ancre a gauche (x 75), echelle 1 : « Cout en PM 10/ 30 » n'est plus comprime
 
 
-class TestRewrapDescription(unittest.TestCase):
-    """Render._adjust_description : la description francaise d'un sort a 3 ou 4 lignes (cadre de 2) est recoupee a la largeur du cadre (police fictive : 9 unites par caractere, cadre de 361 unites = 40 caracteres)."""
-    LAYOUT = 148.0 + 213.0
-    def rewrap(self, text):
-        r = object.__new__(UM.Render)
-        r.texts = types.SimpleNamespace(bitmap=types.SimpleNamespace(width_px=lambda x: 9.0 * len(x)))
-        return r._adjust_description({}, text.split('\n'), self.LAYOUT, 2, r.texts.bitmap, 1.0, 1.0, 1.0, 9.0)
+class TestDescriptionDrawnAsIs(unittest.TestCase):
+    """Description francaise d'un sort a 3 ou 4 lignes (cadre de 2) : toutes les lignes, aux retours a la ligne du patch, a l'interligne du jeu (avant : recoupee a 2 lignes de 148 unites, ou comprimee ; police factice : 9 unites par caractere)."""
+    def draw(self, text):
+        wnd = TR.make_window(7, [dict(pos=[-213.0, 4.0, -324.0], anchor=3, ls=0.881)] * 2); wnd.param_str(0, 0, 'x'); wnd.param_str(0, 1, text)
+        return TR.draw(wnd, wnd.N[11], font=TR.FakeFont(advance=9))
 
-    def test_four_lines_into_two(self):
+    def test_four_lines_stay_four(self):
         for t in ("Permet de sortir\r\nimmédiatement des\r\ndonjons, grottes et\r\ntours.", "Génère une aura\r\nsacrée qui éloigne les\r\nmonstres les plus\r\nfaibles."):
-            out, f = self.rewrap(t)
-            self.assertEqual((len(out), f), (2, 1.0), out)
-            self.assertEqual(' '.join(out), ' '.join(l.strip() for l in t.split('\n')))          # aucun mot perdu ni ajoute
-            self.assertTrue(all(9.0 * len(l) <= self.LAYOUT for l in out), out)
+            quads = self.draw(t)
+            self.assertEqual([q.text for q in quads], t.split('\n')); self.assertTrue(all(abs(q.ts - 1.0) < 1e-6 for q in quads))
 
-    def test_three_lines_in_two(self):
-        out, f = self.rewrap("Ressuscite un allié\r\nmort en lui octroyant\r\nla moitié de ses PV.")
-        self.assertEqual((len(out), f), (2, 1.0), out)
+    def test_three_lines_stay_three(self):
+        quads = self.draw("Ressuscite un allié\r\nmort en lui octroyant\r\nla moitié de ses PV."); self.assertEqual(len(quads), 3)
 
-    def test_three_too_long_lines_compressed(self):
-        t = "\r\n".join(" ".join([c * 4] * 6) for c in "abc")                                         # 3 lignes de 29 caracteres : recoupees a 40 elles feraient encore 3 lignes : le texte est comprime pour tenir en 2
-        out, f = self.rewrap(t)
-        self.assertEqual(len(out), 2, out); self.assertTrue(UM.COMPRESSION_MIN <= f < 1.0, f)
-        self.assertTrue(all(9.0 * len(l) * f <= self.LAYOUT + 0.5 for l in out), (out, f))
+    def test_three_too_long_lines_are_not_compressed(self):
+        t = "\r\n".join(" ".join([c * 4] * 6) for c in "abc")                                         # 3 lignes de 29 caracteres (261 unites) : plus de recoupe, plus de compression
+        quads = self.draw(t); self.assertEqual([q.text for q in quads], t.split('\n')); self.assertTrue(all(abs(q.ts - 1.0) < 1e-6 for q in quads))
 
 
 def _stat(eng, i):
