@@ -146,7 +146,19 @@ class SectionDefilement(unittest.TestCase):
         k = ls.index(('sep', 'Vitesses')); self.assertLess(k, i)
         self.assertEqual([t for t, _ in ls[k + 1:i]].count('sep'), 0, 'aucune section entre « Vitesses » et « Défilement du texte » : elle est juste dessous')
         self.assertEqual(ls[i - 1], ('touche', 'Changer la vitesse en combat'))                                                                          # (derniere ligne des vitesses)
-        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra au clavier', 'Caméra à la souris', 'Clic molette maintenu + déplacement', 'Clic molette', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])        # (la camera ne fait que tourner et se recentrer : D-233 ; plus de zoom ni de molette)
+        self.assertEqual([l for t, l in ls if t == 'sep'], ['Déplacement', 'Caméra', 'Clic molette maintenu + déplacement', 'Clic molette', 'Vitesses', 'Défilement du texte', 'Actions du jeu', 'Autres'])        # (la camera ne fait que tourner et se recentrer : D-233 ; plus de zoom ni de molette)
+
+    def test_toutes_les_options_de_camera_dans_un_seul_groupe(self):                 # D-237 : « Regroupe toutes les options de caméra directement dans un groupe nommé "Caméra" »
+        _, p = menu('commandes'); e = self.lignes(p); ls = [(x['t'], x['l']) for x in e]
+        i = ls.index(('sep', 'Caméra')); j = ls.index(('sep', 'Vitesses'))
+        self.assertEqual(ls.count(('sep', 'Caméra')), 1); self.assertNotIn('Caméra au clavier', [l for _, l in ls]); self.assertNotIn('Caméra à la souris', [l for _, l in ls])
+        groupe = ls[i + 1:j]
+        self.assertEqual(groupe, [('touche', 'Caméra (Gauche)'), ('touche', 'Caméra (Droite)'), ('choix', 'Inverser gauche / droite'),
+                                  ('sep', 'Clic molette maintenu + déplacement'), ('sep', 'Clic molette'), ('choix', 'Vitesse de caméra')])
+        self.assertTrue(all(l != 'Vitesse de caméra' for _, l in ls[j:]), 'la vitesse de caméra n\'est plus dans « Vitesses »')
+        self.assertEqual(ls.index(('touche', 'Caméra (Gauche)')) > ls.index(('touche', 'Droite')), True)                                  # (le groupe vient apres le deplacement)
+        infos = {x['l']: x.get('v') for x in e if x['t'] == 'sep' and x.get('v')}
+        self.assertEqual(infos, {'Clic molette maintenu + déplacement': 'Tourne la caméra', 'Clic molette': 'Recentre la caméra'})
 
     def test_plus_de_page_texte(self):
         _, p = menu('racine'); self.assertNotIn('texte', [e['l'] for e in p._entrees()])
