@@ -1,0 +1,665 @@
+## FILE dq4_pc/window/battle_scene.py
+@@ ed606d15c91b t
+(arene des monstres : la fenetre « Quitter » reste ouverte pendant tout le combat, ce n'est pas une attente du joueur)
+@@ 45e32de30156 t
+heure du dernier pas qui a lu les touches (combat accelere : voir _do_battle_step)
+@@ a19750d8c4a8 t
+la cascade d'entree commence pendant ce pas : on s'arrete la, la suite de l'image reprend a l'horloge du jeu (voir _speed_factor)
+@@ 6db9f1b3a149 d
+Combat : monstres, fond, effets, degats, vitesse et pas du moteur pendant un combat.
+@@ b0fc131976d1 d
+Page Texte du menu Echap : nouvelle « Vitesse de combat » (prise en compte tout de suite, aussi en plein combat).
+@@ 4acd54c459a5 d
+Bouton de vitesse de combat : il se rattache au coin inferieur GAUCHE de la boite du bas (commandes, ou message), comme « Fuir » l'est au coin inferieur droit des commandes. Seules comptent la fenetre de message
+et les fenetres de commandes (RG.BATTLE_COMMAND_WINDOWS) : parmi elles, celle dont le cadre descend le plus bas ; les autres (bandeau de l'equipe en haut, noms des monstres au milieu) n'ont rien a voir avec le bas de
+l'ecran (#47 : le bouton sautait sous elles pendant une image entre deux boites). La plaque a la taille de la plaque « Fuir » (le rectangle accroche sous le cadre, a son bord droit) quand on la trouve, sinon la derniere connue.
+Aucune boite visible (entre deux boites) : l'ancre reste ou elle etait ; toute premiere image du combat (aucune ancre encore) : la boite des messages a sa place d'avance (le bouton n'apparait jamais a la position
+par defaut de la grille, a gauche de l'ecran). -> self.battle_anchor = dict(x, y, w, h) en pixels (x : bord gauche du cadre, y : bord bas du cadre).
+@@ 792dc7a4eb4c d
+Effets-maillages de la ville (paquets 21 / 22) : le moteur pose l'effet sur le rayon de SA camera, entre elle et le personnage (sort Morph, eclaboussure de la grenouille : a mi-chemin exactement,
+mesure sur le paquet 22). Il n'a pas de personnage dans le paquet : on le retrouve, c'est celui qui est sur ce rayon. Pour chaque effet on garde de quoi le replacer sur le meme personnage vu par la camera
+de la visionneuse (zoom, centrage, rotation, inclinaison) : rapport des profondeurs et ecart angulaire (en tangentes) vu de la camera du jeu. Sans personnage sur le rayon : position telle quelle.
+@@ 680911d22a8b d
+Position d'un effet-maillage de la ville vue par la camera de la visionneuse : sur le meme personnage, au meme rapport de profondeur et au meme ecart angulaire que pour la camera du jeu
+(identique a `pos` quand les deux cameras sont les memes).
+@@ 70ebbb81737d d
+(tache de fond) texture HD d'un monstre, lue dans le cache disque s'il existe. Plafonnee a 4096 px de cote (moins de passes si besoin).
+@@ 9ae115ee0fff d
+Texture d'un monstre pour le mode de sprites choisi (F2) : celle d'origine (pixels nets) ou agrandie par l'algorithme HD (calcul en tache de fond, l'original sert en attendant).
+@@ 3b3eccdf975b d
+Liste (texture, vertex_list, ...) des maillages de monstres de l'image courante, dans l'ordre de dessin d'Unity :
+shaders DssaMonster* = fusion alpha, pas d'ecriture de profondeur, pas de masquage des faces -> parties dessinees dans l'ordre des paquets ;
+entre monstres : file de rendu du shader (Transparent+150, +200...) puis du plus loin au plus proche.
+@@ 1d87cd31d7b4 d
+Le moteur n'envoie pas de couleur de fond en combat, et le decor laisse un vide entre le bord du sol et le ciel :
+on prend la couleur moyenne (texture x couleur de sommet) du sol a la peripherie de l'arene, ciel exclu.
+@@ 510a4f077816 d
+Abscisses (unites d'interface, colonne portrait 450 x 800) des monstres d'un masque : emplacement i = bit i (MeshChara) projete par la camera de combat. -> (min, max), ou la liste des abscisses (une par monstre) si `entries`.
+@@ be1723584920 d
+Effet de debut de combat : fond noir, morceaux de la capture qui tombent (voir battle_effect.py).
+@@ accb36503004 d
+Chiffres 0 a 9 (blancs a ombre, 16 x 16 px) de la feuille de menu : textures separees.
+@@ 36f9a98bf124 d
+Nombres de degats qui sautent au-dessus du monstre touche (BattleMenu_setHoppingNumbers -> HoppingNumber.Create) : quatre chiffres au plus, un tick (2 / 30 s) de decalage entre
+deux chiffres, chaque chiffre visible pendant 19 ticks. Position : pied du monstre projete par la camera du combat, plus min(hauteur x 1,85 ; 160) unites d'interface.
+@@ 438b1bce8b7d d
+Vrai quand la boite de dialogue d'un combat doit disparaitre : un fondu au noir commence et la boite n'attend pas de touche (pas de curseur de fin de page : derniere page validee, ou message qui se ferme seul comme « Ragnar meurt ! »).
+Le moteur ne ferme la boite qu'apres le fondu : elle restait affichee sur l'ecran qui noircit. Une boite qui attend encore une touche reste affichee. Elle revient si un nouveau fondu (d'ouverture) commence.
+@@ e491332bb255 d
+Le jeu est-il dans un combat, au sens de l'horloge du moteur ? Partie « combat » du moteur (0xd), mais aussi l'effet d'ecran qui le lance et l'ecran noir qui attend le chargement de sa scene (State.effet,
+State.load_wait : seul un combat les leve). Hors de cela la vitesse de combat n'a aucun effet (la marche garde ses reglages) ; en combat, au contraire, la marche et l'accelerateur n'en ont plus.
+@@ 139f25097be8 d
+Le moteur attend-il le joueur en combat ? Menu qui a la saisie (commandes, cible, sorts, objets, Oui / Non) ou message qui montre son curseur ▼ (Manuel : une touche est attendue). Les touches ne sont alors lues qu'au rythme
+normal (pas « muets » entre deux lectures, voir _do_battle_step) : curseur et repetition des touches inchanges, alors que les monstres suivent la vitesse de combat. (Le dernier message d'un combat attend aussi une touche
+sans montrer le curseur : non detectable, ses pas supplementaires sont donc lus comme des pas ordinaires.)
+@@ 7cf84680ebc7 d
+Un pas du moteur pendant un combat accelere. Quand le moteur attend le joueur, seul un pas sur (f) lit les touches et les clics, a cadence normale (un par 1 / 30 s reelles) ; les autres sont muets : le moteur avance
+(animation de repos des monstres, fenetres) a la vitesse choisie, sans qu'un curseur ni une repetition de touche aille plus vite. Toujours True : on continue jusqu'au bout du rattrapage.
+@@ 2934cb9ce7e6 d
+Touche « Changer la vitesse en combat » ou bouton de l'ecran de combat : Manuel -> Normal -> Rapide -> Très rapide -> Manuel. Le reglage change tout de suite (la section Défilement du texte de Commandes le relit), est enregistre et gouverne aussi le
+defilement des messages (Manuel : a la main). Aucun message a l'ecran (retire depuis #267) : le bouton de l'ecran de combat montre la vitesse, la section Defilement du texte de Commandes aussi.
+## FILE dq4_pc/window/camera.py
+@@ c0bd8d030530 t
+meme champ pour tous les shaders ; echelle du jeu (ballon : jusqu'a 1,25, Field.SetScale : orthographicSize x echelle, MAP-02)
+@@ e563b11c4dc0 t
+pixel perfect : camera sur un pixel de la carte, heros a sa taille exacte (24 x 32 pixels de la carte)
+@@ d7753c56a682 t
+(la camera de la carte du monde ne se regle pas : ni angle ni rotation)
+@@ 8f68a8f5a354 t
+ecran y = -(z - cz) / dh
+@@ 2a30f2b02e02 t
+profondeur : la hauteur (vue de dessus)
+@@ 9f858894e400 t
+un glissement annule le retour au nord demande et pas encore envoye
+@@ d346d80bf0ba t
+(pendant un appui, pyglet n'envoie plus on_mouse_motion : la position sert a savoir si le doigt est toujours sur le bouton)
+@@ 551fc1d4e453 c
+---- combat : decor + monstres (maillages dynamiques du moteur)
+@@ 962307fea625 t
+tangente du demi-champ vertical de l'original
+@@ 315a15affe95 t
+camera libre (paquet 11, bit 7) : position + angles, comme en combat
+@@ 2280b8acfb60 t
+(test) DQ_ZDEBUG : le plan lointain change a chaque image : seules les surfaces en z-fighting changent d'une image a l'autre
+@@ faebdef8e961 t
+SceneCamera.s_yOffset
+@@ 33c0ce4c8bfc c
+Repere des sprites (#184) : le panneau d'un personnage prend la rotation de la camera DU JEU (Chara.normalBillboard) : celle de la vue
+@@ e667d240031e t
+SceneCamera.Update : fov x 4/3, applique a l'horizontale (matrice de projection transposee)
+@@ 7fd0a363eaba t
+vue d'origine 4/3 ; en 16/9 on garde la meme hauteur de champ et on montre plus de decor sur les cotes
+@@ cf751defcd2a t
+SceneCamera.s_yOffset : decalage vertical de l'image
+@@ e2065283c865 t
+NativeManager.cmd_fld_load en mode combat : FldObject.SetDispScale(6, 6, 6), applique a la racine du decor (FldObject.Update)
+@@ b9641ed8251c t
+coins : bas-gauche, bas-droit, haut-droit, haut-gauche
+@@ 8bce4515b6a6 t
+part de l'inclinaison des verticales du monde que prend le sprite : 0 = bords exactement verticaux (defaut depuis #180 : l'essai #134 a 0,5 deformait les sprites pres des bords), 1 = parallele aux murs
+@@ 1ca6a014ca06 t
+(tout contre la camera : pas de division par une profondeur nulle)
+@@ d1888a525ef0 t
+a l'ecran (focale 1) : abscisse du centre du bas, ordonnees du bas et du haut du panneau d'origine
+@@ c7b46ebb586f t
+demi-largeur a l'ecran : proportion (largeur moyenne / hauteur) du panneau d'origine au centre de l'image
+@@ 759f8cf962a7 t
+glissement du haut (unites de l'ecran, focale 1) : inc x tan(inclinaison d'une verticale du monde au pied) x hauteur a l'ecran
+@@ a72be9e78039 t
+pied du panneau : sa direction a l'ecran (une droite du monde reste une droite) = derivee de la projection quand on monte de dy
+@@ 3660f1e092cb t
+(debogage) + tous les sprites et les bulles d'icone
+@@ 51ec67dde506 d
+Camera : camera des villes (celle du jeu, que le joueur tourne avec les boutons de camera DU JEU), de la carte du monde, du combat et du titre, correction des bords des sprites. Le joueur ne regle que la rotation (fleches gauche / droite, clic molette) :
+plus de zoom, d'inclinaison, de centrage ni de lissage de hauteur (retires en #264), plus d'acceleration de la camera (D-233) et plus de rotation faite par la visionneuse a cote du jeu (D-234) : elle est celle du jeu, comme sur mobile.
+@@ 442b387253fe d
+Camera : camera des villes (celle du jeu : le joueur la tourne par les boutons de camera du jeu), de la carte du monde, du combat et du titre, correction des bords des sprites.
+@@ efd34b354286 d
+Carte du monde, comme Field.Init / Field.SetPosition du jeu : camera orthographique vue de dessus (Rotate(90, 0, 0)), centree sur le point donne par le moteur
+(en pixels de 16 par tuile). Le haut de l'ecran est le nord (-Z), l'est est a droite. Hauteur visible = CH_VIEW_HEIGHT tuiles (le heros a la meme taille que dans les villes) x echelle du jeu (ballon, paquet 30).
+La camera est celle du jeu : aucun reglage du joueur.
+@@ 62245a873592 d
+Les boutons de camera du jeu (fleches gauche / droite, clic molette) sont-ils envoyes au moteur ? Terrain libre d'une ville, d'un donjon ou d'une tour : ni la carte du monde, ni l'ecran-titre, ni un message, un menu, une carte ou un effet.
+Le reste (joueur verrouille par un evenement, camera tenue par une scene, lieu qui interdit de la tourner, limites de rotation) est decide par le jeu lui-meme, comme sur mobile : il refuse alors le bouton (Engine.camera_wait).
+@@ bc66c51db60e d
+Clic molette, ou les deux fleches ensemble : les deux boutons de camera du jeu ensemble au prochain pas = le jeu ramene la camera au nord (TownPlayerManager::setCameraRotToNorth : il anime le retour et tient le joueur pendant ce temps).
+@@ 77c5c0495dca d
+Les deux fleches de la camera : -1 (gauche) / 0 / +1 (droite) = sens demande a la main. Les deux ensemble demandent le retour au nord, une seule fois ; tant qu'il en reste une enfoncee apres cette pression double, rien ne se passe
+(le relachement n'est jamais exactement simultane).
+@@ 6933caa8e032 d
+Boutons de camera du jeu a envoyer a ce pas du moteur (ENGINE.CAM_G / ENGINE.CAM_D ; les deux ensemble : retour au nord), d'apres les fleches, le clic molette et le glissement du clic molette (rotation encore a faire : `cam_request`).
+Hors du terrain libre rien n'est envoye et les demandes en attente sont oubliees. Le sens envoye est garde pour Game._camera_after_step.
+@@ 1275a83fe17f d
+Rien n'est envoye a la camera du jeu a ce pas (menu, message, titre, carte du monde...) : les demandes en attente (retour au nord, rotation de la souris) sont oubliees, et deux fleches deja tenues ne comptent pas comme une pression double
+au retour sur le terrain.
+@@ 0153e578f6fb d
+Apres un pas du moteur envoye avec un bouton de camera : le jeu l'a-t-il pris (Engine.camera_wait) ? Il tourne alors d'un cran (ENGINE.CAM_STEP degres) au pas suivant ; au-dela d'un cran par pas, on lui en fait faire les autres tout de suite
+(Engine.camera_turn) : reglage « Vitesse de camera » aux fleches (x2 = deux crans par pas ; la vitesse non entiere se repartit d'un pas a l'autre), jusqu'a CAM_DRAG_STEP crans pour que le glissement du clic molette suive le pointeur.
+S'il refuse (verrou du joueur, scene, lieu qui interdit de la tourner, limite atteinte), la rotation demandee a la souris est abandonnee : la camera reste ou le jeu la met.
+@@ c1501afcf0c1 d
+Cap de la camera du jeu en degres (0 = le cap d'origine des villes, vers +Z ; positif vers +X, comme la fleche droite), pour l'affichage de F1.
+@@ 25feb1b1f7bb d
+Molette : fait defiler le menu Echap ou la licence ; sur le terrain elle ne fait plus rien (plus de zoom, #264).
+@@ 5d9709b63782 d
+Bouton du milieu enfonce : un clic (la camera revient au nord) ou le debut d'un glissement (rotation de la camera). Hors du terrain (menus, messages, combat, titre...) il ne fait rien.
+@@ bcdaa34061e4 d
+Bouton du milieu maintenu et pointeur deplace : la camera tourne (a gauche / a droite seulement ; le deplacement vertical ne fait rien), memes sens par defaut que les fleches (entrees.pivoter) ;
+le reglage « Inverser gauche / droite » inverse le sens du glissement (jamais celui des fleches du clavier). Le jeu tourne par crans (voir _camera_after_step).
+@@ 6ae4180e51b4 d
+Bouton du milieu relache sans avoir glisse : clic = la camera revient au nord (sur le terrain libre d'une ville seulement).
+@@ ca6b64dca6e4 d
+Menu Echap : un curseur maintenu suit la souris ; sur le terrain, la croix a l'ecran tenue a la souris ; bouton du milieu : rotation de la camera.
+@@ b1890b5824f8 d
+Rotation Unity de la camera de combat (NativeManager.cmd_camera + SceneCamera.Update, mode sans cible) : euler (-x, -(y + 180), z).
+@@ a4e057058411 d
+Camera d'une ville comme Unity (SceneCamera.Update, mode avec cible) : LookAt(position, cible), tangage - lookDownAdjust, puis avance de distanceAdjust le long de l'axe. Celle du jeu (#264) : position, cible,
+champ, decalage vertical et rotation envoyes par le moteur, sans zoom, inclinaison, centrage sur le heros ni lissage de hauteur de la visionneuse (TownCamera::execute suit le joueur et borne sa cible aux bords de la carte).
+La rotation que le joueur lui donne est celle du jeu aussi (boutons de camera envoyes au moteur, D-234) : position et cible l'ont deja, rien n'y est ajoute ici, et le jeu la reprend dans ses scenes comme sur mobile.
+Projection : champ HORIZONTAL fov x 4/3 fixe, hauteur deduite de l'ecran portrait d'origine (0,5625). En 16/9 on garde la meme hauteur de champ que sur mobile et on montre plus de decor sur les cotes : la bande
+centrale de la fenetre est exactement l'image du telephone.
+@@ 13dc5e64d6f8 d
+(position, droite, haut, avant) de la camera de la ville telle que le jeu d'origine la place (meme calcul que _town_camera, NO_DEFAULT la rotation du joueur).
+@@ 97400a37ca58 d
+(debogage, DQ_PROJ=n) pixels (x, y depuis le haut) des pieds / haut des panneaux des sprites et des bulles, toutes les n images.
+@@ 48a614ecaac5 d
+Intensite (0 a 1) de la correction des bords des sprites (villes, donjons, tours ; voir _town_panel) : 0 par defaut depuis #184 (« reviens a la position brute des PNJ, exactement comme dans le jeu » : panneau
+d'origine, sans reconstruction a l'ecran) ; l'ancienne correction complete (bords verticaux, proportion constante, #134) s'obtient avec l'option --correction-bords ou la variable d'environnement DQ_CORRECTION_BORDS,
+de 0 (aucune, defaut) a 100 (complete). Ce n'est pas un reglage du joueur (l'ancienne option « Correction des bords des sprites » est retiree).
+@@ 2ddd6534381f d
+(droite, haut, avant) qui oriente le panneau d'un personnage de ville : le repere de la camera DU JEU (Chara.normalBillboard prend la rotation de la camera du jeu, celle que le joueur lui donne comprise : meme inclinaison que sur le mobile,
+et un personnage ne « s'aligne » pas sur la vue quand on monte ou descend la camera), qui est celui de la vue depuis que la visionneuse ne tourne plus la camera a cote du jeu (D-234). `corr` : intensite de la correction des bords (voir _edge_correction).
+@@ 676d256a9478 d
+(Essai #134, RETIRE par defaut en #180 : « remets l'affichage des PNJ comme sur la version mobile, ... ils s'etirent quand ils s'approchent du bord ») Part (0 a 1) de l'inclinaison des VERTICALES DU MONDE (aretes de murs, portes...) que prend le panneau d'un personnage a l'ecran, 0 par defaut (essai : 0,5). Depuis la correction des bords (_town_panel) le sprite est
+exactement vertical a l'ecran partout, mais les murs voisins penchent (11 a 19 degres a 9 unites du centre en 16/9, camera a 47 degres, contre 4 a 6,5 sur le portrait du mobile) et cet angle change quand le heros monte ou
+descend : le sprite semble alors se pencher par rapport au decor (illusion d'optique signalee dans #134). Le pencher a moitie vers la verticale du monde reduit cet ecart de moitie sans revenir au panneau d'origine
+(qui s'ecartait du centre de l'image par son seul haut et se deformait). Comparaison avec l'essai : variable d'environnement DQ_SPRITE_INCLINAISON, de 0 (bords verticaux, defaut) a 100 (parallele au decor).
+@@ b3901624003c d
+Point X (d'un panneau parallele a l'ecran) rapproche de la camera de `delta` unites de profondeur. t = 0 : le long de l'axe de la camera (F), comme les sommets du panneau de la bulle Riseup dans Unity (Riseup.s_vtxDepth) ;
+t = 1 : le long du rayon de vue (camera -> X) : meme point a l'ecran, meme profondeur (sinon le bord decale s'ecarte du centre de l'image de delta x ecart / profondeur : la bulle glisse de cote quand la camera est tournee). Entre les deux : melange lineaire.
+@@ ca48f74851be d
+Les 4 sommets (bas gauche, bas droit, haut droit, haut gauche) du panneau d'un personnage de ville dont les pieds sont en p : un rectangle w x h parallele a l'ecran, dont le bas est recule de `zb` et le haut de `zt`
+vers la camera (profondeur du panneau d'origine, qui penche de 36 degres). t = 0 : le panneau d'origine (decalages le long de l'axe de la camera). Defaut de l'original, rendu visible par le champ horizontal du 16/9
+(le portrait du mobile en voyait bien moins) : le haut, plus proche, s'ecarte du centre de l'image (de zt x ecart / profondeur) et le sprite « se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a
+20 degres) ; de plus la hauteur a l'ecran se comprime vers le bas de l'image, d'ou un sprite trop large (jusqu'a 0,9 au lieu de 0,75). t = 1 : le panneau est reconstruit A L'ECRAN : meme position, meme hauteur
+et memes profondeurs qu'avant (taille, recouvrements et z-buffer inchanges), mais bords verticaux et largeur = 0,72 x la hauteur a l'ecran (la proportion du panneau au centre de l'image : la largeur y est la
+moyenne de celles du bas et du haut), donc le sprite garde ses proportions partout. Au centre de l'image, rien ne change. Entre les deux : melange lineaire des sommets. Camera inconnue ou panneau contre la camera : l'original.
+`inc` (0 a 1, essai #134, voir _sprite_tilt) : le panneau reconstruit est ensuite CISAILLE vers la verticale du monde, les pieds fixes : le haut glisse de inc x (inclinaison a l'ecran d'une verticale du monde au pied du
+personnage) x hauteur, a la meme profondeur. Taille, profondeur et bas inchanges ; 0 : bords verticaux ; 1 : bords paralleles aux murs. Au centre de l'image la verticale du monde est droite : rien ne change.
+@@ 687689906051 d
+(debogage, DQ_CAMV=n) etat de la camera du jeu toutes les n images.
+## FILE dq4_pc/window/capture_effects.py
+@@ a8f3ff66f95a t
+effet en cours (dict de State.screen_effect), capture prise, simulation, textures et tampons de flou, listes de sommets
+@@ 2b4ee33c820e t
+textures de flou noires (le jeu ne les efface pas : contenu initial non etabli, noir suppose)
+@@ 571c2338e40c t
+Custom/CaptureBlur : texture x couleur remplace l'ecran
+@@ e643442c1b3a t
+Custom/Capture
+@@ 69f0d03db7ab d
+Dessin des effets d'ecran de la classe `Capture` de la couche Unity (paquet 34 : voyage, lampe, Riremito ; voir rendu/capture_effects.py pour les regles) : capture de l'ecran du jeu, deux textures de flou a
+demi-resolution en alternance (la remanence : a chaque pas de l'effet, l'etat de l'image precedente y est redessine), puis dessin du maillage de l'effet a la place de la scene, sur fond noir. L'interface (messages,
+fenetres du jeu) et les plans de fondu restent dessines par-dessus, comme le fait la camera de l'interface de Unity (supposé : le contenu exact de cette camera pendant l'effet n'est pas lu).
+@@ b823464f5899 d
+L'effet Capture en cours (dict de State.screen_effect) ou None ; un nouvel effet remet la capture a faire (la premiere image est dessinee normalement puis copiee, voir _capture_grab).
+@@ 9c903da3fd8c d
+La scene du jeu vient d'etre dessinee (sans interface) : on la copie dans la texture de capture, on cree l'effet et les cibles de flou (noires au depart).
+@@ 0da8357afe51 d
+Fait avancer l'effet jusqu'a l'appel de MoveNext qui correspond a l'image du moteur (plusieurs pas par image quand « Vitesse de transition » raccourcit l'effet).
+@@ c0a64363a73f d
+Les dessins de l'effet dans la cible courante : le fond lit la texture de flou `blur` (None : noire, rien a dessiner), la capture lit la copie de l'ecran du jeu.
+@@ 4f13eafcd6a9 d
+Capture.Caputer, passe de flou : l'etat de l'image precedente (fond flou + maillage) est redessine dans la texture de demi-resolution `i`.
+@@ f044dbae8e8c d
+Image de l'effet : fond noir, fond flou, maillage ; puis les plans de fondu et l'interface par-dessus (messages, fenetres du jeu).
+## FILE dq4_pc/window/constants.py
+@@ 817e09edc8b3 t
+numero de bouton de la case « Sauv. cloud » du menu de depart (type 53) : le portage y met « Sauvegardes »
+@@ bb1ad8f0720e t
+bruitage de l'appui sur un bouton de menu (joue par Unity, MenuPortItem.Update)
+@@ e93343cdbae4 t
+touches de manette dont le bouton joue SFX_BUTTON a l'appui (MenuPortItem.Update : `m_gamepad & 0x810`) : A (0x10) et action (0x800) ; B (0x20), retour (0x400), fleches (1, 2, 4, 8) et zone 0x80 sont muets
+@@ 85db225b7c1f t
+bruitage d'essai des volumes (page Son du menu Echap) : degats du sol (CommonWalkDamage::checkWalk), court et sans rapport avec l'interface
+@@ af332def8764 t
+decodes des le depart en tache de fond
+@@ 65d3c41c5652 t
+dernier mode du menu « Shader » (0 originaux, 1 EPX x8, 4 pixel perfect : voir reglages.MODES_SPRITES) : pixel perfect (texels nets sans aucun adoucissement ; carte du monde a une echelle entiere, camera et sprites calees sur les pixels)
+@@ 7520bc9ce6de c
+Camera des villes, lue dans SceneCamera.Update / Global.CameraInitParams[0] (voir docs/technical-notes-dq4-port.md) :
+@@ f95325b85744 t
+SceneCamera.ASPECT_DEF : l'original est concu pour un ecran portrait 450 x 800 ; Unity fixe le champ de vision HORIZONTAL (fov x 4/3) et en deduit la hauteur
+@@ a378bff4a5fe t
+pixels a 100 % : barre de titre, bordures et barre des taches autour de la zone de dessin
+@@ b04f514fbb3e t
+fov nominal du mode 0 (terrain) tant que le moteur n'en envoie pas (paquet 11)
+@@ d4093856e876 t
+SceneCamera.s_distanceAdjust (.cctor) : apres LookAt, la camera avance de 4 unites le long de son axe
+@@ 011b41b94819 t
+SceneCamera.s_lookDownAdjust (.cctor) : la camera releve son tangage de 0,2 degre
+@@ d3ec1c7eca3d t
+correction des bords des sprites (voir Game._edge_correction) : 0 = panneau d'origine du jeu (defaut depuis #184), 1 = reconstruit a l'ecran (bords verticaux, #134)
+@@ 79ac2c820857 t
+agrandissement des fenetres du jeu (la colonne portrait d'origine remplit exactement la hauteur de la fenetre) ; reduit a 1 si un groupe de fenetres ne tient plus a l'ecran
+@@ 4d409b6a204c t
+combat : bord bas du cadre de message = bord bas du cadre principal des menus de commandes (Combattre / Attaquer...)
+@@ 8af21aa2fd28 t
+combat : zone prise par les menus de commandes (bouton Fuir / retour compris) ; sert a garder la meme echelle d'interface que les messages
+@@ 2a180c405d60 t
+fenetre de message du terrain descendue : bord bas du cadre (unites d'interface), comme les messages de combat
+@@ 4b36ce50004d t
+Oui/Non (type 1) : espace VISIBLE entre le bord bas de la pile Oui / Non et le bord haut de la boite de dialogue (D-231 : la pile est posee sur son coin haut droit ; 1 unite, comme entre Oui et Non ; avant : 4 unites entre les mailles, soit 8,5 visibles)
+@@ 6704d5ac01b4 t
+carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros dont le jeu fixe seul la camera ; voir _town_camera)
+@@ 5ae12ad49fa1 t
+cartes dont le plan de ciel (objets dont le nom contient ces mots) est prolonge de part et d'autre par symetrie (MAP-05, choix du joueur : « prolonger le ciel ») : plans concus pour l'ecran portrait, laissaient un grand coin noir a gauche (ev09) ou deux (dpout, sortie de donjon) en 16/9
+@@ caabfb559293 t
+types de fenetres d'avant-partie (StartMenuSelect : liste des journaux ; StartNameEntry : choix du sexe) que la visionneuse centre a l'ecran
+@@ 391da5acddb6 t
+carte du monde : pixels par tuile, tuiles par ligne d'atlas
+@@ 030d989da47b c
+animation de l'eau de la carte du monde (Field.UpdatePattern du jeu) : 5 motifs ; la tuile affichee est numero + decalage du motif, qui avance toutes les 17 images
+@@ d2703d46933a t
+fin (exclue) de chaque plage de numeros de tuile (Field.m_patternCheck)
+@@ 8971fca35a0d t
+motif de chaque plage (0 = tuile fixe) ; la derniere valeur sert au-dela de la derniere plage
+@@ 7de700307545 t
+decalage ajoute a chaque pas, par motif (Field.m_patternInfo.acc)
+@@ 7aae785668b9 t
+le decalage retombe a 0 des qu'il atteint cette limite (.limit)
+@@ 463f348a8977 t
+Chara.SetFieldMode : echelle 28,8 x 1,8 = 51,84 sur un maillage de 0,48 x 0,64 : le heros fait ~24,9 x 33,2 px (1,04 x la feuille 24 x 32), a plat sur la carte
+@@ bea294dc628f c
+ZOOM COMMUN (carte du monde, villes, grottes, tours) : le heros garde partout la meme taille a l'ecran, celle des villes en 16/9 (camera d'origine : distance 39,55 jusqu'a la cible, 4 de moins apres
+SceneCamera.s_distanceAdjust, champ horizontal fov x 4/3 deduit de l'ecran portrait 450 x 800). HERO_FRAC = hauteur du panneau du heros / hauteur de la fenetre.
+@@ f80ed2d5b1fd t
+carte du monde : tuiles visibles en hauteur (~ 20) ; en portrait l'original en montre 28,4 en hauteur et 16 en largeur
+@@ 942ff24b5263 t
+carte du monde : gouttiere (pixels repetes) autour de chaque tuile de 16 px dans l'atlas copie : aucun debordement d'une tuile sur sa voisine au filtrage
+@@ fc66ae608016 t
+unites de ville par pas du moteur : au-dela, la cible de la camera a saute (coupure, changement de carte) : pas d'interpolation
+@@ 52d020e87d79 t
+rotation de la camera autour de sa cible (jeu ou joueur) : tant que le deplacement de la camera par rapport a sa cible, d'un pas a l'autre, reste sous cette part de la distance (environ 20 degres), c'est une rotation,
+@@ 62ec96f6b60b c
+interpolee comme le reste ; au-dela (angle de scene regle d'un coup), c'est une coupure
+@@ 29818610951f t
+glissement du clic molette : au plus ce nombre de rotations du jeu (ENGINE.CAM_STEP chacune) par pas du moteur, pour que la camera suive le pointeur (506 degres par seconde)
+@@ 613bb5962fc4 t
+rotation demandee a la souris et pas encore faite : plafond en degres (un grand glissement ne fait pas tourner la camera longtemps apres le relachement)
+@@ 82e311932f3e t
+le moteur d'origine avance a 30 Hz (Time.fixedDeltaTime de Boot)
+@@ 4205f3cc245b t
+duree maximale (s) des pas du moteur dans une meme image affichee quand la marche est acceleree (vitesse de marche x2 a x4, accelerateur) : au-dela, le jeu prend du retard au lieu de figer l'image
+@@ b827fc9886e0 t
+combat : Global.CameraInitParams[1] du Unity d'origine (champ de vision nominal ; Unity le multiplie par 4/3 et l'applique a l'horizontale d'une vue 4/3)
+@@ 85df87adf980 t
+(essais) miroir gauche/droite ; decalage du decor sur z
+@@ 54cd7358f95c t
+sommets reserves par monstre (listes de taille fixe)
+@@ 5b0e52eab9b0 t
+icones de lieux de la carte du monde (FieldSymbol.s_symbols : 21 rectangles ; le 18 est vide dans l'atlas)
+@@ a69bae128f35 t
+decor : decalage de profondeur (en plus petites unites de profondeur) entre deux groupes dessines l'un apres l'autre ; 24 bits : 4 unites = 2e-7 de la plage de profondeur, invisible pour un relief reel
+@@ 716dd9ec787a t
+feuilles d'origine : gouttiere de 2 px (bords repetes) autour de chaque case, comme les feuilles HD : le filtrage n'attrape plus un bout de la case voisine
+@@ 3e90a1c0a5ab t
+sprites HD (agrandissement x8, voir hd.py) : marge de 4 px, 2 niveaux de mipmaps
+@@ e03bb01f2df0 t
+actions dont on detecte l'appui (front montant)
+@@ 76c0b895ca0f t
+arg2 de GameUpdate : parler / examiner (exactement 0x100), menu de commandes, discussion de groupe, carte
+@@ 1cc46f12ef33 t
+carte du monde : emplacements 0 a 9 = membres du groupe (heros en 0) ; 10 a 12 = vehicules (bateau, ballon...)
+@@ c5b6b0c3f852 d
+Constantes de la fenetre : camera, interface, carte du monde, combat, sprites (valeurs lues dans le jeu d'origine ou choisies pour le portage).
+@@ 7e8922ecb3f2 d
+Vrai si l'appui d'un bouton de menu de touche de manette `pad` joue SFX_BUTTON dans le jeu d'origine (A et action seulement). Le clavier suit la meme regle que le doigt (D-156, #60).
+## FILE dq4_pc/window/field.py
+@@ d86e2b4ca3d9 c
+---- textures
+@@ af55d80d3707 t
+heros : plus de halo violet semi-transparent
+@@ 3a9f8f820a70 t
+personnage : cases 24 x 32 sur 3 colonnes ; bateau (193) : cases 40 x 40 sur 12 colonnes et panneau plus grand (voir hd.SPECIAL_SHEETS)
+@@ 9121edce3a30 t
+pixels transparents = couleur du bord voisin : plus de liseré sombre au filtrage
+@@ 9e4e1364bc5a t
+carte entiere lue dans le moteur : on dessine toute la zone visible (le moteur n'en envoie que 25 colonnes)
+@@ 87eaf7131c36 t
+bornes sur des multiples de 4 et largeur constante : le maillage garde la meme taille
+@@ 529ee6e7bc0f t
+a la marche et ses sommets sont remplaces sur place (pas de reallocation : pas d'a-coup)
+@@ e270e83f8b21 t
+(ligne, colonne, y, x, canal) : une tuile de 16 x 16 par case
+@@ ace826d53611 t
+atlas des tuiles, avec gouttieres
+@@ e4cf9c837c4f t
+atlas d'origine : les icones de lieux y sont des rectangles quelconques
+@@ 3be1afdcb921 t
+sommets de la grille a l'origine (NO, NE, SE, SO, deux triangles par tuile), decales ensuite de (x0, y0)
+@@ 3e954228aa97 t
+meme taille : remplacement sur place
+@@ 101f0ec7540e t
+atlas copie avec une gouttiere de CH_GUTTER pixels autour de chaque tuile
+@@ 2a5f3c867edb t
+pixel perfect (echelle entiere) ou lissage coupe (F3) : plus proche voisin ; sinon pixels nets aux frontieres adoucies (comme les sprites d'origine)
+@@ 446cf635e506 t
+paquet 33 sur la carte du monde : Field.SetColor = couleur du materiau des tuiles (Custom/Field : texture x _Color) et de chaque symbole (alpha propre conserve)
+@@ eaadb6455be6 t
+icones de lieux : posees a plat (le heros se tient au milieu du bord bas)
+@@ 4c0aa541ee7f t
+a plat sur la carte, comme les tuiles (dessin vu de dessus)
+@@ 39097e8ae90d t
+tete en bas dans l'atlas, comme les tuiles : le haut de la carte = le bas de l'image
+@@ 0d46cf220c7d t
+sommets ecrits apres le 1er trace de l'image : sans rebind + commit() ils partent avec l'image precedente (icones en retard d'une image, absentes une image quand leur nombre change)
+@@ 2a1d6961cec3 t
+DQ_DECOR : (test) force un autre decor de combat
+@@ d6883e8b284b t
+decor de combat sans la variante demandee (heure) : la plus proche, plutot qu'un decor vide
+@@ f9e5448c920b t
+massifs de fleurs & co : triangles plats superposes releves de 3 mm (plus de z-fighting, voir flat_sceneries.py)
+@@ 1734bae7571f t
+textures du decor (agrandies selon le mode de F2, voir _decor_tex)
+@@ 37e143f3af21 t
+portes, jarres, tonneaux... : positions affichees (variantes cachees au depart) ; eau, lampes... animees en continu
+@@ a81578fed48d t
+surfaces dont la texture change d'image en image (eau qui scintille, marais...)
+@@ e5e007cfc174 t
+decors de combat : silhouettes des arbres et montagnes adoucies (scenery_outlines.py) ; DQ_SANS_CONTOURS=1 : (test) texture d'origine
+@@ 3b2486e37ff6 t
+images de chaque animation de palette
+@@ 64c72575f822 t
+ecran-titre : ciel prolonge de part et d'autre de la zone portrait
+@@ 2f73967bf709 t
+dpout, ev09 : plan de ciel prolonge par symetrie (MAP-05)
+@@ f3c3b8fa2676 t
+on ne garde que les derniers decors agrandis (memoire de la carte graphique)
+@@ b0c797477796 t
+villes et donjons en « Originaux » / pixel perfect : texels nets, seule la frontiere entre deux texels est adoucie (comme les sprites) ; en combat, peintures etirees : lissage normal
+@@ 66875775ee0e t
+file de rendu 3000 + priorite (FldObject.set_priority)
+@@ 5c4110d7e103 t
+paquet 1 : retour en arriere, decor en sepia (les personnages, bulles et menus gardent leurs couleurs)
+@@ e0b3979d0176 t
+paquet 33 : teinte de tout le decor, sauf les groupes dont la texture a « tz_ » dans son nom (lampes, bougies, vagues)
+@@ 9ceba00f8f52 t
+decor opaque decoupe : alpha -> couverture MSAA, sans melange (le melange doublerait l'alpha)
+@@ f2d958d587c5 t
+Custom/fld_trans : Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, pas de rejet
+@@ 3f29e68c0cc7 t
+(le ciel du titre a ses propres sommets : jamais de culling)
+@@ f8ebd06bd880 t
+decors a plat superposes a la meme hauteur (deux massifs de fleurs, chemin et pelouse...) : sans cela leur profondeur est egale a l'arrondi pres et l'un ou l'autre gagne pixel par pixel, ce qui change a chaque mouvement de la camera (scintillement) ; le groupe dessine en dernier l'emporte, toujours
+@@ 9388a3f4fdc0 t
+palette animee : image courante (sans agrandissement HD)
+@@ 1eb54b7ec21e t
+ciel du titre agrandi autour du centre de l'ecran (#130)
+@@ 57abe8a4ddf1 t
+objets OpenGL : dans le fil du dessin
+@@ 13ab066cf7ae t
+image du moteur affichee : celle du pas precedent + alpha (voir _interpoler)
+@@ 8fc1fb1c28de t
+FbxObject.m_defScale (.ctor : 0,4 pour le modele 10, 1 sinon)
+@@ 11920d362c39 t
+Custom/ImdChara : Cull Back (lu dans le shader) ; DQ_FBX_CULL=0 : sans culling, 2 : sens inverse (l'ancien, faux : on voyait l'interieur du dragon) pour comparer
+@@ d8d6de714d28 t
+Unity : face avant = triangle dans le sens horaire a l'ecran (main gauche), l'inverse du defaut d'OpenGL ; sans cela on ne dessinait que les faces arrieres (l'interieur du dragon : visage vu de l'interieur, corps vu de dos)
+@@ d137fc3a6b09 t
+(couleur du bord sous les pixels transparents : pas de liseré clair au filtrage)
+@@ 9705226c21eb c
+de face a l'ecran, comme les personnages (rotation de la camera). Avance de 0,48 vers la camera de la VISIONNEUSE (et non de celle du jeu : tournee ou inclinee par le joueur, elle decalait la bulle a l'ecran),
+le long du rayon de vue (voir _shift_depth) ; la bulle reste collee au personnage qui la porte, quelle que soit l'inclinaison de la camera (voir _anchor_icon)
+@@ 6e72475fff38 t
+fenetre creee mais pas montree (la 2e vue de la carte, avant qu'on y passe)
+@@ 06e05042f2ae t
+(des fenetres de carte restees creees apres la fermeture ne comptent pas : sans fenetre visible, la carte est fermee)
+@@ 504ac07484fd t
+lieux decouverts (code 3 : x + 256 y, un par nombre) et voile des blocs non explores (code 5) envoyes par le moteur
+@@ 8796e836967b t
+code 4 : lieu special (croix rouge), meme codage que les lieux : x + 256 y
+@@ 42a5a04ec805 t
+plan agrandi (1024 x 768) : Lanczos, avec arrondi des contours (EPX) pour le plan du monde dont les terres sont en pixel art
+@@ 56c4a8fdce4b t
+carte du monde : voile (silhouette grisee) sur les blocs de 10 x 10 pixels non explores (16 x 16 blocs a partir de x = 48, y = 16 du plan de 256 x 192)
+@@ 7a3703784ae0 t
+marqueur « vous etes ici » (icone de 24 x 24, partie 3 ; son numero change d'une generation de la mise en page a l'autre) centre sur le point (x, y) du plan
+@@ 6c73ee3e1319 t
+AddIcon(Vector3.zero, 31, bInBounds) : le coin bas gauche de l'icone (la pointe de la plume) est sur la position, dans le plan de 450 x 337,5 pose en (2, -2) a l'echelle 0,99 (0,99 x 450 / 256)
+@@ 3dc883e62469 t
+la carte est chargee avant ses ordres
+@@ ed01a7292d41 t
+(test) DQ_ANIM_TEST="objet:numero:image" : lance une animation commune a cette image de boucle
+@@ f76681c24fde c
+---- boucle
+@@ ace808d3c461 c
+ombre des personnages : Chara.s_shadowMesh (carre +-1 en XZ, Y = 0,00625), echelle s_shadowDefScale (0,347 ; 10 ; 0,206), texture CharaTex/common (32 x 32 : ellipse noire d'alpha 96 / 255, filtre point),
+shader Custom/CharaShadow (SrcAlpha / OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, file 2999 = avant les personnages), position Chara.SetShadowPosition = pos + rotation du panneau x (0 ; 0 ; 0,25)
+(donc decalee de 0,25 le long du rayon de la camera : meme point a l'ecran, mais devant le sol), orientation Euler(0, lacet de la camera, 0) = a plat.
+@@ 89d94b4efe3e t
+lacet seul de la camera
+@@ 42c9dcb197ab t
+_Color.a = SetShadowAlpha (1 par defaut), x alpha du personnage (SetColorWithShadow)
+@@ 4599e4e247b4 t
+(les personnages qui suivent rejettent les pixels transparents : sinon leur panneau entier ecrit la profondeur et masque le compagnon derriere)
+@@ 4e34609ef86d c
+ombre des personnages sur la carte du monde : Chara.SetFieldMode redimensionne le maillage d'ombre a s_shadowDefScale x 28,8 (ellipse de demi-axes 10 x 5,9 pixels de la carte) et l'incline de 36 degres comme le personnage
+(projetee : 5,9 x cos 36 = 4,8) ; Chara.SetFieldPosition la pose au meme point que le personnage (ses pieds). Le moteur masque celle des bateaux (paquet 15).
+@@ b79444cc2f7f c
+texture CharaTex/common : ellipse d'alpha 96 / 255 aux bords nets (filtre point) ; ici le meme maximum et la meme taille, mais le bord est adouci (ombres « trop brutes »)
+@@ 94ef94e9acd1 d
+Terrain : cartes, decors, personnages (sprites), ombres, carte du monde, icones de lieux.
+@@ c77bb92061c6 d
+Niveau d'anisotropie maximal utilisable (1.0 si l'extension manque), plafonne a 8.
+@@ 9e7896b702b2 d
+Texture RGBA ; mip > 0 : mipmaps (limites a `mip` niveaux, 99 = tous) + filtrage anisotrope.
+@@ 8cb86c44db54 d
+Filtrage d'une texture de decor mipmappee (F3) : de loin, toujours mipmaps trilineaires + anisotrope (stable) ; de pres, lisse = bilineaire, sinon plus proche voisin (texels nets).
+@@ 3eb52559efd5 d
+Feuille `h<ident>` d'origine (pixels nets) ; False si absente. 194 = alias de 193 (Chara.SetTexture).
+@@ d45a9f2cba3c d
+(tache de fond) atlas HD d'une feuille, lu dans le cache disque s'il existe (une feuille au decoupage special a un fichier a part : le bateau n'a rien de commun avec l'ancien decoupage 24 x 32).
+@@ 5152bb565b3c d
+Feuille de sprites pour le mode choisi. Les versions HD sont calculees en tache de fond : en attendant, l'original sert.
+@@ a18aed18ac1e d
+(Re)construit la grille de tuiles quand le moteur en envoie une autre ; l'atlas est la texture Unity `field`.
+@@ 001c0e013b73 d
+Coordonnees de texture (6 sommets par tuile, a plat) de la grille de numeros de tuile `g` ; les tuiles sont stockees tete en bas dans l'atlas.
+@@ be6a616ce10a d
+Une image du jeu sur la carte du monde (NativeManager.Update -> Field.UpdatePattern) : toutes les 17 images, le decalage de chaque motif avance d'un pas, puis retombe a 0 a sa limite.
+@@ 784099a7d6a2 d
+Met a jour sur place les coordonnees de texture des tuiles animees quand un motif a change de pas.
+@@ 702d1d2b5266 d
+Trace une vertex_list en ne liant le VAO et les tampons qu'une fois par image (beaucoup plus rapide que vl.draw).
+@@ 3205e920edfc d
+Les textures de decor de combat agrandies x4 (scenery_outlines.py, 5,6 Mo avec leurs mipmaps) ne sont gardees que pour les derniers decors vus : les plus anciennes rendent leur place sur la carte graphique.
+@@ 7ab241ba1d45 d
+(tache de fond) textures de decor agrandies par l'algorithme HD du mode de F2 (x8, plafonne a 4096 px de cote). Le bord est repete en boucle avant l'agrandissement : les textures se raccordent.
+@@ 785ba52f2edd d
+Textures GL agrandies du decor courant pour le mode de F2 ; None tant que le calcul en tache de fond n'est pas fini (le decor d'origine sert en attendant).
+@@ 9a3f0bbb1b19 d
+Teinte du paquet 33 a appliquer au decor (r, g, b), ou None si elle est neutre (rien ne change : le dessin reste identique). DQ_SANS_TEINTE=1 : (debogage) jamais de teinte, pour comparer.
+@@ de8dd36fc83e d
+Ecrit le uniforme `tint` s'il a change (le programme est en cours d'utilisation).
+@@ 0822c55ba8ed d
+Faces cachees du decor (#182) : les shaders du decor de carte du jeu (Custom/fld_normal, fld_atest, fld_trans, fld_transz et leurs variantes sepia) sont en « Cull Back » (lu dans le paquet de donnees :
+ShaderLab culling = 2) : un mur, un toit, un plafond n'a de texture que sur sa face avant ; vu de derriere (camera tournee, de l'exterieur d'une piece) il est invisible, d'ou la vue a travers les murs d'un interieur.
+Unity : face avant = triangle dans le sens horaire a l'ecran (main gauche), comme les modeles 3D (DQ_FBX_CULL) ; DQ_DECOR_CULL : 0 = sans culling (l'ancien rendu), 1 = defaut, 2 = sens inverse (essai).
+@@ f43df4f994ca d
+Decor de la ville ou du combat. Les textures du decor sont des peintures de 8 a 256 px etirees en 3D : en « Originaux » et en pixel perfect (reglages pour les SPRITES) il garde le rendu d'origine,
+lisse (mipmaps + anisotrope, F3 = agrandissement lineaire ou plus proche voisin) ; le mode agrandi (EPX) lui applique l'algorithme HD choisi.
+@@ 7f648af1c074 d
+Modele 3D numero `no` pret a etre dessine ({'m': fbx.FbxModel, 'vl', 'tex'...}), None tant qu'il se lit (tache de fond : le cache disque, ou le paquet de donnees la premiere fois) ou s'il n'est pas gere.
+@@ 7c5bcbe2d43d d
+Modeles 3D de la scene (e.fbx) : pose = position / rotation / echelle du moteur (paquet 32), animation jouee depuis son lancement (images du moteur : 30 Hz, fraction de pas comprise), couleur = Material.color.
+Shader Custom/ImdChara : couleur du sommet x _Color x texture, fusion alpha, ZWrite, ZTest LEqual, Cull Back, file Geometry (avec le decor opaque, avant les personnages et les effets-maillages).
+@@ 5c1649f32541 d
+Texture de l'icone `ident` (case 32 x 32 de la feuille MenuTexture, numerotee de gauche a droite et de haut en bas ; Riseup.SetTexture -> UV 1/32) ; None si la feuille est absente.
+@@ a37d1ed3751b d
+Bulles d'icone au-dessus des personnages (paquets 19/20, Riseup : carre de 0,96 face a la camera, avance de 0,48 vers elle) : [(texture, vertex_list)].
+@@ 34e9f1db1f50 d
+Position d'une bulle d'icone (paquet 20) pour la camera de la visionneuse. Le moteur la pose au-dessus de la cible (1,294 au-dessus de ses pieds, mesure sur trois villageois) en coordonnees du MONDE, alors que
+les personnages sont des panneaux de face a la camera : si la camera du joueur est inclinee ou tournee, la hauteur de la bulle par rapport a la tete change (1,294 x cos de l'inclinaison a l'ecran, contre une hauteur
+de panneau fixe) et elle semble trop haute ou trop basse. Quand un personnage est sous la bulle (meme x, z), on garde donc l'ecart tel que la camera DU JEU le voit (composantes droite / haut / avant) et on le
+rapporte au repere de la camera de la visionneuse : la bulle reste a la meme place par rapport a la tete (identique a P quand les deux cameras sont les memes). Sans personnage dessous (tonneau, jarre...) : P, ancre dans le monde.
+@@ 3b270db91262 d
+Fenetres de la carte ouverte (FieldImageMap) : {25: plan fixe, 26: grande carte qui se complete, 24: liste des boutiques de la ville, 22: bouton retour} -> port ; vide si aucune carte n'est ouverte.
+@@ ff9ca8082d94 d
+Fenetre de carte du moteur (type 25) : texture du plan nommee par le moteur et marqueur de position (coordonnees en pixels de la texture de 256 x 192).
+@@ cc84f572ac7e d
+Grande carte du monde (type 26, Make_WorldLargeMap) : le moteur envoie le drapeau des pieces du plan (indicateur 0), puis la position du joueur x, y (indicateurs 1 et 2) en pixels d'un plan de
+1024 x 1024. Le jeu compose le plan (LoadLargeWorldMap : fond + pieces dont le bit est leve dans le drapeau) et n'en montre qu'une fenetre de 256 x 192 pixels centree sur le joueur
+(decalage de texture x / 1024 - 0,125 ; le marqueur reste au centre de la fenetre).
+@@ 003eaf78a06a d
+Ordres du moteur sur les objets de la carte (portes, jarres...), puis une image d'animation ; les sommets modifies sont renvoyes a la carte graphique.
+@@ 6d72ce0c49e6 d
+Panneaux de decor tournes vers la camera ; les sommets modifies sont renvoyes a la carte graphique seulement si l'orientation a change.
+@@ 1f6adf4bc903 d
+Une des touches de l'action (menu Touches) est-elle enfoncee ? (Une touche avalee par un raccourci, Entree de Alt + Entree, ne compte pas jusqu'a son relachement.)
+@@ a6da89143947 d
+Terrain sans fenetre : ni menu d'Echap, ni message, ni menu ou carte du jeu, ni combat, ni effet d'ecran. Les fleches gauche / droite tournent alors la camera du jeu (D-233, D-234) ; haut / bas ne font rien ; sinon elles naviguent dans les fenetres.
+## FILE dq4_pc/window/full_screen.py
+@@ 7b007349226d c
+le message quand un passage fenetre <-> plein ecran echoue : (mode demande est le plein ecran, mode garde est le plein ecran) -> phrase entiere (l'anglais n'a pas le meme ordre des mots)
+@@ 5051c83069f1 t
+(la taille du bureau)
+@@ a39c5e769020 t
+Windows : pas d'animation d'ouverture du gestionnaire de fenetres (remise par on_draw, 2 s apres la 1re image du jeu)
+@@ bfc576291d47 t
+(ce que Window.__init__ fait pour une fenetre visible : ici apres l'image noire)
+@@ 98f74b1b602c t
+Windows : l'image noire presentee fenetre cachee n'est pas forcement affichee ; une 2e, fenetre montree, evite le fond de classe (blanc) le temps du chargement
+@@ dcce6ff60da4 c
+---- reglages appliques depuis le menu Echap
+@@ f35e53607da4 t
+par largeur, puis par hauteur
+@@ 47b0311c9262 t
+(c'est deja le moniteur de pyglet : set_fullscreen(True) comme avant)
+@@ 6fd3946f3ce9 t
+(l'etat reel de la fenetre)
+@@ cc9d35ea25b6 t
+(AVANT tout : le moniteur que pyglet garde peut ne plus etre valable, voir _refresh_screen)
+@@ fdfd75e91453 t
+(la taille de la fenetre, a retrouver au retour)
+@@ e1ddf0297c67 t
+(le moniteur a retrouver si le deplacement echoue)
+@@ 03b4392e9d45 t
+(une taille memorisee plus grande que la zone utile de l'ecran est ramenee a l'ecran)
+@@ 29003d4ef101 t
+(cachee avant l'appel : un masquage a moitie reussi est quand meme suivi d'un set_visible(True))
+@@ 744334c7ec5d t
+(test : l'echec arrive apres le changement, pour essayer le retour a l'etat de depart)
+@@ f75ba10e13ca t
+(retour a l'etat de depart, fenetre toujours cachee, sur le moniteur de depart)
+@@ c6a301e407a1 t
+(supposé : le systeme peut ne pas garder ce qui est affiche pendant que la fenetre est cachee ; la meme image est redessinee des qu'elle est visible, sans attendre la boucle)
+@@ 1652b7d3b170 t
+(la signature de pyglet : set_fullscreen(plein, screen, mode, width, height))
+@@ 36bd51cfec8b t
+(son moniteur a ete debranche : elle serait hors de tous les ecrans)
+@@ 1e40c51b7a7e t
+(Windows peut reduire la fenetre sans prevenir)
+@@ 17131d5017e0 c
+---- moniteur du plein ecran : celui de la fenetre (aucun reglage ; logique pure dans screens.py)
+@@ c2045833a250 t
+(le drapeau du systeme, ou l'etat des touches Alt : l'un des deux suffit)
+@@ 83722f2782ed t
+menu Commandes en attente d'une touche : F11 y est « réservée » (reglages.RESERVED)
+@@ 5ec627becc44 d
+Plein ecran, fenetre, resolution et moniteurs.
+@@ 44ffafe4a255 d
+Cree la fenetre directement dans le mode memorise (0 fenetre, 1 plein ecran), avec repli a toute erreur, dit dans la console : plein ecran -> fenetre.
+Elle reste cachee jusqu'a une premiere image noire (pas d'eclair blanc). -> mode obtenu.
+@@ 660450f938bd d
+Fenetre creee en plein ecran, sur l'ecran principal : elle n'existe pas encore, il n'y a donc pas d'ecran ou elle se trouve a detecter (par la suite, F11 ou l'interrupteur la mettent en plein ecran sur l'ecran ou elle est).
+@@ 91ebd581e754 d
+Plein ecran (fenetre sans bordure a la resolution du bureau) ?
+@@ 5e5ab8d89cb3 d
+Tailles proposees (16/9, 720p a 4K), triees par largeur puis hauteur : fenetre = celles qui tiennent sur l'ecran avec ses bordures ; plein ecran = celles du bureau (la ligne est grisee : la fenetre prend toujours
+la resolution du bureau, le choix sert au prochain retour en fenetre). La taille actuelle s'y ajoute si elle est libre.
+@@ 95771c837226 d
+Fenetre : change la taille (ramenee a l'ecran si elle est trop grande). Plein ecran : sans effet, la fenetre garde la resolution du bureau ; le choix sert au prochain retour en fenetre.
+@@ a2533b142192 d
+Windows : compare la zone de dessin donnee par le systeme a celle que pyglet croit avoir et la lui redonne si elles different (fenetre reduite par Windows : sinon le dessin est trop grand et la scene semble zoomee jusqu'au premier redimensionnement).
+@@ 004d23ceebae d
+Interrupteur « Plein écran » du menu Echap, F11 et Alt + Entree : passe de la fenetre au plein ecran (fenetre sans bordure a la resolution du moniteur, l'affichage du moniteur ne change pas) et inversement, en une seule
+bascule (voir _set_full_screen). Le moniteur du plein ecran est celui ou se trouve la fenetre (voir _screen_for_fullscreen).
+Le mode obtenu est memorise dans les reglages (`mode_fenetre`). A toute erreur : etat de depart conserve, dit dans la console et par un message a l'ecran. -> vrai si la fenetre est en plein ecran.
+@@ def678d22465 d
+Echec d'un passage plein ecran <-> fenetre : l'erreur COMPLETE (la pile d'appels, pas seulement son texte) avec l'etat de la fenetre et des moniteurs, dans la console et dans `erreurs_fenetre.log` (a cote des reglages ;
+ignore par git ; `DQ_JOURNAL_FENETRE` : un autre fichier). La ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue. Ne leve jamais d'erreur.
+@@ 1d55695b74b9 d
+F11 / Alt + Entree : fenetre <-> plein ecran.
+@@ f59b8f5b1449 d
+La bascule, en une seule etape (pyglet : un set_fullscreen, qui sur Windows cache la fenetre, change son style et sa taille, puis la remontre et la replace) :
+- la taille de la fenetre est memorisee avant de la quitter (`window_size`, la position l'est par pyglet) et rendue d'un coup en y revenant, jamais par un etat intermediaire (plus de set_fullscreen(False) suivi de set_fullscreen(True)) ;
+- la fenetre est cachee AVANT, donc remontree une seule fois, a sa taille et a sa place definitives, et non pas montree au mauvais endroit puis deplacee ;
+- une image du jeu est dessinee a la taille definitive pendant qu'elle est cachee (les tampons du rendu hors ecran, postfx.py, ne sont refaits que si la taille a change, une seule fois, ici : plus de reconstruction forcee a chaque
+  bascule), puis affichee, puis la fenetre est montree et la meme image redessinee aussitot (au cas ou le systeme n'aurait pas gardé celle de la fenetre cachee) : aucune trame de taille instable ni de tampon vide.
+`screen_page` : objet Screen de pyglet du plein ecran (None : celui que pyglet a deja). Deja en plein ecran, un autre `screen_page` deplace la fenetre sur ce moniteur (meme etape : cachee, un set_fullscreen, une image, montree) ;
+le moniteur de depart est retabli si le deplacement echoue.
+Leve une erreur si le mode n'a pas pu etre pris (l'etat de depart est alors retabli). DQ_BASCULE_SIMPLE=1 : (debogage) un set_fullscreen sans rien d'autre, comme avant.
+@@ c72f6b86db5e d
+Le set_fullscreen de la bascule (un seul appel), sur le moniteur `screen_page` (objet Screen de pyglet ; None : celui que la fenetre a). En revenant en fenetre elle retrouve sa taille (`size_value`) et sa place d'avant
+(position memorisee par pyglet, sur son moniteur d'origine, quel que soit celui du plein ecran) ; sans position memorisee (lancee en plein ecran) ou si son moniteur n'est plus la, elle est centree sur le moniteur
+du plein ecran.
+@@ e98b95342e00 d
+Fenetre cachee, a sa taille definitive : une image du jeu y est dessinee et affichee (pendant les logos et les chargements : du noir), pour que la premiere chose vue soit une image complete.
+@@ 07bfbf57e78f d
+-> (objets Screen de pyglet, descriptions de ecrans.lister) des moniteurs detectes (`display.get_screens()`). La liste est gardee 1,5 s (la page Affichage la lit a chaque image et, sous Windows, l'enumeration interroge le
+systeme) ; `fresh` la relit (bascule, changement de choix). Illisible -> ([], []).
+@@ b36a8e4bd4a2 d
+Remet a jour le moniteur que pyglet garde pour la fenetre (`_screen`) avant une bascule (#126). Sous Windows, ce Screen garde la poignee (HMONITOR) du moniteur telle qu'elle etait a la creation de la fenetre ;
+quand on branche (ou debranche) un ecran, Windows peut en attribuer d'autres et la poignee gardee n'est plus valable : `set_fullscreen` recree alors la fenetre (`Win32Window._create`), qui lit la densite du moniteur
+(`Screen.get_dpi` -> GetDpiForMonitor) et echoue avec « Descripteur non valide » (le journal de Sylfried du 03/11/2026 : plein ecran, puis un ecran externe branche, puis plus de retour en fenetre).
+Le moniteur est cherche dans une enumeration neuve : celui qui a les memes position et dimensions que l'ancien, sinon celui ou se trouve la fenetre, sinon le principal. Ne leve jamais d'erreur.
+-> vrai si un moniteur valable a ete mis en place.
+@@ c197cb3cfc9c d
+Indice (dans `desc`) du moniteur ou se trouve la fenetre (celui de son centre) ; None si elle n'existe pas encore ou si sa place est illisible.
+@@ 3e68e66c9fd6 d
+-> (objet Screen de pyglet, description) du moniteur du plein ecran : celui ou se trouve la fenetre (celui de son centre), a defaut le principal. (None, None) si les moniteurs sont illisibles : pyglet garde alors le sien.
+Aucun choix du joueur (retire le 03/11/2026 sur sa demande : le plein ecran se fait toujours sur l'ecran de la fenetre). Ne leve jamais d'erreur.
+@@ 2c737574202c d
+La fenetre (en plein ecran) est-elle deja sur ce moniteur ? (meme position et memes dimensions que le moniteur de pyglet.)
+@@ 1764a1777fea d
+Memorise le rectangle du moniteur du plein ecran (centrage au retour en fenetre quand la fenetre n'a pas de place d'avant : lancee en plein ecran).
+@@ cc7c699ee2c0 d
+F11 ou Alt + Entree, de n'importe ou (logos, titre, jeu, menu Echap, saisie du nom, combat) : bascule fenetre <-> plein ecran. La touche est avalee (ni validation, ni action du jeu) et, avec Alt, Alt ne vaut plus
+« discussion de groupe » (voir _fronts). -> True si consommee.
+@@ 900fe51ff815 d
+Une ligne de journal : etat et taille de la fenetre (plein ecran ou non), zone de dessin et ecran ; ecrite a la creation, a la 1re image dessinee et a chaque bascule.
+## FILE dq4_pc/window/game.py
+@@ 1b1eecdbba9f t
+F11 / Alt + Entree : touches avalees (ni action ni validation), Alt peut-il encore valoir « discussion de groupe » (appui seul), relachement d'Alt seul a traiter ; taille du bureau ; bascule fenetre / plein ecran en cours
+@@ 775e0ae13b79 t
+les evenements (souris...) recus pendant la creation de la fenetre sont ignores
+@@ 228cff95cd23 t
+logos d'entree : un appui les saute ; fermeture de la fenetre pendant leur affichage
+@@ 3882bdfd0b2c t
+ecran-titre : etat de « Touchez l'ecran » (TapToStart) tant que le port 12 porte la fenetre de type 73
+@@ af29fe3b89de t
+historique : dialogues et combats de la session, favoris dans un fichier a cote de la visionneuse (voir history.py)
+@@ 096e2dd6b865 t
+(les captures de test gardent la taille demandee)
+@@ 7955e553d6c3 t
+(l'anticrenelage MSAA n'est plus demande a la fenetre : la scene est dessinee hors ecran, voir postfx.py ; reglable a chaud)
+@@ d50ba3f33352 t
+mode memorise : la fenetre est creee directement dans ce mode, logos compris : ni fenetre qui apparait puis grandit, ni bascule plus tard
+@@ 3fc027fff52a t
+taille de la fenetre a retrouver en quittant un plein ecran
+@@ 9c4627d47e80 t
+lissage des textures : toujours actif (ex-reglage « Lissage des textures », retire) ; DQ_SANS_LISSAGE=1 : (debogage) plus proche voisin
+@@ cc3bdfa15795 t
+eau animee de la carte du monde
+@@ 5ba41200922b t
+carte du monde : zone visible (cx, cz, demi-largeur, demi-hauteur en tuiles)
+@@ 6d86156c7ee4 t
+camera : boutons de camera du jeu envoyes au dernier pas (sens, a la souris ?), retour au nord demande, les deux fleches tenues, rotation demandee a la souris pas encore faite (degres), reste de la vitesse (voir camera.py)
+@@ 27abf56c0f4d t
+action sans effet -> discussion ; orientation des panneaux de decor
+@@ 1582e2ab4d55 t
+entrees : qui a la main (clavier ou souris, voir inputs.py ; remplace mouse_freeze) ; geste du bouton du milieu (clic = recentrer, glisser = tourner la camera)
+@@ ec77428c98a2 t
+effets-maillages de la ville : emplacement -> (personnage, rapport de profondeur, ecart angulaire) ; (position, droite, haut, avant) de la camera de la visionneuse
+@@ d95383ceda65 t
+souris : bouton appuye (port, numero, manette), clics en attente

@@ -1,0 +1,671 @@
+## FILE dq4_pc/window/battle_scene.py
+@@ ed606d15c91b t
+(monster arena: the "Quitter" window stays open for the whole battle, it is not a player wait)
+@@ 45e32de30156 t
+time of the last step that read the keys (accelerated battle: see _do_battle_step)
+@@ a19750d8c4a8 t
+the entry cascade starts during this step: we stop there, the rest of the frame resumes on the game clock (see _speed_factor)
+@@ 6db9f1b3a149 d
+Battle: monsters, background, effects, damage, speed and engine steps during a battle.
+@@ b0fc131976d1 d
+Texte page of the Esc menu: new "Vitesse de combat" (applied immediately, also in the middle of a battle).
+@@ 4acd54c459a5 d
+Battle speed button: it attaches to the bottom LEFT corner of the bottom box (commands, or message), just as "Fuir" attaches to the bottom right corner of the commands. Only the message window
+and the command windows (RG.BATTLE_COMMAND_WINDOWS) count: among them, the one whose frame extends lowest; the others (team banner at the top, monster names in the middle) have nothing to do with the bottom of
+the screen (#47: the button jumped below them for one frame between two boxes). The plate has the size of the "Fuir" plate (the rectangle attached under the frame, at its right edge) when it is found, otherwise the last known one.
+No visible box (between two boxes): the anchor stays where it was; very first frame of the battle (no anchor yet): the message box at its expected place (the button never appears at the grid's
+default position, on the left of the screen). -> self.battle_anchor = dict(x, y, w, h) in pixels (x: left edge of the frame, y: bottom edge of the frame).
+@@ 792dc7a4eb4c d
+Town mesh effects (packets 21 / 22): the engine places the effect on the ray of ITS camera, between the camera and the character (Morph spell, frog splash: exactly halfway,
+measured on packet 22). It has no character in the packet: we find it again, it is the one on this ray. For each effect we keep what is needed to place it back on the same character as seen by the viewer's camera
+(zoom, centering, rotation, tilt): depth ratio and angular offset (in tangents) as seen from the game's camera. With no character on the ray: position as is.
+@@ 680911d22a8b d
+Position of a town mesh effect as seen by the viewer's camera: on the same character, at the same depth ratio and the same angular offset as for the game's camera
+(identical to `pos` when the two cameras are the same).
+@@ 70ebbb81737d d
+(background task) HD texture of a monster, read from the disk cache if it exists. Capped at 4096 px per side (fewer passes if needed).
+@@ 9ae115ee0fff d
+Texture of a monster for the selected sprite mode (F2): the original one (sharp pixels) or enlarged by the HD algorithm (computed in a background task, the original is used in the meantime).
+@@ 3b3eccdf975b d
+List of (texture, vertex_list, ...) of the monster meshes of the current frame, in Unity's draw order:
+DssaMonster* shaders = alpha blending, no depth write, no face culling -> parts drawn in packet order;
+between monsters: the shader's render queue (Transparent+150, +200...), then farthest to nearest.
+@@ 1d87cd31d7b4 d
+The engine sends no background color in battle, and the scenery leaves a gap between the edge of the floor and the sky:
+we take the average color (texture x vertex color) of the floor at the periphery of the arena, sky excluded.
+@@ 510a4f077816 d
+X coordinates (interface units, 450 x 800 portrait column) of the monsters in a mask: slot i = bit i (MeshChara) projected by the battle camera. -> (min, max), or the list of x coordinates (one per monster) if `entries`.
+@@ be1723584920 d
+Battle start effect: black background, pieces of the capture that fall (see battle_effect.py).
+@@ accb36503004 d
+Digits 0 to 9 (white with shadow, 16 x 16 px) from the menu sheet: separate textures.
+@@ 36f9a98bf124 d
+Damage numbers that hop above the monster that was hit (BattleMenu_setHoppingNumbers -> HoppingNumber.Create): four digits at most, a tick (2 / 30 s) of offset between
+two digits, each digit visible for 19 ticks. Position: foot of the monster projected by the battle camera, plus min(height x 1.85 ; 160) interface units.
+@@ 438b1bce8b7d d
+True when a battle's dialogue box must disappear: a fade to black begins and the box is not waiting for a key (no end-of-page cursor: last page confirmed, or a message that closes by itself such as "Ragnar meurt !").
+The engine closes the box only after the fade: it stayed displayed on the screen as it darkens. A box that is still waiting for a key stays displayed. It comes back if a new (opening) fade begins.
+@@ e491332bb255 d
+Is the game in a battle, in the sense of the engine's clock? The engine's "battle" part (0xd), but also the screen effect that starts it and the black screen waiting for its scene to load (State.effect,
+State.load_wait: only a battle clears them). Outside of that, the battle speed has no effect (walking keeps its settings); in battle, conversely, walking and the accelerator have no effect.
+@@ 139f25097be8 d
+Is the engine waiting for the player in battle? A menu that has the input (commands, target, spells, items, Oui / Non) or a message that shows its ▼ cursor (Manuel: a key is expected). Keys are then read only at
+normal pace ("silent" steps between two reads, see _do_battle_step): cursor and key repeat unchanged, while the monsters follow the battle speed. (The last message of a battle also waits for a key
+without showing the cursor: not detectable, so its extra steps are read as ordinary steps.)
+@@ 7cf84680ebc7 d
+One engine step during an accelerated battle. When the engine is waiting for the player, only one step in (f) reads the keys and clicks, at normal pace (one per 1 / 30 real seconds); the others are silent: the engine advances
+(monster idle animation, windows) at the chosen speed, without any cursor or key repeat going faster. Always True: we continue to the end of the catch-up.
+@@ 2934cb9ce7e6 d
+"Changer la vitesse en combat" key or battle screen button: Manuel -> Normal -> Rapide -> Très rapide -> Manuel. The setting changes immediately (the Défilement du texte section of Commandes re-reads it), is saved and also governs
+message scrolling (Manuel: by hand). No message on screen (removed since #267): the battle screen button shows the speed, and so does the Defilement du texte section of Commandes.
+## FILE dq4_pc/window/camera.py
+@@ c0bd8d030530 t
+same field for all shaders; game scale (balloon: up to 1.25, Field.SetScale: orthographicSize x scale, MAP-02)
+@@ e563b11c4dc0 t
+pixel perfect: camera on a map pixel, hero at its exact size (24 x 32 map pixels)
+@@ d7753c56a682 t
+(the world map camera is not adjustable: neither angle nor rotation)
+@@ 8f68a8f5a354 t
+screen y = -(z - cz) / dh
+@@ 2a30f2b02e02 t
+depth: the height (top view)
+@@ 9f858894e400 t
+a drag cancels the requested return to north that has not been sent yet
+@@ d346d80bf0ba t
+(during a press, pyglet no longer sends on_mouse_motion: the position is used to know whether the finger is still on the button)
+@@ 551fc1d4e453 c
+---- battle: scenery + monsters (engine dynamic meshes)
+@@ 962307fea625 t
+tangent of the original's vertical half field of view
+@@ 315a15affe95 t
+free camera (packet 11, bit 7): position + angles, as in battle
+@@ 2280b8acfb60 t
+(test) DQ_ZDEBUG: the far plane changes every frame: only the surfaces in z-fighting change from one frame to the next
+@@ faebdef8e961 t
+SceneCamera.s_yOffset
+@@ 33c0ce4c8bfc c
+Sprite reference frame (#184): a character's panel takes the rotation of the GAME's camera (Chara.normalBillboard): that of the view
+@@ e667d240031e t
+SceneCamera.Update: fov x 4/3, applied to the horizontal (transposed projection matrix)
+@@ 7fd0a363eaba t
+original 4/3 view; in 16/9 we keep the same field height and show more scenery on the sides
+@@ cf751defcd2a t
+SceneCamera.s_yOffset: vertical offset of the image
+@@ e2065283c865 t
+NativeManager.cmd_fld_load in battle mode: FldObject.SetDispScale(6, 6, 6), applied to the root of the scenery (FldObject.Update)
+@@ b9641ed8251c t
+corners: bottom-left, bottom-right, top-right, top-left
+@@ 8bce4515b6a6 t
+share of the tilt of the world's verticals that the sprite takes: 0 = exactly vertical edges (default since #180: the #134 trial at 0.5 distorted sprites near the edges), 1 = parallel to the walls
+@@ 1ca6a014ca06 t
+(right up against the camera: no division by a zero depth)
+@@ d1888a525ef0 t
+on screen (focal length 1): x of the bottom center, y of the bottom and of the top of the original panel
+@@ c7b46ebb586f t
+half-width on screen: proportion (average width / height) of the original panel at the center of the image
+@@ 759f8cf962a7 t
+top slide (screen units, focal length 1): inc x tan(tilt of a world vertical at the foot) x height on screen
+@@ a72be9e78039 t
+foot of the panel: its direction on screen (a world line stays a line) = derivative of the projection when moving up by dy
+@@ 3660f1e092cb t
+(debugging) + all the sprites and the icon bubbles
+@@ 51ec67dde506 d
+Camera: town camera (the game's, which the player rotates with the GAME's camera buttons), world map, battle and title cameras, sprite edge correction. The player only adjusts the rotation (left / right arrows, wheel click):
+no more zoom, tilt, centering or height smoothing (removed in #264), no more camera acceleration (D-233) and no more rotation done by the viewer alongside the game (D-234): it is the game's, as on mobile.
+@@ 442b387253fe d
+Camera: town camera (the game's: the player rotates it with the game's camera buttons), world map, battle and title cameras, sprite edge correction.
+@@ efd34b354286 d
+World map, like the game's Field.Init / Field.SetPosition: orthographic top-down camera (Rotate(90, 0, 0)), centered on the point given by the engine
+(in pixels, 16 per tile). The top of the screen is north (-Z), east is on the right. Visible height = CH_VIEW_HEIGHT tiles (the hero has the same size as in towns) x game scale (balloon, packet 30).
+The camera is the game's: no player setting.
+@@ 62245a873592 d
+Are the game's camera buttons (left / right arrows, wheel click) sent to the engine? Free field of a town, dungeon or tower: not the world map, not the title screen, not a message, a menu, a map or an effect.
+The rest (player locked by an event, camera held by a scene, place that forbids rotating it, rotation limits) is decided by the game itself, as on mobile: it then refuses the button (Engine.camera_wait).
+@@ bc66c51db60e d
+Wheel click, or both arrows together: both of the game's camera buttons together at the next step = the game returns the camera to north (TownPlayerManager::setCameraRotToNorth: it animates the return and holds the player during that time).
+@@ 77c5c0495dca d
+The two camera arrows: -1 (left) / 0 / +1 (right) = direction requested by hand. Both together request the return to north, once; as long as one of them is still held after this double press, nothing happens
+(the release is never exactly simultaneous).
+@@ 6933caa8e032 d
+Game camera buttons to send at this engine step (ENGINE.CAM_G / ENGINE.CAM_D; both together: return to north), based on the arrows, the wheel click and the wheel click drag (rotation still to be done: `cam_request`).
+Outside the free field nothing is sent and pending requests are forgotten. The direction sent is kept for Game._camera_after_step.
+@@ 1275a83fe17f d
+Nothing is sent to the game's camera at this step (menu, message, title, world map...): pending requests (return to north, mouse rotation) are forgotten, and two arrows already held do not count as a double press
+on return to the field.
+@@ 0153e578f6fb d
+After an engine step sent with a camera button: did the game take it (Engine.camera_wait)? It then rotates by one notch (ENGINE.CAM_STEP degrees) at the next step; beyond one notch per step, we have it do the others right away
+(Engine.camera_turn): "Vitesse de camera" setting for the arrows (x2 = two notches per step; a non-integer speed is spread from one step to the next), up to CAM_DRAG_STEP notches so that the wheel click drag follows the pointer.
+If it refuses (player lock, scene, place that forbids rotating it, limit reached), the rotation requested with the mouse is abandoned: the camera stays where the game puts it.
+@@ c1501afcf0c1 d
+Heading of the game's camera in degrees (0 = the original heading of towns, toward +Z; positive toward +X, like the right arrow), for the F1 display.
+@@ 25feb1b1f7bb d
+Wheel: scrolls the Esc menu or the license; on the field it no longer does anything (no more zoom, #264).
+@@ 5d9709b63782 d
+Middle button pressed: a click (the camera returns to north) or the start of a drag (camera rotation). Outside the field (menus, messages, battle, title...) it does nothing.
+@@ bcdaa34061e4 d
+Middle button held and pointer moved: the camera rotates (left / right only; vertical movement does nothing), same default directions as the arrows (inputs.rotate);
+the "Inverser gauche / droite" setting reverses the direction of the drag (never that of the keyboard arrows). The game rotates in notches (see _camera_after_step).
+@@ 6ae4180e51b4 d
+Middle button released without having dragged: click = the camera returns to north (on a town's free field only).
+@@ ca6b64dca6e4 d
+Esc menu: a held cursor follows the mouse; on the field, the on-screen cross held with the mouse; middle button: camera rotation.
+@@ b1890b5824f8 d
+Unity rotation of the battle camera (NativeManager.cmd_camera + SceneCamera.Update, targetless mode): euler (-x, -(y + 180), z).
+@@ a4e057058411 d
+Town camera as in Unity (SceneCamera.Update, mode with target): LookAt(position, target), pitch - lookDownAdjust, then advance by distanceAdjust along the axis. The game's (#264): position, target,
+field, vertical offset and rotation sent by the engine, without the viewer's zoom, tilt, centering on the hero or height smoothing (TownCamera::execute follows the player and clamps its target to the map edges).
+The rotation the player gives it is also the game's (camera buttons sent to the engine, D-234): position and target already have it, nothing is added here, and the game picks it up in its scenes as on mobile.
+Projection: fixed HORIZONTAL field fov x 4/3, height derived from the original portrait screen (0.5625). In 16/9 we keep the same field height as on mobile and show more scenery on the sides: the central band
+of the window is exactly the phone's image.
+@@ 13dc5e64d6f8 d
+(position, right, up, forward) of the town camera as the original game places it (same computation as _town_camera, WITHOUT the player's rotation).
+@@ 97400a37ca58 d
+(debugging, DQ_PROJ=n) pixels (x, y from the top) of the feet / top of the sprite and bubble panels, every n frames.
+@@ 48a614ecaac5 d
+Strength (0 to 1) of the sprite edge correction (towns, dungeons, towers; see _town_panel): 0 by default since #184 ("go back to the raw position of the NPCs, exactly as in the game": original panel,
+without on-screen reconstruction); the former full correction (vertical edges, constant proportion, #134) is obtained with the --correction-bords option or the DQ_CORRECTION_BORDS environment variable,
+from 0 (none, default) to 100 (full). It is not a player setting (the former "Correction des bords des sprites" option is removed).
+@@ 2ddd6534381f d
+(right, up, forward) that orients the panel of a town character: the frame of reference of the GAME's camera (Chara.normalBillboard takes the rotation of the game's camera, including the one the player gives it: same tilt as on mobile,
+and a character does not "align" with the view when the camera goes up or down), which is that of the view since the viewer no longer rotates the camera alongside the game (D-234). `corr`: strength of the edge correction (see _edge_correction).
+@@ 676d256a9478 d
+(Trial #134, REMOVED by default in #180: "put the NPC display back as on the mobile version, ... they stretch when they get close to the edge") Share (0 to 1) of the tilt of the WORLD'S VERTICALS (wall edges, doors...) that a character's panel takes on screen, 0 by default (trial: 0.5). Since the edge correction (_town_panel) the sprite is
+exactly vertical on screen everywhere, but the neighboring walls lean (11 to 19 degrees at 9 units from the center in 16/9, camera at 47 degrees, versus 4 to 6.5 on the mobile portrait) and this angle changes when the hero goes up or
+down: the sprite then seems to lean relative to the scenery (optical illusion reported in #134). Leaning it halfway toward the world vertical reduces this gap by half without going back to the original panel
+(which moved away from the center of the image by its top alone and got distorted). Comparison with the trial: environment variable DQ_SPRITE_INCLINAISON, from 0 (vertical edges, default) to 100 (parallel to the scenery).
+@@ b3901624003c d
+Point X (of a panel parallel to the screen) brought closer to the camera by `delta` depth units. t = 0: along the camera axis (F), like the vertices of the Riseup bubble panel in Unity (Riseup.s_vtxDepth);
+t = 1: along the view ray (camera -> X): same point on screen, same depth (otherwise the shifted edge moves away from the center of the image by delta x offset / depth: the bubble slides sideways when the camera is rotated). In between: linear blend.
+@@ ca48f74851be d
+The 4 vertices (bottom left, bottom right, top right, top left) of the panel of a town character whose feet are at p: a w x h rectangle parallel to the screen, whose bottom is set back by `zb` and whose top by `zt`
+toward the camera (depth of the original panel, which leans by 36 degrees). t = 0: the original panel (offsets along the camera axis). A flaw of the original, made visible by the horizontal field of 16/9
+(the mobile portrait saw much less of it): the top, being closer, moves away from the center of the image (by zt x offset / depth) and the sprite "leans" outward near the left / right edges (up to 15 to
+20 degrees); moreover the height on screen is compressed toward the bottom of the image, hence a sprite that is too wide (up to 0.9 instead of 0.75). t = 1: the panel is rebuilt ON SCREEN: same position, same height
+and same depths as before (size, overlaps and z-buffer unchanged), but vertical edges and width = 0.72 x the height on screen (the proportion of the panel at the center of the image: the width there is the
+average of those of the bottom and the top), so the sprite keeps its proportions everywhere. At the center of the image, nothing changes. In between: linear blend of the vertices. Unknown camera or panel against the camera: the original.
+`inc` (0 to 1, trial #134, see _sprite_tilt): the rebuilt panel is then SHEARED toward the world vertical, feet fixed: the top slides by inc x (on-screen tilt of a world vertical at the character's foot) x height,
+at the same depth. Size, depth and bottom unchanged; 0: vertical edges; 1: edges parallel to the walls. At the center of the image the world vertical is straight: nothing changes.
+@@ 687689906051 d
+(debugging, DQ_CAMV=n) state of the game's camera every n frames.
+## FILE dq4_pc/window/capture_effects.py
+@@ a8f3ff66f95a t
+current effect (dict of State.screen_effect), capture taken, simulation, blur textures and buffers, vertex lists
+@@ 2b4ee33c820e t
+black blur textures (the game does not clear them: initial content not established, black assumed)
+@@ 571c2338e40c t
+Custom/CaptureBlur: texture x color replaces the screen
+@@ e643442c1b3a t
+Custom/Capture
+@@ 69f0d03db7ab d
+Drawing of the screen effects of the `Capture` class of the Unity layer (packet 34: travel, lamp, Riremito; see render/capture_effects.py for the rules): capture of the game screen, two half-resolution blur textures
+alternating (the persistence: at each step of the effect, the state of the previous frame is redrawn into it), then drawing of the effect mesh in place of the scene, on a black background. The interface (messages,
+game windows) and the fade planes remain drawn on top, as Unity's interface camera does (assumed: the exact content of this camera during the effect is not read).
+@@ b823464f5899 d
+The Capture effect in progress (dict of State.screen_effect) or None; a new effect resets the capture to be done (the first frame is drawn normally then copied, see _capture_grab).
+@@ 9c903da3fd8c d
+The game scene has just been drawn (without interface): we copy it into the capture texture, create the effect and the blur targets (black at the start).
+@@ 0da8357afe51 d
+Advances the effect up to the MoveNext call that matches the engine frame (several steps per frame when "Vitesse de transition" shortens the effect).
+@@ c0a64363a73f d
+The effect's drawings in the current target: the background reads the blur texture `blur` (None: black, nothing to draw), the capture reads the copy of the game screen.
+@@ 4f13eafcd6a9 d
+Capture.Caputer, blur pass: the state of the previous frame (blurred background + mesh) is redrawn into the half-resolution texture `i`.
+@@ f044dbae8e8c d
+Effect frame: black background, blurred background, mesh; then the fade planes and the interface on top (messages, game windows).
+## FILE dq4_pc/window/constants.py
+@@ 817e09edc8b3 t
+button number of the "Sauv. cloud" box of the start menu (type 53): the port puts "Sauvegardes" there
+@@ bb1ad8f0720e t
+sound effect of a menu button press (played by Unity, MenuPortItem.Update)
+@@ e93343cdbae4 t
+gamepad keys whose button plays SFX_BUTTON on press (MenuPortItem.Update: `m_gamepad & 0x810`): A (0x10) and action (0x800); B (0x20), back (0x400), arrows (1, 2, 4, 8) and zone 0x80 are silent
+@@ 85db225b7c1f t
+test sound effect for the volumes (Son page of the Esc menu): floor damage (CommonWalkDamage::checkWalk), short and unrelated to the interface
+@@ af332def8764 t
+decoded from the start in a background task
+@@ 65d3c41c5652 t
+last mode of the "Shader" menu (0 originals, 1 EPX x8, 4 pixel perfect: see settings.MODES_SPRITES): pixel perfect (sharp texels without any softening; world map at an integer scale, camera and sprites aligned on the pixels)
+@@ 7520bc9ce6de c
+Town camera, read in SceneCamera.Update / Global.CameraInitParams[0] (see docs/technical-notes-dq4-port.md):
+@@ f95325b85744 t
+SceneCamera.ASPECT_DEF: the original is designed for a 450 x 800 portrait screen; Unity fixes the HORIZONTAL field of view (fov x 4/3) and derives the height from it
+@@ a378bff4a5fe t
+pixels at 100%: title bar, borders and taskbar around the drawing area
+@@ b04f514fbb3e t
+nominal fov of mode 0 (field) as long as the engine sends none (packet 11)
+@@ d4093856e876 t
+SceneCamera.s_distanceAdjust (.cctor): after LookAt, the camera advances by 4 units along its axis
+@@ 011b41b94819 t
+SceneCamera.s_lookDownAdjust (.cctor): the camera raises its pitch by 0.2 degree
+@@ d3ec1c7eca3d t
+sprite edge correction (see Game._edge_correction): 0 = the game's original panel (default since #184), 1 = rebuilt on screen (vertical edges, #134)
+@@ 79ac2c820857 t
+magnification of the game windows (the original portrait column exactly fills the window height); reduced to 1 if a group of windows no longer fits on the screen
+@@ 4d409b6a204c t
+battle: bottom edge of the message frame = bottom edge of the main frame of the command menus (Combattre / Attaquer...)
+@@ 8af21aa2fd28 t
+battle: area taken by the command menus (Fuir / back button included); used to keep the same interface scale as the messages
+@@ 2a180c405d60 t
+field message window moved down: bottom edge of the frame (interface units), like the battle messages
+@@ 4b36ce50004d t
+Oui/Non (type 1): VISIBLE space between the bottom edge of the Oui / Non stack and the top edge of the dialogue box (D-231: the stack is placed on its top right corner; 1 unit, like between Oui and Non; before: 4 units between the mesh cells, i.e. 8.5 visible)
+@@ 6704d5ac01b4 t
+title screen map (sky, logo, island, dragon: a scene without a hero whose camera the game sets by itself; see _town_camera)
+@@ 5ae12ad49fa1 t
+maps whose sky plane (objects whose name contains these words) is extended on both sides by symmetry (MAP-05, player's choice: "extend the sky"): planes designed for the portrait screen left a large black corner on the left (ev09) or two (dpout, dungeon exit) in 16/9
+@@ caabfb559293 t
+pre-game window types (StartMenuSelect: list of logs; StartNameEntry: gender choice) that the viewer centers on the screen
+@@ 391da5acddb6 t
+world map: pixels per tile, tiles per atlas row
+@@ 030d989da47b c
+world map water animation (the game's Field.UpdatePattern): 5 patterns; the displayed tile is the number + the pattern offset, which advances every 17 frames
+@@ d2703d46933a t
+end (exclusive) of each tile number range (Field.m_patternCheck)
+@@ 8971fca35a0d t
+pattern of each range (0 = fixed tile); the last value is used beyond the last range
+@@ 7de700307545 t
+offset added at each step, per pattern (Field.m_patternInfo.acc)
+@@ 7aae785668b9 t
+the offset falls back to 0 as soon as it reaches this limit (.limit)
+@@ 463f348a8977 t
+Chara.SetFieldMode: scale 28.8 x 1.8 = 51.84 on a 0.48 x 0.64 mesh: the hero is ~24.9 x 33.2 px (1.04 x the 24 x 32 sheet), flat on the map
+@@ bea294dc628f c
+COMMON ZOOM (world map, towns, caves, towers): the hero keeps the same size on screen everywhere, that of towns in 16/9 (original camera: distance
+39.55 to the target, 4 less after SceneCamera.s_distanceAdjust, horizontal field fov x 4/3 derived from the 450 x 800 portrait screen). HERO_FRAC =
+height of the hero's panel / height of the window.
+@@ f80ed2d5b1fd t
+world map: tiles visible in height (~ 20); in portrait the original shows 28.4 in height and 16 in width
+@@ 942ff24b5263 t
+world map: gutter (repeated pixels) around each 16 px tile in the copied atlas: no tile bleeds onto its neighbor when filtering
+@@ fc66ae608016 t
+town units per engine step: beyond that, the camera's target jumped (cut, map change): no interpolation
+@@ 52d020e87d79 t
+rotation of the camera around its target (game or player): as long as the camera's displacement relative to its target, from one step to the next, stays under this share of the distance (about 20 degrees), it is a rotation,
+@@ 62ec96f6b60b c
+interpolated like the rest; beyond that (scene angle set all at once), it is a cut
+@@ 29818610951f t
+wheel click drag: at most this many game rotations (ENGINE.CAM_STEP each) per engine step, so that the camera follows the pointer (506 degrees per second)
+@@ 613bb5962fc4 t
+rotation requested with the mouse and not yet done: cap in degrees (a large drag does not make the camera turn for long after the release)
+@@ 82e311932f3e t
+the original engine runs at 30 Hz (Time.fixedDeltaTime of Boot)
+@@ 4205f3cc245b t
+maximum duration (s) of engine steps within a single displayed frame when walking is accelerated (walking speed x2 to x4, accelerator): beyond that, the game falls behind instead of freezing the frame
+@@ b827fc9886e0 t
+battle: Global.CameraInitParams[1] of the original Unity (nominal field of view; Unity multiplies it by 4/3 and applies it to the horizontal of a 4/3 view)
+@@ 85df87adf980 t
+(trials) left/right mirror; scenery offset on z
+@@ 54cd7358f95c t
+vertices reserved per monster (fixed-size lists)
+@@ 5b0e52eab9b0 t
+world map place icons (FieldSymbol.s_symbols: 21 rectangles; number 18 is empty in the atlas)
+@@ a69bae128f35 t
+scenery: depth offset (in smallest depth units) between two groups drawn one after the other; 24 bits: 4 units = 2e-7 of the depth range, invisible for a real relief
+@@ 716dd9ec787a t
+original sheets: 2 px gutter (repeated edges) around each cell, like the HD sheets: filtering no longer catches a bit of the neighboring cell
+@@ 3e90a1c0a5ab t
+HD sprites (x8 enlargement, see hd.py): 4 px margin, 2 mipmap levels
+@@ e03bb01f2df0 t
+actions whose press is detected (rising edge)
+@@ 76c0b895ca0f t
+arg2 of GameUpdate: talk / examine (exactly 0x100), command menu, party chat, map
+@@ 1cc46f12ef33 t
+world map: slots 0 to 9 = party members (hero in 0); 10 to 12 = vehicles (boat, balloon...)
+@@ c5b6b0c3f852 d
+Window constants: camera, interface, world map, battle, sprites (values read from the original game or chosen for the port).
+@@ 7e8922ecb3f2 d
+True if pressing a menu button of gamepad key `pad` plays SFX_BUTTON in the original game (A and action only). The keyboard follows the same rule as the finger (D-156, #60).
+## FILE dq4_pc/window/field.py
+@@ d86e2b4ca3d9 c
+---- textures
+@@ af55d80d3707 t
+hero: no more semi-transparent purple halo
+@@ 3a9f8f820a70 t
+character: 24 x 32 cells on 3 columns; boat (193): 40 x 40 cells on 12 columns and larger panel (see hd.SPECIAL_SHEETS)
+@@ 9121edce3a30 t
+transparent pixels = color of the neighboring edge: no more dark fringe when filtering
+@@ 9e4e1364bc5a t
+whole map read from the engine: we draw the whole visible area (the engine only sends 25 columns of it)
+@@ 87eaf7131c36 t
+bounds on multiples of 4 and constant width: the mesh keeps the same size
+@@ 529ee6e7bc0f t
+while walking, and its vertices are replaced in place (no reallocation: no stutter)
+@@ e270e83f8b21 t
+(row, column, y, x, channel): one 16 x 16 tile per cell
+@@ ace826d53611 t
+tile atlas, with gutters
+@@ e4cf9c837c4f t
+original atlas: the place icons are arbitrary rectangles there
+@@ 3be1afdcb921 t
+grid vertices at the origin (NW, NE, SE, SW, two triangles per tile), then offset by (x0, y0)
+@@ 3e954228aa97 t
+same size: in-place replacement
+@@ 101f0ec7540e t
+atlas copied with a gutter of CH_GUTTER pixels around each tile
+@@ 2a5f3c867edb t
+pixel perfect (integer scale) or smoothing off (F3): nearest neighbor; otherwise sharp pixels with softened boundaries (like the original sprites)
+@@ 446cf635e506 t
+packet 33 on the world map: Field.SetColor = color of the tile material (Custom/Field: texture x _Color) and of each symbol (own alpha kept)
+@@ eaadb6455be6 t
+place icons: laid flat (the hero stands at the middle of the bottom edge)
+@@ 4c0aa541ee7f t
+flat on the map, like the tiles (drawn as seen from above)
+@@ 39097e8ae90d t
+upside down in the atlas, like the tiles: the top of the map = the bottom of the image
+@@ 0d46cf220c7d t
+vertices written after the 1st draw of the frame: without rebind + commit() they go out with the previous frame (icons one frame late, absent for one frame when their number changes)
+@@ 2a1d6961cec3 t
+DQ_DECOR: (test) forces another battle scenery
+@@ d6883e8b284b t
+battle scenery without the requested variant (time of day): the closest one, rather than an empty scenery
+@@ f9e5448c920b t
+flower beds & co: superimposed flat triangles raised by 3 mm (no more z-fighting, see flat_sceneries.py)
+@@ 1734bae7571f t
+scenery textures (enlarged according to the F2 mode, see _decor_tex)
+@@ 37e143f3af21 t
+doors, jars, barrels...: displayed positions (variants hidden at the start); water, lamps... animated continuously
+@@ a81578fed48d t
+surfaces whose texture changes from frame to frame (sparkling water, swamps...)
+@@ e5e007cfc174 t
+battle sceneries: softened silhouettes of trees and mountains (scenery_outlines.py); DQ_SANS_CONTOURS=1: (test) original texture
+@@ 3b2486e37ff6 t
+frames of each palette animation
+@@ 64c72575f822 t
+title screen: sky extended on both sides of the portrait area
+@@ 2f73967bf709 t
+dpout, ev09: sky plane extended by symmetry (MAP-05)
+@@ f3c3b8fa2676 t
+we only keep the latest enlarged sceneries (graphics card memory)
+@@ b0c797477796 t
+towns and dungeons in "Originaux" / pixel perfect: sharp texels, only the boundary between two texels is softened (like the sprites); in battle, stretched paintings: normal smoothing
+@@ 66875775ee0e t
+render queue 3000 + priority (FldObject.set_priority)
+@@ 5c4110d7e103 t
+packet 1: flashback, scenery in sepia (characters, bubbles and menus keep their colors)
+@@ e0b3979d0176 t
+packet 33: tint of the whole scenery, except groups whose texture has "tz_" in its name (lamps, candles, waves)
+@@ 9ceba00f8f52 t
+cut-out opaque scenery: alpha -> MSAA coverage, no blending (blending would double the alpha)
+@@ f2d958d587c5 t
+Custom/fld_trans: Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, no discard
+@@ 3f29e68c0cc7 t
+(the title sky has its own vertices: never any culling)
+@@ f8ebd06bd880 t
+flat sceneries superimposed at the same height (two flower beds, path and lawn...): without this their depth is equal up to rounding and one or the other wins pixel by pixel, which changes with every camera movement (flicker); the group drawn last always wins
+@@ 9388a3f4fdc0 t
+animated palette: current frame (without HD enlargement)
+@@ 1eb54b7ec21e t
+title sky enlarged around the center of the screen (#130)
+@@ 57abe8a4ddf1 t
+OpenGL objects: in the drawing thread
+@@ 13ab066cf7ae t
+engine frame displayed: that of the previous step + alpha (see _interpolate)
+@@ 8fc1fb1c28de t
+FbxObject.m_defScale (.ctor: 0.4 for model 10, 1 otherwise)
+@@ 11920d362c39 t
+Custom/ImdChara: Cull Back (read in the shader); DQ_FBX_CULL=0: no culling, 2: reverse direction (the former one, wrong: we saw the inside of the dragon) for comparison
+@@ d8d6de714d28 t
+Unity: front face = clockwise triangle on screen (left hand), the opposite of OpenGL's default; without this we only drew the back faces (the inside of the dragon: face seen from the inside, body seen from behind)
+@@ d137fc3a6b09 t
+(edge color under the transparent pixels: no light fringe when filtering)
+@@ 9705226c21eb c
+facing the screen, like the characters (camera rotation). Advanced by 0.48 toward the VIEWER's camera (and not the game's: rotated or tilted by the
+player, it shifted the bubble on screen), along the view ray (see _shift_depth); the bubble stays stuck to the character carrying it, whatever the
+camera tilt (see _anchor_icon)
+@@ 6e72475fff38 t
+window created but not shown (the 2nd view of the map, before we switch to it)
+@@ 06e05042f2ae t
+(map windows left created after closing do not count: without a visible window, the map is closed)
+@@ 504ac07484fd t
+discovered places (code 3: x + 256 y, one per number) and veil of unexplored blocks (code 5) sent by the engine
+@@ 8796e836967b t
+code 4: special place (red cross), same encoding as the places: x + 256 y
+@@ 42a5a04ec805 t
+enlarged plan (1024 x 768): Lanczos, with rounding of the outlines (EPX) for the world plan whose lands are pixel art
+@@ 56c4a8fdce4b t
+world map: veil (grayed silhouette) over the unexplored 10 x 10 pixel blocks (16 x 16 blocks from x = 48, y = 16 of the 256 x 192 plan)
+@@ 7a3703784ae0 t
+"you are here" marker (24 x 24 icon, part 3; its number changes from one generation of the layout to another) centered on the point (x, y) of the plan
+@@ 6c73ee3e1319 t
+AddIcon(Vector3.zero, 31, bInBounds): the bottom left corner of the icon (the tip of the quill) is on the position, in the 450 x 337.5 plan placed at (2, -2) at scale 0.99 (0.99 x 450 / 256)
+@@ 3dc883e62469 t
+the map is loaded before its orders
+@@ ed01a7292d41 t
+(test) DQ_ANIM_TEST="object:number:frame": starts a common animation at this loop frame
+@@ f76681c24fde c
+---- loop
+@@ ace808d3c461 c
+shadow of the characters: Chara.s_shadowMesh (square +-1 in XZ, Y = 0.00625), scale s_shadowDefScale (0.347 ; 10 ; 0.206), texture CharaTex/common (32
+x 32: black ellipse of alpha 96 / 255, point filter), shader Custom/CharaShadow (SrcAlpha / OneMinusSrcAlpha, ZWrite Off, ZTest LEqual, queue 2999 =
+before the characters), position Chara.SetShadowPosition = pos + panel rotation x (0 ; 0 ; 0.25) (hence shifted by 0.25 along the camera ray: same
+point on screen, but in front of the ground), orientation Euler(0, camera yaw, 0) = flat.
+@@ 89d94b4efe3e t
+yaw of the camera alone
+@@ 42c9dcb197ab t
+_Color.a = SetShadowAlpha (1 by default), x alpha of the character (SetColorWithShadow)
+@@ 4599e4e247b4 t
+(the following characters discard transparent pixels: otherwise their whole panel writes depth and hides the companion behind)
+@@ 4e34609ef86d c
+shadow of the characters on the world map: Chara.SetFieldMode resizes the shadow mesh to s_shadowDefScale x 28.8 (ellipse with 10 x 5.9 map-pixel
+semi-axes) and tilts it by 36 degrees like the character (projected: 5.9 x cos 36 = 4.8); Chara.SetFieldPosition places it at the same point as the
+character (its feet). The engine hides that of boats (packet 15).
+@@ b79444cc2f7f c
+CharaTex/common texture: ellipse of alpha 96 / 255 with sharp edges (point filter); here the same maximum and the same size, but the edge is softened
+(shadows "too harsh")
+@@ 94ef94e9acd1 d
+Field: maps, scenery, characters (sprites), shadows, world map, place icons.
+@@ c77bb92061c6 d
+Maximum usable anisotropy level (1.0 if the extension is missing), capped at 8.
+@@ 9e7896b702b2 d
+RGBA texture; mip > 0: mipmaps (limited to `mip` levels, 99 = all) + anisotropic filtering.
+@@ 8cb86c44db54 d
+Filtering of a mipmapped scenery texture (F3): from afar, always trilinear mipmaps + anisotropic (stable); up close, smooth = bilinear, otherwise nearest neighbor (sharp texels).
+@@ 3eb52559efd5 d
+Original sheet `h<ident>` (sharp pixels); False if absent. 194 = alias of 193 (Chara.SetTexture).
+@@ d45a9f2cba3c d
+(background task) HD atlas of a sheet, read from the disk cache if it exists (a sheet with a special slicing has a file of its own: the boat has nothing in common with the old 24 x 32 slicing).
+@@ 5152bb565b3c d
+Sprite sheet for the selected mode. The HD versions are computed in a background task: in the meantime, the original is used.
+@@ a18aed18ac1e d
+(Re)builds the tile grid when the engine sends another one; the atlas is the Unity `field` texture.
+@@ 001c0e013b73 d
+Texture coordinates (6 vertices per tile, flat) of the tile number grid `g`; the tiles are stored upside down in the atlas.
+@@ be6a616ce10a d
+One game frame on the world map (NativeManager.Update -> Field.UpdatePattern): every 17 frames, the offset of each pattern advances by one step, then falls back to 0 at its limit.
+@@ 784099a7d6a2 d
+Updates in place the texture coordinates of the animated tiles when a pattern has changed step.
+@@ 702d1d2b5266 d
+Draws a vertex_list, binding the VAO and the buffers only once per frame (much faster than vl.draw).
+@@ 3205e920edfc d
+The battle scenery textures enlarged x4 (scenery_outlines.py, 5.6 MB with their mipmaps) are only kept for the last sceneries seen: the oldest ones give their space back on the graphics card.
+@@ 7ab241ba1d45 d
+(background task) scenery textures enlarged by the HD algorithm of the F2 mode (x8, capped at 4096 px per side). The edge is repeated in a loop before the enlargement: the textures join up seamlessly.
+@@ 785ba52f2edd d
+Enlarged GL textures of the current scenery for the F2 mode; None until the background computation is finished (the original scenery is used in the meantime).
+@@ 9a3f0bbb1b19 d
+Tint of packet 33 to apply to the scenery (r, g, b), or None if it is neutral (nothing changes: the drawing stays identical). DQ_SANS_TEINTE=1: (debugging) never any tint, for comparison.
+@@ de8dd36fc83e d
+Writes the `tint` uniform if it has changed (the program is in use).
+@@ 0822c55ba8ed d
+Hidden faces of the scenery (#182): the game's map scenery shaders (Custom/fld_normal, fld_atest, fld_trans, fld_transz and their sepia variants) are "Cull Back" (read in the data packet:
+ShaderLab culling = 2): a wall, a roof, a ceiling only has a texture on its front face; seen from behind (rotated camera, from outside a room) it is invisible, hence the view through the walls of an interior.
+Unity: front face = clockwise triangle on screen (left hand), like the 3D models (DQ_FBX_CULL); DQ_DECOR_CULL: 0 = no culling (the former rendering), 1 = default, 2 = reverse direction (trial).
+@@ f43df4f994ca d
+Town or battle scenery. The scenery textures are paintings of 8 to 256 px stretched in 3D: in "Originaux" and in pixel perfect (settings for the SPRITES) it keeps the original rendering,
+smoothed (mipmaps + anisotropic, F3 = linear enlargement or nearest neighbor); the enlarged mode (EPX) applies the chosen HD algorithm to it.
+@@ 7f648af1c074 d
+3D model number `no` ready to be drawn ({'m': fbx.FbxModel, 'vl', 'tex'...}), None while it is being read (background task: the disk cache, or the data packet the first time) or if it is not handled.
+@@ 7c5bcbe2d43d d
+3D models of the scene (e.fbx): pose = engine position / rotation / scale (packet 32), animation played since its start (engine frames: 30 Hz, fraction of a step included), color = Material.color.
+Custom/ImdChara shader: vertex color x _Color x texture, alpha blending, ZWrite, ZTest LEqual, Cull Back, Geometry queue (with the opaque scenery, before the characters and the mesh effects).
+@@ 5c1649f32541 d
+Texture of icon `ident` (32 x 32 cell of the MenuTexture sheet, numbered left to right and top to bottom; Riseup.SetTexture -> UV 1/32); None if the sheet is absent.
+@@ a37d1ed3751b d
+Icon bubbles above the characters (packets 19/20, Riseup: 0.96 square facing the camera, advanced by 0.48 toward it): [(texture, vertex_list)].
+@@ 34e9f1db1f50 d
+Position of an icon bubble (packet 20) for the viewer's camera. The engine places it above the target (1.294 above its feet, measured on three villagers) in WORLD coordinates, whereas
+the characters are panels facing the camera: if the player's camera is tilted or rotated, the height of the bubble relative to the head changes (1.294 x cos of the on-screen tilt, against a fixed panel
+height) and it seems too high or too low. When a character is under the bubble (same x, z), we therefore keep the offset as the GAME's camera sees it (right / up / forward components) and
+express it in the frame of the viewer's camera: the bubble stays at the same place relative to the head (identical to P when the two cameras are the same). With no character below (barrel, jar...): P, anchored in the world.
+@@ 3b270db91262 d
+Windows of the open map (FieldImageMap): {25: fixed plan, 26: large map that fills in, 24: list of the town's shops, 22: back button} -> port; empty if no map is open.
+@@ ff9ca8082d94 d
+Engine map window (type 25): plan texture named by the engine and position marker (coordinates in pixels of the 256 x 192 texture).
+@@ cc84f572ac7e d
+Large world map (type 26, Make_WorldLargeMap): the engine sends the flag of the plan's pieces (indicator 0), then the player's position x, y (indicators 1 and 2) in pixels of a
+1024 x 1024 plan. The game composes the plan (LoadLargeWorldMap: background + pieces whose bit is raised in the flag) and shows only a 256 x 192 pixel window of it centered on the player
+(texture offset x / 1024 - 0.125; the marker stays at the center of the window).
+@@ 003eaf78a06a d
+Engine orders on the map objects (doors, jars...), then one animation frame; the modified vertices are sent back to the graphics card.
+@@ 6d72ce0c49e6 d
+Scenery panels turned toward the camera; the modified vertices are sent back to the graphics card only if the orientation has changed.
+@@ 1f6adf4bc903 d
+Is one of the action keys (Touches menu) held down? (A key swallowed by a shortcut, Enter of Alt + Enter, does not count until it is released.)
+@@ a6da89143947 d
+Field with no window: no Esc menu, no message, no game menu or map, no battle, no screen effect. The left / right arrows then rotate the game's camera (D-233, D-234); up / down do nothing; otherwise they navigate in the windows.
+## FILE dq4_pc/window/full_screen.py
+@@ 7b007349226d c
+the message when a window <-> full screen switch fails: (requested mode is full screen, kept mode is full screen) -> whole sentence (English does not
+have the same word order)
+@@ 5051c83069f1 t
+(the desktop size)
+@@ a39c5e769020 t
+Windows: no window manager opening animation (re-enabled by on_draw, 2 s after the game's 1st frame)
+@@ bfc576291d47 t
+(what Window.__init__ does for a visible window: here after the black frame)
+@@ 98f74b1b602c t
+Windows: the black frame presented while the window is hidden is not necessarily displayed; a 2nd one, with the window shown, avoids the class background (white) during loading
+@@ dcce6ff60da4 c
+---- settings applied from the Esc menu
+@@ f35e53607da4 t
+by width, then by height
+@@ 47b0311c9262 t
+(this is already pyglet's monitor: set_fullscreen(True) as before)
+@@ 6fd3946f3ce9 t
+(the actual state of the window)
+@@ cc9d35ea25b6 t
+(BEFORE anything: the monitor pyglet keeps may no longer be valid, see _refresh_screen)
+@@ fdfd75e91453 t
+(the size of the window, to be restored on return)
+@@ e1ddf0297c67 t
+(the monitor to restore if the move fails)
+@@ 03b4392e9d45 t
+(a stored size larger than the usable area of the screen is brought back to the screen)
+@@ 29003d4ef101 t
+(hidden before the call: a half-successful hide is still followed by a set_visible(True))
+@@ 744334c7ec5d t
+(test: the failure happens after the change, to try the return to the initial state)
+@@ f75ba10e13ca t
+(return to the initial state, window still hidden, on the starting monitor)
+@@ c6a301e407a1 t
+(assumed: the system may not keep what is displayed while the window is hidden; the same frame is redrawn as soon as it is visible, without waiting for the loop)
+@@ 1652b7d3b170 t
+(pyglet's signature: set_fullscreen(fullscreen, screen, mode, width, height))
+@@ 36bd51cfec8b t
+(its monitor was unplugged: it would be outside all screens)
+@@ 1e40c51b7a7e t
+(Windows can shrink the window without warning)
+@@ 17131d5017e0 c
+---- full screen monitor: the window's (no setting; pure logic in screens.py)
+@@ c2045833a250 t
+(the system flag, or the state of the Alt keys: either one is enough)
+@@ 83722f2782ed t
+Commandes menu waiting for a key: F11 is "réservée" there (settings.RESERVED)
+@@ 5ec627becc44 d
+Full screen, window, resolution and monitors.
+@@ 44ffafe4a255 d
+Creates the window directly in the stored mode (0 window, 1 full screen), with a fallback on any error, reported in the console: full screen -> window.
+It stays hidden until a first black frame (no white flash). -> mode obtained.
+@@ 660450f938bd d
+Window created in full screen, on the primary screen: it does not exist yet, so there is no screen where it is located to detect (afterwards, F11 or the toggle put it in full screen on the screen where it is).
+@@ 91ebd581e754 d
+Full screen (borderless window at the desktop resolution)?
+@@ 5e5ab8d89cb3 d
+Proposed sizes (16/9, 720p to 4K), sorted by width then height: window = those that fit on the screen with its borders; full screen = those of the desktop (the row is grayed out: the window always takes
+the desktop resolution, the choice is used for the next return to window mode). The current size is added to them if it is free.
+@@ 95771c837226 d
+Window: changes the size (brought back to the screen if it is too large). Full screen: no effect, the window keeps the desktop resolution; the choice is used for the next return to window mode.
+@@ a2533b142192 d
+Windows: compares the drawing area given by the system with the one pyglet believes it has and gives it to pyglet again if they differ (window shrunk by Windows: otherwise the drawing is too large and the scene seems zoomed until the first resize).
+@@ 004d23ceebae d
+"Plein écran" toggle of the Esc menu, F11 and Alt + Enter: switches from window to full screen (borderless window at the monitor's resolution, the monitor's display does not change) and back, in a single
+switch (see _set_full_screen). The full screen monitor is the one where the window is (see _screen_for_fullscreen).
+The obtained mode is stored in the settings (`mode_fenetre`). On any error: initial state kept, reported in the console and by an on-screen message. -> true if the window is in full screen.
+@@ def678d22465 d
+Failure of a full screen <-> window switch: the FULL error (the call stack, not only its text) with the state of the window and the monitors, in the console and in `erreurs_fenetre.log` (next to the settings;
+ignored by git; `DQ_JOURNAL_FENETRE`: another file). The "Fenêtre impossible (...)" line does not say where it failed. Never raises an error.
+@@ 1d55695b74b9 d
+F11 / Alt + Enter: window <-> full screen.
+@@ f59b8f5b1449 d
+The switch, in a single step (pyglet: one set_fullscreen, which on Windows hides the window, changes its style and size, then shows it again and repositions it):
+- the window's size is stored before leaving it (`window_size`, the position is stored by pyglet) and restored all at once on returning, never through an intermediate state (no more set_fullscreen(False) followed by set_fullscreen(True));
+- the window is hidden BEFORE, so it is shown again only once, at its final size and place, and not shown at the wrong place and then moved;
+- a game frame is drawn at the final size while it is hidden (the off-screen rendering buffers, postfx.py, are only rebuilt if the size changed, once, here: no more forced rebuild at each
+  switch), then displayed, then the window is shown and the same frame redrawn right away (in case the system did not keep that of the hidden window): no frame of unstable size nor empty buffer.
+`screen_page`: pyglet Screen object of the full screen (None: the one pyglet already has). Already in full screen, another `screen_page` moves the window to that monitor (same step: hidden, one set_fullscreen, one frame, shown);
+the starting monitor is restored if the move fails.
+Raises an error if the mode could not be taken (the initial state is then restored). DQ_BASCULE_SIMPLE=1: (debugging) a single set_fullscreen without anything else, as before.
+@@ c72f6b86db5e d
+The switch's set_fullscreen (a single call), on monitor `screen_page` (pyglet Screen object; None: the one the window has). When returning to window mode it gets back its size (`size_value`) and its previous place
+(position stored by pyglet, on its original monitor, whichever one the full screen was on); with no stored position (launched in full screen) or if its monitor is no longer there, it is centered on the full screen
+monitor.
+@@ e98b95342e00 d
+Hidden window, at its final size: a game frame is drawn and displayed in it (during the logos and the loadings: black), so that the first thing seen is a complete frame.
+@@ 07bfbf57e78f d
+-> (pyglet Screen objects, descriptions from screens.listing) of the detected monitors (`display.get_screens()`). The list is kept for 1.5 s (the Affichage page reads it at every frame and, on Windows, the enumeration queries the
+system); `fresh` rereads it (switch, change of choice). Unreadable -> ([], []).
+@@ b36a8e4bd4a2 d
+Updates the monitor pyglet keeps for the window (`_screen`) before a switch (#126). On Windows, this Screen keeps the handle (HMONITOR) of the monitor as it was when the window was created;
+when a screen is plugged in (or unplugged), Windows may assign others and the kept handle is no longer valid: `set_fullscreen` then recreates the window (`Win32Window._create`), which reads the monitor density
+(`Screen.get_dpi` -> GetDpiForMonitor) and fails with "Descripteur non valide" (Sylfried's log of 2026-11-03: full screen, then an external screen plugged in, then no way back to windowed mode).
+The monitor is looked up in a fresh enumeration: the one with the same position and dimensions as the old one, otherwise the one where the window is, otherwise the primary. Never raises an error.
+-> true if a valid monitor was put in place.
+@@ c197cb3cfc9c d
+Index (in `desc`) of the monitor where the window is (that of its center); None if it does not exist yet or if its place is unreadable.
+@@ 3e68e66c9fd6 d
+-> (pyglet Screen object, description) of the full screen monitor: the one where the window is (that of its center), failing that the primary. (None, None) if the monitors are unreadable: pyglet then keeps its own.
+Not a player choice (removed on 2026-11-03 at the player's request: full screen is always done on the window's screen). Never raises an error.
+@@ 2c737574202c d
+Is the window (in full screen) already on this monitor? (same position and same dimensions as pyglet's monitor.)
+@@ 1764a1777fea d
+Stores the rectangle of the full screen monitor (centering on return to window mode when the window has no previous place: launched in full screen).
+@@ cc7c699ee2c0 d
+F11 or Alt + Enter, from anywhere (logos, title, game, Esc menu, name entry, battle): switches window <-> full screen. The key is swallowed (neither confirmation nor game action) and, with Alt, Alt no longer counts as
+"party chat" (see _edges). -> True if consumed.
+@@ 900fe51ff815 d
+A log line: state and size of the window (full screen or not), drawing area and screen; written at creation, at the 1st frame drawn and at each switch.
+## FILE dq4_pc/window/game.py
+@@ 1b1eecdbba9f t
+F11 / Alt + Enter: swallowed keys (neither action nor confirmation), whether Alt can still count as "party chat" (press alone), Alt release alone to handle; desktop size; window / full screen switch in progress
+@@ 775e0ae13b79 t
+events (mouse...) received while the window is being created are ignored
+@@ 228cff95cd23 t
+entry logos: a press skips them; window closed while they are displayed
+@@ 3882bdfd0b2c t
+title screen: state of "Touchez l'ecran" (TapToStart) as long as port 12 holds the type 73 window
+@@ af29fe3b89de t
+history: dialogues and battles of the session, favorites in a file next to the viewer (see history.py)
+@@ 096e2dd6b865 t
+(test captures keep the requested size)
+@@ 7955e553d6c3 t
+(MSAA antialiasing is no longer requested from the window: the scene is drawn off-screen, see postfx.py; adjustable on the fly)
+@@ d50ba3f33352 t
+stored mode: the window is created directly in this mode, logos included: no window that appears then grows, no later switch
+@@ 3fc027fff52a t
+window size to restore when leaving a full screen
+@@ 9c4627d47e80 t
+texture smoothing: always on (former "Lissage des textures" setting, removed); DQ_SANS_LISSAGE=1: (debugging) nearest neighbor
+@@ cc3bdfa15795 t
+animated water of the world map
+@@ 5ba41200922b t
+world map: visible area (cx, cz, half-width, half-height in tiles)
+@@ 6d86156c7ee4 t
+camera: game camera buttons sent at the last step (direction, with the mouse?), return to north requested, the two arrows held, rotation requested with the mouse not yet done (degrees), rest of the speed (see camera.py)
+@@ 27abf56c0f4d t
+action with no effect -> chat; orientation of the scenery panels
+@@ 1582e2ab4d55 t
+inputs: who has control (keyboard or mouse, see inputs.py; replaces mouse_freeze); middle button gesture (click = recenter, drag = rotate the camera)
+@@ ec77428c98a2 t
+town mesh effects: slot -> (character, depth ratio, angular offset); (position, right, up, forward) of the viewer's camera
+@@ d95383ceda65 t
+mouse: button pressed (port, number, gamepad), clicks pending

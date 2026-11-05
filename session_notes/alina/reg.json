@@ -1,0 +1,166 @@
+{
+ "langue": "systeme",
+ "mode_sprites": 4,
+ "mode_fenetre": 0,
+ "msaa": 0,
+ "echelle_rendu": 1.0,
+ "nettete": 0.0,
+ "luminosite": 1.0,
+ "infos": false,
+ "son": true,
+ "volume_musique": 1.0,
+ "volume_bruitages": 1.0,
+ "volume_general": 1.0,
+ "volume_jingles": 1.0,
+ "volume_interface": 1.0,
+ "musique_active": true,
+ "jingles_actifs": true,
+ "bruitages_actifs": true,
+ "interface_active": true,
+ "vitesse_texte": 4.0,
+ "resolution": [
+  1920,
+  1080
+ ],
+ "camera_inverser_gd": false,
+ "vignette": 0.3,
+ "vitesse_marche": 1.0,
+ "vitesse_camera": 1.0,
+ "vitesse_accel": 1.5,
+ "vitesse_combat": 1.0,
+ "historique_favoris_seuls": false,
+ "soin_niveau": false,
+ "taille_degats": 1.6,
+ "grille_edition": true,
+ "boutons": true,
+ "croix": true,
+ "croix_taille": 1.0,
+ "boutons_taille": 1.0,
+ "boutons_aimant": true,
+ "interface_fenetres": {
+  "BattleRoot": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleAction": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleTarget": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleGo": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleIM": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleInfo": [
+   1.1111,
+   0.0,
+   0.0
+  ],
+  "BattleChangeInfo": [
+   1.1111,
+   0.0,
+   0.0
+  ]
+ },
+ "boutons_pos": {},
+ "bouton_vitesse": true,
+ "bouton_vitesse_taille": 1.0,
+ "bouton_vitesse_pos": [],
+ "interface_v": 2,
+ "interface_masquees": [],
+ "touches_v": 5,
+ "touches": {
+  "gauche": [
+   "Q",
+   null
+  ],
+  "droite": [
+   "D",
+   null
+  ],
+  "haut": [
+   "Z",
+   null
+  ],
+  "bas": [
+   "S",
+   null
+  ],
+  "cam_gauche": [
+   "LEFT",
+   null
+  ],
+  "cam_droite": [
+   "RIGHT",
+   null
+  ],
+  "cam_haut": [
+   "UP",
+   null
+  ],
+  "cam_bas": [
+   "DOWN",
+   null
+  ],
+  "menu": [
+   "RETURN",
+   "TAB"
+  ],
+  "discussion": [
+   "LALT",
+   "RALT"
+  ],
+  "carte": [
+   "M",
+   null
+  ],
+  "historique": [
+   "H",
+   null
+  ],
+  "A": [
+   "SPACE",
+   null
+  ],
+  "B": [
+   "BACKSPACE",
+   null
+  ],
+  "accel": [
+   "LSHIFT",
+   "RSHIFT"
+  ],
+  "L": [
+   "A",
+   null
+  ],
+  "R": [
+   "R",
+   null
+  ],
+  "infos": [
+   "F1",
+   null
+  ],
+  "modif": [
+   "LCTRL",
+   "RCTRL"
+  ],
+  "vit_combat": [
+   "V",
+   null
+  ]
+ }
+}

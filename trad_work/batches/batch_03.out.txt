@@ -1,0 +1,807 @@
+## FILE dq4_pc/menus/hud_mobile.py
+@@ 92c98b84e8d5 t
+battle speed button: False = at its place in the grid, on the left edge of the screen (default since #188: "put it back on the left edge for now"); True = attached to the bottom left corner of the bottom box (#47)
+@@ 11418c43be6d t
+"Vitesse de combat" button (specific to the port): shown in battle only, in place of the three field buttons
+@@ 099e1f708fb0 t
+all the rectangular buttons
+@@ 4dbee0c4635a t
+all the elements placed in the interface editor
+@@ 06c5eb099c50 t
+"Boutons et croix de l'ecran" interface: Map, Commands, Chat and the D-pad (the battle speed button has its own interface)
+@@ e825efcbeac3 t
+"Combat : bouton de vitesse" interface
+@@ 2ff8c9d8ca73 t
+top left corner (column, line): left column (the D-pad is at the bottom right), Map at the top, Commands then Chat lower; battle speed between the two: to the left of the battle windows (centered portrait column), it hides none of them
+@@ 1ac6146f9849 t
+(names of the elements in the interface editor: translated when drawn)
+@@ 8bc82d484df4 t
+y coordinate of the icon row in the sheet (PartsInfo[3])
+@@ eaaf2b5f960d c
+Button plates (TouchPad.CreateMenuButton 0xD2377C: plate (t x 40 + 32) x (t x 32 + 32) for a size t) in units of the original interface (450 x 800):
+(width, height, icon side = 48 x icon size)
+@@ f4e9d4e3e4c9 t
+(the battle speed button has no icon: wider plate that carries "Vitesse" and the current speed)
+@@ 04df9902bf75 t
+corners of the 9-slice plate ("Button" sheet, part 7), in interface units
+@@ cc831d017298 c
+---- D-pad (TouchPad): pieces of the "Button" sheet (512 x 512), (x, y, width, height) in pixels from the top left
+@@ 34dd28e431d3 t
+(CurLight 384, 128 and CurBS 320, 128: orange ball and blink halo of the D-pad, TouchPad.SetPadBlink; #131)
+@@ 4b128b8a52eb c
+Original values (TouchPad, libil2cpp.so, RVA; fidelity audit of 2026-11-01): c_PadScaleTBL, MPad 256 x 0.63, Dirs at 104 units from the center, c_MoveThreshold 10,
+c_moveNakaLimit 36.5, c_padColRad 95 for a radius of 80.64
+@@ 9c208c17387b t
+diameter of the ring in units of the original interface (800 high: scale H / 800) before the game option and the port setting: ONE AND A HALF TIMES that of the mobile game (256 x c_PadBaseScaleXY 0.63 = 161.28). History (2026-11-04): double (#169, 10:46: the D-pad, small on a PC screen, is operated with the mouse), then "reduce the size of the D-pad by 25% by default" (11:30, #172): 0.75 x 2 = 1.5; the "Taille de la croix" setting (50 to 200%) applies on top
+@@ 64166ace65d6 t
+"Taille de la croix" game option (g_pad_size: 0 "Grande", 1 "Moyenne" (default), 2 "Petite") -> factor (c_PadScaleTBL)
+@@ f4f766f3910b t
+distance from the center of the ring to the center of a pill (fraction of the diameter; the 128 x 64 quad runs from 72 to 136 units)
+@@ 74ade6b8916d t
+maximum travel of the ball (fraction of the ring radius: 36.5 / 80.64)
+@@ 5918a45dbc75 t
+below this (fraction of the radius: 10 / 80.64), no direction
+@@ 178572c0da6d t
+maximum diameter of the D-pad (fraction of the window width): in 9:16 portrait, twice the mobile size takes up 0.72 of it; a narrower window shrinks it so that it fits
+@@ 503bf708add1 t
+D-pad travel: the pointer reaches the edge of the ring (fraction of the radius, 1 = the drawn edge; the grab zone goes up to 1.178); below it, the hero walks. Chosen value (assumed: "when the joystick touches the edges")
+@@ 8f6a2b9079ca t
+blink of the central circle (seconds per cycle): value chosen by the port (the game's constants, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA, are unused; assumed)
+@@ 5c55f56959a4 t
+radius of the grab zone (fraction of the ring radius: 95 / 80.64 collider, a little wider than the drawn ring)
+@@ cb49c2c12f5b c
+---- style of the mobile game's windows (screenshot of the command menu): translucent midnight-blue background, five-stroke frame (gray, light gray, white, gray,
+dark gray), rounded corners; buttons = gray gradient plates (light at the top, dark at the bottom), light gray border. Drawn as arrays (distance to the edge)
+then kept as textures: no per-frame cost.
+@@ 8bac6b4d0a4a t
+background of the game windows: black at 68% opacity (measured on the field windows, through which the scenery is visible)
+@@ 019a237bb793 t
+frame strokes from the outside to the inside
+@@ 6140e6d64757 t
+gradient of a plate's background (top -> bottom)
+@@ 86335cad84e7 t
+t: 0 at the top, 1 at the bottom
+@@ 1d1889d6b887 t
+(name, x offset, y offset) during a move
+@@ dc1cdd8e3ccd t
+D-pad held by the mouse; mouse position relative to the center (ring radius = 1); textures
+@@ 405edecea01b c
+---- geometry
+@@ 147aaaa2c616 t
+(#188) no anchor: the button is at its grid cell, on the left edge, from the first frame
+@@ 5ad74f0377d6 t
+same plate as "Fuir" (at the size of the button setting)
+@@ fa3396f002b5 t
+window narrower than the mobile portrait (9:16): the doubled D-pad must not stick out of the screen
+@@ ca6d41c1a51a t
+original: at the bottom right, half a cell from the edge
+@@ 966e2de4785b t
+under the bottom left corner of the box (the top of the plate touches its bottom edge)
+@@ 7000c3a90dc7 t
+(the speed button has its own display setting)
+@@ 5c6882483d7d t
+map open: no more buttons on screen (the "mode" button and the back button are those of the map window, type 22)
+@@ 70788d03b2d1 c
+---- mouse
+@@ fdcb0ea1aabd c
+---- position editing
+@@ 8c934b88987a t
+bottom left corner requested
+@@ 61a903be72d9 c
+---- D-pad with the mouse
+@@ df0b28d79052 t
+left the central circle: it is a drag (a direction), no longer a tap
+@@ c101ebfd9729 c
+---- drawing
+@@ 74838c3801b8 t
+height and width of a triangle, gap between two
+@@ 76fa0346ce40 t
+"Manuel": hollow triangle
+@@ ea579c115103 t
+(hidden, it stays whole in the editor: the "Masquée" veil from pause.py darkens it like the other elements)
+@@ 955ff28afa29 t
+tap in progress, or travel (pointer at the edge of the ring): lit ball
+@@ efee5a2920e0 t
+an action is possible (bubble shown) or the game makes the central circle blink: the orange ball and its halo fade in and out smoothly
+@@ 80f436d3e3ca t
+dark veil and grid (optional)
+@@ c5c2cb0812d0 t
+like the "Fuir" plate: a small game window frame (translucent black background, five-stroke frame) that carries the button plate
+@@ 4967074c20e0 t
+without the original menus: drawn button background (midnight-blue window with a white frame, like those of the mobile game)
+@@ d92b7a1f799d d
+Touch buttons of the mobile version, displayed on screen outside battle: Map, Commands (menu), party chat, and the D-pad (touch gamepad, usable with the mouse).
+In battle, only the port's own "Vitesse de combat" button ("Manuel", "Normal", "Rapide", "Tres rapide"; click = next speed) is shown: there is no equivalent button in the mobile game, and it sends nothing to the engine.
+It is on the left edge of the screen (grid cell, since #188; DQ_VITESSE_ANCRE=1 attaches it to the bottom left corner of the bottom box (commands or message), as the "Fuir" button is to the bottom right corner of the commands, which was the default of #47), and has no label: arrows show the speed
+(hollow triangle: "Manuel"; one triangle: "Normal"; two: "Rapide"; three: "Tres rapide"). A player who moves it in the interface editor keeps it at the chosen location.
+
+The original game draws them in the Unity layer (TouchPad: "Map Button" = key 0x1000, "Command Button" = 0x800, "Talk Button" = 0x400; icons 3, 4 and 15 of the
+MenuTexture sheet, 32 px row at y = 224). The engine says when they are visible through the Global.Flag word (first word of its output): (Flag & (8 | 0x30047)) == 8 (pad present, no player lock, fade, screen effect, locked interface or pause); the Map also requires bit 0x20. Positions are set on a grid of 32 x 18 cells (optional snapping).
+
+The D-pad is that of TouchPad ("Button" sheet: ring, eight direction pills with their arrow, ball); in the original code the ring does not move (only the ball follows the finger) and it is always opaque. On PC
+it is fixed (bottom right by default, to be moved in the interface editor): a press in its grab zone (1.178 radius) grabs it, the ball follows the mouse (limited to 0.4526 radius), the direction is one of the eight sectors of
+45 degrees, like the keyboard keys (so it follows the camera). Its diameter is one and a half times that of the mobile game (DPAD_DIAMETER; the "Taille de la croix" setting at 67% gives back the original size). Held at the EDGE of the ring
+(`dpad_run`: TRAVEL_THRESHOLD of the radius or more), it makes the hero run like the accelerator key; closer to the center he walks normally. The "mode de la carte" button is no longer here: it is the one in the map window (type 22).
+@@ 01e35f32891c d
+Is the battle speed button attached to the bottom box? Not by default (#188): it stays on the left edge of the screen, at the grid cell (DEFAULT) or where the player placed it. To try it: environment variable DQ_VITESSE_ANCRE=1 (attached to the bottom left corner of the box, #47) or 0.
+@@ a82483abfdef d
+Elements of the interface editor for the chosen target (settings.SCREEN_TARGET, settings.SPEED_TARGET); empty for another interface.
+@@ 08874b487980 d
+Signed distance (positive inside) from each pixel to the edge of a rounded-corner rectangle w x h (radius r), array (h, w).
+@@ 510fcbf76980 d
+Alpha blending of the blitted texture: pyglet.shapes turns it off at the end of each drawing, so it must be turned back on before a blit (otherwise corners and translucent background come out opaque).
+@@ 13c2958d3ce3 d
+Window in the style of the mobile game's menus: translucent background (midnight blue by default; `background` and `opacity`: other color), five-stroke frame of 1.25 px at 720 p,
+rounded corners (transparent outside the frame). `highlight` (0 to 1): lighter background (pressed button).
+@@ 8e152218fd5f d
+Background of a button like those of the mobile game's command menu: light gray border, gray gradient, rounded corners. Chosen: lighter (like a pressed game button), with no other mark.
+`outline` (r, g, b): outline of this color, thicker than the border (mouse selection).
+@@ c27a6a18e62c d
+Outline (ring of 2.8 px at 720 p, rounded corners, transparent interior) of the given color: mouse selection of a button.
+@@ fab79baa55ba d
+Placement grid of the screen (COLS x LINES cells): translucent white lines.
+@@ 547aab724ccf d
+Is the battle speed button shown? Not during the black screen that waits for the battle scene (State.load_wait), nor when a fade to black is rising or the screen is black (start and end of the battle):
+like the field buttons, which the engine hides during fades. A fade that goes back down (battle entry) lets it appear.
+@@ 978a77f4af85 d
+Pixels per unit of the original interface (800 high), "Taille des boutons" setting included (the battle speed button: its own size).
+@@ 771dd693131e d
+Attachment of the battle speed button to the bottom box (dict x, y, w, h in pixels, computed by the window: left edge and bottom edge of the box, size of the "Fuir" plate), or None: out of battle, in
+the editor, when the player placed it themselves, or as long as no box has been seen (grid position).
+@@ 473bd4952a0f d
+The speed button is shown only if it has a place: the one the player gave it, or, with the original menus, its anchor under the bottom box (computed by the window before drawing: never the default grid position, which is on the left of the screen).
+@@ eda086181799 d
+(width, height) in pixels: original plate of a button (72 x 64, 63 x 56.8...) or diameter of the D-pad ring.
+@@ 3e64bd76df85 d
+Diameter of the D-pad ring in pixels: scale of the original interface, "Taille de la croix" game option, port setting.
+@@ c3cbf3519cab d
+(x, y, width, height) in pixels, origin at the bottom left.
+@@ 23eac1eea312 d
+Buttons to show: those the engine allows (outside the Esc menu, battle, screen effects); in battle, only the battle speed button (outside the black screen and fade to black).
+@@ 6fc6422fe028 d
+Does the engine allow this field button (Map, Commands, Chat) right now, whether or not the "boutons" setting shows it? The keyboard plays the button's sound effect there (D-156: the same situations as with the finger).
+@@ 1cf1ad9a5d5e d
+-> name of the button (full click: release on the pressed button) or None.
+@@ 4c7906257266 d
+Mouse moved (or pressed): position relative to the center of the ring, in radii.
+@@ 2ea723391e47 d
+Mouse button released on the D-pad. -> True if it was a TAP on the central circle: pressed then released without ever leaving it (no drag); the game sees the action key there (like the A key).
+@@ 6781762a32aa d
+45-degree sector of the held direction (0 up, 1 up-right, 2 right... clockwise) or None (dead zone, D-pad not held).
+@@ 8846a9ffd703 d
+Is the D-pad held at the EDGE of the ring (at TRAVEL_THRESHOLD of the radius or more, in a direction)? The hero then runs (like with the accelerator key); closer to the center, he walks normally.
+@@ 69956da4ecaa d
+Direction of the D-pad as game gamepad bits (up / down / left / right), like that of the movement keys.
+@@ 91a2bdd13eb9 d
+Original 32 x 32 icon (RGBA), color of the transparent pixels propagated by one pixel (no dark fringe when the filter blends the edges).
+@@ c1fd0feeaf85 d
+Icon sprite for a button of c pixels per side. The icon is first enlarged by an integer n (nearest neighbor: each original pixel becomes a sharp block), then
+scaled down to the exact pixel size by the linear filter: pixels stay crisp, only the boundary between two pixels is softened (a direct linear enlargement from 32 to 72 px smeared them).
+@@ 2b4d669e5c4c d
+Original plate of the button ("Button" sheet, part 7, 9 slices with 16-unit corners, "pressed" image when the button is down), like the buttons of the game windows: Render.plate.
+-> False without the original menus (the fallback draws the background).
+@@ eb1decca8de5 d
+Battle speed as arrows, no label: a hollow triangle (gray) for "Manuel", then one, two or three filled triangles ("Normal": white; "Rapide": yellow; "Tres rapide": orange, warmer as it speeds up), like the
+triangular cursor of the game menus. Group centered in the plate.
+@@ ebbde2bd96b5 d
+D-pad sprites (pieces of the "Button" sheet, anchored at the center to rotate around).
+@@ c25f8c2c10dd d
+Is an action possible now? (#131: the D-pad then animates, as on mobile.) Yes when the game makes the central circle blink (packet 19, TouchPad.SetPadBlink, tutorial); otherwise, on the free
+field, when an icon bubble is shown (the game puts the bubble on the target the hero can talk to, search or open: assumed, the original game ties the D-pad blink only to its tutorial).
+@@ 4cdb3b1c5849 d
+D-pad: ring, eight pills (the one of the held direction lights up), ball that follows the mouse. Always opaque; the orange ball and its halo (SetVisibleColMove) pulse when an action is possible
+(see action_possible); MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA are unused constants.
+## FILE dq4_pc/menus/message_font.py
+@@ b8f7c8829720 t
+the game's file: the data follow the table (SFont::Load copies 0x40000 bytes of table)
+@@ a8f0f8a03f31 t
+row of the cell where the baseline passes: the bottom of capitals is at row 19 (measured on the engine's canvas: top cell 15 units below the frame, 1st baseline at 35 units, 20 + 15)
+@@ 6096b267c6e5 t
+glyph for codes absent from the font: the "@"
+@@ 73eb911e067d t
+margin columns on the left of the texture (a flagged glyph overflows by one pixel to the left of the write position)
+@@ 38072604a51b t
+one interface unit per canvas pixel (measured: 434 units wide for 0.8477 x 512 canvas pixels)
+@@ 194e6f958a12 t
+width of a dialogue line in canvas pixels (`CTextAutoReturn`: [0x2523c4], value read from the engine during a dialogue)
+@@ 11ba768665e7 t
+(for tools that test `code in font.G`)
+@@ da29145de36e c
+---- glyphs
+@@ fbaf1d55e8d4 c
+---- placement
+@@ 02b0b285a352 t
+cand = (i, output length) after the last break point
+@@ 7aa54379531f t
+bilinear filter, like the game's canvas texture
+@@ db74d692dc5f d
+Message font of the game: the one the engine uses to draw dialogues and battle messages in its text canvas (SDrawCTRL / TextCanvas), not the SE-GARRIR menu font.
+
+The file (`assets/English.font` of the data pack, copied into the cache by `extract_message_font`) is read as is, with ALL its glyphs: a character that the patch or another game of the series (DQ5, DQ6) adds to the font
+is therefore displayed without changing anything here. Format (found in `SFont::Load`, `FontHeader::GetGlyph`):
+  - 28-byte header: "TNOF", then (at byte 24) the height of a glyph cell (24);
+  - table of 65,536 entries of 4 bytes (UTF-16 code -> entry): high byte = glyph width (bits 0 to 6) and flag (bit 7), the other 24 bits = glyph position in the data;
+  - data: for each glyph, `width_px x height_px` opacity bytes (0 to 255), row by row, compressed: a byte "1xxxxxxx" repeats the next byte `xxxxxxx` times, a byte "0xxxxxxx" is followed by `xxxxxxx` bytes
+    as they are, a 0 byte ends the data.
+Placement (`SDrawCTRL::PutChar` 0x1575a0 and `TextCanvas::PutChar` 0x152820 of libdq4core.so; checked pixel for pixel against the canvas of the real engine, tests/test_message_font.py): the write position advances by the
+glyph width; a flagged glyph (V, W, t, v, w, y of the patch) is placed one pixel further left and advances two pixels less (kerning); the space advances by the engine's space width (6, `obj + 0x38`) and not by the
+glyph width (5); the tab by `obj + 0x3c`; the wide space U+3000 by `obj + 0x3a`; line breaks (U+000A, U+000D) do nothing; "$" is not drawn for language 1 (English) and ";" is drawn
+(as a space) only for language 2; a code absent from the font is drawn with the glyph of "@" (entry 0x40 of the table: `[FontHeader + 0x128]`). Each glyph REPLACES the pixels of its cell (there is no
+blending); a gap between letters (`g_letterSpace`, 0 in game) is added to each advance.
+Module without pyglet: only `line` (the texture of a line) needs it.
+@@ 15d5bf9b355f d
+Message font of the game (see the module). `width_px(text)`: advance of the write position (canvas pixels = interface units, 1 to 1); `line(text)`: the texture of a line, like BitmapFont.
+@@ 028fd8803cef d
+Copies the game's message font from the game's data pack (split_UnityDataAssetPack.apk, assets/English.font) into the cache, only once. -> True if it is there.
+@@ 8a69b5e0a86f d
+-> (flag, width, height x width uint8 bitmap) of the glyph for `code` (that of "@" if the font does not have it: GetGlyph).
+@@ e489ec707527 d
+-> (cells, end): cells = [(x, glyph)] with x the column of the cell (write position, minus 1 for a flagged glyph); end = write position at the end of the text.
+@@ 77e8c0784025 d
+Advance of the write position on a line (canvas pixels): what is needed to break lines like the engine.
+@@ 00d93c042447 d
+Width that a character adds to a line for the break computation (`CTextAutoReturn::AutoReturn`): like the drawing advance, but "$" counts its width (it is not drawn) and ";" counts 0.
+@@ 0b9af236134d d
+Lines of a text broken like the engine (`CTextAutoReturn::AutoReturn`, 0x157ed0): the line width is accumulated character by character; when it reaches the limit, it goes back to the last break point
+(after a space, a "㈠" or a hyphen) and moves to the next line; without a break point the overflowing character stays on the line. A line break in the text resets the width to zero, and one that follows
+immediately after an automatic break is swallowed. -> list of lines (the space before a break stays at the end of the line).
+@@ c8ba367e14c7 d
+Image (height x width, uint8) of the line, with the write position at column PAD: exactly what the engine writes into its canvas (each glyph replaces its cell).
+@@ 2ed1b49a63b9 d
+-> (texture, width, height, base) in canvas pixels; base = distance from the top of the image to the baseline (like BitmapFont.line).
+## FILE dq4_pc/menus/name_entry.py
+@@ abe7d6f1d05b t
+empty grid cell (C_NA)
+@@ 8567ad73d94d t
+C_ALPHABET: lowercase, uppercase
+@@ 118ab9383dcb t
+C_LOCALIZE
+@@ f1fb1a7346fa t
+C_ALPHABET_ETC (not localized in the game)
+@@ 07c197b83191 t
+(drawn by Pause._label, which translates them; the FUNCTIONS labels are the game's: we leave them untouched)
+@@ 93a64996533e t
+press sound effect of a menu button (like window.SFX_BUTTON)
+@@ 1a90cc3f85a4 t
+35 cells; then 35 to 39 = function buttons; 40 = Back
+@@ 56783bc74ee8 t
+characters accepted from the keyboard
+@@ 5c9b788efccf c
+layout (interface units, origin at the center of the 450 x 800 column, Y upward)
+@@ d42cfaace85b c
+---- state
+@@ 1b3f717336ad c
+---- inputs
+@@ 791c03e83bdb t
+downward: Back (on the right) or the top of the grid
+@@ b95c02b04234 t
+the keyboard is in text entry: no other key acts on the game
+@@ b4d0bd37f9b4 c
+field: one slot per possible character
+@@ e76194a1e806 t
+last device used: mouse = yellow outline on the hovered key; keyboard / gamepad = gold cursor (arrow) on the chosen key
+@@ a60457113887 t
+(mouse: the plate under the pointer darkens, no yellow outline)
+@@ 872aac58aa6c t
+(the arrow does not leave the frame: "Alphabet" sits flush against its edge)
+@@ ecdc2ca875ea d
+Entry of the hero's name (InputName class of the original Unity layer, "Saisir un nom" screen of adventure log creation).
+
+In the game, Unity holds this keyboard: the engine opens the type 55 window (port 15), sends `[12,0,8]` (8 characters at most) then `[12,1,1]` (keyboard visible) and waits:
+  - OK: `[2, n]` then the n UTF-8 bytes of the name packed two by two (little-endian), sent in the SAME frame (otherwise the engine crashes);
+  - Back: `[1, -1, 32]` (B key on the window).
+The character sets are those of InputName (cctor) for the French language: alphabet (lowercase / uppercase, + space - , . ! ?) and accented letters, in pages of 5 columns x 7 lines.
+The exact positions of the original (grid origin, function buttons) were not found in the code: the layout is drawn here in the style of the game windows.
+The computer keyboard also works (any character of the grid), like the mouse and the arrows + Enter.
+@@ b69dfb2d6ab5 d
+Press on cell i (grid, function button or Back). -> true if something changed (button sound).
+@@ 266d7ced0cd9 d
+Neighbor cell of i in the direction (dx, dy; dy > 0 = upward): the 5 x 7 grid, then the row of function buttons, then Back; it wraps around.
+@@ 843b35aa70b9 d
+Arrows: skips the empty cells of the page.
+@@ 9b5b9372ea21 d
+Physical key. -> true if it was taken (letters arrive through text()).
+@@ a8b689e0e16d d
+Characters typed on the keyboard: those of the grid are added (the cursor moves to OK so that a single Enter confirms); each added letter plays the button sound effect, like the click on the letter (#60, D-156).
+@@ dad0da24f794 d
+(cx, cy, scale): frame of the interface column (Game._ui_reference); the window is reduced to fit the height of the screen.
+@@ 34df7beacbda d
+Text of `size_value` units high, centered (anchor 1), left-aligned (0) or right-aligned (2) at (x, y) (units).
+## FILE dq4_pc/menus/pause.py
+@@ 216f571f7ba9 t
+savestate slots (keys 1 to 9)
+@@ f49b4c6c43c7 c
+Game text palette (MenuPortItemTable: white, yellow, red, gray); black windows framed in white and buttons in the style of the mobile game's command menu
+(see hud_mobile.border and hud_mobile.plate)
+@@ 57d2bd689a55 t
+group subheadings of the drop-down lists ("Écran tactile", "Dialogues"...): dull golden gray, smaller; gold (GOLD) is reserved for the current value
+@@ fa23f56c7108 t
+(fraction of the size of the values)
+@@ 44eee932b047 t
+"no default value" (None and False are possible values)
+@@ a54d37ce074f t
+background of the menu windows: black, with the opacity of the windows of the other menus (hud_mobile.GAME_OPACITY, measured on the game windows)
+@@ 9847b533f43d t
+"Commandes" menu: width of a key cell and gap between the two (at 900 px high, multiplied by k)
+@@ b3c20ae10d71 c
+scrollbar
+@@ 5664aecc2c59 t
+gold cursor of the game menus in the MenuTexture sheet (x0, y0, x1, y1)
+@@ 612c8812960b t
+the game's red cross (clear a key)
+@@ a7cba6b1ba5b t
+icon of the game's back button (cell 11 of the icon row)
+@@ 831b00e7a8b6 t
+Yes / No toggle: size at 900 px high (multiplied by k)
+@@ 1f4db32c0de5 t
+scale of the texts in the game font (relative to the system fonts)
+@@ 9bf90d5ff38b c
+mouse gestures on the field ("Commandes" page, read-only: these are not keys): (gesture, effect); the camera only turns left / right and recenters (D-233)
+@@ 4093979f3f04 t
+(D-238: French texts, translated as they are drawn)
+@@ d6a933ee6f21 c
+interface editor: names of the game windows (Make_* functions of MenuPortItemTable; 'boutons' = buttons and D-pad of the screen, 'msg' = dialogues) and groupings
+of the "Interface a modifier" list. A game window appears there only if it has a mesh to adjust (RG.REMOVED_WINDOWS: game launch, network, windows without a mesh);
+an unknown window goes into "Autres".
+@@ ee6b244f6cc5 t
+editor interfaces that are not Make_* windows of the engine: buttons and D-pad of the screen, dialogues, battle speed button
+@@ 3dbc24936077 t
+value of a drop-down list that is a group subheading ("#Dialogues"): never chosen, skipped by the cursor
+@@ 6409d4e0357c t
+editor panel: press held without moving (seconds) before it lifts; below that, without moving, it is a short press (collapse / expand)
+@@ 2c470ac5f6be t
+double click on the title bar: default delay (seconds) between the START of the first press and that of the second, when the system does not provide it (Windows default: 500 ms)
+@@ 229871e1e6b1 t
+default double-click rectangle (pixels, centered on the first press; Windows default: 4 x 4)
+@@ 7182de0de6d9 t
+movement (pixels) of the pointer, from the press point on the panel's title bar, beyond which the panel moves (below that: short press)
+@@ 42ea67c623d6 t
+yellow frame of the element chosen in the editor preview (the same as that of the screen buttons: hud_mobile.py)
+@@ 06d827d8c547 t
+label of a hidden element in the editor preview: feminine (window, D-pad), masculine (buttons)
+@@ 83b1b1f758f4 t
+(x0, y0, x1, y1) of the frame drawn in the last frame (button placement: a click outside the frame grabs a button)
+@@ 6935e9c0f5e1 t
+line -> (x0, y0, x1, y1) of the "default value" button of the sliders; of the "mute" button of the lines of the "Son" page
+@@ 2d8824d4bef4 t
+slider held by the mouse (line number); value being typed [line, text]
+@@ 94b1da120f07 t
+open drop-down list [line, hovered value]; zones of its values (x0, y0, x1, y1, number)
+@@ d1f74aa7f5bf t
+toggles: button position (0 = No, 1 = Yes) per label, for the animation
+@@ f1b8f5ece437 t
+families of the game font (None: not searched yet); height of capitals per size
+@@ f2974f48d3b7 t
+(screen, line) on which the repeat of a held key started
+@@ 85437645cbf2 t
+scroll: first visible line per screen, last selection seen (the view follows it when it changes), scrollbar drawn, grab of the scrollbar thumb
+@@ 29889bd2bc0b t
+back button (x0, y0, x1, y1), pointer over it; (line, column) -> "clear the key" cross
+@@ 33b418b15c62 t
+game sheets (PIL) and textures of the menu sprites
+@@ 3f19e3a39dd1 t
+mouse selection (the plate under the pointer darkens, as with touch on mobile) or keyboard selection (gold cursor); last pointer position
+@@ de189171fdc7 t
+Yes / No modal window: {'titre', 'detail', 'oui', 'sel' (0 Yes, 1 No)}; zones of its buttons
+@@ 8889345edc69 t
+interface editor: collapsed panel; title bar (collapse / expand); line hovered since (key, instant) for the tooltip
+@@ 09c78d2c56be t
+savestates menu: chosen action (create, load, delete); slot whose deletion is to be confirmed
+@@ 106e1f5c0073 t
+drop-down list: scrollbar, grab of the thumb, first visible value
+@@ 9d1cb22471d0 t
+interface editor: modified element ('boutons', 'msg' or Make_* name of a game window); move in progress (start x, y, start offset)
+@@ 3525dce983d3 t
+interface editor, movable panel: top right corner (x, y) after a move (for the length of the session; None = original position, computed from the chosen interface);
+@@ 2122ad8eb584 t
+press in progress on the title bar {t0, x, y, dx, dy, long (lifted: follows the pointer), double}; instant of the last short press (double click); frame of the open drop-down list
+@@ 24609e6d11a9 t
+(D-238: any text drawn by the pages goes through translation; a text without a translation stays as is)
+@@ 0977940e8cac c
+---- game menu sprites
+@@ 524bc25bc581 c
+---- opening / closing
+@@ b51ac05c84ea t
+pages that stop the game behind them: NONE (#178, D-229: "there must be no pause in any menu"; the history and the "Quitter" question stopped the game until then). The game runs behind all pages, with no key or click (see Window.tick)
+@@ 42b9e7482b1a t
+the selection is by keyboard as long as the pointer has not really moved (cumulative offset from its opening point: inputs.MouseGuard)
+@@ 2ad88fbfe458 t
+directly opens this page (exit question: "Non" preselected, "Non" or Esc close everything)
+@@ 5bb60a6989a9 t
+end of interface editing
+@@ 86676ffcc187 c
+---- screen entries: list of dicts {'t': 'act'|'choix'|'curs'|'touche'|'sep', 'l': label, 'v': displayed value, 'ok', 'moins', 'plus', 'off'}
+@@ b296bf23b66e t
+page identifier (string) -> method that gives its lines
+@@ fb32f548dc69 t
+(page drawn by ui_history.HistoryView: no menu line)
+@@ cb63cc7c9a4c t
+"Non" preselected
+@@ c0d7cffd872c t
+(the menu closes, the game opens its Yes / No box: the only way back to the game's title screen; the "quit the application" question is asked only by the start menu, page 'quitter')
+@@ f20010babd53 t
+(D-238: French names, translated as they are drawn: `_value_name` returns data)
+@@ 4bae74a76a95 t
+"Manuel", "Normal", "Rapide", "Très rapide" (never x1, x2, x3)
+@@ 9313dced38eb t
+(the settings are saved when the menu closes)
+@@ 8d6580b66caa t
+(D-238: above "Plein écran"; applies immediately)
+@@ ebe979faabdd t
+(toggle: the old setting from before #42; F11 and Alt + Enter do the same thing)
+@@ 3c0896d99918 t
+(full screen: inactive line, re-read every frame: see _inactive)
+@@ 828fae802a8a t
+(former red note: now only a tooltip)
+@@ 8897493cf47b t
+(on-screen interface editor: buttons, dialogues, game windows)
+@@ 43d7b50d48be c
+---- interface editor: screen buttons, dialogue window and game windows (size, position, display)
+@@ 5b69c2028c3a t
+(a window that has its own default size keeps its entry, even at 100%)
+@@ 004eaa62449d t
+battle speed button: its size; its position is set by dragging it (or "Replacer sous la boîte")
+@@ b6826c1875de t
+(for all interfaces)
+@@ 96abe00dd910 t
+(the sound comes back: it is heard)
+@@ 586619c92b6b t
+original volume AND sound restored
+@@ 9ca200689c15 t
+(read-only: information lines, neither chosen nor clickable)
+@@ 8e9071fd88d3 c
+---- actions
+@@ 984f85c53f57 t
+(`model` + `value_list`: the title is translated before the number is put in, see _draw_popup)
+@@ 0324e8bf48ee c
+---- keyboard keys
+@@ 59c653e5309f t
+a key: back to keyboard selection (gold cursor), the pointer takes over again at the first real movement (or at the click)
+@@ a6300867cb9c t
+(editor: collapse / expand the panel)
+@@ 872445e02a92 t
+(the on-screen info key is set in "Commandes")
+@@ 6525fda20b80 t
+the game has taken control back (battle, dialogue, scene: the game runs behind the menu, #178): the history is accessible only when the player has control of their character (#187)
+@@ 132336539ac1 t
+the game runs behind the history (#178): what it writes there is added at the bottom of the list
+@@ dcd4a249ab0c t
+single click on the title bar: the collapse happens when the double-click delay has elapsed without a second press (#145)
+@@ f011c76b072e t
+press held without moving: the panel lifts (it will follow the pointer at the first movement)
+@@ a79e73e5985b t
+the selection has changed (mouse, other screen): the repeat stops, it must never touch another setting
+@@ 3531153b5ae8 c
+---- drop-down list
+@@ 1e8d3fc08f71 t
+(the group subheadings are skipped)
+@@ a8f36ddb68e9 t
+(subheadings and inactive lines are skipped; page with no active line: the selection does not move)
+@@ 9b14b1147bfe t
+(a line of the "Son" page has its 'ok': Enter mutes / unmutes the sound; the value is typed by clicking on it)
+@@ 16db34d75541 t
+the pointer left the double-click rectangle: the single click is confirmed, the panel collapses / expands without waiting for the end of the delay (#145)
+@@ 0a1490c14c11 t
+the pointer has not really moved: the keyboard selection stays
+@@ a6769c4c1b99 t
+any other press (elsewhere, too late): the pending single click collapses / expands immediately, it can no longer become a double click
+@@ 4627970bcbd4 t
+confirmation window: a button confirms it, a right click or a click elsewhere closes it
+@@ 003f7ca015c7 t
+panel title bar: short press = collapse / expand, long press = move, double click = original position
+@@ eb4b8d873f4d t
+open drop-down list: a click on a value chooses it, a click elsewhere (or a right click) closes it
+@@ 8ace383627e4 t
+list scrollbar
+@@ a8414f5bb46a t
+(click on a subheading or on the list margin: it stays open)
+@@ 276696b18bf7 t
+back button (at the bottom right of the window)
+@@ 9c6a8716a982 t
+editor: outside the panel, a click grabs the chosen element (a screen button, or the window shown in preview)
+@@ a28cc2c86689 t
+a click anywhere other than on the value being typed confirms it
+@@ f362f5b864f1 t
+(line that became inactive since the last frame: the click does not reach it)
+@@ 0ca346845cdf t
+mute button of the "Son" page: mutes or restores the sound
+@@ d31243290ee8 t
+round "default value" button (sliders, choices, original keys)
+@@ 07083c1675e8 t
+slider: the held click drags it (drag)
+@@ 49129dff884b t
+click on the value: keyboard entry
+@@ b556392f38d1 t
+cross: clears the key of the cell
+@@ e1e81cacf443 t
+line of the "Son" page: a click next to the buttons does not mute the sound
+@@ 617e33fa2991 t
+(dx, dy: offset of the pointer relative to the top right corner of the panel)
+@@ 005e7d9acbb8 t
+(the single click is confirmed: no more double click possible on it)
+@@ 5ef82966e2e0 t
+short press (no movement): a single click collapses / expands AFTER the double-click delay (see do_update); second press of a double click: original position, without collapsing or expanding (#145)
+@@ f503f54a11cb t
+single click: the double-click delay runs from the START of the press (like Windows); already elapsed at release (long press longer than this delay): collapses / expands right away
+@@ 77b0191fe42b t
+editor panel: it follows the pointer as soon as the pointer has left the press point (the panel lifts, no collapse or double click), or after a held press
+@@ 6aa85c790c63 t
+a click immediately followed by a drag: the click collapses first, then the panel follows the pointer
+@@ ca7ac8fe41a5 t
+game window: it follows the pointer (offset as a fraction of the screen), snapped to the grid if the setting is active
+@@ c7fbc3bd1f76 t
+scrolling list: the wheel scrolls the view (like the scrollbar)
+@@ 6ca83d4c04a8 t
+(otherwise, reverse direction: wheel up = next line)
+@@ 5e527c4e18d5 t
+arrowhead at the start of the arc
+@@ 835f69f56028 t
+speaker box (x0 to x1), then the flaring cone (x1 to x2)
+@@ cf5f017acc46 t
+red cross in place of the waves
+@@ d90ca27f234d t
+two waves (circle arcs) to the right of the cone
+@@ 9ee612c22715 t
+first appearance: no animation
+@@ f83e188155ae t
+track between the two arrows
+@@ 194c5c413dd1 t
+scrollbar thumb: darkened when held or hovered
+@@ 0c2e8270eb33 t
+arrows: 75% under the pointer
+@@ f1ab73ca3255 t
+only the screen buttons (the game windows are not drawn during editing)
+@@ 123174d6b0e6 t
+only the chosen window (neither the other windows, nor the buttons)
+@@ 87119b8ab3cc t
+element not displayed in game (the whole interface, or the D-pad alone): the preview stays visible so that it can be placed, but darkened and marked
+@@ 3d0194b53a3b t
+(on a dark background: the text of the test message goes underneath)
+@@ 5757b26d3636 t
+the yellow selection frame stays as sharp as on a displayed element (the veil covered it)
+@@ cb492d58fb29 t
+(toggle animation)
+@@ 28b733c66ca5 t
+collapsed editor panel: only the title bar remains
+@@ 6570db06da38 t
+(the selection skips subheadings and inactive lines, including when the screen opens or when the chosen line has just become inactive)
+@@ e43b0de55609 t
+line fixed at the top (no page has one anymore): it does not scroll; (`fixe` of a slider is a function, not True: a page can start with a slider)
+@@ 25e1c32c1a49 t
+(identical in English: nothing to translate; `_label` would translate it if needed)
+@@ 804a0c7f6b89 c
+heights: the back button is under the window; if the lines do not fit, they scroll (scrollbar on the right, in the margin)
+@@ 7c50d522cb7b t
+(no back button at the root: "Reprendre" closes the menu)
+@@ a8786f741911 t
+(no more help line at the bottom: the help texts are tooltips; the information message is drawn above the frame)
+@@ 23213b592a8d t
+compact panel
+@@ 2cb270eb4a55 t
+tall lines: the key cells do not touch the edges (the list scrolls)
+@@ 3320bd7e62f0 t
+tight lines: smaller text, so that it fits in the button
+@@ 0d897c879981 t
+(the window closes on the last visible line)
+@@ 81f8c9dee001 t
+right margin of the line contents (buttons: 42 px margin on the left as on the right; the scrollbar is in the margin)
+@@ 97968bf791d7 c
+width: the longest label + room for the values / sliders / key cells
+@@ d1980a73f9c8 t
+(states: the date of the slots does not count, the window keeps the same size with or without a saved state; the date shrinks if needed)
+@@ 62e8f563fa4c t
+list: value + arrow; toggle: Yes / No then the toggle
+@@ 9b443aed7ccd t
+(sound: plus the mute button)
+@@ 60ce2222d1cc t
+collapsed: the title bar alone, to see the whole screen; position: the player's after a move, otherwise the original (see _panel_pos)
+@@ 942f250248bb t
+collapsed: the title bar keeps the width of the expanded panel (it stays under the pointer: short press then double click)
+@@ 492fe8cca89b t
+press on the title bar: gold title; after the long press, the panel "lifts" (enlarged frame, gold outline)
+@@ 006db73ade3f t
+collapse / expand the panel: arrow in the title bar (up = collapse, down = expand)
+@@ f62d3fb466b7 t
+(stuck to the title: it follows it when the panel changes width)
+@@ b09c61b1b0d2 c
+view: the selection stays visible when it changes; otherwise the view moves only through the bar or the wheel
+@@ 4d2a681fdcee t
+buttons of each line at the previous frame: under the pointer, it is the button that darkens, not the plate of the line
+@@ a4041f6bbed1 t
+right edge of the line contents
+@@ d1d039b547e3 t
+buttons: same margin on the left and on the right
+@@ 79a507702d00 t
+inactive line (re-read every frame): the whole cell is grayed, never chosen or hovered, with no click zone
+@@ 3bddd486d187 t
+mouse: the line is darkened as long as the pointer is on it (and not on one of its buttons); there is no selection anymore when it leaves
+@@ ccfa4c083cf7 t
+keyboard: the chosen line, with the gold cursor
+@@ fe4ed3559aef t
+button background, like those of the mobile game's command menu: the plate darkens when chosen (keyboard) or hovered (mouse), without an outline
+@@ f87f6741eb89 t
+gold cursor of the game menus (keyboard selection)
+@@ 7fadd3ce1da1 t
+line of the "Son" page whose sound is muted: name, value and gauge grayed
+@@ feb3c11cf47a t
+text centered in the button
+@@ 928f61032cbe t
+information line (mouse gesture): the gesture on the left, its effect on the right in gray, with no plate, no selection and no click zone
+@@ 2a6186470146 t
+subheading: in the center of the window
+@@ 0657309df635 t
+width allowed for the label (0: no limit)
+@@ 9eeac69d5613 t
+(up to the location, on the right)
+@@ 0977db19e03f t
+(space for the round "default value" button of the choices, on the right of the line)
+@@ 432004472e95 t
+drop-down list: current value and small down arrow
+@@ 6d44dcd86a4e t
+Yes / No toggle: the text of the value, then the toggle
+@@ 06d0cbb7042d t
+space for the mute button ("Son" page), between the value and the "default value" button
+@@ 6c6e09052ca8 t
+right edge of the value: the "default value" button is to its right
+@@ 7d4f271f6b7e t
+(yellow gauge; gray when the sound is muted or the line inactive)
+@@ 617d507a1fbd t
+(chosen cell: by keyboard, or waiting for a key; with the mouse it is the plate that darkens)
+@@ 29ecc6af0dcb t
+key cell (lighter when chosen), set back from the edges of the button
+@@ a901c1fb2ed7 t
+text centered in the cell (equal margins: the red cross is on the right, outside the text zone)
+@@ b69c97667e6e t
+(baseline: the middle of the height of the capitals on the middle of the cell)
+@@ 03dd1163e993 t
+(at 75% under the pointer; dull when the line is inactive)
+@@ dbf932bbc1d7 t
+(an inactive line has no zone: no hover, no click; its zone serves only for the tooltip)
+@@ df975ff1192c c
+foot of the frame: help (centered, always inside the frame)
+@@ ce08894a3bc8 c
+back button, at the bottom right of the window
+@@ 1157db1231d7 t
+(pressed version of the "Button" sheet under the pointer)
+@@ c12d07adebb9 c
+thumbnail of the hovered state
+@@ 74455974022c c
+---- tooltips (help on mouse hover) and modal window
+(D-238: the help texts are French texts; `_helptext_lines` translates each sentence separated by three spaces, see the catalog texts_en\pause.py:
+an assembled help text ("..." + KEY_HELPTEXT) is therefore translated sentence by sentence)
+@@ 8efa20ef9af1 t
+inactive line: no keyboard or mouse hint, only its own help (it says why)
+@@ 50fbaecb469c t
+text specific to the line, before the general hint
+@@ 6359b35d0b44 t
+(no tooltip during a press on the title bar)
+@@ a797221636ec t
+(inactive line: only its own help, if it has one, is shown)
+@@ f399d02f14c0 t
+hint: under the chosen line (above if there is no room)
+@@ 04e72482b752 t
+mouse: the button under the pointer darkens; keyboard: the chosen button, with the gold cursor
+@@ dd92c95e619d t
+space for the scrollbar, to the right of the values
+@@ e8a6b4afd6d3 t
+the highlighted value has changed: the view follows it; otherwise only the bar or the wheel moves it
+@@ 1bcac5ef5496 t
+(the first choice of a group shows its subheading)
+@@ 9e893412ea9b t
+group subheading: in the center of the list, in dull golden gray and smaller (gold is that of the current value), with no click zone
+@@ bf39529812f2 t
+mouse: the value under the pointer is darkened (pressed plate), without an outline
+@@ 7ae895c325d7 t
+keyboard: gold cursor
+@@ 98f80664cfab d
+Esc menu: resume, savestates, display, sound, commands (speeds, keys, interface), back to the title screen.
+
+While the menu is open the game KEEPS running behind it, on all pages, without receiving any key or click (#178: no pause in any menu; the scene stays displayed, darkened). Navigation: arrows or the configured up / down / left / right / A / B keys,
+Enter / Space = confirm, Esc / Backspace = back, mouse (hover, click, right click or "back" button at the bottom right of the window = back, wheel, scrollbar).
+Two selection modes: with the keyboard, the gold cursor (fixed) in front of the line; with the mouse, nothing is outlined: as with touch on mobile, the plate (or the button) under the pointer darkens and lights up again when it leaves.
+Settings are saved in settings.json. Black windows, gold cursor and back button: those of the game menus (MenuTexture and Button sheets).
+@@ baab0d034a86 d
+(size, color) of a drop-down list group subheading: smaller than the values and a dull golden gray, never gold (gold marks the current value).
+@@ 4e12e3437e0b d
+System double-click setting, re-read at each press: (delay in seconds, width, height in pixels of the rectangle around the first press). Windows: GetDoubleClickTime and SM_CXDOUBLECLK / SM_CYDOUBLECLK (the
+"Double-click speed" slider of the Windows Mouse panel); the environment variable DQ_DOUBLE_CLIC (seconds) forces the delay; without Windows, the Windows defaults (0.5 s, 4 x 4).
+@@ 6ac6c4f34e0e d
+Label in the game font (GMaruGoPro-M, cache/ui_font.otf, registered on the first call); failing that, the system fonts.
+@@ ccb5e0d50e8f d
+Game texture sheet (cache/<name>, PIL RGBA); None if it is absent.
+@@ 8533189a98b3 d
+Texture (linear filter) of a PIL RGBA image, kept under `lookup_key`.
+@@ 01f32449096e d
+Texture of a piece of the sheet `name_str` (box x0, y0, x1, y1), color of the transparent pixels propagated by one pixel (no dark fringe when filtering); None if the sheet is missing.
+@@ 3322e7ab3d35 d
+pyglet's shapes turn off alpha blending at the end of their drawing: it is turned back on before a texture.
+@@ c8c86359e834 d
+Is the mouse pointer in zone z (x0, y0, x1, y1)? Only in mouse mode: with the keyboard, nothing is hovered.
+@@ 5c12b12ea42f d
+Hovered and active zone: like _pointer_in, except under a modal window (Yes / No window, open drop-down list, waiting for a key) which keeps the hover for itself.
+@@ 26f807c8c226 d
+Gold cursor of the game menus (pointing right), `topmost` pixels high, at the left at x, vertically centered at yc; it stays fixed.
+@@ b99b1b046f08 d
+Back button of the game menus: button-window of the Button sheet (nine pieces, 32 px corners reduced by half, pressed version at 96 px to the right) and its back arrow icon.
+@@ de3e7c00b43c d
+Is the game stopped behind the menu? No, on no page (root "Paramètres", settings, history, "Quitter" question): the game runs, it receives no input. It stays true only for a page added to FROZEN_PAGES (empty: see the rule above).
+@@ 3b6e03b6990c d
+Value entry: Yes / No = toggle (confirming or clicking toggles it; left = No, right = Yes); any other choice, even with two values = drop-down list
+(confirming or clicking opens it; left / right go to the previous / next value). `off`: the line cannot be modified in the current state (see _inactive: grayed, neither chosen nor hovered nor clicked).
+`default`: original value of the setting (round "default value" button to the right of the line, Delete / Home); `restore_default` / `is_default`: instead, for a setting handed back to the game (function that restores it, function that says whether it is).
+@@ 32fb64fb4a51 d
+The line cannot be modified in the current state (`off`: a boolean, or a function re-read on each call; the entries are redone every frame anyway: a line grayed out by another value
+becomes active again as soon as this value changes). An inactive line is grayed out entirely (label, value, arrow, round button, cell); it is neither chosen (the gold cursor and the arrows skip it), nor hovered
+(no darkened plate), nor clicked, nor confirmed, nor adjusted (left / right, Delete, Home); only its tooltip (`helptext`, if it has one) remains. Applies to all line types on all pages.
+@@ 2edb6d9698e1 d
+Line that the cursor can choose: neither a subheading (or information line), nor an inactive line.
+@@ 80b35c211620 d
+True if the value of a drop-down list is a group subheading ("#Dialogues").
+@@ 83db628446b7 d
+Index of the first value that is not a subheading, starting from i in the direction d.
+@@ dc18f79dea28 d
+Numeric slider from `minimum` to `maximum` (values rounded to `step`, arrows: `step_f`). Clicking on the value or confirming allows typing it on the keyboard: `mult` = factor between the internal
+value and the one that is displayed and typed (100 for percentages). `default`: original value of the setting ("default value" button to the left of the slider, Delete key).
+@@ c1b6cd309d3a d
+Values of the "Interface a modifier" list: the editable elements by group (INTERFACE_GROUPS), each group preceded by its subheading ("#Dialogues"); only the game windows that have a layout appear there.
+@@ 345b1fd20f15 d
+[size, x offset, y offset] of the chosen element (game window).
+@@ 14b01dcbc199 d
+Chosen interface to modify: for dialogues, a new random test message.
+@@ bf4773df4ce6 d
+Is interface c displayed on screen? Buttons and D-pad: 'boutons' setting; game window: absent from the list of hidden interfaces. Each interface has its own setting.
+@@ 6978d2d2b341 d
+"Interface" page: first the interface to modify (list by groups), then its display (specific to each interface), then its settings.
+@@ bf5831b30f26 d
+"Rétablir cette interface": the chosen interface goes entirely back to its original state (RG.Settings.reset_interface: position, size, display and all its options, and it alone).
+Nothing else to do: the preview and the game re-read the settings every frame.
+@@ 7508ef9f3ab2 d
+"Rétablir toutes les interfaces": all the interfaces and the editor's options (grid, snapping) back to their default (RG.Settings.reset_interfaces), and the panel returns to its original place.
+@@ 9747dba9ba4a d
+Sound setting (toggle or volume): saves the value, applies it immediately to the sounds playing, and for a volume plays a test sound effect (the music, however, plays during the page).
+@@ 2f238587a7bb d
+Line of the "Son" page: the name of the sound, its volume bar (and its value), the mute button (`active` = (read, write) the toggle of the sound), the "default" button (original volume and sound restored).
+Keyboard: up / down changes line, left / right adjusts the volume, Enter mutes or restores the sound, Delete or Home resets the line to its default.
+@@ 4ba6c27f0ebd d
+One line per sound (sound.CATEGORIES, plus the sound in general): name | volume bar | mute button | "default" button; no more sections.
+@@ 67b85f53007f d
+"Défilement du texte" section of the "Commandes" page (just under the "Vitesses" section; it used to be the "Vitesse de défilement du texte" page of the root menu): "Vitesse du texte" (writing speed of dialogues),
+then "Vitesse de combat" ("Manuel", "Normal", "Rapide", "Tres rapide": engine clock during battles and scrolling of battle messages).
+@@ 4e8b3a5a7b66 d
+"Modifications" page (formerly "Jeu"), just under "Commandes" in the root menu: the modifiers of the game rules, disabled by default (= like the original game); for now HP and MP restored on each level gained.
+@@ b59967869592 d
+Line of a keyboard action: two cells (main key, secondary key); Delete clears the chosen cell, the round button (or Home) restores the original keys.
+@@ af8c7bebb04c d
+Sections (subheadings): movement (keys), "Camera" (left / right keys, mouse, direction, camera speed; a single group since D-237), speeds (walk, accelerator: choice x1 to x4; accelerator key and multiplier: slider; then the "Changer la vitesse en combat" key), text scrolling ("Vitesse du texte" and "Vitesse de combat": see _text_scroll), game actions, others (special key, info); then the restoring of the keys.
+@@ 81e9c89be706 d
+'2026-10-31 19:21:05' -> '31/10/2026  19:21:05' (name of a state: its recording date and time).
+@@ 61ec8b0db490 d
+Location of the state only if it means something to a player (the technical name of a map, like "mak1f1", is not shown).
+@@ cf752a791def d
+Savestates: a drop-down list chooses the action (create, load, delete) applied to the confirmed slot; deletion goes through a confirmation window.
+@@ fdf65b1538d9 d
+"Revenir à l'écran titre": the menu closes (the game resumes) and the engine opens the original box of the game's "Paramètres" button (game text, Yes / No); what follows (Yes: fade then title, No: back to the game)
+is the engine's job (Engine.request_return_to_title).
+@@ 7bc95ffdb9d6 d
+Information message (4 seconds, above the frame): `model` is the FRENCH text, with placeholders (%d, %s) if there are `value_list`. `message[0]` is the full French text; the display (`_message_text`) translates the model BEFORE putting
+the values in (D-238: English does not have the same word order), and also translates the values that are texts of the tool (name of an action, name of a key).
+@@ 7b23351a5ba9 d
+The information message in the language of the tool ('' if there is none, or if it is more than 4 seconds old).
+@@ 1f16528762c5 d
+Delete state n: a modal window asks for confirmation ("Non" preselected).
+@@ ab457a5fc647 d
+True if the key is consumed (the menu is open).
+@@ bda6fa9443cb d
+A direction is held down: it will repeat (do_update) as long as it is held, on the line and screen where it started.
+@@ 1a5c7ed5bf94 d
+Repeat of held directions, long press on the editor panel (called every frame). "Son" page: the sounds play (the game is stopped) so that the volumes being adjusted can be heard.
+@@ 6e6acbab6f06 d
+First visible value of the drop-down list (the scrollbar moves it without changing the highlighted value).
+@@ e2f753fdd8b5 d
+Chosen line, or None when it is inactive (no action reaches it: left / right, Delete, Home, Enter); a subheading gives way to the next line.
+@@ c47b8adc4c99 d
+Index of the line that the cursor must occupy: i if it is active, otherwise the first active line after it, then before it; i if no line is active (page with nothing to choose: the cursor is not drawn).
+@@ 77e930ee25e4 d
+What held a line that became inactive stops: open drop-down list, slider held with the mouse, value being typed.
+@@ 45949eb08c42 d
+Resets the slider, the choice or the keys of the chosen line to their original value.

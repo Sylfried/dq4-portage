@@ -1,0 +1,972 @@
+## FILE tests/test_exp_gift_touch.py
+@@ 91c645a9d712 d
+Le don d'experience du roi (chapitre 1) fige le jeu au dernier message de niveau (#261).
+
+Le menu `MaterielMenu_EXTRA_PRESENT_EXP` (ajout du mobile) attend, une fois les niveaux montres, un declenchement du pad du jeu (`dss::g_Pad + 2`, rempli par `Global::NativeExec` d'apres le 2e argument de `GameUpdate`) :
+le toucher d'ecran exactement 0x100, ou les boutons 0x400 a 0x2000. La touche A d'un message (0x10) ne le leve jamais.
+
+  1. `Engine.awaits_touch` (sans moteur : la memoire est simulee) : vrai seulement si le menu est dans le tableau du gestionnaire de menus ET a son dernier etat ;
+  2. `inputs.touch_for_engine` : A envoie 0x100 seul quand le menu attend, rien ne change sinon ;
+  3. un modele de `Global::NativeExec + 0x74` (code machine relu) montre pourquoi 0x10 et 0x110 ne suffisent pas et 0x100 ou 0x400 oui ;
+  4. branchement : `Game._entries` appelle bien la conversion quand un message est ouvert (le test lit le code, sans pyglet).
+
+    python3 tests/test_exp_gift_touch.py
+@@ a066dab08b18 d
+g_Pad + 2 d'apres le 2e argument de GameUpdate (Global::NativeExec + 0x38 a + 0x74) : les bits 10 a 13 de `decl` (decalages -5, -5, -5, -3, masques 0x20, 0x40, 0x80, 0x400), plus 0x10 quand
+`decl & 0x7fff` vaut exactement 0x100 (le toucher).
+@@ de01781e6aee d
+Un moteur dont seule `mem` existe : gestionnaire de menus a GES, tableau de 8 pointeurs a GES + 8, menu du don d'experience a L + 0x24c730 (etat a + 0x30).
+@@ db18d8cb12cf d
+Game._entrees (fenetre/keyboard_mouse.py, a besoin de pyglet : lu comme du texte) envoie A au moteur apres la conversion, seulement quand un message est ouvert (sur le terrain, A = parler, deja 0x100).
+## FILE tests/test_extended_sky.py
+@@ 87ff5ce313fd t
+les points du bord ne bougent pas
+@@ f800fb0b12e3 t
+la copie gauche finit la ou l'original commence
+@@ 8f4ed0ce7193 t
+la copie droite commence la ou il finit
+@@ 4f48ebfc239a t
+meme profondeur : aucun plan incline
+@@ 8f43131caca5 t
+le titre a son propre ciel (`_title_sky`)
+@@ edd7d7ede310 d
+Test des copies de ciel de `dpout` et `ev09` (MAP-05 : ciel prolonge de part et d'autre ; logique pure : sans fenetre, sans moteur, sans APK) :
+
+1. `title_sky.cloned_positions` : un `dx` nombre decale x (copies du ciel du titre, comme avant) ; `('miroir', xe)` est une symetrie par rapport au plan x = xe (les points du bord ne bougent pas, y et z intacts, symetrie
+   deux fois appliquee = identite), le tableau d'origine n'est pas modifie, float32 conserve ;
+2. copie symetrique d'un plan de ciel : elle touche l'original par son bord (aucun trou, aucun chevauchement) et le plan etendu (copie gauche + original + copie droite) couvre trois fois sa largeur, a la meme profondeur ;
+3. `EXTENDED_SKIES` : `dpout` (plan `dpoutenk`) et `ev09` (plan `e9km1`) ; l'ecran-titre garde son traitement propre.
+
+  python3 tests/test_extended_sky.py
+@@ 1449427d4456 d
+Plan de ciel type (deux triangles ; pas de la geometrie reelle, seulement sa forme : un rectangle vertical).
+## FILE tests/test_fbx_anim.py
+@@ 62c4420386a6 t
+Hermite a pentes nulles : milieu = moyenne
+@@ 29348c435c88 t
+hors des cles : on garde la premiere / derniere valeur
+@@ c0d2cb9593c3 t
+nlerp entre deux cles de 90 degres : ecart < 1 degre
+@@ 86c587d5e8b7 t
+strictement croissant sur le tour
+@@ f1b005bd83af t
+1, 2 ou 4 tours plus tard : meme instant du clip
+@@ 00e07d95d2d7 t
+1 s plus tard : fondu de 0,3 s vers « Take 002 »
+@@ 92c3916a6964 t
+avant : quaternion nul
+@@ 43344d315b6e d
+Tests de l'animation des modeles 3D (dq4_pc/fbx.py) : courbes d'Hermite, boucle du lecteur, melange de rotations.
+
+  python3 tools/test_fbx_anim.py
+
+1. une rotation de 0 a 360 degres (clip a cles de quaternions tous les 90 degres, comme les modeles du jeu : `m_EulerCurves` est vide, les rotations sont des quaternions) tourne EN CONTINU, ni de quelques
+   degres seulement, ni a l'envers ;
+2. le temps d'un clip en boucle est replie modulo sa duree (WrapMode.Loop) : deux tours = un tour ; un clip qui n'est pas une boucle reste sur sa derniere image ;
+3. le fondu entre deux clips melange les rotations du meme cote de la sphere : q et -q sont la meme rotation, leur moyenne ne doit ni s'annuler ni faire faire un demi-tour a l'os ;
+   un melange de rotations proches (cas du dragon du titre) reste la simple moyenne ponderee, inchangee.
+@@ 9b02bbeb0088 d
+Quaternion (x, y, z, w) d'une rotation de `deg` degres autour de Y.
+@@ 9a51ef5a1b51 d
+Courbe de rotation a 4 composantes : un quaternion tous les `dt` secondes, tangentes lineaires (pente d'une cle a la suivante), comme les cles reechantillonnees de l'import Unity.
+@@ 1797606fb9aa d
+FbxModel minimal (un os, sans maillage) : seul `local` est utilise.
+@@ e4cff9c1369c d
+Rotation autour de Y (degres, entre -180 et 180) d'un quaternion normalise.
+@@ 9c52958a6b9d d
+TzKeys tous les 90 degres : l'angle de l'os croit regulierement de 0 a 360 (= 0), sans retour en arriere.
+@@ 51b1f8ce7dcc d
+A = +10 degres, B = -(-10 degres) (meme rotation que -10, mais de l'autre cote de la sphere) : a mi-fondu, 0 degre ; avant : 180 degres.
+@@ c3f3d8971aad d
+Du meme cote de la sphere : moyenne ponderee des composantes, comme avant.
+## FILE tests/test_field_group_order.py
+@@ 48824ccb8e80 t
+devant -> derriere
+@@ c6db54362e1c t
+Doc (emplacement 12 de PlayerStatus)
+@@ ddf6b8752cb6 t
+203 = Teleportation
+@@ a5ecda5b2e28 t
+sortir de l'eglise (haut) : village de maout, en plein air
+@@ 0d69551d5376 t
+menu racine : Magie
+@@ 873b13442f7d t
+Doc
+@@ c12c4dc16315 t
+le sort
+@@ 587a5543c519 t
+2e lieu : sur la carte du monde
+@@ 894d6d76efa4 t
+la descente a bien ete vue, et l'arret empile aussi
+@@ 9d2f702e17e7 d
+Carte du monde : ordre de superposition des membres du groupe a l'atterrissage (issue #135 : « une fois atterri, Doc s'est retrouve devant Ragnar »).
+
+    python3 tools/test_field_group_order.py                                                    (partie sans moteur : Linux sans ecran, pyglet en mode « headless »)
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_field_group_order.py      (ajoute le scenario du moteur reel)
+
+Origine : FieldPartyDraw::draw (libdq4core 0x1ec5a8) trie les membres du groupe par profondeur decroissante (tri par selection, a profondeur egale l'emplacement le plus bas garde la tete) puis leur
+donne SpriteCharacter::setDepth 10, 9, 8... : a profondeur egale, le heros est DEVANT ses equipiers. Un atterrissage (Zoom, aile de chimere) empile le groupe sur un seul point (mesure sur le vrai moteur : heros
+et Doc a (2495,967 ; 391,967 ; z 200) apres la descente), c'est donc la regle d'egalite qui decide. Avant : `sorted((z, y, slot))` mettait le plus grand emplacement devant (Doc).
+
+  1. sans moteur (`field_depth_rank`) : position egale -> heros devant ; hauteur z, puis « plus au sud », priment toujours ; vehicules (>= 10) : le plus recent devant, sans changer le groupe ;
+  2. moteur reel (sauvegarde 1, groupe Ragnar + Doc) : sort Teleportation (action 203) lance depuis le village de maout vers le 2e lieu (carte du monde), descente jusqu'a l'arret : le groupe est empile
+     (memes x, y, z) et le heros est devant Doc ; pendant la descente, Doc (au nord, z plus petit) reste derriere le heros.
+## FILE tests/test_fld_priority.py
+@@ db88187a5ba0 t
+avant : 4, 0, 4 (la moitie haute des drapeaux)
+@@ 154e7e4afdb4 t
+billboards (& 36) : seuls les 16 bits bas, comme avant
+@@ 865540160f1b t
+le cache d'avant (priorite fausse) n'est jamais relu
+@@ 3bcb0aca8bd9 d
+#203 (audit MAP-01) : priorite des objets de carte (FMAP) : entier de 32 bits en +52 (file de rendu 3000 + priorite), drapeaux = entier de 32 bits en +48.
+Lancer depuis la racine : python3 tests/test_fld_priority.py
+@@ 2e7d17abd9a7 d
+Un chunk FMAP minimal : en-tete de 0x20 octets (tag, taille, nombre d'objets) puis 0x50 octets par objet ; `objects` = [(drapeaux int32, priorite int32)].
+## FILE tests/test_focus_loss.py
+@@ 91986d15bf95 t
+(l'echeance de la musique est decalee de la duree de la pause)
+@@ a30d32468403 t
+(ecoute : on entend les reglages)
+@@ 14b9a764fb50 t
+(la page redemande l'ecoute : toujours muet)
+@@ a4739815ff26 t
+(retour : l'ecoute de la page reprend)
+@@ 454436681f79 t
+(le menu suspend encore le jeu : pas de reprise)
+@@ 973ea9235dac t
+(toujours sans focus)
+@@ 5a4d2c7814b1 t
+(boutons de souris tenus : relaches)
+@@ 200df92bd3ea t
+(rotation de la camera demandee a la souris : abandonnee)
+@@ e7e952a24e14 t
+(retourne avant tout pas du moteur : un faux Jeu n'a pas de moteur)
+@@ 129a68a6f393 t
+(rien n'existe encore : pas d'appel)
+@@ 3970a687cc4c t
+(les touches tenues au retour ne sont pas un nouvel appui)
+@@ ab3a9e453077 d
+#235 (audit UNI-02 et SND-07, sondage du 04/11/2026 : « pause a chaque perte de focus ») : quand la fenetre perd le focus (Alt + Tab, clic ailleurs, minimisation), le jeu s'arrete et la musique et les bruitages se
+mettent en pause (Sound.SystemPause de l'original) ; au retour, le son repart la ou il s'etait arrete et le jeu reprend sans rattrapage.
+- Son : `Sound.lose_focus` (faux lecteurs, sans fenetre ni carte son), y compris pendant l'ecoute de la page Son du menu et menu suspendu.
+- Jeu : `Game.on_deactivate` / `on_activate` / `_loop` sur un faux Jeu (ignore si pyglet n'est pas importable : les tests Jeu ne tournent pas en CI).
+    python3 tests/test_focus_loss.py
+@@ a0c2a32ac66f d
+Un Son sans pyglet (modules `pyglet` masque) avec de faux lecteurs : une musique et un bruitage en cours.
+@@ 614796d23b3c d
+La page Son du menu fait jouer les sons menu suspendu (`listening`) ; sans focus, rien ne joue quand meme, et le retour du focus rend la main a la page.
+## FILE tests/test_full_screen_effects.py
+@@ 5f4f08b7bd47 t
+quad de 12,9 x 12,9, a 5 unites devant la camera
+@@ ed7dda56289a t
+largeur x 4/3
+@@ 8daeb26044fe t
+hauteur et profondeur inchangees
+@@ 801a038e2edf t
+meme centre
+@@ f899747b461b d
+#223 (audit CMB-02) : un effet de combat fait d'un quad plein ecran (l'effet 35, modele 5035 : teinte violette) est etire a la largeur de l'ecran quand le combat est elargi en 16/9 ; sinon il ne couvrait que le
+centre 4:3 (bandes laterales non teintees). Sans fenetre ni moteur.
+    python3 tests/test_full_screen_effects.py
+## FILE tests/test_game_priority.py
+@@ da27762ad123 t
+(hors combat : la branche « vitesse des combats » de Game._speed_factor ne joue pas)
+@@ 250cc04b0d8f t
+reglage du joueur = 8 lettres par image, rien fixe par le jeu : la meme duree que le mot 2 du jeu
+@@ cdc6c56b262c d
+Test de la priorite du jeu sur les reglages du joueur : « quand le jeu fixe lui-meme une valeur par script, il prime sur le reglage du joueur ».
+
+  1. regles pures (game_priority.py) : effective_value, effective_factor, letters_per_frame, fade_duration ;
+  2. vitesse de marche (`Game._speed_factor`, sur un faux objet) : sans effet pendant un evenement (verrou du joueur, dont le fondu de sortie), appliquee en terrain libre et pendant le fondu d'arrivee (#107) ;
+  3. moteur d'origine (si --apk et --saves sont donnes) : vitesse du texte fixee par le jeu (le mot de vitesse du message est modifie en cours de route) ; fondu lance par une commande de script du jeu
+     (la sauvegarde --slot-fondu, par defaut 2 : debut du prologue, commande fade_out de 30 images) non raccourci, fondu du moteur raccourci.
+
+    python3 tools/test_game_priority.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4] [--slot-fondu 2]]
+Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
+@@ 8ca01747fea3 d
+Comme test_text_scrolling.text_frames, mais le mot de vitesse de la fenetre de message est ecrit a `game_word` (un script du jeu qui fixe la vitesse) des l'ouverture du message ; None = non touche.
+Renvoie (images entre l'ouverture du message et la fin de sa premiere page, lettres de la page).
+@@ 1f735d89cf9f d
+[(image, duree d'origine, duree appliquee, fondu de script ?)] des fondus au noir du moteur depuis le chargement de la sauvegarde `slot`.
+@@ e5aad83ccad2 d
+La marque des fondus de script n'empiete sur aucun champ de l'entier du paquet 9 (duree 0x7ff, couleur 0x800, sortie 0x1000, blanc 0x2000, plan de fond 0x4000).
+@@ 501bf826e4b0 d
+#107 : le fondu d'arrivee sur une carte (flag 1 seul, le heros marche deja) n'empeche plus la marche acceleree (mesure : flags 0x39 pendant les 30 images, 0x3d + verrou pendant le fondu de sortie).
+@@ fb7a34d0364d d
+#127 : au retour d'un combat le fondu de retour dure 30 images mais le joueur est libre des l'image 12 (mesure sur le vrai moteur : flags 0x2d jusqu'a l'image 11, puis 0x29, le heros marche des l'image 13) :
+la marche acceleree et l'accelerateur (course) agissent des que le verrou tombe, et non a la fin du fondu.
+@@ a31fe3184b6c d
+Le moteur change de scene 1 a 3 images apres la sortie au noir (State.transition_guard) : horloge du jeu, meme si le verrou n'est pas encore pose (image 0 du retour : flags 0x1).
+@@ ba1f35ea92a6 d
+Mot de vitesse fixe par le jeu (2 = 8 lettres par image) : meme duree quel que soit le reglage du joueur ; sans cela le reglage s'applique.
+## FILE tests/test_gradient_background.py
+@@ 554778ac3f7f t
+mlout1 le soir (zone 3) : rose-gris en haut, orange en bas (entree 3 de param_map_backcolor, valeurs sur 31)
+@@ de41608ebda2 t
+couleur d'effacement = moyenne, comme avant
+@@ 834c199eb6a6 t
+fondu de couleur du jeu : un paquet par image
+@@ bcc637e28cbb t
+le moteur envoie la couleur APRES le paquet 0, dans la meme image
+@@ c32863c81f71 t
+nuit : degrade discret, mais un degrade
+@@ 1956f70a4cea t
+ligne 0 = bas de l'image
+@@ d1db24d37309 t
+0 en bas, 1 en haut
+@@ 658047b8057f t
+StageStatus : heure du monde en + 0xcc
+@@ 260e5d8d359d d
+Test du fond des villes en degrade (#111) : le moteur envoie, par le paquet 8 (`cmd_back_color`, RVA 0xD14F44), DEUX couleurs (haut et bas de l'image) et le jeu les donne a `BackColor.SetColor(topmost, bottom, 0)`
+(RVA 0xCC43F8) : un quadrilatere plein ecran dont les deux sommets du haut ont la couleur haut et ceux du bas la couleur bas (shader « BackColor » : `gl_Position = in_POSITION0`, `SV_Target0 = vs_COLOR0`,
+file Background, ZTest Always, ZWrite Off, sans fusion). La visionneuse n'en gardait que la moyenne (fond uni).
+
+  1. decodage du paquet 8 dans `State.apply` : `top_background`, `bottom_background`, `background` (moyenne : couleur d'effacement) ; remis a zero a chaque chargement de carte ; anciens etats enregistres ;
+  2. `background_gradient` : vrai seulement si les deux couleurs different (sinon rien ne change, au pixel pres, par rapport a avant) ;
+  3. rendu : un vrai degrade vertical lineaire (partie GL, facultative : ignoree s'il n'y a pas de contexte GL) ;
+  4. moteur reel facultatif (DQ_APK et DQ_SAVES) : a l'heure du soir (heure du monde 1984 : zone 3), `mlout1` (village du prologue) recoit un degrade ; en journee (heure 1000) les deux couleurs sont egales.
+
+    python3 tools/test_gradient_background.py        (Linux sans ecran : pyglet en mode « headless » ; DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> pour la partie moteur reel)
+Les sauvegardes ne sont ouvertes qu'en lecture (le moteur ecrit dans un dossier temporaire).
+@@ 5e4d00946f14 d
+Le sommet est ecrit tel quel en espace de decoupe (gl_Position = in_POSITION0) : pas de matrice ; la couleur est celle de sommet, sans autre terme (SV_Target0 = vs_COLOR0).
+@@ 4d5026406a86 d
+Tolerance de 9 niveaux : le tampon d'image du contexte sans ecran (EGL) est en 5-6-5 bits (marches de 8 / 4 / 8 niveaux) ; un degrade a l'envers ou non lineaire s'ecarterait de 50 a 100 niveaux.
+## FILE tests/test_ground_decals.py
+@@ 3338715e4299 t
+unite de superposition des couches de decor
+@@ 24ccc6e40a8d t
+< 0 : horaire vu de dessus = face avant d'Unity (Cull Back)
+@@ 66f9d46429a6 t
+la couche la plus frequente : exactement 0,125 (pierres, terre, fleurs sur l'herbe)
+@@ f5ac1502f106 t
+la plupart des decalques sont a un multiple de 0,125 au-dessus du sol
+@@ 8e3614722c63 t
+presque aucun decalque coplanaire avec le sol (le jeu n'a pas de decalage de profondeur)
+@@ ffa9a78b734c t
+tous tournes vers le haut : le Cull Back d'Unity ne cache aucun decalque
+@@ c14ea0cd9bde t
+(groupe, sommets de CET objet)
+@@ 0e7e4b67dff2 t
+tous les sommets de l'objet a -0,125 (surfaces plates)
+@@ 9f8e3b329557 d
+Decalques plats poses au sol (chemins de pierres, fleurs, herbes, taches de terre...) : hauteur au-dessus du sol dans les DONNEES du jeu (cartes extraites par `data.py`, cache `carte10_*.pkl`).
+
+Constat (enquete #45, « les pierres flottent ») : les shaders de decor du jeu (`Custom/fld_normal`, `fld_atest`, `fld_trans`) n'ont AUCUN `Offset` de profondeur ; les concepteurs separent les couches
+par la geometrie : chaque couche de decalques est posee 0,125 unite (1/8) au-dessus de celle d'en dessous (village `maout` : herbe y = -0,25, terre et pierres y = -0,125). Ce test garde cette mesure :
+si l'extraction (signe de y, matrices, cache) changeait, la regle ne se verrait plus et il echouerait. Il ne teste PAS le rendu.
+
+    DQ_CACHE_CARTES=<dossier des carte10_*.pkl> python3 tools/test_ground_decals.py
+@@ 03c5ecbd7005 d
+Pour chaque triangle plat DECOUPE (alpha < 250 quelque part dans sa texture) hors groupes transparents ('tr') : hauteur au-dessus du triangle de sol OPAQUE (texture sans aucun alpha < 250) le plus
+haut qui est dessous (meme x, z). -> (liste des hauteurs, nombre de decalques sans sol dessous, nombre de decalques tournes vers le bas).
+@@ 33c55f1edef2 d
+Objet `020_mast1` (dallage du village : pierres `maisiyk1..4`, terre `sn02` / `najimi02`, bassin `r_mizu02`, textures 32 x 32 ou 64 x 64) : toutes ses surfaces plates sont a y = -0,125 ;
+l'herbe `masiba` (objet `018_maoutsb1`) en dessous : y = -0,25.
+## FILE tests/test_heap_alert.py
+@@ 49429c163be7 t
+(D-238 : ces tests attendent les textes francais, quelle que soit la langue de l'ordinateur)
+@@ 783eaa9fda84 t
+fenetre/jeu.py a besoin de pyglet, numpy, unicorn... (l'import seul suffit)
+@@ 04f41970ad90 t
+(etat charge : tas de 12 Mo)
+@@ d15767772d15 t
+94 % puis retour a 84 % : pas de nouvelle alerte (le palier bas est deja passe)
+@@ 0cff78398bd6 d
+Alerte du tas du moteur (ENG-01, audit du 04/11/2026) : le tas n'est jamais libere et fait 256 Mo ; la fenetre le note dans le journal des erreurs a 200 Mo puis a 240 Mo (plus de message a l'ecran depuis #267).
+
+1. `Core.heap_used` : octets alloues (heap_ptr - HEAP_BASE) ; seuils 200 et 240 Mo sous la taille du tas ;
+2. `Game._watch_heap` : rien sous 200 Mo ; une ligne du journal a 200 Mo, une autre a 240 Mo, chacune UNE fois, et aucun message a l'ecran (le faux jeu n'a pas de `toast`) ; le tas qui redescend (chargement d'un etat) rearme les alertes ;
+   un saut direct au-dela de 240 Mo donne une seule ligne ; aucun etat instantane n'est ecrit (il garderait le tas plein).
+
+  python3 tests/test_heap_alert.py
+## FILE tests/test_history_access.py
+@@ 7484d27ca908 t
+#194 : le joueur n'a pas a etre informe
+@@ 7fa0e5229bd0 t
+sans message (#194)
+@@ d42e4f4532ec d
+Test (sans moteur ni affichage) de l'acces a l'historique (#187 : « l'historique doit pouvoir etre accessible uniquement quand j'ai le controle de mon perso, donc pas pendant un combat ni pendant un moment ou le jeu
+prend le controle ») : `Game.player_control`, `Game.history_possible`, `Game._history_key`, la ligne « Historique » du menu Paramètres et la fermeture de la page quand le jeu reprend la main.
+
+    python3 tools/test_history_access.py
+
+  1. player_control : vrai seulement sur le terrain (ville, carte du monde) sans verrou du joueur (Global.Flag 4), message, menu du jeu, effet d'ecran, chargement ni combat ; un fondu seul (flag 1) n'y change rien ;
+  2. history_possible : en plus, jamais a l'ecran titre ;
+  3. touche H : ouvre la page quand c'est possible, sinon un message bref et aucune page ; la touche est branchee sur `_history_key` dans on_key_press (et plus sur l'ouverture directe) ;
+  4. menu Paramètres : la ligne « Historique » est active / inactive (grisee, infobulle) selon `history_possible` ; sans cette methode (faux jeu minimal) elle reste active ;
+  5. Pause.maj : page historique ouverte puis le jeu reprend la main (combat, dialogue, scene) : la page se ferme (retour a la racine, ou menu ferme si elle avait ete ouverte par la touche) avec un message ; tant que le joueur a la main, la liste suit le jeu (#178).
+@@ 2ed1c5f7a3e3 d
+Ce que `player_control` lit du moteur et de la fenetre.
+@@ d5c1722870c5 d
+Pause.maj sur la page « historique » (les autres pages et `shutdown` sont remplaces par des espions).
+## FILE tests/test_history_key.py
+@@ 3ea3acb0268f t
+(variables laissées telles quelles par le jeu : rien à retenir)
+@@ d19bacd5f6b8 t
+le texte autour a changé : pas ce message
+@@ 443ae04e0deb t
+(même variable, deux valeurs : refusé)
+@@ 0acece8c2d64 t
+(le « ; » du patch est déjà retiré du texte lu)
+@@ f3dafbdfd97f t
+(le moteur peut aussi donner tout le message d'un coup)
+@@ 24a85d9612c4 t
+variable inconnue : laissée
+@@ be189840a520 t
+plus cette page
+@@ c8204c841e46 t
+(le texte n'est nulle part dans le fichier)
+@@ 3c9da9281f31 t
+(le numéro ne correspond pas à ce texte)
+@@ f1f42238ddd8 t
+(pas de moteur : on ne peut pas vérifier)
+@@ b3d8883753e5 t
+(le fichier garde la clé : on peut la retrouver)
+@@ 164813c6dd41 t
+le message est de retour : le texte revient
+@@ 47f3151cea28 t
+un autre favori : le fichier est réécrit en entier
+@@ 6fb9a4096df6 t
+(rien ne change tant qu'on ne redemande pas)
+@@ 705589c12a2e t
+(pas d'arrêt du jeu : le favori dit que le texte manque)
+@@ 8d571960c19c t
+(le texte enregistré fait foi : rien n'est redemandé)
+@@ 08fd02c65385 t
+(le 32 bits bas seulement)
+@@ 15dff2cb450b t
+genre 1 : message
+@@ ce91b84cb6ba t
+(« <ERR ... > » : inconnu)
+@@ 4c7867ba42ac t
+(symbole absent)
+@@ 2e9469230cd9 t
+(le moteur redonne le texte lu)
+@@ 254ece4e3263 t
+(un texte modifie dans le patch se repercute)
+@@ acb984409770 d
+Favoris de l'historique des dialogues rangés par la CLÉ du message (#265) : le fichier des favoris garde le numéro du message dans les fichiers du jeu (« b0802000#199 »), pas son texte ; le texte est
+redemandé au moteur (TextAPI::extractText), donc un message modifié dans le patch change aussi dans les favoris.
+
+  1. fonctions pures : `message_key`, `value_list` (variables « [NONE 1,0] » du jeu), `binding` (message entier ou page séparée par ㈡), `linked_text` ;
+  2. `History` avec un faux moteur : le favori n'est rangé par la clé que si le texte des fichiers redonne EXACTEMENT ce qui a été lu ; sinon il garde son texte (comme avant) ; le fichier ne contient alors aucun texte ;
+     relu avec un autre texte dans les fichiers, le favori montre le nouveau texte ; message disparu : une ligne le dit avec la clé ; anciens fichiers (avec « texte ») et entrées invalides ;
+  3. `Sensor` (faux émulateur) : le numéro vient de ui_MsgAdd, seulement quand TextBuffer::cat en est appelée directement ; `Sensor.model` interroge TextAPI::extractText (genre 1) ;
+  4. avec le vrai moteur (si DQ_APK et DQ_SAVES sont donnés) : les numéros captés pendant le prologue, un favori rangé par la clé puis relu dans un second moteur, un texte modifié qui se répercute.
+
+    python3 tests/test_history_key.py
+@@ 4d06691d4066 d
+Capteur factice : `files` = {numéro: texte des fichiers du jeu} ; `calls` = numéros demandés.
+@@ 49ca1d6a1d58 d
+Émulateur factice : registres, chaînes C, mémoire, noms de fonctions, appels.
+@@ 2cf6a6837c5f d
+Le debut d'une sauvegarde de prologue avec le vrai moteur (sauvegarde 1 : messages 2002 a 2011 du fichier b0002000) : numeros captes, favori range par la cle, relu dans un second moteur.
+@@ 690b1dee098f d
+Premiere sauvegarde (la 1 par defaut, ou DQ_SLOT_PROLOGUE, puis les autres) dont le debut dit au moins 3 dialogues avec la touche A : (moteur, historique) ; None si aucune.
+## FILE tests/test_inactive_lines.py
+@@ 1de32be9e175 t
+(la page Interface dessine l'apercu du jeu : le faux jeu n'en a pas)
+@@ f48cd689ac21 t
+(facultatif : cache d'interface du jeu pour la police et les icones ; sans lui, polices du systeme et plaque de repli)
+@@ 9f3fd673178b t
+(plus de paramètre `note`, plus de place réservée sous la valeur ; restent en rouge : le message d'erreur du pied du cadre et « Masquée » de l'éditeur, qui ne sont pas des notes sous les valeurs)
+@@ bd1cda5b3d2f t
+fenêtre : rien n'est sauté
+@@ febdbdcd9d0a t
+plein écran : « Résolution » est sautée
+@@ 39dcbf86f3dd t
+(« Langue » est la premiere ligne de la page, D-238)
+@@ 17c848d24606 t
+(le tour de la liste reprend par la fin)
+@@ f784431b7b44 t
+(molette vers le haut = ligne suivante)
+@@ d9626879e27e t
+fenêtre : la résolution se règle
+@@ a9cd31cdf35a t
+Entrée sur l'interrupteur : plein écran
+@@ 1f477c7b5490 t
+... « Résolution » est grisée tout de suite
+@@ 0cce2f1581c4 t
+... et se rallume au retour en fenêtre
+@@ 0eaf330633b3 t
+F11 pendant que « Résolution » est choisie : le curseur passe à la ligne active suivante
+@@ 52bf274d20e5 t
+(revenue en fenêtre : la ligne se rallume, le curseur reste où il est)
+@@ e73e9a18ab98 t
+(libellé, valeur, flèche, bouton ↺ : n'importe où dans la case)
+@@ 17918524fea7 t
+(elle garde son aide : elle dit pourquoi)
+@@ d1e74f83267c t
+(mais plus de consigne « Entrée ou clic : ouvrir la liste »)
+@@ 06dccf49035b t
+une ligne active, elle, répond
+@@ 839423745723 t
+(grisée : pas de blanc franc ; active : texte blanc)
+@@ ea9fe03ac74e t
+navigation : jamais sur la ligne inactive (si une autre ligne est active)
+@@ c4f9cb865c65 t
+(tous les types de lignes ont été éprouvés)
+@@ 0616fbd93a7d t
+(page d'une seule ligne : le curseur n'a nulle part ou aller)
+@@ 8dd7ac92d6be t
+(ligne hors de la vue d'une liste qui défile : rien à cliquer)
+@@ 5ca468ebd4d5 t
+« Oui » est inactive : le curseur reste sur « Non »
+@@ 3fb61e15f848 t
+clic sur « Oui » inactive : l'application ne se ferme pas
+@@ 9dcfc9aa6435 t
+clic sur « Non » (active) : le menu se ferme
+@@ 765e44e574f1 t
+(active : le clic règle le curseur)
+@@ 7e9daf7e7b9b t
+(devenue inactive en la tenant : lâchée)
+@@ 8e278195557b t
+liste ouverte sur « Shader »
+@@ 7c46852232ef d
+Test des lignes inactives du menu Pause (page Affichage : « Résolution » en plein écran ; page États : emplacements vides) et du libellé « Modifications ».
+
+    python3 tools/test_inactive_lines.py
+
+Une ligne qui ne peut pas être modifiée dans l'état courant (`off`) est grisée en entier (libellé, valeur, flèche, bouton ↺, case), jamais choisie (le curseur doré et le clavier la sautent), jamais survolée (aucun
+surlignage), jamais cliquée ni validée ; plus aucun texte rouge de note sous les valeurs. Le test couvre tous les types de lignes de toutes les pages : il marque chaque ligne, une à une, comme inactive (PauseMarked)
+et vérifie qu'aucune action ne l'atteint (clavier, clic, survol, molette, glisser, saisie, liste déroulante). Le menu est piloté avec un faux « jeu » ; le dessin se fait dans une fenêtre pyglet cachée (EGL sans écran) :
+le survol est vérifié sur les pixels (la ligne inactive ne change pas quand le pointeur la survole, une ligne active si).
+@@ c13b124b9166 d
+Ce que le menu Pause demande à la fenêtre ; `full` peut changer à tout moment (les lignes se recalculent à chaque image).
+@@ c24d4eb69bdd d
+Menu Pause dont certaines lignes (libellés de `inactive`, sur toutes les pages) sont marquées inactives : permet d'éprouver chaque type de ligne.
+@@ 7c5d8b4fac8b d
+Tout ce qu'une action sur une ligne pourrait changer.
+@@ 73d78a275d1b d
+Fenêtre pyglet cachée (une seule pour tout le test) ; None si le contexte graphique manque ici.
+@@ d6a9936a68e4 d
+Dessine le menu puis rend l'image (tableau RGBA, origine en bas à gauche).
+@@ 934c9d8949a2 d
+Zone (x0, y0, x1, y1) de la ligne idx à la dernière image : (zone, active ?).
+@@ 8c2b05bd19a3 d
+« Résolution » est inactive en plein écran (le choix du moniteur du plein écran n'existe plus : le plein écran se fait sur l'écran de la fenêtre).
+@@ c8c873323188 d
+Chaque ligne de chaque page, marquée inactive à son tour : aucune action ne l'atteint, le curseur l'évite, elle n'a pas de zone de clic.
+@@ 2537e16fd6ae d
+Une ligne qui devient inactive pendant qu'on la tient (curseur glissé, valeur tapée, liste ouverte) est lâchée sans rien changer.
+@@ 58bb73b8149c d
+Une ligne grisée parce qu'une autre valeur la rend sans effet redevient active dès que cette valeur change (et inversement).
+@@ 1706c16433a7 d
+La ligne inactive est identique avec ou sans pointeur dessus ; une ligne active change (contrôle du test).
+@@ 336b7af968fd d
+La plaque d'une ligne inactive est plus sombre que celle d'une ligne active, et son texte est gris (pas blanc).
+@@ 385094d0dbe3 d
+Toutes les lignes inactives : ni erreur ni action ; la sélection ne bouge pas, le curseur n'est pas dessiné.
+@@ a564067bd059 d
+Marquer les autres lignes ne gêne pas celle qui reste (contrôle du test).
+## FILE tests/test_interface_panel.py
+@@ 3abe65c528d1 t
+pyglet.window.mouse.LEFT / RIGHT
+@@ c0e73a75d1a9 t
+panneau deplie : x0, y0, x1, y1 (fenetre 1280 x 720)
+@@ c112257e42c4 t
+barre de titre (fold_zone)
+@@ 8d9f17f3e464 t
+(fenetre.on_mouse_drag : x, y, dx, dy, boutons, modifiers ; seuls x et y servent)
+@@ c0324e980f44 t
+coin haut droit = pointeur - decalage de l'appui
+@@ bc71b6ce015a t
+un glisser n'est pas un clic (pas de double clic ensuite)
+@@ 262a9c7284f5 t
+soulevement apres 0,35 s sans bouger
+@@ ab1e87460962 t
+(le pliage attend la fin du delai du double clic : #145)
+@@ 57cc206d48a7 t
+(assez tard : pas un double clic)
+@@ c692e0931e01 t
+premier clic : rien ne bouge encore (on attend un eventuel second clic)
+@@ ef2de104f5e3 t
+deuxieme clic dans DOUBLE_CLICK_DELAY
+@@ 65ff92a0d32d t
+le panneau revient a sa place d'origine, sans avoir change d'etat
+@@ 97d8127316f9 t
+et le pliage du premier clic n'a pas lieu apres coup
+@@ c0c7484fd94b t
+replie, mais pas tout de suite
+@@ b86b35fae02d t
+un seul changement d'etat
+@@ 315762f8a097 t
+pas avant la fin du delai (compte depuis l'appui)
+@@ fa9810040c2f t
+et sans attendre davantage : pas de delai ajoute apres le relachement
+@@ dfd84b4463ce t
+0,45 s apres le debut du premier appui
+@@ ef67be493c2f t
+double clic : retour a l'origine, aucun pliage
+@@ 131ca1459b65 t
+0,57 s apres le debut du premier : le premier clic est deja acquis
+@@ dbd88585f9ce t
+(replie au bout de 0,5 s, sans attendre un delai de plus)
+@@ b2ada69458a8 t
+le second est un clic simple : il deplie
+@@ f524370e773f t
+trop loin : pas un double clic, le premier clic replie aussitot
+@@ cad34a024ca8 t
+et le second (simple) a deplie apres son propre delai
+@@ b4d12118cdec t
+dans le rectangle : double clic
+@@ c0153670d201 t
+pointeur toujours sur place : on attend encore
+@@ f175e9d3b247 t
+il s'est eloigne : plus de double clic possible, le clic simple agit a l'instant
+@@ c75f5a155138 t
+une seule fois
+@@ 4a24ca57480c t
+(clic sur une ligne du panneau, loin de la barre)
+@@ 3fb93c424dd7 t
+(un seul pliage)
+@@ 9b717b00ff06 t
+nouvel appui juste apres : un glisser, pas un double clic
+@@ 5fc39fc7f2ac t
+une ligne du panneau, pas la barre : pas de glisser du panneau
+@@ 58c6b84e6a87 t
+clic droit : Annuler, pas de glisser
+@@ 14e9da37bf85 t
+fenetre plus grande que 1280 x 720
+@@ 039fb7ac93e3 d
+Test du panneau flottant « Interface » (menu Echap > Affichage > Interface) : glisser par la barre de titre, replier / deplier, double clic.
+
+    python3 tools/test_interface_panel.py
+
+Rejoue la suite d'evenements d'une vraie souris, comme pyglet les envoie a la fenetre (on_mouse_press -> Pause.clic, on_mouse_drag -> Pause.glisser avec dx / dy, on_mouse_release -> Pause.relache ;
+l'horloge est simulee, la boucle d'images appelle Pause.maj) :
+  - appui puis glisser tout de suite (sans attendre l'appui long) : le panneau suit le pointeur et ne se replie pas ;
+  - appui sans bouger (ou avec une secousse de quelques pixels) : replier / deplier ;
+  - appui maintenu sans bouger (soulevement) puis glisser : il suit aussi ;
+  - double clic : retour a la position d'origine ; double appui suivi d'un glisser : il se deplace ;
+  - detection du double clic alignee sur Windows (#145) : delai compte depuis le DEBUT du premier appui, rectangle SM_CXDOUBLECLK x SM_CYDOUBLECLK centre sur lui, et un simple clic replie des que le double clic est
+    devenu impossible (delai ecoule, pointeur sorti du rectangle, autre appui) au lieu d'attendre betement.
+@@ 784f94d3f3d6 d
+Souris simulee : horloge et evenements pyglet vers un menu Pause d'un jeu factice.
+@@ a90e68b5dfad d
+Le temps passe (images de la boucle : Pause.maj a chaque image).
+@@ 466b98b226a6 d
+Appui et mouvement immediat (moins de LONG_PRESS_DELAY) : le panneau suit le pointeur, sans se replier.
+@@ 9e4f0f7325f3 d
+Quelques pixels de tremblement pendant un clic (moins de PRESS_TOLERANCE) : c'est un clic, pas un glisser.
+@@ ad28e16d6623 d
+#145 : un clic simple ne plie qu'une fois le delai du double clic ecoule, et une seule fois ; le delai court depuis le DEBUT de l'appui (comme Windows), pas depuis son relachement.
+@@ c8e19d47dd4c d
+#145 (Windows) : second appui a 0,45 s du DEBUT du premier (donc 0,40 s apres son relachement) = double clic ; a 0,55 s du debut = deux clics simples, meme si 0,5 s ne separent pas le relachement du second.
+@@ 45ec4ef28f42 d
+#145 (Windows) : le second appui doit tomber dans le rectangle SM_CXDOUBLECLK x SM_CYDOUBLECLK centre sur le premier ; sinon c'est un clic simple de plus.
+@@ c4c0a79e5e59 d
+#145 : pointeur sorti du rectangle apres le relachement (survol) = le simple clic est acquis, le panneau replie tout de suite, sans attendre la fin du delai.
+@@ 4fb0119843c9 d
+#145 : un autre appui (hors du rectangle) valide aussitot le clic simple qui attendait, au lieu de le laisser traine.
+@@ a1d5afe979a0 d
+#145 : si l'appui a deja dure plus que le delai du double clic (delai systeme court), le clic simple est acquis des le relachement.
+@@ 01b141c15151 d
+#145 : un double clic sur un panneau replie ou deplie ne le replie ni ne le deplie, a aucun moment.
+@@ 2d1f25ee2b34 d
+Un clic suivi tout de suite d'un glisser : le clic plie d'abord (comme avant), puis le panneau suit le pointeur.
+@@ f26e7f849fbe d
+Un glisser juste apres un clic deplace le panneau (il ne revient pas a l'origine).
+## FILE tests/test_interface_settings.py
+@@ ccdf80f888b5 c
+cles de DEFAULT qui ne touchent PAS l'editeur d'interface (affichage, son, texte, touches, camera, vitesses...) ; « infos » = lignes d'information F1, « taille_degats » = valeur fixe (plus un reglage)
+@@ 9b2e1f1a969e t
+sens de la camera deplacee a la souris (#45, D-233) ; version des tailles par defaut des fenetres (#47)
+@@ 103d644636eb t
+case « Favoris seulement » de l'historique (#47) : un etat de la fenetre, pas une interface de l'editeur
+@@ e567faecf6b9 c
+valeurs differentes de DEFAULT pour chaque reglage d'interface
+@@ 427d9c5944e9 t
+boutons et croix : tout revient (affichage, tailles, positions)
+@@ d46016bf2075 t
+bouton de vitesse de combat, fenetres et options de l'editeur : intacts
+@@ 62c13a436114 t
+affichage, taille et position : tout revient (la position : collee sous la boite du bas)
+@@ 9963a0463763 t
+boutons et croix, fenetres et options de l'editeur : intacts
+@@ 28ad6f37e939 t
+taille, position et affichage d'origine
+@@ 92226c224320 t
+les autres fenetres gardent leur reglage
+@@ 6ac7d820acf5 t
+... et leur masquage
+@@ 6b646b0c6cf5 t
+Oui / Non est une interface a part
+@@ be1761ecebc1 t
+rien a remettre : rien ne change, pas d'erreur
+@@ 962e75dc713f t
+interfaces et options de l'editeur (grille, aimantation) : tout est revenu
+@@ e1bb7308e84d t
+les autres reglages ne bougent pas
+@@ a5de0528cf6f t
+DEFAULT n'est jamais modifie par une remise a zero (#47 : seules les fenetres de commandes du combat ont une taille par defaut)
+@@ 7678aac2c31c t
+tout affiche : rien de marque (le bouton de vitesse des combats n'est plus ici : il a sa propre interface)
+@@ 53604bbbd6b7 t
+« Afficher la croix » = Non : la croix seule est marquee (feminin), les boutons non
+@@ 6e59be246ab0 t
+interface entiere masquee : boutons (masculin) et croix (feminin)
+@@ 8a2dc5b00c48 t
+(le panneau de l'editeur et la selection ne dependent pas de l'affichage)
+@@ 51ff40b9abca t
+bouton de vitesse de combat : son propre affichage, independant des boutons
+@@ 307b043ee100 t
+fenetre masquee : marquee (feminin) ; seule celle-la
+@@ 769873d61a3c t
+la place du panneau est une option globale de l'editeur
+@@ 24794de59d8f t
+(les autres reglages du fichier sont gardes)
+@@ 322b6d670988 t
+(jamais place : sa plaque suivait « Fuir » et ignorait la taille des boutons)
+@@ 9c8f6cc0dfa9 t
+les autres boutons gardent les leurs
+@@ 935f5386f91b d
+Test des remises a zero de l'editeur d'interface (menu Echap > Affichage > Interface) : « Retablir cette interface » et « Retablir toutes les interfaces ».
+
+    python3 tools/test_interface_settings.py
+
+Verifie : (1) que toute cle de reglage est classee (interface ou non) : une cle ajoutee a DEFAULT sans classement fait echouer le test ;
+(2) « Retablir cette interface » ne remet que l'interface choisie (boutons et croix de l'ecran, ou une fenetre du jeu / les dialogues) ;
+(3) « Retablir toutes les interfaces » remet toutes les interfaces et les options de l'editeur a DEFAULT, sans toucher aux autres reglages (son, affichage, touches...) ;
+(4) les memes actions, appelees par la page Interface (Pause), changent aussi l'etat de session de l'editeur (place du panneau).
+@@ 444267a5c236 d
+Reglages de test : toutes les cles d'interface et quelques autres a des valeurs non par defaut.
+@@ 468ce2a524f3 d
+« Centrer la camera sur le joueur » n'existe plus (#47) : la camera est toujours centree sur le heros, sauf quand le jeu la prend. Un reglages.json qui contient encore `camera_centree` ou `suivi_camera_v`
+se charge sans erreur, ces cles sont ignorees et ne sont pas reecrites a l'enregistrement.
+@@ fa9cc44b94f1 d
+Un ancien reglages.json (le bouton de vitesse de combat faisait partie de « Boutons et croix de l'ecran ») garde l'etat du bouton : affichage, position, taille ; une seule fois.
+@@ 31b35638f564 d
+Apercu de l'editeur : chaque element masque (toute l'interface, ou la croix seule) est marque, les autres non ; la croix reste selectionnable (son rectangle est toujours donne).
+@@ 682d2c39b34c d
+Les entrees « Retablir » de la page Interface appellent ces remises a zero (jeu factice : `reg` et la liste des fenetres) ; la place du panneau (session) est remise a l'origine par « toutes ».
+@@ 5cdafa1bcecf d
+Le fichier enregistre par la nouvelle version contient les trois cles : le choix du joueur fait foi, meme si « Boutons » change ensuite.
+## FILE tests/test_item_description.py
+@@ 50836588c33a t
+unites d'interface par pixel de police (characterSize 9,945 des descriptions)
+@@ c3595b01cf2a t
+type 38 : texte ancre a x = -214
+@@ 617c298bf67c t
+type 10 : texte ancre a x = -211
+@@ ba2804694aa9 t
+(type, port, numero de chaine) : le port est dans la cle (#219 : la fenetre du casino a d'autres textes au meme numero)
+@@ 9e35245b622b t
+la cellule « Attaque » commence a x = 63 : la description s'arrete avant son cadre
+@@ 0d8806dd7af5 t
+le texte du moteur n'est pas modifie (c'est le rendu qui recoupe)
+@@ 0a3bf1034138 t
+memes lignes, memes retours a la ligne, ligne vide finale comprise
+@@ cc0ed29b2fb8 t
+1re ligne de 39 caracteres = 312 unites > 270
+@@ 6c30c84d8d39 t
+menu Objets : 400 unites > 359
+@@ a1ee24277ffb t
+36 + 31 caracteres : trois lignes a 270 unites, deux en comprimant
+@@ 80a677c878ab t
+(ne plante pas : le texte deborde, comme avant)
+@@ 7a3cb6a2c99a t
+320 unites : un seul mot, 1 ligne, comprime pour tenir
+@@ bd571a59e2f2 t
+30 caracteres = 240 unites : tient (les codes @cN ne comptent pas)
+@@ c384f14578fd t
+le deuxieme appel (meme texte, meme cadre) ne mesure plus rien
+@@ cec8442a2a22 t
+aucun mot perdu, ajoute ou deplace
+@@ bc94b333cd07 t
+(le constat : la majorite des descriptions debordait de la cellule de gauche)
+@@ 1ab89d4a42e1 t
+compression la plus forte : x 0,75
+@@ a6e95a77a5e0 t
+aucune n'a besoin d'etre comprimee : le recoupage suffit
+@@ 45c62648cbc0 t
+barre du bas (z -324 ou -323,5) ou cellule de gauche en combat (z -197), texte a gauche
+@@ 6e9aa5939a9a d
+Description d'un objet qui ne tient pas dans son cadre (retour de 13 h 30, #190) : en combat, « Peut aussi etre utilisee comme objet au / combat. » sortait de la cellule de gauche de la fiche de l'objet (type 38)
+et recouvrait la cellule « Attaque E 74 » ; dans le menu Objets (type 10) une description d'une seule ligne de 50 caracteres allait sous le bouton du sac. Le texte francais du patch a des lignes de 38 caracteres, la
+mise en page du jeu a ete faite pour 2 lignes de ~28 : Render._texte recoupe maintenant la description a la largeur de son cadre (UM.DESCRIPTIONS) et, si 2 lignes ne suffisent pas, la comprime (jusqu'a COMPRESSION_MIN).
+
+    python3 tools/test_item_description.py
+    DQ_APK=<APK patches> [DQ_UI_CACHE=<cache de l'interface>] python3 tools/test_item_description.py        (ajoute les 360 descriptions reelles du patch avec la vraie police)
+@@ 8ca1e1ad65ca d
+Police fictive : 8 pixels par caractere (U = 0,9945 : 8 unites par caractere a peu pres), cellule de combat = 270 unites (33 caracteres), cadre du menu Objets = 359 unites (44 caracteres).
+@@ 57e775cd82eb d
+Les 360 descriptions du patch (assets/msg/en/b0831000.mpt et b0835000.mpt : deux tables jumelles de 180 objets) avec la vraie police SE-GARRIR : aucune ne sort du cadre, ni en combat (type 38) ni dans le menu Objets (type 10).
+@@ 89e6d3cebd16 d
+Les cles de UM.DESCRIPTIONS designent bien, dans la vraie mise en page, la barre de description du bas de chaque fenetre (et rien d'autre).
+@@ 55b7204dceb3 d
+#219 (audit UI-04) : la barre du bas des fenetres du casino (46), d'achat (60, 61), de vente (63) et de la fiche d'objet de vente (70) est recoupee comme celle des fiches d'objet.
+@@ 11328ad06e4b d
+Type 46 : les listes (ports 0 a 3) ont aussi un texte au numero 3 ; seule la barre du bas (port 4) est recoupee.
+@@ 31e50837c051 d
+#219 : barre du bas des fenetres 46, 60, 61, 70 (texte a l'ancre x = -213,5, taille 9,945) : 24 descriptions sur 360 sortaient du cadre (pire : +72 unites), aucune ne sort apres.
+@@ 9cb5d01fb462 d
+Type 63 : texte de taille 8,2875 (0,83 fois les autres) : aucune ligne trop large, mais 3 descriptions de plus de 2 lignes (comprimees pour tenir sur 2).
+## FILE tests/test_keyboard_sfx.py
+@@ a38c1fe7e01c t
+pas de pyglet (CI) ou fenetre non importable : seule la regle est testee
+@@ 3d2c0fcd0cb1 t
+(en combat : seul le bouton de vitesse, propre au portage)
+@@ abc03d56cc76 t
+(la camera du jeu n'a rien a voir avec les bruitages : test_entries.py et test_engine_camera.py)
+@@ bc4e58e63d38 c
+---- doigt / souris : bouton sous le pointeur
+@@ c71ce092edd4 t
+(le bouton est bien presse, seul le bruit manque)
+@@ 6ec2d2d2ff3b c
+---- clavier : menu a curseur local (liste d'une colonne de boutons A)
+@@ 5e037e478f3a t
+(le message d'annulation part quand meme)
+@@ 2c58e3d33a91 t
+les fleches sont dans une autre fenetre
+@@ 15f985d06eb4 c
+---- clavier : saisie numerique (colonnes ▲ ▼, validation A)
+@@ c774de5d0f51 t
+changement de colonne : muet
+@@ a4baba1bdaf0 t
+▲ ▼ : message au moteur
+@@ 047651f96caf c
+---- clavier : touches du terrain
+@@ 6599387d9b3a t
+interdit : rien ne se passe, aucun bruit
+@@ 563691995d11 t
+(A / clic sur le terrain : parler, aucun bouton)
+@@ 6be0de3a2e8f t
+appui souris sur le bouton Discussion : le bruit a deja ete joue a l'appui
+@@ 72186fa94e26 d
+Test (#227, audit SND-08 / SND-09 / UI-01, regle de #60 / D-156) : le bruitage 300 des boutons de menu suit la regle du jeu d'origine, au doigt comme au clavier.
+
+    python3 tests/test_keyboard_sfx.py
+
+Original (MenuPortItem.Update, desassemblage) : a l'appui, `Sound.PlaySE(300)` seulement si la touche de manette du bouton est A (0x10) ou action (0x800). B (0x20), retour (0x400), fleches (1, 2, 4, 8) et zone 0x80 sont muets ;
+les boutons du terrain (Carte, Commandes, Discussion : TouchPad.internalUpdate) jouent le bruitage. Le clavier joue le bruitage « dans les memes situations qu'au doigt » (D-156).
+
+1. La regle (`button_sfx`) : une table de touches de manette.
+2. `Buttons.allowed` : les boutons du terrain permis par le moteur = ceux que `visible_ones` montre (sans le reglage d'affichage).
+3. Vraies methodes de `Game` sur un faux jeu : clic sur un bouton (A / action : bruit ; B, fleches, retour, mode de la carte : muet), menu au clavier (A : bruit ; B, fleches de page, ▲ ▼, colonne : muet),
+   touches Commandes / Discussion / Carte sur le terrain (bruit si le moteur autorise le bouton), carte ouverte (tout muet), lettres tapees dans la saisie du nom (une par lettre).
+(Les parties 2 et 3 demandent pyglet : ignorees sans lui, comme dans la CI.)
+@@ b7aef81fee95 d
+Faux jeu : un journal des bruitages demandes et des messages envoyes aux menus.
+@@ a939883435c4 d
+`Buttons.allowed` suit `Buttons.visible_ones` (le reglage « boutons » mis a part).
+@@ 68a99f1e1197 d
+Un faux menu : liste de (numero, manette, x0, z0, x1, z1) en unites d'interface, rendue sous forme de `wnd` (boutons) et de zones en pixels.
+@@ 7f1f897bea21 d
+Vraies methodes de `Game` (_menu_input, _step_entry, on_mouse_press, _entrees, _hud_sfx) sur un faux jeu.
+@@ 87fc87ef0a79 d
+Une lettre tapee au clavier joue le bruitage du bouton, comme le clic sur la lettre.
+## FILE tests/test_language.py
+@@ ecdf3f808b33 t
+France, Belgique, Canada, Suisse, Luxembourg, Monaco
+@@ 179c74f6089c t
+anglais US / GB, allemand, japonais, espagnol, italien, portugais, russe, chinois
+@@ b6aab9b5553d t
+(« fra », « frisian » : pas le francais)
+@@ c03a10a41624 t
+absent
+@@ 07f138e855b9 t
+cle absente
+@@ c978faff418b t
+illisible
+@@ 88fa9eaff48e d
+Langue de l'outil (language.py, D-238), sans fenetre ni moteur : detection de la langue de l'ordinateur (francais quelle que soit la variante, sinon anglais), reglage, `tr` / `N_`,
+lecture du reglage dans reglages.json, et regles du catalogue anglais (texts_en\) : memes trous (%d, %s...), memes espaces aux bords, pas de francais dans l'anglais, pas de doublon,
+chaque texte litteral passe a `tr(...)` / `N_(...)` dans le code a sa traduction.
+
+    python3 tests/test_language.py
+@@ 0281133439f1 d
+Le texte contient une lettre accentuee ou un mot-outil francais.
+@@ 6df571a559c1 d
+Regles du catalogue anglais (tous les fichiers de texts_en\).
+## FILE tests/test_launcher.py
+@@ fa61222c48f2 t
+la ligne qui lance le jeu
+@@ 724e3b299015 t
+chaque pause d'avant suit un message d'echec (Python introuvable, installation...) ou un « exit /b 1 »
+@@ 0c10e9193352 t
+chemins et noms propres exclus
+@@ 02c6ac2576c7 t
+la console Windows n'affiche pas les accents sans reglage : pas d'octet hors ASCII
+@@ 694cb45b5e36 d
+launch_dq4.bat : la console se ferme avec la fenetre du jeu (D-236) ; messages en francais ou en anglais selon la langue de Windows (D-238). Le fichier est lu comme du texte (sans Windows) : apres la ligne qui lance le jeu, `pause` n'est permis
+que dans le bloc « si le code de sortie n'est pas 0 » (le jeu s'est arrete sur une erreur : on laisse le message lisible), et le lanceur rend le code de sortie du jeu. Fins de ligne CRLF conservees. Les messages sont des etiquettes
+(`:m_xxx_fr` / `:m_xxx_en`) en bas du fichier, appelees par `call :m_xxx_%DQLANG%` : chaque appel doit avoir ses deux versions, l'anglaise sans mot francais, et le fichier rester en ASCII.
+
+    python3 tests/test_launcher.py
+@@ 5974e4e546ab d
+Les lignes du lanceur proprement dit : jusqu'a « exit /b %CODE% » (apres, ce ne sont que les etiquettes des messages).
+@@ 7f86aa42cadd d
+{nom d'etiquette : lignes} pour les etiquettes `:m_...`.
+## FILE tests/test_level_hp.py
+@@ 96272fcfbe53 t
+dans HaveStatus (le meme ordre que getHp / getHpMax / getMp / getMpMax du moteur)
+@@ d49a8915d9a0 t
+PlayerStatus : taille ; HaveStatus a +0x58 (HaveStatusInfo +0x10, puis +0x48)
+@@ e42d2b6b1cfd t
+une valeur qui n'est pas un booleen retombe sur « desactive »
+@@ 126d9beff6c1 t
+par defaut : comme le jeu
+@@ 8dde1fa66181 t
+rencontre : un monstre du groupe 3 (numero de monstre, nombre) a Encount + 0x34 / 0x44
+@@ 352c2cf1171d t
+a 1 point du niveau suivant, 2 PV
+@@ 21d430d5bdae t
+les autres n'ont plus de PM : personne ne peut soigner (un sort de soin d'un compagnon fausserait la mesure)
+@@ cce6a3c9805b d
+Option « PV et PM restaures au niveau superieur » (reglage `level_heal`, Engine.level_heal) : le moteur d'origine tourne sous Unicorn.
+
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 -m unittest tools.test_level_hp
+
+Sans ces deux variables, les tests du moteur sont ignores (seules les constantes sont verifiees). Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
+Ce qui est mesure :
+  - appel direct de status::HaveStatus::levelup(bool) sur des membres du groupe (PV 3, PM 1 avant) : option desactivee, les PV et PM restent ; option activee, ils passent au maximum du NOUVEAU niveau ;
+  - un vrai combat gagne (monstre force, un membre a 1 point du niveau suivant) : la montee de niveau du jeu passe par cette fonction avec l'argument faux (appelee par HaveStatusInfo::levelup), et le membre
+    sort du combat avec tous ses PV quand l'option est activee, sans changement quand elle est desactivee.
+@@ 45f92a6432e1 d
+`tbz w20, #0, #+0x10` : bit 0 du registre w20, saut de 16 octets.
+## FILE tests/test_loading.py
+@@ b501bec466d7 t
+bit 12 du paquet 9 : fondu vers la couleur (sortie) ; sinon entree
+@@ 0ea08ede1100 t
+(l'image qui leve la retenue fait deja le 1er pas du fondu)
+@@ 0fddda01f4c8 d
+Test de la retenue du dessin pendant un changement de carte (micro-images de mise en place du decor) et de l'absorption des blocages de chargement.
+
+Le moteur envoie le decor de la nouvelle carte (paquet 0) une image AVANT sa camera (paquet 10) et les positions de ses personnages (paquet 13) ; le fondu d'entree demarre, lui, a l'image du chargement.
+Sans retenue, une image de la scene d'avant (camera) / sans personnages se voyait sous les quelques % d'opacite restants. `State.loading` retient le dessin (noir + fondus seulement) et suspend le fondu d'entree
+jusqu'a ce que la scene soit en place, sans changer la duree du fondu.
+
+  1. regles pures (`State.apply`, `update_loading`, `tick_fade` sur des paquets fabriques) ;
+  2. absorption des blocages (`Game._absorb_blocking`, faux objet) ;
+  3. Windows : transitions du gestionnaire de fenetres (`transitions_dwm`, systeme simule) ;
+  4. moteur d'origine (si --apk et --saves sont donnes) : teleportations vers des cartes de villes : la retenue dure au plus LOADING_MAX images, la 1re image montree est complete (camera envoyee, personnages
+     places) et le fondu d'entree garde toute sa duree.
+
+    python3 tools/test_loading.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4]]
+Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
+@@ 9ff2003849d1 d
+Un pas du moteur vu de l'etat (Engine.step) : image, paquets, fin de la retenue, fondus.
+@@ a5ddec56075b d
+Paquets d'un chargement de carte : decor, fondu d'entree, un personnage cree (sa position arrive a l'image suivante).
+@@ 3bebfb9505f3 d
+Etat apres un fondu au noir termine (ecran couvert), sur une carte quelconque.
+@@ df174e194c6c d
+L'image qui leve la retenue d'un chargement n'est pas interpolee depuis l'etat de la retenue (camera d'avant) : Game._interpoler sur un faux objet.
+@@ 095eef3acc9b d
+Windows : animation d'ouverture de la fenetre coupee pendant le lancement (fenetre.transitions_dwm). Ici sans Windows : le systeme est simule.
+## FILE tests/test_lying_pose.py
+@@ 129c95732246 t
+se couchent sans angle precis : 0 -> 180 degres
+@@ e2ef459265dc t
+(aucun paquet pour l'emplacement 8)
+@@ 9b7523d5e9e6 t
+DisplayCharacter::setSleepFlag(0)
+@@ 7193611487c3 t
+DisplayCharacter::draw : 0x400 | angle << 12 (sans les bits 8 / 9 : le sommeil continue)
+@@ 88dbb0e831ff t
+Chara..cctor : y = 0 tant qu'aucun paquet 17
+@@ 89cea676444c t
+nouvelle carte : la statique de Chara reste
+@@ 06029f8a9f93 t
+emplacement inconnu : sans effet, sans plantage
+@@ acd2f6415f4c t
+emplacement inconnu
+@@ a8dc24bd1a36 c
+direction 0 = tete en haut, 0x4000 = a gauche, 0x8000 = en bas, 0xc000 = a droite
+@@ 9a2a29e64473 c
+le corps a plat garde sa taille de feuille a l'ecran : largeur 0,48 x 2,25 = 1,08, hauteur 1,44, quelle que soit l'inclinaison de la camera
+@@ 4fb968476359 t
+profondeur du centre du corps
+@@ 73c14ae7b0c2 t
+bas gauche -> bas droit
+@@ 2a690fa29bdc t
+bas gauche -> haut gauche
+@@ 65e60dd5d985 t
+rectangle, aucun cisaillement
+@@ 5bb987d1f4c4 t
+le haut de la feuille est en haut de l'ecran
+@@ 9d76bcecb9c9 t
+vecteur « pieds -> tete » a l'ecran
+@@ 2f58c7fdae50 c
+bas gauche -> bas droit puis bas gauche -> haut gauche : meme sens de rotation que la feuille debout (produit vectoriel positif a l'ecran)
+@@ 2a9834bd0ed7 c
+la camera tourne de 90 degres : le corps (monde) tourne a l'ecran dans l'autre sens : tete a droite (0xc000) devient tete en haut quand la camera tourne de 90 degres
+@@ 7028372760b9 t
+reste un quart de tour exact (pas un angle quelconque)
+@@ 25ba8bbabf9e c
+z-buffer : la profondeur des 4 coins est celle du rectangle a plat (a 0,1 + hauteur du sol), pas celle d'un panneau debout
+@@ 786e6f011193 t
+soldat en armure bleue
+@@ 0c3466502ea9 t
+couche (bits 8 et 10) : emplacements 0 (heros) et 1 (compagnon)
+@@ e0731080176a t
+se relever (bit 9, sans direction) : emplacements 0 et 1
+@@ 820170fa0076 d
+Tests des poses couchees (paquets 16 / 17 / 18, #45) : decodage des paquets (State.appliquer, sans moteur) et geometrie (lying_pose.py, sans fenetre) ; avec le vrai moteur (si DQ_APK et DQ_SAVES
+sont donnes) : la carte taf1 (chateau a dalles vertes, soldat en armure bleue emplacement 8) envoie bien le paquet 16 0x0c000508 et le paquet 17 [1040, 1863].
+
+    python3 tools/test_lying_pose.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_lying_pose.py      (ajoute le test du vrai moteur)
+@@ 45d37fd9e5cd d
+Camera de ville : (droite, haut, avant) et position ; le tangage regarde vers le bas, le lacet tourne vers +X.
+@@ 99e1aa66bc3d d
+Coordonnees ecran (focale 1) d'un point monde et profondeur.
+@@ 00fa72f77908 d
+Le heros et ses compagnons (emplacements 0, 1...) se couchent par le meme paquet 16 que les PNJ : TownPartyDraw::setSleep(true) (appele par la commande de script cmd_set_player_sleep) envoie
+0x500 | angle << 12 pour chacun, puis 0x200 pour se relever. Le crochet sur setPosition donne l'objet TownPartyDraw (Unicorn : vider les blocs deja traduits).
+## FILE tests/test_magic_entries.py
+@@ 0ff8184cde93 t
+ligne de cout de la rangee 0
+@@ f26d3e8c8fe7 t
+meme ancrage, sans tabSize
+@@ ac4fa389fefb t
+4 rangees au plus : ni la 5e ni la 6e
+@@ 3fc58ecf21ec t
+rejeu d'une fenetre : les codes de rangee d'abord
+@@ 135509724694 t
+menu Utiliser / Transferer / Abandonner : preset 1, trois rangees
+@@ 0f107cfd592d t
+le texte suit sa plaque
+@@ 4a6ba920eac1 t
+retour au preset 0 : tout est remis en place
+@@ 06fa44db7762 t
+le champ du nombre garde sa largeur : la colonne reste alignee
+@@ 690d4f0d74af t
+le texte 301 n'a pas de tabSize : rien n'est remplace
+@@ d19cc0e67894 t
+le texte lui-meme n'est pas modifie
+@@ 668717166e58 t
+aucun mot perdu ni ajoute
+@@ 34d5a2b0bbee t
+3 lignes de 29 caracteres : recoupees a 40 elles feraient encore 3 lignes : le texte est comprime pour tenir en 2
+@@ f8a7ee6ba49e t
+PV, PV max, PM, PM max
+@@ 2ecbfcbe9702 t
+emplacements de PlayerStatus dans originalPlayer_ (groupe de l'emplacement 1)
+@@ 978a11b5ed06 t
+identifiants d'action des sorts du terrain
+@@ d5af9d550744 t
+(Multisoin : 10 PM, sans cible ; Evac' : 1 PM ; Passage sur : 2 PM ; Mappille et Sifflet : 0 PM)
+@@ b2798ff19aad t
+le dialogue d'ouverture doit etre ferme et le joueur libre
+@@ b2a2d7c0287d t
+HaveStatusInfo = HaveStatus - 0x48
+@@ e118c36706c4 t
+menu racine : « Magie »
+@@ c8e00f93ea80 t
+liste des personnages : Doc
+@@ 87b79561dc0e t
+le sort de la rangee 0
+@@ 089beeafcd73 t
+la cible
+@@ b6ace5c9b6b8 t
+SoundManager::playSe : bruitage de lancement (tous les sorts) ; bruitage de soin
+@@ e70ba6a67bef t
+rangee 0 sur deux lignes, 1 a 3 cachees, preset 0
+@@ 8c38e5ee8f2b t
+le message officiel d'Evac' (id 0xc3d6d), pas « Les blessures de Ragnar guérissent ! »
+@@ e46c7b9b34d7 t
+Evac' a Strattbourg : le jeu a son propre message (« Mais il ne se passe rien. »)

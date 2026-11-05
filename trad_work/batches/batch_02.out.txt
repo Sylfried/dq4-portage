@@ -1,0 +1,676 @@
+## FILE dq4_pc/core/engine.py
+@@ 2c92e4fa21c5 t
+return to title: None, 'ouvrir' (to be launched at the next step) or 'dialogue' (the game's Oui / Non box is waiting for the answer); see request_return_to_title
+@@ d6c3954018d4 t
+the player chose "Paramètres" in the Divers menu: the viewer opens its Pause menu (see _divert_params)
+@@ c04b27678800 t
+FieldData::drawBlock(this): the object that holds the world map
+@@ 63b311af6965 t
+dialogue history: hook on TextBuffer::cat (installed before the first frame: Unicorn keeps the blocks already translated)
+@@ 28dca7fc1d92 t
+battle history: read-only hooks (defeated enemies, gold, experience; see battle_history.py)
+@@ c431ef10c77f t
+the title runs for a few frames (cursors initialized)
+@@ b876bb74c770 t
+other engine version: nothing is touched
+@@ fc00714a54dd t
+letters the engine is about to write (window speed word x 4)
+@@ dcacc0d5bbab t
+player setting only while the game is at its standard speed (4); any other value (100 for battle windows, speed set by the game) is the game's own
+@@ e0ceb307fadd t
+game speed: unchanged (also when the setting is "comme le jeu", 4)
+@@ 63156c970d3e t
+x1: the game as is
+@@ 4abeb38142f1 t
+signed 32-bit integers (the counter goes negative when it triggers)
+@@ b3462b02c329 t
+call skipped: direct return (the stack is already restored, x30 = the caller's return address)
+@@ 01d2f6c4a0d2 t
+(the PLT stub: adrp x16 ; ldr x17, [x16, #0x968] ; add x16, x16, #0x968 ; br x17: its entry in the address table, 0x240968, contains addPlayTime)
+@@ bbd419d84392 t
+call skipped
+@@ 3e900f3043a6 t
+`bl` to the UseAction::execUse stub?
+@@ 77154e985466 t
+UseAction::getUseMp
+@@ 31768393603a t
+MP spent: the spell had an effect
+@@ f909f81661b1 t
+the game already has its failure message
+@@ 116bf2813989 t
+the healing sound effect of the next step is cut off (see _sound)
+@@ 645dcd09d703 t
+a single copy of the message (the engine shows it once per living target)
+@@ b782d01178d6 t
+exit from the target loop: no more healing sound effect pending (menuUpdate plays one per remaining target) if nothing happened
+@@ 1e0316743dc8 t
+before `sub w8, w8, #0xc4`: the spell had no effect -> w8 = 0xc7 (result 3 > 2): no healing sound effect
+@@ c5666e44e2c6 t
+address after the `ret` of the function
+@@ 8a726c403ea9 t
+UnitySetFade: `mov w10, #9` (packet type) at +8; other engine version: nothing is touched
+@@ 6a47540f8b4b t
+(blocks already translated before the hooks)
+@@ ef9f9340ecb5 t
+a savestate loaded during the return-to-title box: the box no longer exists (engine memory replaced)
+@@ 54254386c764 t
+already widened (reapply_fixes)
+@@ e45f7b353d67 c
+TownMenu_OPERATION_ROOT::menuUpdate (list of the Divers menu): "cmp w8, #7" (0x16ef28) followed by "b.ne" to the "unknown button" exit;
+button 7 ("Paramètres") closes the menu and opens TownMenu_OPERATION_SETTING
+@@ 38b118c4ec1d t
+"cmp w8, #7" -> "cmp w8, #4095"
+@@ 06d6baa38dc8 t
+(0x713ffd1f = already patched)
+@@ 85deaae80666 c
+text canvas of the messages: Unity creates it through a port message (width, height); the handler is called directly
+@@ c5f824c87bfe t
+the answer of a previous box does not count (MenuBase::menuBaseSetup resets it to 0 when the menu is added; here it may already be added: an NPC message in progress)
+@@ fd57d48db4e0 t
+closed without an answer (the engine's scene took the box over: a message from more than one script, for example): the request is dropped, the player is released
+@@ bbc05606f208 c
+walking speed of the hero (Fix32 per engine step, original values from libdq4core): towns (two variables), world map (Speed, plus the two local constants
+0x27520c and 0x275210 that FieldPlayer::move reads when moving diagonally). Running speeds up the engine clock (viewer, _loop), not these values;
+they are put back to the original only when a savestate is loaded (see reset_speeds)
+@@ 409746d2b8d7 t
+the cascade follows "Vitesse de transition" like the fades: 57 frames at x1, 57 / factor afterwards (the simulation advances 57 frames in total, see Game._draw_effect)
+@@ 6fc7f0032efe t
+last call of the arrival (state 4): the game's camera is given back to the game, the scene reappears
+@@ b5ff93cb9b93 t
+bit 0: "a fade is in progress" (Fade.FadePlane.CheckFade: remaining frames > 0). The engine raises it itself when it starts a fade (UnitySetFade) then waits for it to drop
+@@ 64709f2fd2c5 t
+(Global::IsFadeEnd: inn, chapter titles, loading screen, menu openings, whistle...)
+@@ 894230ca5736 t
+(test) "image:monstre:hauteur:degats,...": calls BattleMenu_setHoppingNumbers like the engine after a hit
+@@ dff9b86d99a7 t
+(test) log of the battle packets: frame, [(type, ints...)]
+@@ db6508e9eb44 t
+(temporary test) all packets except 22/28/29
+@@ 6c07ed83e9f2 t
+the battle scene has arrived
+@@ 7f8206b9b385 t
+end of battle: the fade-in that follows on the map is the return one (the game's duration)
+@@ ca957c8a2dfc t
+battle without a screen effect (scenario...): the previous scene must not appear before the battle's scene has loaded
+@@ e9157d19fea6 t
+armed during this step (the engine has already decremented it once)
+@@ dbc516cc5a3b t
+the fade of this exit has not (yet) arrived
+@@ 888f6991d1d8 t
+heads/tails at 0, free pointer = 65
+@@ 5667b66854bf t
+otherwise: a menu whose input the engine requests (command 6 on every frame), even under a message: the Oui / Non of a question
+@@ 9a595d923b24 t
+(test) interface -> engine messages
+@@ 37161d88fa6e t
+number of visible lines of the window (engine setting)
+@@ 3a5c17b8d78a t
+height of a line (canvas pixels)
+@@ 186610e2b74f t
+current scroll (the engine animates it by 8 pixels per frame)
+@@ 6a250ff13a76 t
+the canvas is circular (512 lines, REPEAT) and the engine's scroll grows without bound: like `ui_menu.select_language` (y & 0x1ff)
+@@ a7ea8259df40 d
+The game engine (libdq4core.so, ARM64) running in an emulator + decoding of what it asks of Unity.
+@@ d9c383befa04 d
+Core + saves: reads from a real folder, persistent writes (never into the originals).
+@@ 0d2399d6198a d
+Attribute dictionary read from a pickle -> the same one with the current names.
+@@ b0ed19ad2e11 d
+What Unity would know on screen: decoding of the engine's packets.
+@@ 953f08f29a88 d
+What the Unity interface remembers of the engine's messages: one window per port (list of texts, cursor, open or not).
+Messages of a port (after the first byte = number of arguments): [1,..] opens; [7,0] closes; [11,line,column] announces
+that the port's next message is the text of that cell; [4,i] cursor on line i; [12,line,x] and [10,..] settings.
+@@ f1ef59c690fd d
+Is the game in a battle transition: start screen effect (the "cascade"), black screen waiting for the scene, battle arrival and exit fades, fade back to the map (and the 1 to 3 frames
+between two of these fades)? Since #47 its duration in frames follows "Vitesse de transition" (State._fade, Engine._start_battle_effect) like any fade; its clock stays the game's for the cascade and, on the return to the
+map, while the player is locked or between two fades (Game._speed_factor: as soon as the player is free, accelerated walking and the accelerator take effect, #127), whereas "Vitesse de combat" acts from the end of the cascade (black screen, arrival fade, messages) up to and including the end fade.
+@@ 7dbd81d9ec3c d
+One game frame (after tick_fade): the windows and the battle transition guard run down.
+@@ 2afe841d6b12 d
+Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command): fade-out = toward opacity 1 from the current opacity;
+fade-in = the plane starts again from opacity 1 toward 0 (Unity starts from the plane's current opacity: the same thing after a completed fade-out). Duration <= 1 frame: immediate.
+@@ 307a2edf40f4 d
+Fade.SetFadeOutBlack(0) on plane 0 (in front of everything): opaque, black, immediately (end of the lamp and Riremito effects); it stays that way until a fade-in started by the engine.
+@@ ea3e63aa047c d
+Fade.SetFadeIn(frames) on plane 0 (arrival of a trip, Capture.Tabi): from the plane's CURRENT opacity to 0, in `frames` equal steps (FadePlane.Command, IN): no visible effect if the plane is transparent, and
+the "fade in progress" bit of Global.Flag stays raised for `frames` frames (CheckFade), as in the game.
+@@ 207bca896a42 d
+End of the drawing hold after a map load (once per engine frame, after `apply`). The viewer has seen only packet 0 (new scenery) at the load frame: camera of the previous scene,
+characters without a position, no tint and no object orders; the engine sends the camera (packet 10) and the positions (packet 13) on the next frame (59 maps tried, 529 maps counted: always the offset of 1).
+While `loading` exists, the window draws only the fade planes (black of the covered screen) and the fade-ins are suspended (`tick_fade`): the game's fade keeps its full duration, it just starts
+one frame later, on a complete scene. Ready: at least LOADING_MIN frames, camera received, and visible characters all placed (at most LOADING_PLACEMENT waiting frames); safeguard LOADING_MAX.
+@@ 1d17e8f5348d d
+FadePlane.Update: once per game frame, for each of the two planes. Safeguard (front plane only): a screen that stays fully black for more than 6 s (fade-in started by Unity itself, not by the engine) is reopened;
+the background plane has none: the engine keeps it black by itself (chapter title, 160 frames) and reopens it with a command.
+@@ bdd213b4fa6f d
+A setting or a hook could not be installed (different engine instruction: another APK version). The game continues with the original behavior; the line goes to the console and to `missing_hooks`
+(without duplicates: reapply_fixes passes through here again after a savestate is loaded), from there the window notes it in erreurs_fenetre.log and warns the player with an on-screen message.
+@@ 7a7d6ccdcd23 d
+Text speed of dialogues and scrolling in battles (player settings, Esc menu).
+- Text: ui_MsgLoop writes, on every engine frame (30 Hz), `speed x 4` letters (speed = word at MSG_SPEED, copy of the window type's array: 1 for dialogues, 100 for battle windows that
+  display their line all at once). A hook on `sxth w20, w8` replaces this number with the setting's (`text_speed`, letters per frame, fractions accumulated; 4 = like the game: the hook does nothing).
+- Battles: BattleAutoFeed reads OptionStatus.battleSpeed (g_Option + 5, the game's option "Vitesse des messages", saved in the save file) on every message: `scroll_mode` (None = nothing is touched)
+  is written at that address before each frame; a change made by the player in the game's Settings window (setBattleSpeed called from TownMenu_OPERATION_SETTING::menuUpdate) is
+  reported to `scroll_callback(value)` (loading a save, for its part, goes through Profile::deliverDATA_PARTY and triggers nothing).
+@@ e6ff48e7a91f d
+Option "PV et PM restaures au niveau superieur" (`level_heal`, false = like the game). Every level-up goes through `HaveStatus::levelup(bool)`: it recalculates the stats, then, if the argument is true
+(the case of `debugLevelup`), sets HP and MP back to their maximum (`tbz w20, #0` at +0x3f8: HP <- max HP, MP <- max MP). A hook on that instruction forces the bit when the option is active; the rest of the calculation is the game's.
+@@ 7cd3928482c3 d
+Random encounters and accelerated walking (see encounters.py). `walking_speed` (written by the viewer before each step: walking acceleration factor, 1 = normal; always 1 in battle)
+> 1: the hook on `str w8, [x0]` of `CountDown::exec` (w9 = counter before, w8 = after) replaces the counter's loss with (1 + a) / (2 a) times the game's, so that the encounters per
+real second are (1 + a) / 2 times those at x1 and not a times. At 1 (or less): the hook does nothing (the original game, identical).
+@@ 5ac135a3b3ea d
+Arrival of night and accelerated walking (see encounters.py, #163). World time advances only through the tail jump `FieldStage::ChangeTime(0)` of `FieldPlayerDoku::checkDokuDamage` (+ 0x38, world map,
+on every engine frame where the hero advanced). `walking_speed` > 1: this jump happens only for the fraction (1 + a) / (2 a) of the calls (`Passer`); for the others, the hook goes straight to the `ret` of the
+function (the stack is already unwound at that point), so that night arrives (1 + a) / 2 times faster per real second and not a times. At 1 (or less): the original game, identical.
+@@ 876b61636520 d
+Save play time on real time (#239, audit ENG-04, probe of 2026-11-04). The engine adds 2 units (1/60 s) per step (`GameStatus::addPlayTime(2)` in `Global::NativeExec`): at x1
+(30 steps per second) that is real time, but accelerated walking and fast battle make `a` times more steps per second and the play time (and the history timestamp, which reads it) runs `a` times too fast.
+`clock_speed` (written by the viewer before each step: acceleration factor of the game clock, walking AND battle; 1 = normal) > 1: the hook skips the call (returns directly to the next instruction, nothing
+else is touched: x0 and w1 are no longer used) for the fraction 1 - 1 / a of the steps (`Passer`), evenly. At 1 (or less, slowed down): the original game, identical.
+@@ 6cd26ef71639 d
+Spells of the Magie menu (outside battle) that cost MP but spend none: the engine spends MP only if the spell had an effect (`BaseAction::useMp`), but for heals it announces the success message anyway
+(the action table gives the same text for success and failure: "Les blessures de X guerissent !" at full HP). The Magie menu casts the spell through `UseAction::execUse` in two places (choice of a
+target: `TownMenu_MAGIC_CHARSELECT::menuUpdate`; group spell or spell without a target: `TownMenu_MAGIC_ROOT::useMagicNoTarget`) then shows `param + 0x1f8` ("X lance le sort Y !") and the list `param + 0x210`.
+A hook before the call notes the caster's MP, a hook after compares: if the spell costs MP (`excelParam` table), the MP did not drop and the game announces its success message (fields 1 / 3 of the
+message table) or none, the list becomes the game's message "Mais il ne se passe rien." (`MSG_NOTHING_OCCURS`, only once, even for a group). The game's own failure messages (Rappel, Antipoison, Evac'...) and battle do not change.
+Sound effects (measured on the real engine): the cast plays sound effect 306 (the same for all spells: it always stays); the result message then plays healing sound effect 501 (`menuUpdate` + 0x110, for actions 196 to 198: Premiers secours, Soins
+partiels, Soins complets, without checking whether the heal was used): when the spell had no effect, this second sound effect is cut (a single `sub` modified before the instruction: the comparison output becomes 3, above 2). A group spell with no effect already no longer plays it (empty target loop).
+@@ a5576a25819e d
+Fades started by a game SCRIPT command (fade_in / fade_out: `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, which call Global::fadeIn / fadeOutBlack... then UnitySetFade with the script's duration,
+and themselves wait for that number of frames: `isEnd` counts the frames): packet 9 receives the PJ.SCRIPT_FADE_MARK mark, and State._fade does not shorten this fade ("vitesse des
+transitions" setting: it applies to the engine's fades, map changes..., not to those a script has fixed). Without the mark, the shortened fade would leave the screen black until the end of the script's wait.
+@@ 14f831a22332 d
+Address of a byte of status::g_Option (OptionStatus: +1 music volume, +2 sound effect volume (0 to 4), +5 battle message speed).
+@@ b59069033d06 d
+(music volume, sound effect volume, battle message speed) of the game's options (Settings window, saved in the save file).
+@@ 3ecc2e458539 d
+Battle message scrolling imposed on every frame (code 0 to 3: wait of 12 / 22 / 32 / 42 frames, 4: manual); None: the game's value is returned (the one from the save, or chosen in its Settings).
+@@ 3423d1196fc3 d
+Before each engine frame: the imposed value is written; if the game had set another one (loading a save or a savestate, Settings window), that is the one that will be returned.
+@@ 12d5c987ec47 d
+(test) (open message, ui_MsgLoop state, current letter, end of line, window type speed).
+@@ 8c3fb96f790e d
+Puts back the fixes that the viewer places in the engine's memory (widened locations window, no "Sauv. cloud", "Paramètres" button, original walking speeds). Called after a savestate is loaded
+(savestates.apply): the library's original image is reloaded first, and a savestate recorded by a version that did not yet have a fix does not contain it. Each one is idempotent.
+@@ cc465d7e767f d
+FieldData::drawSymbol shows the world map's locations (towns, caves...) only in the window of the original portrait screen around the hero
+(x from -192 to +448, y from -192 to +788 pixels, plus a margin): in 16/9 the locations at the sides appeared only once very close. The three constants of
+the function (add w22/w23/w24, w9, #imm) are raised to 1600 pixels: the window covers everything the viewer can show, even zoomed out.
+@@ d50ba9e8b086 d
+The "Paramètres" button of the Divers menu opens the viewer's Pause menu, not the game's original settings (volumes, speed, D-pad size, return to title): the comparison of the chosen button's number with 7
+is raised to 4095 (never equal: the engine treats the press as that of an unknown button, does not close the Divers menu and does not enter the "Settings" state). Without effect if already done or if the engine is another
+version. Called again after a savestate is loaded (savestates.apply puts back the library's original image).
+@@ 55fe88e96d0b d
+Patch of the "Paramètres" button (patch_params) and hook on the comparison: it raises `request_pause` when the chosen button is 7; the viewer then only has to open its Pause menu (Game.tick).
+@@ 75e0d9862205 d
+(trial) forces the switch to the world map: Global::startField().
+@@ fd4d00eaad7e d
+Return to the title screen: the end of the "Revenir à l'écran titre" button of the game's original Settings when "Oui" is answered (TownMenu_OPERATION_SETTING::menuUpdate, state 5): clears bank 4
+(autosave, killbank), closes the box, locks the player, then Global::startTitle() (30-frame fade to black started by UnitySetFade(0x101e), chapter 0, the next part is the title). To be
+invoked DURING a step (see _return_to_title_after): the fade packet must be read with those of the step, otherwise the fade is lost (the buffer is reset to zero at the next step) and the screen goes black at once.
+@@ a44f44d2dfe8 d
+Pause menu > "Revenir à l'écran titre": opens the game's box (its text, Oui / Non) at the next step, like the button of the original Settings. -> false if a request is already in progress.
+"Non" closes the box and gives control back to the player; "Oui" launches back_to_title, with the game's fade. Both continuations are played by `_return_to_title_after`, after each GameUpdate.
+Only in towns and on the world map, the two parts where the original Settings menu exists and where the box responds (trial: in battle, the box opens but receives neither keys nor
+clicks, the battle command menu keeps control; not verified in shops and the casino games).
+@@ 8d3dd441ea6a d
+Before GameUpdate: opens the box. Same sequence of calls as state 5 of the original Settings menu (menuUpdate + 0x1ac): openMessageForMENU, addMessage(0xCBA2F), setYesNo() (cursor on "Oui"),
+setYesNoSuperCancel(false); the player is locked as in the game's menu (PlayerManager::setLock(true), given back by "Non").
+@@ 8063dcdbbf57 d
+After GameUpdate, before the packets are read: the box's answer (TownMenu_MESSAGE + 0x10, as the original Settings menu's menuUpdate does). 2 = Non: the box is closed and control is
+given back (setLock(false), the inverse of the opening). 1 = Oui: back_to_title, in this step, therefore with its fade.
+@@ 980ad9bdc58c d
+(trial) loads a town or a dungeon: Global::startTown(name_str). Refuses a name without a map file (`assets/map/<name_str>.stg`): the original engine does not test it and crashes (null pointer in FldStage::getCameraLimitL),
+for example `za3f3`, an orphan map (`.map` and `.fld` in the graphics pack, no `.stg`) (#76).
+@@ 35bbf9861da3 d
+Puts the hero's walking speeds back to their original values: a savestate recorded by an older version during a run contains them increased (running no longer touches them).
+@@ 85b569897752 d
+(current index, count) of the shops in the list of a town's map (TownImageMap::execute: two local statics, 0x2750c4 and 0x2750c8; the list is the type 24 window).
+@@ 2a81783f2303 d
+Camera of the original engine's towns (TownCamera, static object): (left limit, right limit, lock); limit = 0: free rotation, < 0: rotation forbidden, > 0: bounded angle (units of 1 / 4096 of a turn); lock: camera locked by an event.
+@@ 1ba79591f17d d
+State of the engine's TownCamera (static object), to know whether the game drives the camera: (lock +0x3e, target mode +0x48, viewpoint lock +0x40, movement in progress +0x43).
+@@ 0eb2934e5183 d
+Camera rotation that the game has just accepted (TownPlayerManager + 0x698, CAMERA_ROT_TYPE): ROT_CAM_RIGHT or ROT_CAM_LEFT as long as the button held at this step has not yet turned the camera (player lock, scene, location that forbids
+turning it: the game does not touch it and the value stays 0), ROT_CAM_NORD during the return to north.
+@@ df48325fe07b d
+`times` more rotations of the game's camera (direction: ROT_CAM_RIGHT or ROT_CAM_LEFT), each exactly that of one engine step (setCameraRotType then TownPlayerManager::setCameraRot: TownCamera::rotateL / rotateR, which clamps according to the limits
+of the location, and rotation of the party's direction so that the hero keeps his heading on screen). Used by the "Vitesse de camera" setting (the game turns only one notch per step) and by the wheel click drag. Called after a step that took the button (camera_wait)
+: the rotations of this step ARE these `times` calls (the first consumes the one that the button put on hold).
+@@ dd3233516838 d
+The game's "Taille de la croix" option (g_pad_size): 0 Grande, 1 Moyenne (default), 2 Petite.
+@@ d86cc5d133f8 d
+True when the experience gift menu (`MaterielMenu_EXTRA_PRESENT_EXP`, a mobile addition: the king of Burland in chapter 1) is open and in its last state: once the levels are shown, `menuUpdate` (state +0x30 = 2)
+waits for a trigger from the game's pad (`dss::g_Pad + 2`, filled by `Global::NativeExec` from the 2nd argument of `GameUpdate`: the screen tap, exactly 0x100, or the buttons 0x400 to 0x2000), before closing the menu and
+giving control back to the scenario. The A key of a message (0x10) never raises it: the window then sends the tap (see Game._entries). "Open": the menu is in the array of the `MenuManager` manager (its state stays at 2 after
+closing until the next creation).
+@@ cb3c3044b21f d
+Global.Flag: first word of the engine's output (bit 3: touch gamepad present; 4 player lock, 0x20 map allowed, 0x40 interface locked...).
+@@ 31dbd2131069 d
+Bit 1 of Global+0xd8: Unity (Capture.ScreenEffect) raises it at the start of a screen effect and lowers it at the end; the engine waits for it to drop.
+@@ 10bd5f1dac21 d
+Packet 34 (value 4): the screen shatters into pieces (BATTLE_EFFECT_FRAMES frames) while the engine waits; then the screen stays black until the battle scene has loaded.
+@@ 4211f0d88ac8 d
+One game frame: advances the battle start effect, lowers the flag at the end (the engine resumes on the next frame); counts the loading wait.
+@@ e6102296dab2 d
+Packet 34, values 3 (trip: ailes de Chimere), 5 (lamp: Ranaruta) and 6 (Riremito): Capture.ScreenEffect raises bit 1 of Global.Flag, which the engine waits for, and starts a coroutine that lasts
+EF.FRAMES[...] frames (63 to 64 at departure, 45 at the arrival of a trip); the window draws the effect (fenetre/capture_effects.py), see _screen_effect. Bit 7 of the value: bReverse (trip: arrival) or bMorning
+(lamp: morning tint). Like the battle cascade, the effect follows "Vitesse de transition" (fewer engine frames).
+@@ 36da9fac2013 d
+One game frame: advances the Capture effect in progress. The immediate black (lamp, Riremito: Fade.SetFadeOutBlack(0)) and the fade-in of a trip's arrival (Fade.SetFadeIn(30)) are started at their call of
+MoveNext; at the end, the flag drops (the engine resumes on the next frame). End of a trip's departure: the screen stays black (State.black_screen) until the end of the arrival. The black screen is abandoned if it
+lasts too long (safeguard) or if the game returns to the title.
+@@ 7131aca1ad8e d
+One game frame. held = keys held down (walking); decl = keys that have just been pressed (buttons, menus).
+Screen fades are replayed in State (tick_fade). -> list of packets
+@@ 3c0333bfc027 d
+Map transition sound effect (door, exit, village entrance, stairs, world map <-> town): cause of its loss with the shortened fades ("Vitesse de transition" x3 and above, marginal at x2).
+When the game leaves a town or the world map, it starts a 30-frame fade to black AND arms a 15-frame countdown (EXIT_COUNTDOWN); at 0, NativeExec calls playTownExitSE / playFieldExitSE, which play
+sound effect 305 only if the old scene is still alive. In the original game, the next map's loading happens only at the end of the fade (30 frames): the sound effect is requested at mid-fade. The viewer's shortened fade
+(State._fade) brings the loading before the 15 frames: the old scene is destroyed, the engine no longer requests anything (no packet 35). The countdown is therefore reset to the same proportion as the fade
+(played duration / original duration): the sound effect stays requested at mid-fade, the duration of the fade and that of the sound effect do not change. Without a shortened fade (ratio 1), nothing is touched.
+@@ bfc2ba4615dd d
+(test, DQ_MSGDBG=1) one line at each change of the message state: engine frame, state, letters written / letters of the line, window type speed.
+@@ 4ef9f2638908 d
+Entire world map (FieldData: CWorldMap +0x188 grid of 256 x 256 block numbers, block table +0x180 of 6 bytes,
+water animation offsets at addresses 0x275830/34/38). Same rule as FieldData::drawBlock (verified: 1300 tiles out of 1300).
+The engine sends only 25 columns around the hero; here we can draw around him as much as we want.
+@@ 61d69bd28bae d
+Bitmap of the message text (height x width, 0-255 = opacity), or None if the canvas does not exist yet.
+@@ c8e5ed0a9877 d
+Does what the Unity interface would do: reads the messages that the engine has put for each port (menus, windows...)
+then empties the queue. Without this the queue grows endlessly and ends up overwriting the neighboring memory.
+@@ ad6c15fc6c4f d
+Port of the menu window that waits for keys (active and accepting input), or None.
+@@ d38c956fb21c d
+All the menu ports whose input the engine requests (touch acts on each of them): the most recent first.
+@@ 30b92ab6f558 d
+What Unity does: drops a message [n, args...] into the engine<-interface queue of the port (menu keys/pointer).
+@@ cfbc91242163 d
+(number of visible lines - 1, height of a line, scroll) of the message canvas, as the engine holds them.
+@@ 9700241c32cd d
+Part of the canvas currently visible in the message window: n lines from the current scroll.
+-> (height x width) array of 0-255, or None.
+@@ bddab278ce61 d
+Mask of `getCatalogStatus`: bits 0-4 = valid bank, 5-9 = unreadable, 10-14 = corrupted, 15 = a file is missing.
+@@ d8b4d315da96 d
+After an import of saves: the engine reads the data1..5 / data9 files only when the start menu is created; it is made to read the catalog again (names, chapters, durations of the lists). -> new status mask.
+@@ 14bc80abfbb7 d
+What the engine sets when the start menu is created (`updateActiveDiary`): (a bank 0-2 contains data, bank 3 is valid, bank 4 is valid) -> grayed-out or absent buttons.
+@@ b54ba4d95423 d
+number 1..5 -> reads data<number>.dat; the engine restarts the saved town
+## FILE dq4_pc/core/game_priority.py
+@@ 7c7c9875901a t
+letters written per engine frame by an ordinary dialogue (speed word 1 of the window type array, x 4): the game's "default" value for the text
+@@ f19128d10009 t
+bit added (by the viewer) to the packet 9 integer of a fade started by a game script command (fade_in / fade_out); the engine does not use this bit
+@@ 78e9b61509a2 d
+Priority of the game over the player's settings (no dependencies: imported by the engine, the window and the tests).
+
+Principle: a player setting is a DEFAULT VALUE, applied as long as the game does not itself set the parameter. As soon as the game sets it explicitly (script command, event lock,
+scene camera...), its value applies, until it gives control back. The player does not take back what the script has decided.
+The functions below are the pure rules (tested by tools/test_game_priority.py); the detection of "the game set it" is done by the caller (engine.py, window.py).
+@@ d0b29de18c6d d
+The value that applies: the game's when it has set one (game_value is not None), otherwise the player's setting.
+@@ c95167c6b358 d
+Player setting that MULTIPLIES a game quantity (speed, zoom): when the game itself sets the quantity (game_fixed true), the neutral factor applies and the game's value stays as is.
+@@ 978a7e708e79 d
+Letters written on this engine frame. `engine_letters` = what the engine is about to write (window speed word x 4). At the standard (ordinary dialogue), it is the player's setting; any other value
+(battle windows that display their line all at once, speed set by the game) is the game's and the player's setting changes nothing there.
+@@ a2141d49064c d
+Duration (in frames) of a fade to black once the "vitesse des transitions" setting is applied: the original duration divided by the factor (x1 = as is, a fade of one frame or less is immediate).
+A fade started by a game script command keeps its duration: the script has set it, and itself waits for that number of frames.
+## FILE dq4_pc/core/history.py
+@@ f6b99e9c168e t
+favorites file (version 1 was the old per-saved-game message history: abandoned)
+@@ 3effc5180d46 t
+of the session: the oldest ones drop out
+@@ 386de65f8c80 t
+characters kept from a message
+@@ fd3177ed4213 t
+"㈡": page break (new bubble) in the text of a message in the game files
+@@ a5c8042df307 t
+game variable not resolved in the text of a message in the files: "[NONE 1,0]" (the hero's name, a number, an item...)
+@@ fe4a1e84c36c t
+the text kind is stored in bits 24 and above of the identifier that TextAPI::extractText takes
+@@ ca293bbcc551 t
+ui_MsgAdd(int number, bool): the engine adds a message (number = key in the game files); it calls TextBuffer::cat
+@@ 5eecdac77a9e t
+frames: a pending page is recorded if the message window has never opened after this delay (3 s)
+@@ 8beb266596b8 t
+2 s of game time (1/60 s): two identical messages closer together than that are a duplicate
+@@ 526f7c9108aa t
+seconds: writes are grouped (favorites change only by hand: they are written immediately, see toggle_favorite)
+@@ a34f9195e129 t
+message with a name that the game displays / without a name
+@@ 0892af0d012f t
+out-of-battle message / battle message (never stored in the dialogues)
+@@ 1dd200ffd51f t
+(translated when it replaces the text of a favorite: see History._resolve)
+@@ 66d511d86bcf t
+history list -> type of its elements (History.entries, "Favoris seulement" filter)
+@@ 4a4d69347c24 t
+(translated by the window when drawing: tr(OUTCOME_CAPTION[...]))
+@@ c88120e4b980 c
+---------------------------------------------------------------------------------------------------------------------------------- elements
+@@ 1feb4216cf52 t
+dialogue: message number in the game files (None: unknown), message page (None: whole message), values of the variables [NONE a,b]
+@@ 2733d4ec563e t
+dialogue favorite stored by key (the file does not keep the text)
+@@ 95f5a663c53d t
+... and whose text has not yet been requested again from the engine (see History._resolve)
+@@ b8c113a94e8d t
+(no text: it comes from the game files)
+@@ b598bbe9f287 t
+favorite that keeps its text (before #265, or a message that the game files do not give back as is)
+@@ 2657b87464c8 t
+favorite stored by key: the text will be requested again from the engine
+@@ f2b745671dcf t
+(favorites from before #141 have no fled, no vanished and no items)
+@@ 28fb3e3ddc62 t
+(the same variable with two values: not the same message)
+@@ be8b00f3207d t
+word wider than the line
+@@ 3b0b73c23b1a t
+defeated, fled, vanished, remaining
+@@ 9c1e073353e9 t
+(non-breaking spaces: line wrapping does not make them disappear)
+@@ a2b8c0c80e69 c
+---------------------------------------------------------------------------------------------------------------------------------- data
+@@ 79fd6c470a6e t
+'d' Elements of the session, from oldest to newest
+@@ 0d58f1613e6d t
+'c' Elements of the session
+@@ be799a865574 t
+Elements (d or c) kept in the file, in the order in which they were made favorites
+@@ ca2cad874e60 t
+next favorite number
+@@ a80970ecd85a t
+counter of the sequence numbers (dialogues, battles, favorites: never the same one twice)
+@@ a6d995e455a4 t
+pages of a message already prepared by the engine but not yet read (see _pages)
+@@ 00a0993dd4f9 t
+end-of-page cursor of the previous frame; message window seen open since the burst; waiting frames
+@@ d53dc912d95d t
+Engine Sensor (once it exists); text of the game files already requested, by message number
+@@ 058c2cb9c935 c
+---- favorites file
+@@ 363a16fc1f98 t
+next number saved: never a number already taken, nor a number already given and then removed
+@@ c798914b85c7 c
+---- lists
+@@ f5a56de8f946 c
+---- favorites
+@@ 4e9e691063e8 t
+(new number: the layout kept by the window is no longer valid)
+@@ e6c4a3698650 c
+---- adding
+@@ 50305d6ab7a0 t
+the engine displayed the message again (page came back, question asked again)
+@@ 3b8a0a8aedfc c
+---- link with the engine
+@@ 171d6650a0c9 t
+the history must never stop the game
+@@ 3a17006f5a63 t
+battle messages do not enter the dialogues
+@@ 3c629a5309b1 t
+new message: the previous one is finished (its remaining pages have been read or skipped)
+@@ 882f93458fff t
+next page of the same message
+@@ 8e875ec81c8b t
+the window closed (or never opened): the message is finished
+@@ a45cb3d4912e c
+---------------------------------------------------------------------------------------------------------------------------------- hooks in the engine
+@@ 0d168dae71c6 t
+the name that the game displays on the message window (empty: none)
+@@ 3ea426fbd86e t
+(the immediate caller of TextBuffer::cat is ui_MsgAdd: the number comes from that call)
+@@ 1d85c8678473 t
+(never emptied for lack of History.do_update: it does not grow endlessly)
+@@ 964bf1e54196 d
+History: the dialogues spoken on screen (outside battle), the latest battles and the favorites.
+
+Three parts:
+- `Sensor` (hooks in the engine, installed by Engine.__init__): the text of a message is known in only one place, TextBuffer::cat (called once per message page, macros resolved, with the
+  speaker's name given by the engine itself: the "@a<name>@b" of the patch texts, that is, the name that the game DISPLAYS on the message window). The hook records the text, that name, the game time
+  (status::g_Game + 4, in 1/60 s) and whether the call comes from a battle (battle messages do not enter the dialogue history: battle has its own, battle_history.py).
+- `History` (pure data, no pyglet or emulator): the SESSION's dialogues and battles (in memory, they disappear when the viewer is closed) and the favorites (the only element
+  kept: a JSON file next to the viewer, until the player removes the star).
+- pure functions: text cleanup, line wrapping, battle formatting.
+
+Dialogue favorites keep the message's KEY (its number in the game files, "b0802000#199": file = number // 1000 x 1000, rank = remainder), not its text: the text is requested again from the game engine at
+launch (TextAPI::extractText, see `Sensor.model`), so a message modified in the patch also changes in the favorites. The number is known at the ui_MsgAdd hook (the text, for its part, goes through TextBuffer::cat). The
+link is made only if the text given by the game files gives back EXACTLY what the player read (see `binding`: message page, game variables "[NONE 1,0]" replaced by the values seen);
+otherwise (text built by the program, pages split differently...) the favorite keeps its text, as before.
+
+A dialogue is shown as in the game: a message window, with the speaker's name in a name plate ONLY if the game displayed it at the time the dialogue was spoken; otherwise the text alone, as the game writes
+it (the words of a character without a name start with "*:" in the FR patch: that start is kept). No "who said this" or "where" is deduced.
+@@ 71028e484bee d
+A history element: dialogue (type 'd': displayed name or None, text) or battle (type 'c': enemies [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}], gold, xp, outcome, objects [{'nom'}]).
+`n`: sequence number (display key), `t`: game time (1/60 s), `fav`: number of the matching favorite (None: not a favorite).
+@@ 68a03bd44515 d
+List of species [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] checked and copied (fuis and disparus: 0 if they are missing, as in the favorites from before #141); None if it is not valid.
+@@ db60200ccc87 d
+List of items won [{'nom'}] checked and copied; None if it is not valid.
+@@ 78fb28f39e0d d
+Removes the ";" from the patch text: a break mark placed just after a space in item names ("bâton de ;cyprès", "l'herbe ;médicinale"), not punctuation (no punctuation ";"
+in the patch texts; see docs/viewer-notes-dq4-pc.md, PR #148). The space before it stays: "l'herbe médicinale".
+@@ 8785487dfaad d
+Text as the game displays it: color codes (@c0...) and control characters removed, trailing spaces removed, line breaks kept (never more than one empty line). The "*:" at the start of the words
+of a character without a name is KEPT (it is the game's text). The ";" (the break mark of the patch's item names) is removed (#139).
+@@ 656f95f76dc5 d
+A message's key as it is cited for the patch: file (number // 1000 x 1000, 7 digits) # rank: 802199 -> "b0802000#199".
+@@ 3ccdfb32b110 d
+Values of the game variables ("[NONE 1,0]") that turn the text of the `model` game files into the read text `text`: {} if the model has no variable (or if the text shows them as they are, like the files) and
+the two are identical; {variable: value} if the text is found again by replacing each variable; None if the model does not give this text back.
+@@ ee55f2c1bddf d
+How to find `text` (what the player read, cleaned) in the game files text `raw_value`: (page, values of the variables), `page` = rank of the message page (separated by ㈡) or None for the whole
+message; None if neither a page nor the whole message gives back EXACTLY this text (the favorite then keeps its text).
+@@ 2fc608f0aab8 d
+Text of a favorite stored by key: the page `seg` (None: whole message) of the game files text `raw_value`, variables replaced by the kept values (an unknown variable stays as it is). '' if `raw_value` is missing
+or does not have this page.
+@@ 02164745fadf d
+Splits `text` into lines of at most `width_px` (measure(string) -> width): the text's line breaks are kept, the split is made at spaces (not at non-breaking spaces); a word wider than the line is cut.
+@@ 25354c254890 d
+"1 vaincu", "2 vaincus": the singular or plural template (`singular`, `plural_form`: template texts "%d vaincu" / "%d vaincus", N_; English has only one form but keeps it as two).
+@@ fbb13954ba92 d
+An enemy species, on one line: "Gluant ×3" when all are defeated ("Gluant" if there was only one), otherwise each one's fate: "Gluant ×3 : 1 vaincu, 1 enfui, 1 disparu"; those that are neither defeated,
+nor fled, nor vanished are still there when the battle ends (the party fled or was defeated): "2 restés".
+@@ 9b3341ead1b1 d
+Text lines of a battle (Element of type 'c'), one per row: one per enemy species (species_line: who was there, who is defeated, fled, vanished or remaining), then, for a victory, the gold and experience
+won, then the items obtained ("Objets : Herbe médicinale, Pierre de vie"). Nothing is written when there was no item.
+@@ 3d74cb27aac3 d
+Element of type 'c' from a dict of battle_history.BattleSensor.do_update; None if the dict is unusable.
+@@ 413d32a99d16 d
+Dialogues and battles of the session (in memory) + favorites (file). The file is next to the viewer (never in the game's saves folder, which is not modified):
+{"version": 2, "suivant": 7, "favoris": [{"k": "d", "id": 3, "t": 12345, "nom": "Alena", "texte": "..."}, {"k": "c", "id": 5, "t": 1, "ennemis": [...], "or": 3, "xp": 4, "issue": "victoire", "objets": [{"nom": "Herbe médicinale"}]}]}.
+@@ 47facbc90eb8 d
+Hook on the engine (Unicorn): TextBuffer::cat, called once per message page. The recorded messages wait in `output` until History.do_update picks them up (each one: texte, genre, val = name that the
+game displays or None, cat, carte, t, mid = message number in the game files or None). The number comes from a second hook, on ui_MsgAdd(number, bool): TextBuffer::cat is called from there (the stack shows it);
+a page that does not come from it (text built by the program) has no number. An error in a hook must never stop the engine.
+@@ 68b53f399631 d
+What makes up an element's identity (to recognize a duplicate, or an element already in the favorites): the content, not the number.
+@@ 24575d7f034c d
+Element of a favorite read from the file; None if it is not valid (the rest of the file is kept).
+@@ 7d27e19c21c1 d
+Reads the favorites file. An unreadable file is set aside (.corrompu) and we start again from zero; an invalid favorite is ignored without losing the others.
+@@ 2c2751f77898 d
+Writes the file if it changed (atomic write: temporary file then replacement). Writes are grouped: at most one every STORAGE_DELAY seconds, `force` for closing.
+@@ 530ed7a5f724 d
+Elements of a history tab, from oldest to newest: 'dialogues' or 'combats' (and 'favoris': all the favorites, see below). `favorites_only`: the window's "Favoris seulement" option -> only the
+favorites of that kind of element (dialogues or battles): those in the file, therefore also those of previous sessions, in the order in which they were made favorites (the most recent at the bottom).
+@@ 1d3de483b280 d
+Makes the element a favorite (a copy is kept in the file, immediately) or removes it. An element of the favorites list that is "unstarred" disappears from that list; the session element that
+corresponds to it loses its star. -> True if the element is now a favorite.
+@@ b3332fcd77f9 d
+Text of message `mid` in the game files (requested from the engine; kept), or None (no engine, unknown message).
+@@ 0099c93c56e8 d
+A dialogue favorite whose key is known: if the text of the game files gives back EXACTLY the text read, the favorite is stored by key (the file will not keep the text); otherwise it keeps its text.
+@@ be244bdeb8de d
+Requests again from the engine the texts of the favorites stored by key (0.13 ms per call: the file's 500 favorites in 65 ms). A message that no longer exists or no longer has this page: a line says so, with the key.
+@@ f1887d2a9952 d
+When the history is opened: the texts of the favorites stored by key are requested again from the engine. The game files do not change while the viewer is running, but the engine chooses some
+variants of a text according to the current game (the hero's gender: "ma mignonne" / "mon chou"): a favorite therefore shows the text as the current game would give it.
+@@ 1b73a29dcafe d
+Adds a dialogue to the session (raw engine text, name displayed by the game or None, message number in the game files or None); -> the Element, or None (empty, duplicate).
+@@ 7ad71a971151 d
+Adds a finished battle (dict from battle_history.BattleSensor.do_update); -> the Element, or None.
+@@ c883e763737a d
+Once per engine step: stores the messages recorded by the Sensor (out-of-battle dialogues) and the finished battles (BattleSensor), and writes the favorites if needed.
+@@ 874e2b077fcb d
+Stores the first `n` pending pages (all of them if n is None).
+@@ a3b35aa042d3 d
+The engine prepares ALL the pages of a message at once (several TextBuffer::cat in the same frame, same game time): record only those that the player has read, otherwise the history
+would show the next page before it was read. The first page is recorded right away; each time the end-of-page cursor goes out (the player turns the page, Engine.ui.msg['feed']) the next one
+is recorded; everything that remains is recorded when the message window closes or when a new message arrives. Battle messages (automatic scrolling) are never held back.
+@@ 9ffb77a4fc99 d
+Entry of ui_MsgAdd: the message number (1st argument) that TextBuffer::cat is going to receive.
+@@ 3445f6ae2057 d
+Text of message `mid` as the engine pulls it from the game files (TextAPI::extractText, kind 1 = message): raw, with the page breaks "㈡" and the variables "[NONE 1,0]"; None if the engine has none.
+To be called between two frames (never from a hook), like the names in battle_history.
+@@ be3f00e90687 d
+-> (game time in 1/60 s, game identifier) read in status::g_Game.
+@@ 4da0d04d1337 d
+Names of the functions on the call stack (chain of frame pointers), from the immediate caller to the root.
+## FILE dq4_pc/core/load_tracking.py
+@@ 97c09f13dbda d
+Timestamped log of startup and map changes (diagnostic tool, no effect outside tests).
+
+    DQ_SUIVI=1          : one line per event on the console, "SUIVI +12.345s evenement cle=valeur ..." (time since the program was launched)
+    DQ_SUIVI=<file>     : the same thing in this file (append)
+
+What is recorded (see window.py and engine.py): window creation, first black frames, window display, logo frames, end of engine loading, first game frame, duration of each map
+loading (`_load_map`), frame by frame after a map change (what is drawn: held black or scene, camera, characters placed, fade opacity), drawing hold
+(`State.loading`). Without the environment variable, each call costs only a boolean test.
+@@ 19823644c174 d
+Seconds since the program was launched (monotonic clock).
+@@ dc37e95b41ad d
+A log line (no effect if DQ_SUIVI is not defined).
+@@ a33391515f86 d
+Tuple of floats rounded for the log (None stays None).
+## FILE dq4_pc/core/lying_pose.py
+@@ f0fdfb5928e7 t
+half of the lying mesh (0.48 x 0.64), before the character's scale
+@@ 0a27f0fe3989 t
+s_lieOffset[quadrant]: (x, z); the y component is the height from SetSleepNear
+@@ d61f14b01690 t
+SetSleepNear: offset 0
+@@ 57341e35092b t
+lieBillboard: the _sleepMatrix matrix is raised by 0.1
+@@ 2043c10e76fd t
+SetSleepDir: 16-bit angle / -182.0444 + 180 (65536 / 360, sign reversed)
+@@ ea3e4266668d t
+center of the mesh (Transform.position)
+@@ 7ac3b6662370 t
+center for depth (_sleepMatrix)
+@@ da2cd8412f85 t
+camera yaw only: top view oriented by the camera
+@@ cc45403dd3a9 t
+corners of the sheet, centered: bottom left, bottom right, top right, top left
+@@ baa7c18d3f39 t
+vertex of the lying mesh: right of the sheet = -X, top = -Z
+@@ c8a3d25cdd00 t
+Y rotation (Quaternion.Euler(0, angle, 0))
+@@ 0757236ce7b7 t
+depth of the flat body
+@@ 5f1c48c1f202 t
+screen position (focal length 1 at depth z0): XZ plane seen from above, without foreshortening
+@@ 437f0a81e3f2 d
+Lying poses of town characters (engine packets 16 / 17 / 18, #45).
+
+What the original game does (read from the disassembly, Unity IL2CPP + engine):
+  - Packet 16 `cmd_chara_sleep_pose` D132FC, one integer v: character = v & 0xff; if v & 0x300: Chara.SetSleepPose(bit 8) (CCC234); if v & 0x400: Chara.SetSleepDir(v >> 12) (CCC5A0).
+    Sent by `DisplayCharacter::setSleepFlag` (engine 0x17c918: 0x500 | angle << 12 to lie down, 0x200 to get up) and, when the direction changes during sleep,
+    by `DisplayCharacter::draw` (0x400 | angle << 12). SetSleepDir(d): angle = (d & 0xffff) / -182.0444 + 180 degrees, Y rotation; quadrant = bits 14-15 of d.
+  - Packet 17 `cmd_chara_sleep_near` D133E4, two integers (defNear, offset): Chara.SetSleepNear (CCD494): height of the lying body = 0.3104 if offset = 0, otherwise offset x 1.6 / 8192;
+    it is written into the Y component of the 4 `s_lieOffset` offsets (static: it persists from one map to the next). Sent by `cmd_set_sleep_near` (engine 0x219e1c).
+  - Packet 18 `cmd_chara_pose` D13474: v = slot | number << 8: Chara.SetTexture(number): the character changes sprite sheet (`TownCharacterDraw::changePose`).
+  - Lying mesh `Chara.s_meshLie4 / 8`: the same rectangle as the panel (0.48 x 0.64) but FLAT (XZ plane, y = 0), turned around by half a turn (top of the sheet toward -Z), hence the + 180 degrees of SetSleepDir.
+  - Shader `Custom/CharaSleep`: the screen position (x, y) comes from the character's transform, whose rotation is that of the inverted camera x the sleep rotation (s_lieBillboardRot,
+    Chara.CalcLieBillboard): the lying plane is seen exactly FROM ABOVE, without foreshortening: the sprite appears on screen as its sheet turned by an angle, at full size. The z and w (depth,
+    perspective division) come from the `_sleepMatrix` matrix = TRS(position + (0, 0.1, 0), sleep rotation, scale): the body is flat in the world for the z-buffer and the overlaps.
+  - Position: P + s_lieOffset[quadrant]; s_lieOffset (Chara..cctor CCE364) = (0, h, 0.2), (-0.1, h, 0), (0, h, -0.2), (0.1, h, 0); h = height from SetSleepNear (0 as long as there is no packet 17).
+  - The shadow is not drawn (Chara.lieBillboard pushes it 64 below the ground when it is not separate).
+
+This module contains only geometry (numpy): testable without a window.
+@@ b1b3e34543ab d
+Height of the lying body (packet 17, second integer): Chara.SetSleepNear.
+@@ 80d0e617ae1b d
+(angle of the Y rotation in degrees, quadrant 0 to 3) of a packet 16 carrying bit 0x400: Chara.SetSleepDir(value >> 12).
+@@ c5d0527f25b8 d
+Direction of the lying character's head on screen (top view, zero-yaw camera) in degrees clockwise: 0 = up, 90 = right: used by the tests.
+@@ 70a905caa96c d
+The 4 WORLD vertices (bottom left, bottom right, top right, top left OF THE SHEET) of the panel of a lying character whose feet are at p.
+scale_factor: mesh size (width of the panel on screen / 0.48, with the character's SetScale scale); border = (right, up, forward) of the camera, cam = its position.
+The points are on the view rays: on screen the panel is the sheet turned by an angle, at full size (no foreshortening, no tilt), but its depth is that of the flat body
+(see the header); None if the body is behind the camera.
+## FILE dq4_pc/core/pktlog.py
+@@ 4ab531b135cf d
+Structured log of the engine->Unity packets (cut at the cursor writes).
+@@ d4be88455665 d
+-> list [type, ints without the type, floats] for the frame that has just been computed.
+The floats go to the "open" packet (UnityGetPacket called, not yet validated), otherwise to the last valid packet.
+## FILE dq4_pc/language.py
+@@ 13bc711c43b7 t
+values of the "Langue" setting
+@@ 912840a5b4a0 t
+the files of texts_en\ (each one defines EN = {French text: English text})
+@@ 682d0d5f3fd5 t
+primary identifier 0x0C = French (all variants)
+@@ 11322f291974 d
+Language of the tool (D-238): French or English for everything specific to the port (settings, history, saves, license, F1 information, console messages...).
+The game's texts (dialogues, game menus, names) come from the game files and do not change.
+
+"Langue" setting ("Affichage" page): `system` (default: French if Windows is in French, whatever the variant, otherwise English), `entry`, `fr`.
+
+Principle: the source text is the FRENCH text written in the code; `tr(text)` returns the same text in French, and its English translation (`texts_en\`) in English. A text without a translation stays in French (never an error);
+French therefore stays identical to itself by construction. Template texts remain templates to format AFTER translation: `tr('%d fichier(s)') % n`.
+Module constants are marked with `N_` (the text is returned as is, translated when it is displayed): `ACTIONS = (('haut', N_('Haut')), ...)` then `tr(label_text)` when drawing.
+@@ e0ee9ce2824b d
+'fr' if the computer is in French (any variant: France, Belgium, Canada, Switzerland...), otherwise 'en'. `reader`: function with no argument that returns the interface language (tests).
+@@ 9ec957ee58f8 d
+`code`: Windows language identifier (integer, e.g. 0x040C), or text "fr_FR.UTF-8" / "fr-BE" / "French_France".
+@@ 5aab09e66c48 d
+The computer's display language: Windows (GetUserDefaultUILanguage), otherwise the environment variables, otherwise the locale.
+@@ a0868380aa7c d
+Sets the language: `choice` among CHOICES (any other value: `system`). -> 'fr' or 'en'.
+@@ 90b8e5e6f405 d
+The chosen setting: 'systeme', 'en' or 'fr'.
+@@ f0846f323ce9 d
+The French -> English catalog (the files of texts_en\, loaded once).
+@@ 3a48b3a94b8d d
+The text in the tool's language (the French text itself in French, or when it has no translation).
+@@ 8c688acb71bc d
+Marks a module constant to be translated when it is displayed (returns the text as is).
+@@ 52022f835b57 d
+The "langue" setting of a reglages.json file (for console messages, before the settings are loaded); 'systeme' if absent or unreadable.
+## FILE dq4_pc/main.py
+@@ d7d3d8edf2a3 t
+(before the migration: its messages are in the tool's language)
+@@ a8ae3a06b1ec t
+(the migration may have brought reglages.json to its place)
+@@ 4f7b3c17acf3 t
+language of the tool (D-238); the game's texts do not change
+@@ 340b66a92df8 t
+(2 = the old exclusive full screen: 1)
+@@ f0ce0063468d t
+the background HD computation must not delay the drawing
+@@ 9c207c3a3911 t
+the fixed loop (Game._loop) runs before each draw; the drawing follows the vertical synchronization
+@@ 857ff1ff4e41 d
+Entry point of the port: `python -m dq4_pc` (this is what `launch_dq4.bat` does, at the project root).
+
+Reads the arguments, takes over the old file layout if needed (paths.migrate), then opens the game window (fenetre/jeu.py).
+All the default folders come from paths.py (the `data` folder at the project root).
+@@ a57c8f1c09a7 d
+This run's settings file: the command line's `--settings` if given, otherwise the default one (the language is read from it BEFORE building the parser: its help is in that language).
+@@ 213e1cb3db60 d
+D-238: the tool's language ("langue" setting of reglages.json) for console messages and help, before the settings are loaded. -> 'fr' or 'en'.
+@@ 402b1b234d77 d
+The command-line parser, in the current language (see set_language): `python -m dq4_pc --help`.
+## FILE dq4_pc/menus/hud_mobile.py
+@@ b25a3d014bdb t
+screen grid (cells proportional to the window)

@@ -1,0 +1,641 @@
+## FILE dq4_pc/menus/ui_menu.py
+@@ f2e59b5fef80 t
+hors plaque de bouton : le texte doit tenir dans la largeur de sa fenetre (a partir de son point d'ancrage, avec la meme marge)
+@@ da7797715be5 t
+(ancrage trop pres du bord pour que ce soit le texte qui soit trop large)
+@@ 53ed15ed1671 t
+limite posee par la fenetre (ligne de cout de la fiche d'un sort) : le cadre n'est pas un element de la fenetre
+@@ f229c693602c t
+texte plus large que le bouton qui le porte (traduction plus longue que l'original) : compresse en largeur pour tenir dedans (avec la police d'origine : seulement la ligne de cout de la fiche d'un sort, « Cout en PM 10/ 30 » est plus long que « MP Cost 10/ 30 » et sortait du cadre)
+@@ dbbc0e62b806 t
+alignement de la ligne dans le bloc
+@@ 7d6b18aca5ee t
+texture a la taille native de la police (1 px = 1 px de police), agrandie par le filtre bilineaire comme dans Unity
+@@ 589ae7f2f834 t
+appelee avec un masque de monstres -> (x min, x max) en unites d'interface, ou None ; proj(masque, True) -> la liste des abscisses, une par monstre (fournie par la visionneuse)
+@@ e40479fe2619 t
+police d'origine SE-GARRIR (facultative : sans elle, GMaruGoPro-M)
+@@ 38c89fb24c07 t
+police des messages (facultative), meme quand les autres ressources sont deja la
+@@ 704bdbae579b d
+Fenetres de menu du jeu d'origine : mise en page exacte (lue dans le code Unity du jeu, voir tools/ui_il2cpp), dessinee avec les feuilles du jeu.
+
+Le fichier de mise en page (cache/ui_layout.json) decrit, pour chaque type de fenetre (Make_* de MenuPortItemTable) : les objets (position, maillage,
+materiaux, texte), les elements modifiables (IText / IIcon / IButton / IBar...) et leurs liaisons (id, no) -> element, et l'effet de chaque code
+(deplacement / affichage). Ce module applique les messages du moteur (setItemParam*, setItemCode, curseur) a ces objets et les dessine.
+Repere du jeu : portrait 450 x 800, X vers la droite, Z vers le haut, origine au centre de l'ecran, Y = profondeur (plus grand = devant).
+@@ 37c2f5ec65bb d
+Ordonnee (unites, vers le haut) de la ligne de base de la 1re ligne d'un TextMesh : TextMesh.anchor pose le point d'ancrage zp en haut (row 0), au milieu (1) ou en bas (2) d'un bloc de n lignes de hauteur `step`
+(= interligne de la police x characterSize x 0,1 x lineSpacing) ; la ligne de base est `asc` (ascent de la police x characterSize x 0,1) sous le haut de la ligne, quel que soit lineSpacing.
+Verifie sur la capture du mobile (ecran4 : « Rat volant » 1 ligne, « Scarapince / x2 » 3 lignes, onglet « Ragnar »), a 0,3 unite pres.
+@@ db1a0bb47adc d
+Remontee (unites) a appliquer au texte pour centrer l'encre dans sa ligne. Le jeu a regle lineSpacing (0,441 cibles, 0,481 plaques de monstres, 0,801 onglets / boutons / noms...) pour la police japonaise : la boite de ligne
+est raccourcie de (1 - ls) mais la ligne de base reste a `ascent` du haut de la ligne, donc avec SE-GARRIR (encre centree dans sa boite naturelle de 23,5 px) le texte descend de (1 - ls) x interligne x u / 2 sous le centre de sa boite
+(6,5 unites pour « Rat volant » et les plaques : texte colle au bas du cadre). Applique aux trois ancrages verticaux (l'ecart encre / boite ne depend pas de l'ancrage ; seul le cas milieu a une reference mobile, ecran4). lineSpacing >= 1 (PV / PM / Nv., regles sur les jauges) : 0. ECART VOLONTAIRE avec le jeu d'origine, qui a le meme defaut.
+@@ 408760adabdd d
+Un bouton reagit-il au contact (souris, tactile) et a la validation ? MenuParts.IButton : le fichier de rappel des etats (RVA 0xD043CC) coupe le test de contact (`defaultIsHit`, 0xCFDB6C) pour les etats 2 (invisible),
+3 (grise) et 4 (inverse) ; normal et enfonce le laissent actif. Un bouton grise n'est donc ni survole ni choisi, et le moteur ne recoit rien.
+@@ 26589f4b1ca0 d
+TextMesh.tabSize : une tabulation vaut `tabSize` fois la largeur d'une espace (8 pour « Cout en PM:	  2 » des magies et la ligne « Nv. » de l'ordre de marche, 25 pour le « x2 » des plaques de groupe) ; la police du jeu n'a pas de glyphe pour « 	 » :
+elle comptait pour rien et le texte suivant collait a ce qui precedait (« Nv. » dessine sur le sprite du personnage, « x2 » colle a gauche de la plaque). Cellule sans tabSize : inchange.
+@@ a23d4cbec0c5 d
+La sauvegarde automatique existe-t-elle ? Le moteur le dit par le code 0 du menu de depart (1 : data5.dat valide, 0 : absent ou illisible) et n'envoie l'etiquette de la cellule (4, 1) que dans le premier cas ;
+`code_auto` None (code pas encore recu) : l'etiquette tranche.
+@@ a1f608b5fdee d
+frameData (TextAsset du jeu) : nombre de maillages, puis pour chacun : nb sommets, nb indices, sommets (x, y, z, u, v), indices.
+@@ 3c4bb4cfd749 d
+(correctif propose) type 1 (combat : cadre 188 de haut, canevas 164 = 4 lignes de 34) ramene a la hauteur de la fenetre du terrain (type 0 : cadre 126, 3 lignes) :
+les deux rangees hautes du cadre et le haut du canevas descendent de dz, le bord bas ne bouge pas ; V du bas du canevas = hauteur / 512 (le haut reste a V = 0).
+@@ a5be14bd7856 d
+Fenetre de message : le canevas montre exactement `num` lignes de `lh` pixels (plus une marge de 3 pixels, le defilement du moteur commence a -3) au lieu de 3,5 lignes : la mise en page d'origine
+laisse voir le haut de la ligne suivante sous la derniere ligne (canevas de 100,5 pour des lignes de 28 : type 0 ; combat : lignes de 34).
+@@ 3d3929a6524d d
+Types de message de combat 2 et 3 (messages des actions) : la mise en page d'origine dessine leur canevas de texte a 90 % (`scale` 0,9 : 490 pixels du canevas dans 441 unites), ce qui rend le texte
+plus petit que dans les dialogues du terrain et le message de debut de combat. On agrandit toute la fenetre (cadre, canevas, curseur de fin de page) de 1 / scale autour de son coin bas gauche, puis on la recentre :
+le texte a la taille des autres dialogues, avec autant de signes par ligne que dans l'original (bord bas inchange).
+@@ cbe82cdf75b8 d
+cache/ui_layout.json : {'header': {...}, 'types': {numero: {...}}} ; cadres : maillages des fenetres (frameData)
+@@ 1b2ec2ee4a27 d
+Un texte plus large que sa plaque est-il comprime pour y tenir ? Toujours avec la police de repli ; avec la police d'origine (SE-GARRIR) seulement quand la fenetre pose une limite (`fit_x` : ligne de cout de la fiche d'un sort) ou
+pour les etiquettes de bouton des fenetres de BUTTON_COMPRESSION_TYPES (poker). Ailleurs un texte francais plus long que son bouton depasse comme sur le mobile (choix du joueur, audit UI-05).
+@@ 6da2cef2944a d
+PartsInfo.SetUV : 4 sommets (HG, HD, BD, BG) de l'icone numero `no` dans la feuille.
+@@ 6a71500414f1 d
+(x0, x1, z0, z1) du dessin VISIBLE d'une maille de cadre, dans le repere local de la maille (unites d'interface), ou None.
+Un cadre est une grille de cases dont celles du bord ont une marge transparente dans la feuille, de taille differente d'un cadre a l'autre (le cadre des dialogues : 6 unites a droite, 4,5 en haut ; celui de Oui / Non : presque
+rien) : poser deux cadres bord a bord sur les bords de leurs mailles les decale de ces marges. Pour chaque case (maille, triangles `tris`), on cherche dans `alpha` les colonnes et les rangees dont l'opacite depasse `threshold`
+(la colonne de texture croit avec x, la rangee decroit quand z monte : v = -rangee / hauteur de la feuille).
+@@ 8af5cb6fff37 d
+Une fenetre de menu ouverte (un port du moteur) : etat modifiable d'apres les messages du moteur.
+@@ a2d87799dced d
+Fenetre de message du jeu (MenuMessage) : cadre (frameData) + canevas de texte dessine par le moteur + curseur de fin de page.
+Le canevas est une texture 512 x 512 qui boucle ; le defilement `[3, y]` decale l'origine verticale de ses UV de (y & 0x1ff) / 512.
+@@ 9960b9f17e11 d
+Police bitmap Unity du jeu pour la langue anglaise (et le patch FR) : « SE-GARRIR » (Font « Garrick », 20 px, 218 glyphes) ; elle remplace GMaruGoPro-M, la police japonaise.
+Les donnees (ui_garrir.json : metriques et rectangles des glyphes ; ui_garrir.png : atlas 256 x 256, alpha) sont extraites de base.apk par prepare_resources.
+Un TextMesh de caractere de taille cs affiche 1 px de police = cs * 0.1 unite d'interface ; la largeur d'une ligne = somme des « advance » des glyphes (pas de crenage).
+@@ 57d9ab2b6383 d
+Lignes de texte -> textures (police du jeu rendue par Pillow, blanche ; la couleur est appliquee au dessin).
+@@ 18f0fc3112dd d
+Dessine des Fenetre sur l'ecran : prog GL maison, feuilles 0 (MenuTexture) et 1 (Button).
+@@ a3dd163c9e6b d
+Recoit ce que l'interface du jeu memorise (Interface.obs) et tient une Fenetre par port de menu.
+@@ 378dd362c569 d
+Police bitmap SE-GARRIR (Font Unity) -> ui_garrir.json (metriques, glyphes : code, vert x y l h, advance, flipped, uv x y l h) et ui_garrir.png (atlas RGBA, tel que le rend UnityPy).
+@@ 4e4a4c9b7938 d
+Extrait des APK du jeu (une seule fois) : feuilles MenuTexture et Button, police, maillages des cadres. -> True si tout est la.
+@@ eefafe6062da d
+ItemNumCTRL.Changer(v) (0xD08060) : compteur passif a deux chiffres d'une ligne de la liste d'objets (Sub_ItemButton : IBase 3 = dizaines, IBase 4 = unites, feuille 12, cases de 32 px).
+v < 2 : deux cases vides (icone 1) ; sinon dizaines = (v / 10) % 10 (icone 16 x chiffre, ou 1 si zero), unites = icone 16 x (v % 10) ; 100 et plus se replient modulo 100 (123 -> 23).
+Les deux chiffres sont les IBase 3 et 4 de la MenuParts de la ligne (celle de l'element (ligne, 0)).
+@@ 7e87020d92c7 d
+Make_NameButton, code 6 (`<Make_NameButton>b__0`) : mise en page de la liste. Le preset `c` (NAMES_PRESETS) donne le nombre de rangees visibles et l'ordonnee de la premiere : les rangees suivantes (jusqu'a la 6e) sont desactivees, donc ni
+dessinees ni cliquables (la 5e rangee, vide, restait visible et menait, au toucher, a une magie inexistante : <ERR ...> a l'ecran). Les codes de rangee (0 cache, 1 / 2 visible) arrivent apres et priment.
+@@ 9dc4e2cdc2d9 d
+Fonction de code dont l'argument est un MASQUE DE BITS sur des elements actifs / inactifs (Make_Casino_Poker b__1 : bit n = zone tactile de numero n, cartes 0 a 4 et « Donner » 5 ; le moteur envoie 63 pour toutes).
+L'exporteur de mise en page n'a essaye que les valeurs 0 a 5 : le tableau `fx` ignore les autres. Si le tableau est bien de cette forme (pour CHAQUE valeur connue, les elements inactifs sont exactement ceux dont le bit
+de leur numero de bouton est a 0, parmi ceux que la valeur 0 desactive), on applique la meme regle a la valeur recue : l'element de numero de bouton n est actif quand le bit n est a 1. Sinon rien (comme avant).
+@@ 7af94f7d6e3d d
+IIcon.Change(no) : les quatre UV de l'icone numero `no` de la feuille de l'element.
+@@ e4cfaba947b2 d
+Noeud de la plaque du membre i (celui que le code -1 cache), ou None.
+@@ 6bfd2de016d8 d
+Ids 0 a 3 = plaques : le code 8 lance ShakeFrame (m_shake = 8), le code -1 cache la plaque. Id 5 = fleche du membre qui agit : un code >= 0 l'affiche (SetActive), la deplace et BattleUpCursor.ForceUpdate la remet sur l'icone 2.
+@@ 72c659768e11 d
+Fin de ShakeFrame : la plaque revient a sa place ; rouge : m_shakeEndCallback = BattleBar.RedApply (la barre rouge rejoint la valeur courante).
+@@ 56d8b09b9542 d
+Icone de la fleche de cible (feuille 10) ; montrer : SetActive(true) du code >= 0 (l'exporteur ne le voit pas : le code ne fait que la deplacer, la fleche restait cachee).
+@@ 4e8cd0ac8f0c d
+Une image du jeu (30 Hz) : secousse des plaques (ShakeFrame.Update : un decalage de la table par image, puis le rouge de la barre) ; la fleche de cible clignote en temps reel (BattleUpCursor.Update).
+@@ 0c2ce852131a d
+StatusIconChanger : v = icone | (couleur << 16). La premiere icone (feuille 13) prend `v & 3` (0 rien, 1 croix = mort, 2 tete de mort = poison), la seconde l'oeil (3) si le bit 2 est leve (sort scelle) ;
+la couleur (palette de l'en-tete : blanc, jaune = a l'article de la mort, rouge = mort) teinte la matiere de cette feuille. i = rang de la partie qui porte deux icones de la feuille 13.
+@@ cbce9b513053 d
+Les 12 marques du type 31 : parties d'une seule icone de la feuille 6 (Button), dans l'ordre des parties.
+@@ b620b619176a d
+MonsterMarkList.Reset (code 4) : toutes les marques sont cachees.
+@@ 5871ab371fcc d
+Code 3 : IFrame.Change(0xDB + code) choisit le cadre (219 : 316 de haut, 220 : 262, 221 : 260) ; code 2 : un seul bouton, plus bas, les deux autres caches.
+@@ 1ee5b4154469 d
+Titre du type 54 : le texte est pose pour le cadre 219 (onglet de 241,5 de large, 316 de haut) ; les cadres 220 (sans onglet) et 221 (onglet de 301,5, 260 de haut) changent la hauteur
+et la largeur de l'onglet : le titre le suit (en bas : la hauteur perdue ; au centre : la moitie de la largeur gagnee), sinon il flotte au-dessus de l'onglet (liste « Reprendre » / « Auto »).
+Choix du portage : le code d'origine (0xD0A604) ne deplace que les boutons, mais le texte envoye au code 2 est bien le titre de l'onglet.
+@@ e3a3d78aef48 d
+Bouton choisi (curseur) : les elements de ce numero passent a l'etat « appuye ».
+@@ 186243bfa97b d
+ReceiveParameters(code >= 1) : nom du monstre, fenetre ajustee a une ou deux lignes (VariableWindow 142 x 18 ou 36), masque des monstres du groupe.
+@@ 19e3bc9f285b d
+b__1(code = nombre de plaques) : x = centre des monstres du groupe (borne a +-142), z = 105 (69 si plus de deux plaques), rangees de 58 vers le haut.
+@@ cb6fcb3c8eba d
+Zones tactiles (MenuParts d'un bouton : numero, touche de manette envoyee au moteur au relachement) : [(numero, manette, x0, z0, x1, z1, profondeur)] en unites d'interface ; ident : l'identifiant de l'element s'ajoute en fin de tuple.
+@@ 7852bc64c726 d
+Ordonnee (unites d'interface) du bord bas des parties visibles de la fenetre.
+@@ 6ab41f1dc2bb d
+(bas, haut) en unites d'interface des parties visibles de la fenetre, ou None si rien n'est dessine.
+@@ 1280f7fb65c6 d
+(x0, x1, z0, z1) du dessin VISIBLE des parties montrees de la fenetre, en unites d'interface (voir `visible_edges` : les marges transparentes des cadres ne comptent pas) ; les bords des mailles quand la feuille n'est pas connue. None si rien n'est dessine.
+@@ df0fb894b424 d
+Rectangles (x0, z0, x1, z1) des elements dessines (visibles, avec maillage) de la fenetre : les cadres et les plaques.
+@@ 9f6f7f6ce8d7 d
+Menu de depart (type 53) : le jeu colle ses boutons au bord bas de l'ecran portrait ; la visionneuse les centre en hauteur (le groupe entier : « Sauvegarde automatique », les quatre choix, Licence, Sauvegardes, retour)
+dans un cadre noir. Le decalage se calcule sur la mise en page complete (visible ou non) pour que le groupe ne bouge pas quand un bouton apparait ou disparait. -> decalage applique (unites).
+@@ 2f6777c7fdd4 d
+Plaque de bouton dont le moteur n'a envoye aucune etiquette (case inexistante : « Sauvegarde automatique » sans fichier data5.dat lisible) : cachee, avec ses textes ; remontree des qu'une etiquette arrive.
+La mise en page ne change pas (le cadre du menu de depart garde la place) ; une plaque cachee n'est ni survolee ni choisie (`buttons` ignore les elements invisibles).
+@@ 3beade9c9af2 d
+Texte gris (TEXT_COLOR_GRAY) sur les plaques de bouton grisees (etat 3), blanc de nouveau quand elles ne le sont plus. Le shader gris du jeu ne fait que retirer la couleur : sur la plaque grise du menu de depart
+la difference ne se voit presque pas ; le texte gris montre qu'elle est inactive (choix de la visionneuse : le jeu, lui, ne change la couleur du texte que pour les boutons qui l'ont demande).
+@@ 2cba1c9ba262 d
+Menu de depart : plaque « Sauvegarde automatique » (voir _auto_plate) puis texte gris des plaques grisees.
+@@ 0d3cd4c4d5da d
+Menu de depart (type 53) : la plaque « Sauvegarde automatique » reste TOUJOURS visible, avec son etiquette ; sans sauvegarde auto elle est grisee (etat 3 : shader gris) donc inactive (`is_state_active` : ni survol, ni clic,
+ni validation au clavier ; le moteur, qui n'a pas de cellule 4 dans ce cas, ne recoit rien). Le jeu d'origine, lui, CACHE cette plaque (code 0 = 0 : cadre 215 / 216 puis SetActive(false)) ; la demande de l'utilisateur
+(grisee, jamais disparue) l'emporte. Avec DQ_AUTO_CACHEE : comportement d'origine. Idempotent (appelee a chaque image).
+@@ 80b714df703b d
+Rectangle (x0, z0, x1, z1) de toute la mise en page (plaques, boutons), agrandi de `margin` : le cadre noir du menu de depart ; `visible_ones` : seulement les elements montres (listes de journaux : le cadre change de hauteur).
+@@ 2052b3d4b565 d
+(x, z) du centre de ce que la fenetre montre (cadre, onglet, plaques, bouton de retour), en unites d'interface ; None si rien. Les fenetres d'avant-partie (liste des journaux, choix du sexe) sont posees sur le bord bas-droit
+de l'ecran portrait : la visionneuse les centre (par le repere de dessin, sans toucher aux positions).
+@@ 7a6724f067e3 d
+(gauche, droite) en unites d'interface de toutes les parties de la fenetre (visibles ou non : la mise en page ne change pas), ou None : limites dans lesquelles un texte doit tenir. Mis en cache.
+@@ 283f73d13fdc d
+Oui / Non (Make_YesNo, type 1) : sur mobile les deux plaques du cadre sont cote a cote (« Oui » a gauche, « Non » a droite, 134 x 48 unites chacune, une unite entre les deux) ; ici elles sont l'une sur l'autre,
+« Oui » au-dessus de « Non », comme sur DS (demande de Sylfried du 04/11/2026 : la pile est posee sur le coin haut droit de la boite de dialogue, voir `Game._ui_yesno`). La pile garde la colonne de la plaque de gauche
+(x de -134,5 a -0,5) ; les mailles (cadre, plaque, texte) sont deplacees d'un bloc, rien d'autre ne change : le curseur du moteur range deja Oui / Non en une colonne (haut = Oui, bas = Non), les zones tactiles
+et la selection suivent les noeuds deplaces. Sans deux plaques numerotees (autre mise en page), rien n'est change.
+@@ 0543eb9f968f d
+typ = type de fenetre (0 terrain, 1-3 combat), y = defilement du canevas, feed = curseur de fin de page, qui = nom de l'interlocuteur ('' : aucun).
+MenuMessage.NoticeReceive, commande 4 : le nom n'est montre que sur la fenetre du terrain (m_nowType == 0) ; le cadre devient alors frameData 191 (le meme que 192 + un onglet colle au bord haut-gauche, souligne)
+et le TextMesh « m_who » recoit le nom. Les cotes servant a poser la fenetre (etendue(), bas()) restent ceux du cadre sans onglet : l'onglet depasse vers le haut, il ne decale rien.
+@@ 362faf67125e d
+(x0, x1, z0, z1) du dessin VISIBLE du cadre des dialogues (sans l'onglet du nom), en unites d'interface (voir `visible_edges`) ; les bords de la maille quand la feuille n'est pas connue.
+@@ 973da16c5b4b d
+Ordonnee (unites d'interface) du bord bas du cadre.
+@@ 5ec19400d9a2 d
+(gauche, droite) du cadre, unites d'interface (Render._texte : limites dans lesquelles un texte doit tenir).
+@@ 30cf954fe38a d
+Largeur d'une ligne en px de police (somme des advance ; un caractere absent de la police compte comme une espace).
+@@ 1fd5ed8381fe d
+-> (texture, largeur, hauteur, base) en px de police ; base = distance du haut de l'image a la ligne de base.
+@@ 0c32317049e0 d
+-> (texture, largeur, hauteur, base) ; base = distance du haut de l'image a la ligne de base.
+@@ 77f209a34f03 d
+Canevas de texte du moteur (512 x 512 octets d'opacite) -> texture « msg » (blanc, alpha = opacite), qui boucle comme dans Unity.
+@@ 86388aae5552 d
+-> liste de (profondeur, ordre, genre, donnees) d'une fenetre.
+@@ cad40d105363 d
+fens : liste de Fenetre ; (cx, cy) = pixel du centre de l'ecran du jeu ; s = pixels par unite ; vp = (largeur, hauteur) de la fenetre.
+@@ be285dad69b5 d
+Maillage de la plaque de bouton du jeu (feuille Button, partie 7, neuf morceaux de la fenetre « liste » Make_NameButton) : sommets, UV, indices, couleur.
+@@ ffd2f7753793 d
+Dessine le fond d'un bouton exactement comme les fenetres du jeu (ex. « Soigner tous ») dans le rectangle pixel (x, y, w, h) : les coins gardent leurs proportions (celles du modele : 16 unites de coin pour sa hauteur),
+le milieu s'etire. choisi : version enfoncee de la feuille (celle d'un bouton choisi dans le jeu). coin : cote des coins en pixels (les 16 unites d'origine, quelle que soit la hauteur : boutons de l'ecran).
+grise : bouton inactif (shader gris du jeu, et assombri a 55 % : la couleur retiree se voit a peine sur cette plaque grise).
+-> False si la plaque du jeu est indisponible.
+@@ fd394ebf7991 d
+Plan de la fenetre de carte : texture 4:3 (plan agrandi, voile compris). Petite carte (type 25, ICityMap : CreateFromTexture 450 x 337,5 pose en (2, -2) sous le cadre, echelle locale 0,99) : de x = -223 a 222,5,
+de z = 398 a 63,875 ; grande carte du monde (type 26) : rectangle de 450 x 337,5 de x = -225 a 225 (position d'origine non lue : garde).
+@@ 57a18c9fb9e4 d
+Largeur utile (unites) de la plaque de bouton (partie 7) qui porte ce texte centre, ou None : la plaque dont le rectangle contient le point d'ancrage du texte.
+@@ 75c232727935 d
+Description dont le cadre montre `nmax` lignes sur `layout` unites de large : (lignes, facteur de compression). Un texte qui tient deja (au plus `nmax` lignes, aucune plus large que le cadre) est laisse tel quel, avec les retours a la ligne du patch.
+Sinon les retours a la ligne sont remplaces par des espaces et le texte est recoupe a la largeur du cadre ; s'il faut encore plus de `nmax` lignes, il est comprime en largeur (jusqu'a COMPRESSION_MIN) pour tenir en `nmax` lignes.
+@@ 9037905e3e90 d
+Les fenetres des ports 2 a 11 (menus du terrain) sont creees par le moteur au demarrage, avant que la visionneuse n'ecoute : on rejoue leur creation et leur contenu.
+@@ 4ed14f5da3b9 d
+Une image du jeu : animations des fenetres (secousse des plaques de combat, clignotement de la fleche de cible).
+## FILE dq4_pc/paths.py
+@@ f7c25eb73f1a t
+.../dq4-portage/dq4_pc
+@@ d910a21ed909 t
+.../dq4-portage
+@@ eb86e5617379 t
+dans data\ : les etapes de la reprise deja faites (D-235)
+@@ d598e3aaea06 t
+(son nom d'avant D-239 ; renomme au premier demarrage)
+@@ 740a93ba57ae t
+les fichiers du jeu : data1 a data3 = journaux, data4 = suspension, data5 = sauvegarde auto, data9 = journal le plus recent
+@@ 308625aa7e4c t
+(DQ4_DONNEES : son nom d'avant D-239)
+@@ 32736e5ef3f1 t
+(DQ4_JEUX : idem)
+@@ 8641069ff390 t
+variable d'avant le rangement
+@@ 1168e74bef62 t
+(ancien dossier de la copie du telephone, repris par `migrate` ; DQ4_JEUX : une copie lue seulement)
+@@ c50146e30125 t
+D-232 : un seul dossier, ou le jeu lit ET ecrit ses journaux (data1.dat...), a cote de `savestates\\`
+@@ 338081e22454 t
+(ancien dossier d'ecriture, repris par `migrate`)
+@@ 904b02d5f5ac c
+---- sauvegardes -------------------------------------------------------------------------------------------------------------
+@@ b41fe3d296e6 c
+---- noms en anglais (D-239) -------------------------------------------------------------------------------------------------------
+@@ 41ea67ee26f4 t
+dossiers : ancien nom -> nouveau
+@@ 448d44b78d30 t
+fichiers (et leurs copies `.tmp`, `.bak`... : le debut du nom suffit)
+@@ 74cb4a9746c7 t
+etapes de resume.json d'avant D-239 -> nouveau nom
+@@ db362ba95988 t
+(par ex. un dossier ouvert dans l'Explorateur : on essaie contenu par contenu)
+@@ caeaeac5e4de t
+(pas vide ou verrouille : il reste, rien n'est perdu)
+@@ a160f2d9ffe9 t
+(avec DQ4_DATA / DQ4_DONNEES, le dossier est a toi : on n'y touche pas, seul son contenu est renomme)
+@@ 5c767fd40987 t
+sauvegardes, reglages, journaux, reprise.json
+@@ a90e058d980d t
+etats, etat_NN.dqs, avant_import_..., avant_rangement_...
+@@ fdc077020a15 c
+---- migration de l'ancienne disposition ------------------------------------------------------------------------------------------
+@@ 0a47653aebef t
+les reprises qui ne se font qu'une fois (D-235)
+@@ 9fef6f38484f t
+(sans le fichier la reprise se refait au prochain demarrage : elle ne ecrase rien)
+@@ 2ea9896c5bf8 t
+(le fichier de reprise vient peut-etre de changer de dossier ou de nom)
+@@ 683860ee5668 t
+(un probleme : le renommage est refait au demarrage suivant ; rien a renommer : rien a noter)
+@@ 35a5b8076c3d c
+1. cache : meme volume, donc un simple renommage (il pese plusieurs centaines de Mo)
+@@ 7d5c6513234e c
+2. APK francais : copies (jeux\DQ4\patched_apks -> data\apk)
+@@ 628e5287baf3 c
+3. D-232 : les anciens dossiers data\saves\portage et \mobile\<date> sont remontes dans data\saves puis ranges (AVANT les reprises plus anciennes : ce que le jeu ecrivait ces derniers jours est prioritaire sur de vieilles copies)
+   (se fait toujours : elle deplace ces deux dossiers, donc ne se repete pas d'elle-meme)
+@@ 7c0e24ab0d15 c
+4. sauvegardes du portage d'avant : dq4_pc\sauvegardes\{data*.dat, etats\, avant_import_*\} -> data\saves (D-232 : un seul dossier ; D-239 : et mis en anglais au passage)
+@@ 9b3b634c53e3 c
+5. sauvegardes du telephone d'avant : jeux\DQ4\saves\<date la plus recente> -> data\saves (ce que le jeu lisait en second, fichier par fichier)
+@@ 8f0767c9e601 c
+6. reglages et favoris de l'historique
+@@ d7f1c32bdff3 c
+7. journal des erreurs de la fenetre
+@@ 18d81262c355 t
+`python -m dq4_pc.paths` : la reprise seule (lancee par launch_dq4.bat avant le jeu)
+@@ f12d35153976 t
+(D-238 : les messages de la reprise sont dans la langue de l'outil)
+@@ 4d6a67130c28 d
+Tous les dossiers et fichiers du portage, en un seul endroit (rangement du 04/11/2026, noms en anglais du 05/11/2026 : D-239).
+
+Tout ce qui t'appartient (APK, sauvegardes, caches, reglages) est dans UN dossier, `data\`, a la racine du projet ; il n'est jamais envoye sur GitHub (.gitignore) :
+
+    data\
+      apk\                      les 3 APK francais (base.apk, split_config.arm64_v8a.apk, split_UnityDataAssetPack.apk)
+      saves\                  UN SEUL dossier (D-232) : le contenu exact du .zip d'export, pour copier d'un coup les sauvegardes du telephone
+        data1.dat ... data5.dat, data9.dat   les journaux du jeu (lus et ecrits par le moteur ; ceux du telephone se copient ici)
+        savestates\           les etats instantanes (state_01.dqs ...)
+        before_import_<date>\   copies de securite faites avant chaque import de sauvegardes
+        before_tidy_<date>\     anciens dossiers `portage\` et `mobile\` ranges tels quels par la reprise (voir `migrate`) : sans danger a effacer une fois la partie verifiee
+      cache\                    ce que le portage calcule a partir des APK (cartes, sprites, sons, menus) : sans danger a effacer
+      settings\               settings.json, history_favorites.json, history_messages.json
+      logs\                   window_errors.log
+      resume.json               les etapes de la reprise de l'ancienne disposition deja faites (D-235)
+
+Deux variables d'environnement, pour les tests et les installations particulieres (les anciens noms DQ4_DONNEES et DQ4_JEUX marchent toujours) :
+  DQ4_DATA  : un autre emplacement pour tout le dossier `data`.
+  DQ4_GAMES : (ancien fonctionnement) un dossier « jeux\DQ4 » contenant `patched_apks` et `saves\<date>` ; il remplace `data\apk`, et `saves\<date>` reste une copie LUE SEULEMENT de sauvegardes (tests, installations particulieres).
+
+Noms en anglais (D-239) : les dossiers et fichiers que les versions d'avant creaient en francais (`donnees`, `sauvegardes`, `etats\etat_NN.dqs`, `reglages`, `journaux`, `avant_import_...`, `reprise.json`...) sont RENOMMES sur place au premier demarrage
+(`english_names` dans `resume.json`) : un simple renommage, sans copie, sans rien ecraser ni supprimer ; si un nom existe deja a la nouvelle place, l'ancien fichier reste ou il est et le renommage est refait au demarrage suivant.
+
+`migrate()` reprend aussi l'ancienne disposition (jeux\DQ4, dq4_pc\cache, dq4_pc\sauvegardes, dq4_pc\reglages.json ...) : elle COPIE (ou, pour le cache seulement, deplace) vers la nouvelle,
+sans jamais ecraser un fichier deja present et sans rien supprimer. Chaque reprise n'a lieu QU'UNE FOIS (D-235) : `data\resume.json` note les etapes faites, pour que ce que tu effaces dans `data\`
+(un dossier `before_import_...`, un journal, des reglages) ne soit pas recopie depuis l'ancien dossier au demarrage suivant. Une disposition deja en service (journaux, etats, reglages ou cache dans `data\`) compte comme reprise faite.
+@@ 08fe4cd7efd1 d
+Les dossiers et fichiers, calcules a partir de la racine des donnees (et des deux variables d'environnement).
+@@ 32fd51cb9cb2 d
+Le nom anglais d'un dossier ou fichier cree par les versions d'avant D-239 (`etats` -> `savestates`, `etat_01.dqs` -> `state_01.dqs`, `avant_import_<date>` -> `before_import_<date>`...), ou None s'il n'a pas change.
+@@ c092c9006dec d
+Renomme `src` en `dst` (meme dossier ou dossiers voisins, donc sans copie) sans rien ecraser ni supprimer : `dst` absent -> simple renommage ; deux dossiers -> le contenu de `src` est remis un par un dans `dst`
+(puis `src` est retire s'il est vide) ; deux fichiers -> `src` reste ou il est (probleme note). Ajoute (src, dst) a `moves` pour chaque renommage fait, (src, dst, raison) a `problems` sinon.
+@@ 0bad60adc113 d
+Renomme les entrees de `folder` qui ont encore un ancien nom ; `deep` : descend dans les sous-dossiers, sauf les copies archivees par la reprise (`portage`, `mobile`, `before_tidy_...`) qui restent telles quelles.
+@@ 632053e84584 d
+D-239 : renomme sur place les dossiers et fichiers que les versions d'avant creaient en francais. -> (renommages, problemes) ; voir `_move`.
+@@ 872190535f02 d
+Les phrases qui disent ce que `english_names` a fait (vide : rien).
+@@ 77b42f726470 d
+Copie un fichier s'il n'existe pas encore a destination ; renvoie 1 si copie.
+@@ a76feb3374ca d
+Un chemin relatif d'une ancienne disposition, avec chaque nom mis en anglais (`etats\etat_01.dqs` -> `savestates\state_01.dqs`).
+@@ 12191d9f7bbb d
+Copie les fichiers du jeu (data1.dat... data9.dat) des dossiers `sources` (par ordre de priorite) dans `destination`, sans rien ecraser : le premier dossier qui a le fichier gagne. -> nombre de fichiers copies.
+@@ 6b49dd015e42 d
+D-232 : un seul dossier de sauvegardes. Les journaux de l'ancien `saves\portage` (prioritaire : c'est ce que le jeu ecrivait) puis ceux de la copie du telephone la plus recente (`saves\mobile\<date>`)
+sont copies dans `saves\`, sans rien ecraser (ce que le jeu lisait avant, fichier par fichier, dans cet ordre) ; puis, une fois chaque fichier retrouve a sa place, les deux anciens dossiers sont deplaces
+tels quels dans `saves\before_tidy_<date>\` : rien n'est supprime. Un echec laisse les anciens dossiers en place (le jeu les lit encore). Avec DQ4_JEUX (copie du telephone ailleurs, lue seulement) : sans effet.
+-> phrases decrivant ce qui a ete fait.
+@@ 1547cc5dcd5a d
+Les etapes deja faites (`data\resume.json`, ou `reprise.json` si son renommage n'a pas encore eu lieu) : dict nom -> date, ou {} (fichier absent ou illisible). Les noms d'etapes d'avant D-239 sont traduits.
+@@ 98c5a5a10734 d
+Pour chaque etape : sa destination sert deja dans `data\` (une version d'avant D-235 a deja fait la reprise, ou tu as copie tes fichiers toi-meme) -> rien a recopier.
+@@ 3d9c2cd94c73 d
+Reprend l'ancienne disposition dans `data\`. -> liste de phrases decrivant ce qui a ete fait (vide : rien a faire).
+Copie sans jamais ecraser ni supprimer, sauf le cache (deplace d'un coup si `data\cache` n'existe pas, sinon laisse tel quel) et les anciens dossiers `saves\portage` et `mobile` (deplaces dans `avant_rangement_<date>` apres copie) ; ne fait rien avec DQ4_DONNEES / DQ4_JEUX non reconnus.
+Chaque reprise ne se fait qu'une fois (D-235) : ce que tu effaces ensuite dans `data\` (un dossier `before_import_...`, un journal, des reglages) ne revient pas depuis l'ancien dossier.
+D-239 : tout commence par le renommage en anglais des dossiers et fichiers des versions d'avant (`english_names`), pour que les reprises suivantes arrivent deja dans les bons noms.
+@@ 56b36d5d1afc d
+Dossier de la copie du telephone la plus recente (`mobile\<date>` : l'ancien rangement, ou DQ4_JEUX\saves\<date>, la date se trie comme l'ordre alphabetique), ou None.
+@@ a776cdf10030 d
+Dossier des etats instantanes pour ce dossier d'ecriture : `saves\savestates` avec l'emplacement habituel (`saves`), sinon `<write_dir>\savestates` (tests, --saves-ecriture).
+@@ 0c6676893840 d
+Dossier qui recoit les copies `before_import_<date>` : `saves\` avec l'emplacement habituel, sinon le dossier d'ecriture lui-meme.
+@@ 768b20e2f808 d
+L'etape reste a faire ? Sinon (faite avant, ou destination deja en service) on la note faite, sans rien copier.
+## FILE dq4_pc/persistence/logfile_format.py
+@@ 09ca26a235bb t
+banque vide : valide, sans somme
+@@ 540aab29e310 d
+Lecture minimale d'un fichier de journal du jeu (data1.dat a data5.dat) : de quoi dire s'il est utilisable, sans le charger dans le moteur.
+
+Format (desassemblage de Cryption::Filter 0x152de8 et de Profile::isValidData ; verifie sur les sauvegardes d'un telephone et sur celles ecrites par le moteur) : 15 360 octets chiffres par un flux xorshift32 dont la graine est le CRC32
+(polynome 0x7a7b58c6, cle « vb76Eg43 ") ; en clair : mot 0 = « rate » (0x65747261) et mot 1 = 0x0bf697de pour une banque valide, « DWEN » (banque neuve) ou « DLED » (banque supprimee) pour une banque vide ; le mot 2 est la somme
+des 0x3660 premiers octets (mot 2 mis a zero). data9.dat (512 octets) n'est qu'un numero de banque : seule sa taille se controle.
+@@ 5750d58307a3 d
+Filtre du jeu (xor symetrique : sert aussi a chiffrer).
+@@ 16efca233d77 d
+-> None si le fichier est utilisable, sinon la raison (texte pour le joueur). Les tailles sont controlees par l'appelant ; data9.dat n'a pas de somme.
+## FILE dq4_pc/persistence/saves.py
+@@ 56644e464e3f t
+(D-239 : `etats/etat_NN.dqs` des .zip d'avant est reconnu aussi)
+@@ 9934e35ee375 t
+(le dossier de lecture n'est jamais modifie : ses fichiers restent intacts, inutile de les copier)
+@@ bdbdb046e480 c
+---- boites de dialogue de fichiers (tkinter, dans un fil a part pour que la fenetre du jeu reste vivante)
+@@ 529def14e4ea d
+Export et import des fichiers de sauvegarde (bouton « Sauvegardes » du menu de depart, a la place de « Sauv. cloud »).
+
+Ce qui s'exporte : les six fichiers du jeu (data1.dat a data3.dat = journaux, data4.dat = suspension, data5.dat = sauvegarde auto, data9.dat = journal le plus recent) tels que le moteur les lit
+(le dossier d'ecriture d'abord, sinon celui de lecture) et les etats instantanes du portage (savestates/state_NN.dqs). Un fichier .zip les contient a plat (`data1.dat`, `savestates/state_01.dqs`).
+Ce qui s'importe : un .zip de ce genre, ou des fichiers dataN.dat isoles (par exemple ceux copies depuis un telephone Android) ; les noms sont reconnus meme dans des sous-dossiers du .zip.
+Rien n'est jamais ecrase sans copie : avant l'import, les fichiers du dossier d'ecriture qui vont etre remplaces sont copies dans `data\saves\before_import_<date>\` ; les dossiers de lecture (tes sauvegardes d'origine) ne sont jamais modifies.
+Les fichiers ne sont pas interpretes ici, seulement controles : taille (journal : 15 360 octets ; data9 : 512) et somme de controle d'un journal (logfile_format : un fichier abime ou qui n'est pas un journal du jeu est refuse, avec la raison, au lieu de donner une « banque vide » au chargement) ; chaque fichier est ecrit en entier ou pas du tout (fichier temporaire puis remplacement).
+@@ 12d825abcb8d d
+Le nom d'un etat instantane tel qu'il s'ecrit maintenant : `etat_03.dqs` (ancien nom) -> `state_03.dqs`.
+@@ d1f6a68e3a96 d
+Les fichiers de journaux que le moteur lit : {nom: chemin} (le dossier d'ecriture passe avant celui de lecture, comme GameCore.h_fopen).
+@@ 0d48a4290d53 d
+Etats instantanes du portage : {nom: chemin}.
+@@ 4168080db8e1 d
+Ecrit le .zip. -> (nombre de journaux, nombre d'etats). Leve ValueError s'il n'y a rien a exporter.
+@@ fadd75111dd5 d
+Fichiers a importer : -> ({nom de journal: octets}, {nom d'etat: octets}, [problemes]). Chemins : .zip, dossiers (journaux / etats a l'interieur) ou fichiers isoles.
+@@ 1d58909e9cdb d
+Copie les journaux / etats trouves dans le dossier d'ecriture, apres avoir copie ceux qu'ils remplacent dans `before_import_<date>`. -> (nb journaux, nb etats, dossier de copie ou None, problemes).
+Leve ValueError si rien d'utilisable n'a ete trouve.
+@@ f236e3346389 d
+Une boite « Enregistrer sous » ou « Ouvrir » ; `result` reste None tant qu'elle est ouverte, puis liste de chemins (vide = annule) ; `unavailable` vrai sans tkinter.
+## FILE dq4_pc/persistence/savestates.py
+@@ 4f675267479a c
+Anciens noms de modules (avant le rangement du 04/11/2026 : tout etait a plat dans dq4_pc) -> noms actuels : les etats enregistres avant cette date
+gardent le nom de module `moteur` (ou autre) dans leur pickle ; on les relit sans les changer.
+@@ 4e028b69d34b t
+etats enregistres entre le rangement du 04/11/2026 et le passage a l'anglais du 05/11/2026
+@@ eb6536b11fc7 c
+Anciens noms de classes (meme date) : `Etat` est devenue `State`.
+@@ 4afae0c9bf21 c
+Liste blanche des classes lisibles dans un etat (#241, audit ENG-05) : un `.dqs` recu d'une autre personne ne doit pas pouvoir executer de code au chargement. Un pickle peut appeler n'importe quelle fonction
+d'un module importable (os.system, eval...) ; on n'accepte que les types de donnees qu'ecrit `snapshot` / `write` : les deux classes du portage (`State`, `Interface`), les conteneurs de base,
+les tableaux numpy (les deux espaces de noms, `numpy.core` avant numpy 2 et `numpy._core` depuis) et trois conteneurs de `collections`. Releve fait sur de vrais etats (monde, ville, combat) : rien d'autre.
+@@ 0831d7ec1b80 t
+(les etats d'avant #206 n'ont pas d'empreinte : acceptes)
+@@ 3be92deef894 t
+TOUT est lu avant d'ecrire quoi que ce soit dans le moteur : un fichier abime laisse le jeu intact (#206)
+@@ 19943c99fcee t
+fichiers ouverts : on n'en garde la trace que si le moteur en avait ouvert (non vu entre deux images jusqu'ici)
+@@ e695013a9e5b t
+etat enregistre par une version plus ancienne (avant les nombres de degats)
+@@ a035e19a99ea t
+vitesses de heros d'origine (un etat enregistre par une ancienne version pendant une course les contient majorees), bouton « Paramètres » -> menu Pause (un etat enregistre
+@@ 379ce8969c8b c
+avant ce detournement a remis l'instruction d'origine), fenetre des lieux elargie et « Sauv. cloud » retiree (idem : l'image d'origine est rechargee ci-dessus)
+@@ 38ff318d864c d
+Etats instantanes (savestates) : tout ce qui fait vivre le jeu, a un instant entre deux images.
+
+Le moteur d'origine tourne dans l'emulateur (emu_core) : son etat = memoire (tas, donnees, pages modifiees de la bibliotheque) + quelques
+compteurs du chargeur. A cela s'ajoute ce que la visionneuse a decode des paquets (Etat : camera, sprites, fondus...) et la memoire des fenetres de menu
+(Interface). Un etat pese quelques centaines de Ko compresse ; la pile n'est pas gardee (elle est vide entre deux appels du moteur).
+
+Fichier : b'DQ4ETAT1' | taille + JSON des infos | taille + PNG de la miniature | pickle compresse (zlib).
+Les etats ne contiennent AUCUN fichier du jeu : ils ne servent qu'avec l'APK qui les a produits (meme version de la bibliotheque).
+@@ 5c1949bc112d d
+pickle.loads qui reconnait aussi les anciens noms de modules et refuse toute classe hors de ALLOWED_CLASSES (rien n'est execute : un fichier piege est rejete avant).
+@@ e10cff140c32 d
+Empreinte de la bibliotheque du moteur (image apres relocation) : un etat n'a de sens qu'avec la bibliotheque qui l'a produit (#206).
+@@ 22589d615cd8 d
+Pages de la bibliotheque (donnees, patchs) differentes de l'image apres relocation : [(numero, octets)].
+@@ 7548b3db87eb d
+Etat du moteur `m` (Moteur) -> dictionnaire serialisable. A appeler entre deux images. `viewer` : objet serialisable de plus (etat des objets animes de la carte...) rendu par appliquer.
+@@ 40a20b4b588e d
+Remet le moteur `m` dans l'etat `d` -> objet `viewer` donne a instantane. Les ressources liees a la fenetre (fenetres de menu d'origine, textures) sont a reconstruire par l'appelant (voir Game.load_state).
+@@ 24ca26dc3778 d
+Enregistre l'etat `d` dans `path` (ecriture atomique).
+@@ 6d8348f23770 d
+-> (infos, miniature PNG) d'un fichier d'etat, sans lire l'etat lui-meme ; None si le fichier n'existe pas ou n'est pas valide.
+@@ 0e193054e25c d
+-> dictionnaire d'etat (a passer a appliquer).
+## FILE dq4_pc/persistence/settings.py
+@@ 29f7d7c533a8 c
+Touches par defaut : action -> [touche principale, touche secondaire] (noms pyglet.window.key)
+@@ f747c27b6f5f t
+les fleches : sur le terrain gauche / droite tournent la camera des villes (D-233 ; les deux ensemble la recentrent), partout ailleurs (menus, messages, combats) les quatre sont des directions ; haut / bas ne servent que dans les menus (l'inclinaison a ete retiree en #264)
+@@ 66b51d064d00 t
+fait defiler la vitesse de combat (Manuel, Normal, Rapide, Tres rapide) : en combat comme ailleurs ; V = « vitesse » (libre : ni ZQSD, ni fleches, ni F1, ni les chiffres des etats)
+@@ 3e6fa224f002 t
+defaut de l'action « Menu » avant la v5 (touches_v) : Entree seule ; un fichier qui le contient encore recoit Tab en plus (voir Settings.__init__)
+@@ 609df5e12caa c
+libelles des actions (menu Commandes : la page range les lignes par sections, voir pause.py ; L / R : pages des menus du jeu, touches fixes absentes du menu)
+@@ b7effbabe74e t
+(D-238 : libellés en français, traduits à l'affichage par le menu Pause : `tr(label_text)`)
+@@ dc0de759d554 t
+Echap ouvre le menu, F11 bascule fenetre / plein ecran (comme Alt + Entree) : non reattribuables
+@@ 359873dbc98b c
+(D-238 : `key_name` rend toujours le nom FRANCAIS (une donnee, comme les libelles des actions) ; le menu le traduit en le dessinant, `tr(key_name(...))`, y compris « Pavé 0 » a « Pavé 9 » des autres touches du pave numerique)
+@@ fae67a26fe06 c
+Fenetres de commandes du combat (le cadre du bas : Combattre / Fuir, Attaquer / Magie / Objets / Defense, cibles, objets et sorts, infos) : cadre de 459 unites d'interface, alors que les messages d'action du combat
+(types 2 et 3 de la fenetre de message) en font 510. Par defaut ces fenetres sont agrandies a la largeur des boites de dialogue (510 / 459) : le bouton de vitesse, colle au coin bas gauche de la boite du bas, ne se
+decale plus quand un message d'action remplace le menu au debut d'un tour (#47). Meme mecanique que toute fenetre reglee dans l'editeur : [taille relative, decalage x, decalage y].
+@@ 330d5f4e50ac t
+langue de l'outil (D-238) : 'systeme' (francais si Windows est en francais, sinon anglais), 'en' ou 'fr' ; les textes du jeu ne changent pas
+@@ 25738ea24de4 t
+« Shader » : 0 originaux, 1 EPX x8, 4 pixel perfect (voir hd.py) ; 2 (regions lissees) et 3 (bicubique), retires car ils ne faisaient que flouter, valent 1 a la lecture
+@@ 874efe58956e t
+fenetre : 0 fenetre, 1 plein ecran (fenetre sans bordure a la resolution du bureau, l'affichage du moniteur ne change pas) ; F11 / Alt + Entree passent de l'un a l'autre (ex-booleen « full_screen » ; l'ancien plein ecran exclusif, mode 2, est devenu 1)
+@@ f528aeca7a81 t
+anticrenelage MSAA (0, 2, 4, 8) : la scene est dessinee hors ecran (postfx.py), le changement est immediat ; limite par la carte graphique
+@@ 56844cec578b t
+suréchantillonnage : la scene est dessinee a cette echelle (1 a 2) puis reduite (1 = normal ; 2 = 4 fois plus de pixels calcules, scintillement et bords en escalier tres reduits)
+@@ 1fdca8c2a1a8 t
+0 a 1 : accentuation adaptative des contours de la scene (0 = aucune)
+@@ 276b4b625c4b t
+0,5 a 1,5 : courbe de gamma de la scene (1 = comme le jeu ; plus haut = plus clair)
+@@ b5288c004fd4 t
+F1 : lignes d'information
+@@ 480c280dbb70 t
+son : volume general, des jingles et fanfares, des sons de l'interface (categories : voir sound.py ; « bruitages » = les effets sonores du jeu)
+@@ 51a8e49a57d9 t
+interrupteurs par categorie
+@@ 95964cc034b5 t
+dialogues : lettres affichees par image du moteur (30 par seconde) ; 4 = comme le jeu (voir TEXT_SPEEDS)
+@@ 20d336f3fa66 t
+fenetre : taille de la fenetre [largeur, hauteur] (ramenee a l'ecran si elle est trop grande) ; plein ecran : sans effet (la fenetre prend la resolution du bureau)
+@@ ec0875eb6099 t
+camera tournee a la souris (clic molette maintenu + deplacement) : inverse le sens gauche / droite (non = comme les fleches : glisser vers la droite = fleche droite) ; ne change pas les fleches du clavier
+@@ 568e5af45a3e t
+assombrissement des bords de l'image de jeu (0 = aucun, 1 = coins noirs) : donne du volume aux decors et sprites 2D, cache le fond uni hors de la carte
+@@ c1e851cc4ade t
+facteur de vitesse du jeu quand le heros marche : x1, x2, x3 ou x4 (SPEEDS_X)
+@@ b7ea19f706dc t
+vitesse de rotation de la camera aux fleches et du recentrage : x1 a x4 (la touche d'accelerateur ne l'accelere pas)
+@@ 823daa13240e t
+« Multiplicateur de l'accélérateur » (1 a 2) : multiplicateur de la marche (on court) tant que la « Touche d'accélérateur » est tenue (ex-« vitesse_course ») ; ne s'applique JAMAIS aux combats (voir battle_speed)
+@@ b84f37de5c07 t
+« Vitesse de combat » : 0 Manuel (vitesse normale, on passe chaque message a la main), 1 Normal, 2 Rapide, 3 Tres rapide (BATTLE_SPEEDS) : le moteur fait 1, 2 ou 3 fois plus de pas par seconde pendant un combat (animations des monstres et des coups, deplacements, delais, defilement des messages, fondus) ; la musique et les bruitages gardent leur vitesse (voir battle_speed.py)
+@@ fa55ba3bbe8d t
+fenetre « Historique » : case « Favoris seulement » cochee ? (etat enregistre a chaque changement, retrouve d'une session a l'autre ; pas de ligne dans le menu Echap : on le change dans la fenetre elle-meme, voir ui_history.py)
+@@ 3a263b31c866 t
+« PV et PM restaurés au niveau supérieur » : quand un personnage gagne un niveau, il retrouve tous ses PV et tous ses PM (le jeu d'origine ne le fait pas) ; desactive = comme le jeu
+@@ 4a18d88f5462 t
+taille des nombres de degats sur les monstres (1 = taille de la mise en page d'origine, tres petite sur un grand ecran)
+@@ d5c3a186a831 t
+editeur d'interface : grille de placement affichee (32 x 18 cases)
+@@ fa2255121a78 t
+boutons tactiles de la version mobile (Carte, Commandes, Discussion) affiches a l'ecran, hors combat
+@@ 87c8fd135a58 t
+croix (manette tactile) a l'ecran, utilisable a la souris : affichee ou non ; taille relative (en plus de l'option « Taille de la croix » du jeu)
+@@ 7653085d4390 t
+taille relative ; positions posees sur une grille (aimantation)
+@@ 1d3cda87d068 t
+fenetres du jeu : nom (Make_* de MenuPortItemTable, ou 'msg' pour les dialogues) -> [taille relative, decalage x, decalage y en fraction de l'ecran] ; absent : comme le jeu (voir pause.py, editeur d'interface)
+@@ 86a0f48e331c t
+bouton ou 'croix' -> [colonne, ligne] de son coin superieur gauche sur la grille de l'ecran (vide : positions d'origine, voir hud_mobile.py) ; le bouton de vitesse de combat a la sienne (bouton_vitesse_pos)
+@@ 60d0f5718fc4 t
+interface « Combat : bouton de vitesse » (sortie de « Boutons et croix de l'ecran ») : affiche en combat ou non ; taille relative ; [colonne, ligne] de son coin superieur gauche (vide : colle sous la boite du bas, voir hud_mobile.Buttons.ancre)
+@@ ed14aa39b6ca t
+version des tailles par defaut des fenetres du jeu (interface_fenetres) : un fichier enregistre avant (sans cette cle) recoit une seule fois les nouvelles tailles par defaut, sauf pour une fenetre que le joueur a reglee ; v2 : fenetres de commandes du combat a la largeur des dialogues
+@@ 886e9725c07b t
+editeur d'interface, « Afficher cette interface a l'ecran » = Non : noms des fenetres du jeu (Make_*, ou 'msg' pour les dialogues) qui ne sont pas dessinees ; pour les boutons et la croix de l'ecran, c'est le reglage 'boutons'
+@@ 17d14c5b1f74 t
+version des reglages : une liste de touches plus ancienne que la v3 est abandonnee (v3 : ZQSD pour marcher, fleches = camera, Espace = action) ; v3 -> v4 : Discussion de groupe = Alt / Alt Gr (si ces touches sont libres), accelerateur x1,5 (si la course etait au x2 d'origine) ; v4 -> v5 : « Menu » = Entree et Tab (si « Menu » avait encore l'ancien defaut, Entree seule, et que Tab est libre) ; une action ajoutee depuis prend sa touche par defaut
+@@ 0773f28f0cbc c
+Fenetres du jeu absentes de l'editeur d'interface (pause.py) : lancement du jeu (menu de depart, nom, titre, licence, reseau : gerees a part), sans maillage (rien a regler), sans objet sur PC
+ou qui suivent les monstres a l'ecran. Leurs reglages enregistres par une ancienne version sont abandonnes au chargement (ils decalaient un texte seul ou une fenetre du lancement).
+@@ e46aef805a82 c
+Editeur d'interface (pause.py : Affichage > Interface) : classement des reglages et remises a zero. Toute cle de DEFAULT qui touche l'interface doit figurer dans l'un de ces trois groupes
+(tools/test_interface_settings.py le verifie : une cle ajoutee sans classement fait echouer le test).
+@@ 22816604cb12 t
+« Boutons et croix de l'ecran » : l'une des interfaces de l'editeur (les autres : 'msg' et les fenetres du jeu, par leur nom Make_*)
+@@ ca0495151926 t
+reglages de SCREEN_TARGET : affichage des boutons et de la croix, tailles, positions
+@@ a7587d44767e t
+« Combat : bouton de vitesse » : sa propre interface de l'editeur (groupe « Combat »), separee de SCREEN_TARGET
+@@ 4b115f3c4f19 t
+reglages de SPEED_TARGET : affichage, taille, position
+@@ 963a5147c82d t
+reglages par fenetre du jeu (ou 'msg') : taille et position, affichage
+@@ 9506ca47d651 t
+options de l'editeur lui-meme, communes a toutes les interfaces : grille affichee, aimantation
+@@ 41eeef40ba06 t
+fenetre du jeu sans reglage enregistre : taille relative, decalage x, decalage y (fractions de l'ecran)
+@@ 6213e2f150db c
+TzKeys d'anciens fichiers de reglages qui n'existent plus : jamais lues (le chargeur ne prend que les cles de DEFAULT), donc absentes du fichier a la prochaine sauvegarde. 'full_screen' (booleen d'avant la #42) est converti en 'mode_fenetre' ;
+'mode_fenetre_retour' (dernier mode non exclusif, #42), 'edge_correction' (option retiree : la correction des bords des sprites est toujours appliquee) et 'lissage' (option retiree : le lissage des textures est toujours applique) sont abandonnees ; 'camera_centree' et 'suivi_camera_v' aussi (#47 : la camera est toujours centree sur le heros, sauf quand le jeu la prend). 'ecran_plein' (choix du moniteur du plein ecran, #52) et 'sortie_audio' (choix du peripherique audio, #112) sont retires le 03/11/2026 a la demande de Sylfried : le plein ecran se fait sur l'ecran de la fenetre, le son reste sur la sortie par defaut de Windows.
+@@ 2c868ff0bbc4 t
+valeurs possibles de 'mode_sprites' (le 4 garde son numero : les anciens fichiers de reglages et les options --hd restent valables)
+@@ 37912adcd43c t
+bornes des curseurs du menu Echap
+@@ 95997f1f63f9 t
+(reglages Oui / Non : toute valeur qui n'est pas un booleen revient au defaut)
+@@ 3e0170c79c07 t
+crans de la vitesse du texte (lettres par image) ; 4 = le jeu, 4000 = tout d'un coup
+@@ 21a087e58c16 t
+crans de la vitesse de marche, de la camera et des transitions (x1 = comme le jeu)
+@@ d3b7ab5d92bd t
+crans de « Vitesse de combat » : Manuel (vitesse normale + messages passes a la main), Normal (= le jeu), Rapide, Tres rapide
+@@ 388f06bda29c t
+libelles montres au joueur (page Texte, bouton de l'ecran de combat, message de la touche) : jamais « x1 », « x2 », « x3 »
+@@ 78d16a2803a0 c
+Defilement des messages de combat : OptionStatus.battleSpeed (g_Option + 5, valeur d'origine 2 : OptionStatus::initialize) ; BattleAutoFeed::setMessageSpeed : 0 / 1 / 2 / 3 = attente de 12 / 22 / 32 / 42 images (0,4 / 0,73 / 1,07 / 1,4 s) avant le message
+suivant, 4 = pas d'avance automatique (touche). « Vitesse de combat » impose 4 en Manuel et 0 (la plus courte, 12 images) sinon (#45 : avec 2, la valeur d'origine, 32 images, le nombre de degats n'apparaissait que 0,77 s apres le debut de l'animation du coup
+et un tour d'attaque durait 5,7 s ; avec 0 : 0,43 s et 3,0 s ; l'animation du coup garde sa duree) : les vitesses Rapide et Tres rapide accelerent l'horloge du moteur, donc cette attente aussi.
+@@ 3ec135176a3e t
+(bornes : jamais plus lent que Manuel, ni plus rapide que Très rapide)
+@@ a4b9e4d87380 t
+ancien reglage « Plein écran » (booleen) -> 1 (plein ecran sans bordure, comme avant) ou 0 ; le booleen n'est plus enregistre (voir OBSOLETE_KEYS)
+@@ 235485e3bbf6 t
+ancien « Multiplicateur de la course » -> vitesse de l'accelerateur (l'ancien multiplicateur de la camera, accel_camera, est abandonne : un seul facteur pour les deux)
+@@ a3f9f719a51b t
+anciennes touches de course et d'acceleration de la camera -> une seule « Touche d'accélérateur » : « Courir (maintenir) », a defaut les trois autres (« appuyer » n'existe plus)
+@@ ca3144742a3b t
+le joueur avait vide ces touches : l'accelerateur n'a pas de touche
+@@ 1be024c10f96 t
+(une seule fois : ensuite les trois cles sont enregistrees)
+@@ 8d0ed361062a t
+(tout ancien « Defilement automatique : non » = messages a la main)
+@@ f6c36bcf2979 t
+ancien « Messages en combat : Manuel » impose -> « Vitesse de combat : Manuel » (les autres crans n'ont plus d'equivalent : l'attente suit la vitesse de combat ; rien d'impose : la vitesse enregistree reste)
+@@ 6b975f79c6fc t
+(la taille des nombres de degats n'est plus un reglage : valeur fixe)
+@@ b3c9568b6faa t
+anciennes tailles par defaut des fenetres -> nouvelles, une seule fois (ensuite la cle est enregistree et le choix du joueur fait foi) : fenetre sans reglage ou a l'ancienne taille par defaut (1, 0, 0)
+@@ 358700d814d4 t
+v3 -> v4 : nouvelles valeurs par defaut, sans toucher a ce que le joueur a regle lui-meme
+@@ 6751189bf977 t
+une touche deja prise par une autre action lui reste
+@@ 9d99ff26cce7 t
+v4 -> v5 : nouveau defaut de « Menu » (Entree et Tab). Seul l'ancien defaut exact (Entree seule) change : un choix du joueur est garde, et Tab reste a l'action qui l'a prise
+@@ 94f77ff79ca4 t
+action ajoutee depuis : sa touche d'origine est abandonnee si une autre action l'a prise
+@@ ab5c7eab3269 t
+une touche reservee (F11 : bascule fenetre / plein ecran) ne peut plus etre une touche d'action : retiree d'un ancien fichier
+@@ 7464e71440c2 t
+valeurs d'anciennes versions ramenees aux curseurs
+@@ 6d332ca4f718 t
+ancien curseur (0,5 a 2) -> x1 a x4
+@@ 5fefddc8dce7 t
+un des crans du menu
+@@ 7f2833bc0e9f t
+editeur d'interface : fenetres retirees de l'editeur
+@@ 82992a51df80 t
+(la position du bouton de vitesse n'est plus ici)
+@@ 2aaeae27b2db t
+(2 = ancien plein ecran exclusif -> 1)
+@@ e59ff969f4a3 c
+---- editeur d'interface : remises a zero (toujours a partir de DEFAULT, jamais de valeurs recopiees)
+@@ 533871f9930f t
+bouton de vitesse de combat : affichage, taille et position (retour sous la boite du bas)
+@@ b20b7931ae40 c
+---- touches
+@@ 6057a3331145 d
+Reglages du joueur (menu Echap) : affichage, son, touches. Enregistres dans reglages.json (a cote de window.py, ignore par git).
+@@ 03327c5f03aa d
+Taille relative, decalage x, decalage y d'une fenetre du jeu sans reglage du joueur : celle de DEFAULT (fenetres de commandes du combat) ou, sinon, DEFAULT_WINDOW (comme le jeu).
+@@ 8c361a90ef3e d
+Valeur lue (ancien fichier de reglages, option --hd) -> mode existant : 2 (regions lissees) et 3 (bicubique) sont devenus 1 (EPX x8, le plus proche : meme agrandissement x8 des contours, sans le flou) ; tout le reste -> pixel perfect.
+@@ 9c55dd47f3e3 d
+Valeur lue (reglages.json, option --plein-ecran) -> 0 (fenetre) ou 1 (plein ecran). Un booleen est l'ancien reglage « full_screen » (vrai = 1) ; 2, l'ancien plein ecran exclusif (#42), devient 1 : le plein ecran qui reste ;
+tout ce qui est invalide -> fenetre.
+@@ ca63cd2150b0 d
+Valeur de OptionStatus.battleSpeed a imposer au moteur pour ce cran de « Vitesse de combat » : 4 (a la main) en Manuel, 0 (attente de 12 images entre deux messages : les animations s'enchainent sans temps mort) sinon.
+@@ 3600d4697c1b d
+Le jeu change lui-meme battleSpeed (chargement d'une sauvegarde, fenetre Parametres d'origine) : 4 -> Manuel ; toute autre valeur -> sortie du Manuel (Normal), les autres crans sont gardes.
+@@ 890f8742746a d
+Vitesse lue (ancien curseur de 0,5 a 2 ou valeur absurde) -> le cran x1 a x4 le plus proche (a egalite le plus rapide), jamais moins que x1.
+@@ 4c560e8949ce d
+Valeur lue (reglages.json, saisie) -> le cran de BATTLE_SPEEDS le plus proche (a egalite le plus rapide) ; tout ce qui n'est pas un nombre (texte, booleen, None, nan) -> `default`.
+@@ c73681f99a05 d
+Touche « Changer la vitesse en combat » : Manuel -> Normal -> Rapide -> Très rapide -> Manuel (une valeur invalide est lue comme Normal, une valeur hors bornes comme le cran le plus proche).
+@@ f9ed4687a5da d
+Nom lisible d'une touche (nom pyglet) pour le menu.
+@@ 202be8faeeb0 d
+Nom pyglet -> code de touche (None si inconnu).
+@@ 157d6cbed2fe d
+Code de touche -> nom pyglet.
+@@ aa061725291d d
+Ancien fichier : le bouton de vitesse de combat faisait partie de « Boutons et croix de l'ecran » (affichage = 'boutons', taille = 'boutons_taille', position = boutons_pos['combat']) ; il a maintenant ses propres reglages,
+repris tels qu'ils agissaient : affiche si les boutons l'etaient ; sa position gardee si le joueur l'avait placee (sinon elle reste collee a la boite du bas) et alors la taille des boutons (sans position, la plaque
+suivait celle de « Fuir » et ignorait la taille). `boutons_pos` perd la cle 'combat'. Modifie `d` sur place.
+@@ 115401b246a4 d
+Copie (modifiable) de la valeur par defaut d'un reglage.

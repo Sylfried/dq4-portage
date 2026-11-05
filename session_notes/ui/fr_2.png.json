@@ -1,0 +1,24 @@
+{
+ "S": 1.6,
+ "cx": 513.6,
+ "cy": 208.8,
+ "text": "Co\u00fbt en PM:          2",
+ "node_pos": [
+  102.0,
+  12.0,
+  -18.0
+ ],
+ "plate": [
+  102.0,
+  -20.0,
+  178.0
+ ],
+ "width_px": 169,
+ "width_u": 112.04700000000001,
+ "tscale": 1.0,
+ "fit_x": null,
+ "tabSize": 8.0,
+ "characterSize": 6.63,
+ "anchor": 3,
+ "dy": 20.0
+}

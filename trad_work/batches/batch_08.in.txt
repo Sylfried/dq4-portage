@@ -1,0 +1,724 @@
+## FILE dq4_pc/window/game.py
+@@ f8bd2d93a659 t
+combat : textures de monstres (m<id>) et maillages
+@@ 273f97eec407 t
+F1 : lignes d'information en haut a droite + cadre noir translucide
+@@ 6ebbb6e5f441 t
+fond en degrade des villes (#111) : programme et quadrilatere plein ecran, crees au premier besoin
+@@ f7e04385c463 t
+effet de debut de combat : capture de l'ecran, simulation, sommets
+@@ 34cd12b8e70d t
+teinte du decor (paquet 33) : textures « tz_ » exclues ; derniere valeur du uniforme `tint`
+@@ b53a180b00b7 t
+extrait en arriere-plan cartes, sprites et monstres pas encore en cache : plus de lecture du gros paquet de donnees en pleine partie
+@@ 30431e38ca5f t
+modeles 3D animes (fbx.py : le dragon du titre) : numero -> {'etat', 'm', ...} ; emplacement -> lecteur d'animation
+@@ 1df3eca482c6 t
+on laisse le moteur lancer la carte sauvegardee avant le premier affichage
+@@ 8661639bc294 t
+les chargements lourds se font ici, pas pendant le jeu
+@@ 6075a534b480 t
+les bruitages du chargement sont perdus, la musique de la carte reste
+@@ c00e25661a8d c
+boucle a pas fixe : le moteur avance exactement a 30 Hz (comme FixedUpdate de l'original) quelle que soit la cadence d'affichage, et l'image affichee est calculee entre deux pas
+@@ a0452a816d30 t
+(test) un pas par image affichee, sans horloge ni interpolation ; DQ_TEMPS_REEL=1 : horloge reelle (vitesse, course)
+@@ f9447ada413b t
+execute avant le dessin des fenetres (pyglet.app.run(interval=0))
+@@ 099d9ee4ec11 c
+---- mode de la fenetre : 0 fenetre, 1 plein ecran (sans bordure, a la resolution du bureau : l'affichage du moniteur ne change jamais)
+@@ a1520b9f6ddf t
+(affiche par full_screen.py avec tr)
+@@ d7925f3f65a1 t
+bandeau des titres de chapitre (type 12)
+@@ 6626bd77652b t
+premiere fois : les images du titre sont extraites avant les logos (le moteur se charge pendant ce temps)
+@@ e4d0883aa51d t
+(le moteur se charge encore : ecran noir, sans texte)
+@@ 75edc3c271df t
+BELOW_NORMAL_PRIORITY_CLASS / nice
+@@ c66a2da3484b t
+(D-238 : le processus de preparation parle la langue de l'outil, pas celle de l'ordinateur)
+@@ 113bce618721 t
+fermeture pendant les logos : le constructeur s'arrete
+@@ c82bdabc0181 t
+WM_SYSCHAR : le caractere de Alt + Entree. Sans ce gestionnaire, Windows (DefWindowProc) fait entendre sa « tonalite d'erreur » a chaque Alt + Entree. Les autres Alt + touche restent a Windows.
+@@ 50ce53595daa t
+le pointeur ne choisit rien dans les menus du jeu tant qu'il ne s'est pas ecarte de sa position d'avant (la selection au clavier ne doit pas sauter ; voir entrees.MouseGuard)
+@@ 8223b3a839cc t
+la fenetre n'a plus le focus : le jeu et le son sont geles (#235, sondage du 04/11/2026 : « pause a chaque perte de focus ») ; voir on_deactivate / on_activate et _boucle
+@@ 04fa9172fb29 t
+(pendant la creation de la fenetre, rien n'existe encore : `_loop` gele le jeu et met le son en pause des qu'elle tourne)
+@@ e994555c14ca t
+(rotation demandee a la souris, retour au nord en attente : pas apres coup)
+@@ 3aa9500de6fa t
+bruitages deja lances pendant l'image affichee en cours quand le combat est accelere (None : pas de filtre ; voir _boucle et battle_speed.sounds_to_play)
+@@ 99de6cfb6647 t
+le moteur et le son sont-ils arretes derriere le menu ? (voir _sync_freeze)
+@@ 6939600f1631 t
+fenetre sans focus : le moteur est arrete (le son : Sound.lose_focus), l'image reste celle du dernier pas ; au retour, pas de rattrapage (on_activate)
+@@ 0ca7b5fb68eb t
+(test) captures reproductibles : attend la fin des calculs HD en tache de fond
+@@ 6431605df165 t
+page de FROZEN_PAGES (aucune depuis #178) : le moteur est arrete ; sinon il tourne sans entree (tick)
+@@ 173f8ea290c1 t
+temps de jeu de la sauvegarde sur l'heure reelle, marche et combat (#239 : le moteur n'en compte qu'une part des pas quand f > 1, voir Engine._game_time_hooks)
+@@ 74e336d24eee t
+marche acceleree : les rencontres aleatoires par seconde suivent (1 + a) / 2 et non a (crochet du compteur du moteur, voir encounters.py) ; en combat, rien
+@@ aec983ecbcb3 t
+combat accelere : un meme bruitage n'est lance qu'une fois par image affichee (voir VC.sounds_to_play) ; sa vitesse de lecture ne change pas
+@@ d5fd38423220 t
+(tolerance de 15 %, rattrapage et budget de calcul : voir battle_speed.avancer)
+@@ dc617c73afec t
+effet d'ecran de la classe Capture (voyage, lampe, Riremito : le moteur attend sa fin) ; cascade d'entree en combat : horloge du jeu (sa duree suit « Vitesse de transition », en images du moteur : Engine._start_battle_effect) ; ni vitesse de combat, ni de marche, ni accelerateur
+@@ 9e475f59e35d t
+combat, des la fin de la cascade (ecran noir, fondu d'arrivee, message « X apparait ») jusqu'au fondu de fin compris : « Vitesse de combat » seule (Manuel et Normal : 1, Rapide : 2, Très rapide : 3) ; ni la vitesse de marche ni le multiplicateur de l'accélérateur ne s'y appliquent
+@@ dabd65a57ed2 t
+menu « Paramètres » : pas de marche acceleree (aucune direction n'est envoyee au jeu)
+@@ 1312aedfd520 t
+entre deux fondus d'un combat (le moteur change de scene 1 a 3 images plus tard) : horloge du jeu. Le fondu de RETOUR a la carte, lui, n'est plus coupe d'office (#127) : seul le verrou du joueur (plus bas) compte, comme pour le fondu d'arrivee sur une carte (#107)
+@@ d2b5c728c50b t
+casino, bestiaire : jamais de marche acceleree (les fleches tenues y servent aux menus)
+@@ 4e62cff59ae7 t
+le jeu a la main (scene, evenement sans message, fondu de sortie) : son rythme est le sien, la direction tenue n'y change rien ; un fondu seul (arrivee sur une carte, joueur libre) n'y compte plus (#107)
+@@ 4ed8c035a2c4 t
+course : touche d'accelerateur tenue, ou croix a l'ecran tenue au bord de son anneau (hud_mobile.TRAVEL_THRESHOLD)
+@@ 73baee4cc6a9 t
+numero d'image de boucle ou l'evenement n a lieu (None si pas encore connu)
+@@ 2be192e7f3d3 t
+@x@y : clic gauche en (x, y) pixels depuis le haut a gauche ; @x@y@1 : clic droit ; @x@y@2 : survol seul
+@@ d5c4b7212ba3 t
+^x^y : souris deplacee bouton enfonce
+@@ 0d4a7d3a8c0d t
+%x%y : appui du bouton du milieu (la molette) ; &x&y : pointeur deplace bouton du milieu enfonce ; *x*y : relachement
+@@ e4d8d33070f7 t
+$texte : caracteres tapes
+@@ ef694c062588 t
+appui court : relache 3 images plus tard
+@@ 58762c3cec5f t
+(l'image qui leve la retenue d'un chargement n'est pas interpolee depuis la camera de la retenue)
+@@ 4a27c3fae174 t
+pixels de la carte / unites de la ville par pas ; au-dela, c'est un saut
+@@ a4ce2124dc9a t
+(ville : la cible, et la camera autour d'elle quand elle tourne ; carte du monde : camera de la carte, plus bas)
+@@ eb202709645c c
+(test) ferme le message d'accueil automatiquement
+@@ 1b7ab23a73bd t
+(test) charge cette ville ou ce donjon
+@@ b26cf5d228f4 t
+(test) clics simules : image:x:y[:d] (d = clic droit), x et y en pixels depuis le haut a gauche ; appui a l'image, relachement 3 images plus tard
+@@ 53fa2b8d34c2 t
+d = 2 : survol sans clic
+@@ 6534672f0506 t
+menu « Paramètres » ouvert : le jeu tourne mais ne recoit ni touche ni clic (les touches du menu ne font pas marcher le heros)
+@@ a7a81183258f t
+rotation de camera demandee a ce pas : crans de plus selon la vitesse reglee ou le glissement (camera.py)
+@@ 64ce1fcc7dc7 t
+tas du moteur presque plein (ENG-01)
+@@ a8183dc8d782 t
+une sauvegarde n'a pas pu etre ecrite (#198) : le jeu continue, le joueur est prevenu
+@@ 0959bbaaabce t
+dialogues et combats de ce pas -> historique (voir history.py)
+@@ be215f820619 t
+bouton « Paramètres » du menu Divers : le menu Pause s'ouvre a la place des reglages d'origine du jeu (Engine._divert_params)
+@@ a4907d78bdc5 t
+MenuPortSendQuit : retour sur le menu de depart = quitter l'application (ApplicationQuit : question Oui / Non)
+@@ 4b450153980c t
+animations des fenetres d'origine, une fois par image du jeu
+@@ e2443e50c70c t
+nombres de degats sur les monstres (HoppingNumber) : un par coup
+@@ 6853e24c0145 t
+options « volume » de la fenetre Parametres du jeu
+@@ 775200a9421e t
+(test) captures pendant l'effet de debut de combat
+@@ 57769eef98cf t
+(test) captures intermediaires pendant un combat
+@@ eb49fdf21a40 t
+raccourci chiffre : l'etat et la miniature sont pris sur l'image qui vient d'etre dessinee
+@@ 14987f7f44d1 t
+le jeu sans le menu, pour la miniature des etats (copie sur la carte graphique : pas de relecture qui bloque)
+@@ 4aaa57751def t
+message bref en haut de l'ecran (sauvegardes seulement, D-230)
+@@ 7bce58b1e006 t
+(test) DQ_CARTE_TEST="nom;x,y,z;cx,cy,cz" : montre une carte de ville/grotte avec une camera fixe (animations de decor)
+@@ c0aa463bfc03 t
+(test) sans les personnages du moteur (le heros se superposerait aux objets etudies)
+@@ d741dc53caa9 t
+(test) DQ_CARTE_DEPL="dx,dy,dz" : la camera se deplace de ce vecteur a chaque image affichee (scintillement en mouvement)
+@@ 3a8aa34d0987 t
+nouvel effet de debut de combat : la premiere image est dessinee normalement puis copiee
+@@ 698c9d18b8a1 t
+effet d'ecran de la classe Capture (voyage, lampe, Riremito) : meme principe, mais l'interface reste dessinee par-dessus (capture_effects.py)
+@@ 2c1dbe1410b9 t
+(les deux premieres images, le jeu est encore affiche normalement ; a l'arrivee d'un voyage c'est le noir du depart)
+@@ 86b254191d9c t
+fin de l'effet, scene du combat pas encore arrivee : noir (sinon on verrait la scene d'avant)
+@@ 675cd57d99d1 t
+carte du monde (tuiles) ou ville (decor 3D)
+@@ f401f3bfa2b6 t
+ville : (droite, haut, avant) de la camera, pour les panneaux des personnages
+@@ 5e4001052f41 t
+chargement de carte sous un ecran couvert, scene pas encore en place : on ne dessine que le noir et les fondus (State.update_loading)
+@@ 17edde6b6c30 t
+chargement synchrone (plusieurs dixiemes de seconde) : le temps passe n'est pas rattrape par le moteur (le fondu d'entree garde sa duree, au lieu de sauter 3 pas en une image)
+@@ dd112e844bdd t
+fond du combat = bg_color du decor charge (FETC, BackColor.SetColor de cmd_fld_load) ; estimation en attendant la liste / DQ_FOND_ESTIME=1 : (test) l'ancienne estimation
+@@ cc0989f897a0 c
+carte du monde pas encore envoyee, ou combat fini et scene suivante pas encore arrivee : on ne montre pas la scene d'avant avec la camera d'une autre (image de decor de combat au retour d'une fuite) ;
+ou chargement de carte pas encore complet (retenu) : le moteur n'a envoye que le decor, la camera et les personnages arrivent a l'image suivante
+@@ 0b9ab29179c2 t
+(prepare le rendu hors ecran sous le noir : sa creation ne retarde pas la 1re image visible)
+@@ ac1d8d89ee33 t
+(fin de combat : les fenetres du combat, comme le statut du groupe en haut a gauche, restent « visibles » dans le moteur un instant : sur l'ecran noir on ne voyait que cette boite)
+@@ ee819b38b421 t
+scene dessinee hors ecran si un reglage d'affichage le demande (anticrenelage MSAA, nettete, luminosite : postfx.py) ; sinon directement dans la fenetre
+@@ dbebf689e330 t
+ville : fond de BackColor en degrade (#111)
+@@ 5c5af5754b17 t
+arbres, bougies... : de face a la camera, quelle que soit sa rotation
+@@ 08b391056a48 c
+sprites : panneaux verticaux tournes vers la camera (listes de sommets persistantes, une par emplacement)
+@@ 76f0a63395c3 t
+carte du monde : le haut du sprite est le nord (-Z)
+@@ f86d8aa16e0c t
+correction des bords : intensite (0 a 1) et position de la camera de la visionneuse
+@@ 400827420cfb t
+essai #134 : part de l'inclinaison des verticales du monde prise par les sprites
+@@ 637fc536aeb5 t
+carte du monde : sprites a plat, tous a la meme hauteur, superposes selon field_depth_rank
+@@ 62dc66547e1a t
+paquet 14 : Chara.SetVisible
+@@ 7df5e91691ab t
+(bateau : 12 colonnes de 40 x 40, voir hd.SPECIAL_SHEETS)
+@@ 85bb21fa4091 t
+panneau du bateau : 0,8 x 0,8 contre 0,48 x 0,64 pour un personnage
+@@ e19bfb99a2b2 t
+personnage couche (paquet 16) : dessine a plat par lying_pose, voir plus bas
+@@ 127d5bea82c2 t
+case (col, row) de l'atlas (origine ou HD), gouttieres exclues
+@@ dddc8aa0c33d t
+carte du monde : sprite a plat (vue de dessus), le heros (emplacement 0) au-dessus des autres
+@@ 3583dc47dcca c
+Chara.normalBillboard : le panneau (0,48 x 0,64) prend la rotation de la camera, donc il est de face a l'ecran (pas ecrase par l'inclinaison) ; ses sommets
+sont decales en profondeur (bas 0,185, haut 0,65 vers la camera, Chara.SystemInit) : une fois a l'ecran il se comporte comme un personnage debout pour le z-buffer
+@@ 97cfd3af882a t
+paquet 13, bit 11 : Chara.SetScale (Transform.localScale du panneau, pieds fixes) ; 1,0 presque partout, 0,738 pour le heros et son equipier dans mlb1a, 0,952 dans ev07 (le reste : valeurs de depart d'une image)
+@@ a28a77ae7b6d t
+decalages de profondeur a l'echelle du panneau (le haut penche de 36 degres vers la camera : le panneau est presque vertical dans le monde)
+@@ 4b3663f3b7fb c
+Panneau d'origine par defaut depuis #184 (« exactement comme dans le jeu » : voir _edge_correction, _sprite_reference et _town_panel) : le haut du panneau, plus proche, s'ecarte du centre de l'image et le sprite
+« se penche » vers l'exterieur pres des bords gauche / droit (jusqu'a 15 a 20 degres en 16/9), comme sur le mobile mais plus visible avec le champ du 16/9 ; la correction des bords (bords verticaux, proportions
+constantes, taille et profondeur inchangees, #134) reste disponible (DQ_CORRECTION_BORDS=100), de meme que le cisaillement (DQ_SPRITE_INCLINAISON, voir _sprite_tilt)
+@@ 1fe7089f9453 c
+Pose couchee (paquets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep ; voir lying_pose.py) : le panneau n'est PAS debout, la correction des bords (qui redresse un panneau debout) ne lui
+est jamais appliquee ; vu de dessus, a pleine taille, tourne selon la direction du sommeil, avec la profondeur du corps a plat (z-buffer, recouvrements par un lit, un mur...)
+@@ 685d23411f9e t
+paquet 30 : le panneau du ballon (Field.SetFloatingObject) suit l'echelle du terrain, pieds fixes : il garde sa taille a l'ecran (MAP-02)
+@@ 449cb163a35c t
+paquet 15 : le moteur peut masquer l'ombre d'un personnage (bateaux de la carte du monde...) ; couche, l'ombre part 64 sous le sol (Chara.lieBillboard) sauf si elle est separee
+@@ 21eee581ea6d t
+paquet 15, bit 14 : le moteur donne la position de l'ombre sur la carte du monde (le ballon : plus au sud que ses pieds) ; sinon l'ombre est sous les pieds
+@@ 2bf7e9372c72 t
+(le uniforme vaut 0 tant qu'on ne l'a pas ecrit : tout noir)
+@@ bdecd4475d9e t
+shaders DssaMonster* : ZWrite Off, Cull Off, ZTest LEqual
+@@ a8b655fb8027 t
+reecrit les sommets des monstres/effets (tampons « sales » : pas encore envoyes au GPU)
+@@ 1cd84aa85173 t
+force le rebind + commit() au 1er trace : sinon les monstres sortent avec les donnees de l'image precedente
+@@ ce691e362b36 t
+texture agrandie : filtrage doux des mipmaps ; originale : pixels nets (plus proche voisin si le lissage est coupe)
+@@ b5e3df19b77f t
+DssaCharaTransparent : ZTest Always
+@@ b9a649195b42 t
+bestiaire : la carte de la ville reste chargee (aucun paquet 0) mais la camera du livre, a 83 unites, n'en voit qu'une tranche (l'eglise, au bord du plan lointain) derriere la liste et la fiche : le livre ne montre que le monstre (paquets 21 / 22)
+@@ 07f18a8a588e t
+modeles 3D animes (le dragon du titre) : meme file que le decor opaque
+@@ db107ba961b1 t
+comme Unity (shader Chara, ZTest normal) : un personnage cache par un decor n'est pas visible du tout
+@@ 0a6949f788b4 t
+bulles d'icone (Riseup), devant les personnages
+@@ 7c29b7ef5733 c
+effets-maillages de la ville (paquets 21, 22 : sort Morph, eclaboussures, coups d'epee du prologue, credits et logo du titre), tournes vers la camera. Ils passent APRES les personnages (Custom/Chara : file Transparent,
+3000) : DssaChara Transparent+100, DssaMonster0 +150, DssaMonster1 +200, DssaCharaTransparent Overlay-150 (3850, ZTest Always : devant tout, comme les bulles Riseup, de la meme file). Avant, ils etaient dessines
+avant les personnages : un personnage cache a l'effet qui le recouvre (le nuage du sort Morph passait « derriere » Elisa).
+@@ 73b2d42193ce t
+(pas sur la carte du monde, entierement en 2D)
+@@ 19cbeadda38f t
+effet Capture qui demarre : la scene (sans interface) est copiee, puis les images normales continuent (le noir d'un voyage en cours couvre tout)
+@@ f6a4bd31faa5 t
+capture de l'ecran du jeu, sans les lignes d'aide
+@@ 5b8929c1ad00 d
+Fenetre PC 16/9 : fait tourner le moteur du jeu et dessine ce qu'il demande (decor, sprites, camera).
+La classe `Game` est le coeur (demarrage, boucle, dessin de la scene) ; le reste est range par theme dans les modules voisins (voir docs/code_plan.md).
+@@ 4ab1e6634a64 d
+Ajoute `text` (lignes finies par un retour a la ligne) au journal des erreurs de la fenetre (window_errors.log, dossier des journaux) ; ne leve jamais : -> True si ecrit.
+@@ 0eb7909b966a d
+(test) DQ_SIM_ECHEC=1 (ou 0, ou 1,0) : la creation / la bascule vers ce mode (1 plein ecran, 0 fenetre) echoue, pour essayer les replis.
+@@ 109cf02b3eb3 d
+Fenetres de menu d'origine (mise en page lue dans le code Unity du jeu) ; sans le fichier cache/ui_layout.json on garde les menus simples.
+@@ a0a172a92a6e d
+Le moteur se charge dans un fil pendant que les logos d'entree (Boot.Logo : SQUARE ENIX, ArtePiazza) passent, comme sur le mobile ou ils couvrent le chargement ; un appui saute le logo courant.
+Pas de logos pour un lancement direct sur une sauvegarde (--slot N), les captures de test (sauf --logos) ni avec --sans-logos.
+@@ 2da0b25a1e8c d
+Ecran noir, sans aucun texte (le texte, lui, va dans la console) : la fenetre reste vivante pendant les chargements du demarrage.
+@@ 676005fe7ad4 d
+Preparation du cache dans un processus a part, a priorite basse (data.py en ligne de commande) : dans un thread, ses extractions ralentissaient le jeu. Repli : thread.
+@@ ff1d1107ba45 d
+Menu « Paramètres » (Echap) ouvert (oui) ou ferme. Le jeu continue de tourner derriere lui, sans aucune entree (voir `tick`), sur toutes les pages (#178) ; une page de Pause.FROZEN_PAGES (vide) l'arreterait (moteur et son : `_sync_freeze`, a chaque image).
+A la fermeture, les touches deja tenues ne comptent pas comme un nouvel appui.
+@@ 9db477e0dc7c d
+La fenetre perd le focus (Alt + Tab, clic sur une autre fenetre ou un autre ecran, minimisation) : le jeu s'arrete (`_loop`), la musique et les bruitages se mettent en pause (Sound.lose_focus, comme Sound.SystemPause de l'original) et les boutons de la souris tenus sont relaches (le relachement hors de la fenetre n'arrive jamais : camera a la molette, croix a l'ecran, bouton appuye).
+@@ 459b1c256fc4 d
+La fenetre reprend le focus : le son repart la ou il s'etait arrete, le jeu reprend sans rattraper le temps passe (horloge remise a zero, comme a la fermeture du menu) et les touches deja tenues ne comptent pas comme un nouvel appui.
+@@ c46f3a296783 d
+Menu Echap > Quitter > Oui (et « Quitter » du menu de depart) : la meme fermeture que la croix de la fenetre (reglages, historique, son ; aucune sauvegarde de partie : comme le jeu d'origine, l'automatique n'est ecrite qu'a l'arrivee sur une carte, voir docs/technical-notes-dq4-port.md).
+@@ ae4eeed1a611 d
+La ligne « Revenir à l'écran titre » du menu Pause n'est active qu'en ville et sur la carte du monde (hors ecran-titre) : la, la boite d'origine (Engine.request_return_to_title) recoit les touches et les clics.
+@@ d0f373d2f747 d
+Menu Pause > « Revenir à l'écran titre » : le menu Pause est deja ferme ; le moteur ouvre la boite d'origine du jeu (son texte, Oui / Non) ; « Oui » lance son retour au titre, avec son fondu
+(Engine.request_return_to_title). Seul chemin de retour au titre du jeu.
+@@ 6a5e43139e03 d
+Arret du son et de l'horloge du moteur quand le menu passe sur une page qui arrete le jeu (Pause.FROZEN_PAGES), reprise quand il la quitte ; au retour, pas de rattrapage du temps passe.
+@@ 3955265c0b37 d
+Avance le moteur par pas de 1/30 s (horloge reelle, au plus 3 pas de rattrapage par image affichee ; un blocage plus long est oublie) puis fixe alpha, la fraction du pas en cours.
+@@ dc377b355caf d
+Facteur de vitesse de l'horloge du jeu quand le heros marche (reglages : vitesse de marche, accelerateur tant que sa touche est tenue). Seulement sur le terrain (ville, donjon, carte du monde),
+direction tenue, sans message ni menu ni combat ni effet d'ecran, ni evenement du jeu (verrou du joueur, Global.Flag 4) : quand le jeu a la main, son rythme prime sur le reglage. Un fondu seul (flag 1, joueur libre) n'empeche plus l'acceleration (#107) : le fondu d'arrivee d'une carte dure 30 images alors que le heros marche deja
+depuis la 12e (mesure sur le vrai moteur) ; avant, l'accelerateur ne marchait pas pendant cette seconde. Meme chose au retour d'un combat (#127) : le fondu de retour dure 30 images, le joueur est verrouille jusqu'a l'image 11 puis libre
+(le heros marche des l'image 13, mesure sur le vrai moteur) ; avant, `State.battle_transition` coupait l'acceleration pendant les 30 images, soit 0,6 s de marche normale malgre la touche de course tenue. Pendant le fondu de sortie, le joueur est verrouille (flag 4) : rien n'y change. Le moteur fait alors plus de pas par seconde (voir _boucle) : le heros, les PNJ et les animations vont plus vite ensemble,
+les compagnons gardent leur distance (l'historique des positions avance au meme rythme) et le taux de rencontre suit la distance parcourue (il compte les pas).
+@@ 93b2b95dd7df d
+Le joueur a-t-il la main sur son personnage ? Oui seulement sur le terrain (ville, donjon, tour, carte du monde), quand le jeu n'a verrouille ni le joueur (evenement, scene, discussion avec un PNJ, fondu de sortie :
+Global.Flag 4, la meme condition que la marche acceleree, voir _speed_factor), sans message, sans menu du jeu (commandes, boutique, Divers...), sans effet d'ecran ni chargement, et hors combat (partie
+« combat », cascade d'entree, ecran noir qui attend la scene du combat, entre deux fondus d'un combat). Un fondu seul (arrivee sur une carte, retour de combat, joueur libre) n'y compte pas (#107, #127).
+@@ b1989b2a5c3c d
+L'historique (touche H, ligne « Historique » du menu Paramètres) n'est accessible que quand le joueur a la main sur son personnage (#187) : ni pendant un combat, ni quand le jeu prend la main (dialogue, scene, evenement,
+fondu de sortie, menu du jeu), ni a l'ecran titre.
+@@ 08272502d5f7 d
+Touche de l'historique : ouvre la page si le joueur a la main, sinon rien (aucun message : le joueur n'a pas a en etre informe, #194 ; la touche est toujours acquittee, elle ne sert qu'a cela).
+@@ 770f107cd2af d
+Un pas du moteur hors combat accelere (marche, accelerateur). Renvoie False quand la transition d'un combat vient de commencer pendant ce pas (effet d'ecran de debut rendu par une rencontre) : VC.avancer s'arrete la
+et le reste de l'image reprend a l'horloge du jeu ; sans cela, les pas restants du rattrapage d'une marche acceleree raccourciraient le debut de la cascade.
+@@ de80ab5335fb d
+(test) touches pressees a une image de boucle n, ou "cN+k" = k images de boucle apres que le combat a atteint N images : 'n:NOM' (NOM = nom de touche pyglet ;
++NOM / -NOM = maintenue / relachee ; @x@y = clic de souris (@x@y@2 : survol seul) ; %x%y &x&y *x*y = appui / glisser / relachement du bouton du milieu) ; captures '<shot>_<n>.png' ; la derniere capture quitte.
+@@ e3aa4fc31e66 d
+(test) modificateur Alt d'un evenement de touche simule : le vrai clavier le donne (Alt tenue : MOD_ALT) ; +LALT puis RETURN = Alt + Entree.
+@@ 553f51eabebd d
+(test) --options-test "image:Libelle=valeur;image:Libelle=valeur" : applique des options de la page Affichage a l'image de boucle donnee, par les memes fonctions que le menu Echap (valeur lue comme du JSON : 3, true, 0.5, [1280, 720]).
+@@ 36d7c60a0cec d
+(test) DQ_TEMPS_IMAGES=<fichier> : journal « genre image-de-boucle image-du-moteur duree-en-ms » de chaque pas du moteur et de chaque dessin (repere les blocages d'un premier affichage :
+texture ou modele charge a la volee).
+@@ 2c622d528b5f d
+Etat du pas qui vient de finir : positions des personnages et de la camera, pour l'interpolation.
+@@ 0689072c5cca d
+Remplace, le temps d'un dessin, les positions des personnages et de la camera (carte du monde, villes) par celles de l'instant entre le pas precedent et le pas actuel ;
+un saut (changement de carte, deplacement force) n'est pas interpole. Renvoie de quoi tout remettre en place.
+@@ 4e44bc6a891d d
+(position, cible) de la camera de la ville entre le pas precedent `pr` et le pas actuel, a la fraction `a`, ou None (rien n'a bouge, ou coupure : changement de carte, plan de scene, angle regle d'un coup). La cible suit le deplacement ; la camera tourne
+autour d'elle (boutons de camera du jeu, scenes) : on interpole sa position RELATIVE a la cible, en cap (par le plus court chemin) et en rayon, pour que la rotation reste lisse entre deux pas du moteur (a 30 Hz, un cran de rotation deplace la camera de
+1,7 unite : plus que le seuil d'un saut sur une seule coordonnee) ; un deplacement relatif de plus de CAM_JUMP_ROT fois la distance en un pas est une coupure.
+@@ 9d926956c289 d
+Une image tres longue (plus de 4 pas du moteur : 133 ms) parmi les 3 qui suivent un chargement de carte (textures du decor et des personnages, shaders, rendu hors ecran : premiere image d'une scene) ne doit pas
+etre rattrapee : sans cela le moteur refait d'un coup 3 pas (VC.avancer) et le fondu d'entree saute d'autant (a l'ecran : l'image apparait deja a moitie fondue). L'horloge du moteur repart de zero ; le temps
+du blocage est perdu (ecran de chargement). Limites : une machine lente (images de 100 ms et plus) ne fige pas le jeu, seul un vrai blocage est absorbe, au plus 3 fois par chargement.
+@@ f84f32521e90 d
+(diagnostic, DQ_SUIVI) une ligne par image dessinee pendant les 12 premieres images et pendant les 16 images qui suivent un chargement de carte ou un changement de partie : ce qui a ete dessine (`_drawing_kind` :
+scene, noir de chargement...), l'etat de la scene (camera, personnages places), l'opacite des deux plans de fondu, la retenue du dessin (`State.loading`).
+@@ 7e1958d36df5 d
+Un etat instantane (raccourci chiffre, Ctrl + chiffre) n'a pas pu etre enregistre ou charge : une ligne dans la console et dans le journal des erreurs, et le petit message a l'ecran (D-230).
+@@ 55f324e95545 d
+Sauvegarde que le moteur n'a pas pu ecrire (GameCore.h_fclose, apres deux essais, #198) : l'ancien fichier est intact et le jeu continue ; petit message a l'ecran (D-230) et ligne dans le journal des erreurs.
+@@ 4b4e6e58141c d
+Tas du moteur (ENG-01, audit du 04/11/2026 : « Core.malloc » avance toujours, « h_free » ne libere rien, 256 Mo en tout ; environ 480 combats ou 7 000 chargements de carte, soit des heures de jeu) : le moteur s'arreterait d'un coup
+a 256 Mo. Une ligne du journal des erreurs le note a 200 Mo (78 %), puis a 240 Mo (94 %) (aucun message a l'ecran depuis #267), une fois par palier (de nouveau si le tas redescend, par exemple apres le chargement
+d'un etat). Fermer puis relancer le jeu remet la memoire a zero ; le jeu ecrit sa sauvegarde automatique (data5) a chaque arrivee sur une carte, rien n'est ecrit ici : un etat instantane garderait le tas plein.
+@@ 184eac4a5db8 d
+Reglages du moteur que l'apk utilise n'a pas laisses s'installer (Engine._manque : autre version du moteur que celle etudiee) : le jeu tourne avec le comportement d'origine pour ces points. Une ligne par point dans le journal
+des erreurs (aucun message a l'ecran depuis #267), une seule fois (les points trouves plus tard, apres le chargement d'un etat, sont annonces a leur tour).
+@@ 2831c2d36d04 d
+Un pas du moteur (30 par seconde d'horloge de jeu). `mute` : pas supplementaire d'un combat accelere pendant que le moteur attend le joueur (menu, message qui attend une touche) : le moteur avance (animations des monstres,
+fenetres, minuteries) sans aucune touche ni clic, ceux-ci restant lus au rythme normal (voir _do_battle_step).
+@@ f79a2d3e2b71 d
+Lignes d'information (F1) : lieu et fenetre, reglages d'affichage, son, performances. Rien n'est modifiable ici : les reglages sont dans le menu Echap.
+## FILE dq4_pc/window/helpers.py
+@@ 5c10b0d00cd4 d
+Petites fonctions de la fenetre (sans etat) : zone utile de l'ecran, rang de profondeur, camera libre, hauteur de camera, matrice de projection...
+@@ 799f2bbe901d d
+(largeur, hauteur) maximales d'une zone de dessin qui tient sur l'ecran principal avec sa barre de titre et la barre des taches ; None si l'ecran est inconnu.
+@@ 3c93aa1a2f63 d
+Ramene une taille de fenetre trop grande pour l'ecran a la plus grande taille de meme forme qui tient : Windows reduit alors la fenetre sans prevenir et le dessin gardait la taille demandee (scene zoomee, en partie hors de la fenetre).
+@@ d51350b88e20 d
+Carte du monde : rang de superposition de chaque sprite place (le plus grand rang est devant ; il pose la hauteur 0,04 + rang x 0,0005 du sprite a plat).
+Le jeu (FieldPartyDraw::draw, libdq4core 0x1ec5a8) trie les membres du groupe par profondeur decroissante (tri par selection ; a profondeur egale, l'emplacement le plus bas garde la tete) puis leur donne
+SpriteCharacter::setDepth 10, 9, 8... dans cet ordre : a profondeur egale, le heros (emplacement 0) est devant son equipier. Ordre ici : hauteur z du moteur (3e valeur de la position), puis le plus au sud
+(un equipier au sud du heros est devant lui), puis, a position egale (atterrissage d'une aile de chimere ou de Zoom : le groupe est empile sur un seul point, issue #135), l'emplacement le plus BAS devant
+pour le groupe ; les vehicules (emplacements >= 10) gardent le plus recent devant.
+@@ 6f3b953c2c2a d
+Matrice 3x3 d'une rotation Unity (angles d'Euler en degres, ordre z puis x puis y, espace gauche) : colonne = axe local dans le monde.
+@@ 08080b1dd75c d
+Camera libre : position + rotation (comme en combat), pas de cible. Paquet 11 bit 7 (scenes, titre) ; casino : le moteur envoie la position et la rotation (paquet 10, masque 5) sans paquet 11.
+@@ ea37c80fb7b2 d
+Le fond de la ville est-il un vrai degrade (paquet 8 : couleurs du haut et du bas de l'image, `State.top_background` / `bottom_background`) ? Faux sans paquet 8 (None) ou si les deux couleurs sont egales : l'effacement
+de l'image, de cette couleur, suffit (aucune difference avec avant #111).
+@@ 3d461259941f d
+Fenetre ouverte sans bouton de validation (manette 0x10) ni curseur du moteur (Oui / Non) : elle n'a rien a faire de la touche A (ex. « Quitter » de l'arene des monstres, un seul bouton de retour 0x400).
+@@ 789d28055dc6 d
+Windows seulement : active ou coupe les animations de la fenetre faites par le gestionnaire de fenetres (DWM : ouverture en fondu / zoom, reduction, restauration ; DWMWA_TRANSITIONS_FORCEDISABLED).
+Coupees pendant l'ouverture de la fenetre du jeu, elles ne s'ajoutent pas (un fondu de la fenetre elle-meme, par-dessus le noir puis les logos, ressemble a un rideau) ; remises ensuite (voir on_draw).
+Aucune erreur ne remonte (systeme sans DWM, poignee absente : rien ne change). -> True si le systeme a accepte.
+## FILE dq4_pc/window/inputs.py
+@@ 444e22230fbf c
+---- pointeur et clavier
+@@ cbf8d6951e99 t
+pixels : ecart, depuis la position du pointeur quand le clavier a servi pour la derniere fois, a partir duquel la souris reprend la main (survol, selection). Compte CUMULE depuis cette position
+@@ a59faba4edb0 c
+(et non d'un evenement au suivant : une souris moderne envoie des evenements de 1 a 2 pixels, jamais « assez grands » un par un) ; un tremblement de la table ou du capteur (1 a 2 px) ne reprend rien
+@@ 049abc570aff c
+---- clic molette
+@@ 937e4ffe8e4d t
+pixels : deplacement, depuis l'appui, a partir duquel un clic molette devient un glissement (en dessous : un clic ; le tremblement de la main n'en fait pas un glissement)
+@@ 91415478deb5 t
+glissement horizontal : degres de rotation de la camera pour un deplacement egal a la hauteur de la fenetre (la sensibilite ne depend pas de la resolution) ; droite = fleche droite
+@@ 43d92123f1df c
+---- bloc d'infos de F1
+@@ 052473eca468 c
+---- touche A pendant une attente de « toucher »
+@@ dedea33ae124 d
+Entrees souris / clavier de la visionneuse : la logique pure (sans fenetre ni OpenGL), pour la tester (tools/test_entries.py).
+- mouse_active / MouseGuard : quand le pointeur reprend la main apres un usage du clavier (survol et selection) ;
+- WheelGesture / pivoter : clic molette (clic simple = camera ramenee au nord par le jeu, glisser a gauche / a droite = rotation de la camera, sens reglable) ;
+- info_zone : ou se pose le bloc d'infos de F1 (en haut a droite).
+@@ 8e4bd3aa2c07 d
+Le pointeur a-t-il vraiment bouge ? `ref` : position (x, y) du pointeur quand le clavier a servi pour la derniere fois (None = la souris a deja la main : un clic, ou un vrai mouvement depuis) ;
+`pos` : position actuelle. Vrai si la souris a la main ou si le pointeur s'est ecarte de `ref` d'au moins `tol` pixels. Un clic n'a jamais besoin de ce test : il agit toujours.
+@@ d807d9a0d129 d
+Memoire du « dernier peripherique » : le clavier (touche pressee) fige la position de reference ; le premier vrai mouvement (mouse_active) ou un clic rend la main a la souris, sans delai.
+@@ 0eaaf58aff2c d
+Un geste du bouton du milieu : appui, deplacements, relachement. Un clic (relachement avant d'avoir bouge de DRAG_THRESHOLD pixels, dans n'importe quel sens) recentre la camera ; un glissement la fait tourner a gauche / a droite
+(seul le deplacement horizontal compte), depuis le point ou le seuil est franchi (pas de saut au debut) ; apres un glissement, le relachement ne recentre rien (un clic suivi d'un deplacement n'est pas un clic).
+@@ e615d5dbcfcf d
+Glissement horizontal de dx pixels -> rotation de la camera a faire, en degres (positif : vers la droite, comme la fleche droite) : meme grandeur que les fleches. `requested` : ce qui restait a tourner (le jeu ne tourne que par crans,
+voir Game._camera_after_step) ; le total reste entre -maxi et +maxi. `invert_gd` (reglage « Inverser gauche / droite ») : le sens du glissement est inverse ; les fleches du clavier ne passent pas par ici.
+Les limites du lieu, les verrous et les scenes sont ceux du jeu : il refuse la rotation (Engine.camera_wait) et la demande est abandonnee.
+@@ 5fcca8863856 d
+Bloc d'infos de F1 (lieu, reglages, performances) : (cote, largeur disponible) ; le cote est 'droite' par defaut (en haut a droite de l'ecran), 'gauche' si la colonne d'interface occupe la droite.
+La largeur est la marge libre a cote de la colonne d'interface (portrait 450 x 800, agrandie de ui_zoom ; `column` faux : pas de fenetres du jeu, tout l'ecran), pour ne pas cacher ses fenetres ; au moins 260 pixels.
+@@ 3dc888d8f42c d
+(p, decl) envoyes au moteur. `is_waiting` : un menu du jeu attend le toucher d'ecran (Engine.awaits_touch : le don d'experience du roi) ; `touch` : la valeur qu'il lit (exactement 0x100). A (touche, clic, Entree, Espace) envoie ce toucher
+seul, sans A ni B ; le reste du temps rien ne change. Un message ouvert recevrait sinon A (0x10), que ce menu ne lit pas : le jeu restait fige au dernier message de niveau (#261).
+@@ 70a617533c0d d
+Une touche vient d'etre pressee, le pointeur est en `pos` (None : position inconnue, le premier mouvement compte).
+@@ b189913b4085 d
+Mouvement du pointeur en `pos` : vrai si la souris a (ou reprend) la main, faux si ce n'est qu'un tremblement apres l'usage du clavier.
+@@ 6398fce2e7ab d
+Pointeur en (x, y), bouton du milieu enfonce -> deplacement horizontal en pixels (vers la droite : positif) a appliquer a la camera ; 0 tant que le geste reste un clic.
+@@ b3d13c93c24e d
+-> True si c'etait un clic simple (la camera se recentre), False apres un glissement ou sans appui.
+## FILE dq4_pc/window/keyboard_mouse.py
+@@ 19dfe3198434 t
+F11 / Alt + Entree : de n'importe ou (logos, titre, jeu, menu Echap)
+@@ 2507ec38cb55 t
+Alt seul = discussion de groupe, au relachement (voir on_key_release et _fronts)
+@@ 32f5cecaa234 t
+le clavier a la main : le survol ne reprend qu'au premier vrai mouvement du pointeur (un clic reprend la main aussitot)
+@@ 29b90561b816 t
+saisie du nom : le clavier lui appartient
+@@ fb34c2d20255 t
+ecran Sauvegardes (export / import)
+@@ 4d2badea59f3 t
+ecran Licence : defilement et retour
+@@ a5e928699fbf t
+Echap : retour dans les menus du jeu et la carte (comme la touche Annuler), sinon le menu Echap
+@@ 312cfac51308 t
+Manuel -> Normal -> Rapide -> Très rapide (en combat comme ailleurs)
+@@ 0eb9f3aa68f8 t
+touche de l'historique des messages (#187 : seulement quand le joueur a la main sur son personnage)
+@@ 302b495f7d35 t
+raccourcis des etats : chiffre = enregistrer, Ctrl + chiffre = charger
+@@ 661e1bb54c27 t
+Maj + touche modificatrice (sans chiffre) : annule le dernier chargement, au relachement
+@@ fbbfa7d2b0ef t
+Alt relache : si rien d'autre n'a ete fait pendant (pas Alt + Entree), c'est l'appui de la touche de discussion de groupe
+@@ bedf050d2d55 t
+menu de depart : Echap = Annuler (le retour de la racine = quitter)
+@@ 8027aad6f98d t
+casino, bestiaire : Echap = bouton retour de la fenetre ouverte (manette 0x20) ; rouleaux en marche, message, cartes en cours de distribution : pas de retour, le menu Echap s'ouvre
+@@ 8ea909780bdc t
+(pendant les logos, le moteur se charge encore : `self.engine` n'existe pas)
+@@ c5f5d2c54f45 t
+un clic agit toujours, aussitot : la souris a la main
+@@ 2edd5013e4c6 t
+bouton du milieu : la camera seulement (jamais un clic de menu, de message ou de bouton)
+@@ 6eb7523c8c3f t
+titre : un toucher n'importe ou valide (la manette recoit A)
+@@ fa8e31a7c0c2 t
+boutons a l'ecran (Carte, Commandes, Discussion) et croix
+@@ ddecc68c11f4 t
+terrain libre : un clic gauche n'importe ou = touche d'action, comme l'espace (#131 ; plus de clic sur la bulle seule)
+@@ 91532e7facda t
+boutons de la fenetre de la carte (sans numero) : retour (touche de manette 0x400, ferme la carte) et mode (haut de la manette, change de vue), actifs au relachement
+@@ 452e6cee924b t
+(retour et mode : manette 0x400 et 2, muets comme dans MenuPortItem.Update)
+@@ dde8a24e8234 t
+tous les menus qui attendent la saisie : bouton le plus en avant, puis fenetre la plus recente
+@@ f019274a82dd t
+toucher le message = page suivante
+@@ 501965400220 t
+(un mouvement sans bouton enfonce : le relachement du bouton du milieu est passe inapercu, hors de la fenetre ou pendant une perte de focus ; le geste est abandonne)
+@@ 2c8b31578f19 t
+simple tremblement apres l'usage du clavier : ni le mode, ni la selection ne changent (ecart cumule depuis la derniere touche, voir entrees.MouseGuard)
+@@ ec72d3e6e0a0 t
+hors d'un bouton : l'element survole en dernier reste seul en surbrillance (le curseur du moteur y est aussi) ; effacé par on_mouse_leave ou une touche
+@@ 78b3ec1e891c t
+bouton sans numero (retour, fleches de page) : seul l'element est allume, le curseur du menu ne bouge pas
+@@ 612d30782e57 t
+menu Echap : le pointeur a quitte la fenetre, plus rien n'est survole (les plaques se rallument)
+@@ 6fc296bab045 t
+manette du jeu : bas 1, haut 2, droite 4, gauche 8
+@@ 186651b68c95 t
+toucher du rond central de la croix (sans glisser) = touche d'action, comme sur mobile (#131)
+@@ 240c69fd01ff t
+bouton de vitesse de l'ecran de combat : ne passe rien au moteur
+@@ ae13d10fbc82 t
+bouton retour : MenuPortItem.Update ajoute 0x400 aux touches du jeu (le moteur ferme la carte) au lieu d'envoyer un message au port
+@@ 74417812746f t
+bouton « mode de la carte » de la fenetre (type 22, icone 19 / 20 / 2 envoyee par le moteur) : haut de la manette = change de vue (traite avec la touche Carte)
+@@ db0999a84643 t
+bouton « Sauvegardes » du menu de depart (a la place de « Sauv. cloud ») : propre au portage
+@@ bf2307c73417 t
+croix a l'ecran tenue a la souris : une direction de plus (relative a l'ecran, comme les touches)
+@@ e0cbab49bbde t
+(Alt : au relachement, voir alt_tap : Alt + Entree ne doit pas lancer la discussion de groupe)
+@@ 23418d3b5bc8 t
+(une touche avalee relachee hors de la fenetre : la liste se vide)
+@@ 8345097b6955 t
+clics de souris : page suivante / annuler
+@@ d23f3dd4b241 t
+boutons qui viennent d'etre presses
+@@ 92c0c01ef2bd t
+Entree et Espace tournent aussi les pages des messages
+@@ ddd3906cbe4a t
+repetition des directions maintenues (curseurs de menu)
+@@ 4d1c6f1d8474 t
+fin de l'appui OK / Annuler envoye au menu
+@@ ab7b8bf2ca01 t
+carte ouverte : premiere version
+@@ 75752655a144 t
+ville avec des boutiques : la carte a une 2e vue, la liste des boutiques (type 24)
+@@ 48fd9d1d99c0 c
+Touche Carte : 1re fois la premiere version (en ville : le plan), 2e fois l'autre version (en ville : la liste des boutiques ; haut de la manette sur la fenetre du plan : FieldImageMap::execute), 3e fois ferme (bouton retour : 0x400, comme MenuPortItem.Update d'Unity) ;
+Annuler ou le bouton retour ferment aussi. Le curseur et les fleches ne servent pas ici (sauf les fleches de la liste des boutiques : boutique precedente / suivante).
+@@ 2ac6fe95c7d9 t
+ville : M = plan, puis liste des boutiques, puis ferme ; le bouton « mode de la carte » alterne plan / liste
+@@ c56f86e1acfe t
+fleches de la liste : boutique suivante / precedente
+@@ 0a1584d6fcd8 t
+(le bouton de l'ecran « mode de la carte » change de vue dans les deux sens)
+@@ 013fc2c8aa0e t
+arene (combat) : la seule fenetre ouverte est « Quitter » (manette 0x400) et A doit tourner la page du message (touche du terrain pour le moteur)
+@@ c0d4533ceb97 t
+critere memoire seul : le message d'abord
+@@ b9b4565fca1b t
+un menu attend les touches : elles lui sont envoyees, pas au terrain
+@@ 7389c3841156 t
+L / R = gauche / droite (page precedente / suivante des menus a une colonne)
+@@ c2ff0ab0a2d9 t
+ecran-titre : seul A valide (Espace, Entree ou toucher) ; ni marche, ni camera
+@@ a8280a38734a t
+saisie du nom, ecran Licence : tout passe par le clavier du portage
+@@ 0015419d764d c
+sur le terrain : A = parler / examiner, Annuler, X ou Start = ouvrir le menu (le moteur veut ces boutons seuls)
+@@ 1731ec191ec6 t
+(le moteur veut ces boutons seuls) A, puis boutons a l'ecran, puis touches Commandes / Discussion / Carte
+@@ 1be7a7222cf2 t
+(sur le terrain, les bits 4 et 5 des touches tenues sont les boutons de camera du jeu : gauche, droite, les deux = retour au nord)
+@@ de4b64f3288d t
+message ouvert : A tourne la page (0x10) ; le menu du don d'experience, a son dernier etat, attend le toucher d'ecran (0x100 seul)
+@@ a6ec7ba9acb7 t
+(ni menu, ni message, ni titre : une rotation demandee a la souris ou un retour au nord en attente ne partent pas apres coup)
+@@ e06ea3042f3c d
+Clavier, souris et manette : evenements de la fenetre et lecture des touches.
+@@ b81f7dd61731 d
+Menu Echap : saisie d'une valeur au clavier.
+@@ 304bdc544aea d
+Seule touche fixe : Echap (menu). Les autres sont celles du menu Commandes (pad, infos a l'ecran) ; le menu ouvert recupere toutes les touches.
+@@ d0460b754734 d
+Echap sert de touche Annuler quand une fenetre du jeu (menu, carte) est ouverte sur le terrain : sinon il ouvre le menu Echap (combat, messages et terrain libre compris).
+@@ 56e8fb90b90c d
+Une fenetre visible du jeu a-t-elle un bouton Annuler / Retour (touche de manette 0x20) en ce moment ? (casino, bestiaire : Echap le presse ; sinon il ouvre le menu Echap)
+@@ e1ed5aef2ac7 d
+Bouton de la fenetre `port` sous le pointeur (le plus en avant d'abord) : (numero, manette, profondeur, identifiant de l'element) ou None.
+@@ f59142405300 d
+Souris = tactile du mobile : appui sur un bouton du menu actif (MenuPortItem.Update, PUSH_STATE_BEGIN) ; clic droit = Annuler.
+@@ 9801ad3c6a76 d
+Survol de la souris : le bouton sous le pointeur est selectionne comme avec les fleches. Menu tactile (curseur local) : immediat ; menu a curseur du moteur :
+le curseur est amene sur le bouton par des appuis de direction, une image sur trois (voir _step_toward_hover).
+@@ 99c229aa6465 d
+Vrai si l'element a un dessin de bouton (plaque, partie 7) ou de fleche (partie 10) : le cadre de fenetre qui couvre l'ecran (manette 128) n'en est pas un.
+@@ fcc86e441baa d
+Un appui de direction vers le bouton survole (menus dont le curseur est dans le moteur), tant que le curseur n'y est pas (au plus 24 appuis).
+@@ 37ad436acf2a d
+Relachement sur le meme bouton (PUSH_STATE_FINISH) : MenuPort.Send([1, numero du bouton, touche de manette du bouton]).
+@@ 857e095d6528 d
+Manette du jeu d'apres les touches reglees : directions, A (action / valider), B (annuler). Sur le terrain, les fleches gauche / droite sont celles de la camera (boutons de camera du jeu, voir _bits_camera) et les directions
+sont celles de l'ecran : c'est le jeu qui les tourne selon sa camera, comme sur mobile ; dans un menu, un message ou un combat, les fleches deviennent des directions.
+@@ af921e90724f d
+Touche Commandes / Discussion / Carte sur le terrain : le bruitage 300 du bouton a l'ecran, dans les memes situations qu'au doigt (#60, D-156 ; le bouton est-il permis par le moteur, qu'il soit affiche ou non).
+@@ b43d1a7f6b3f d
+Appuis (front montant) de X, Start, L et R depuis la derniere image du moteur.
+@@ 060500c7c02f d
+Touches et clics de ce pas du moteur -> (p, decl) : boutons tenus et boutons qui viennent d'etre presses, tels que le moteur les veut (menu qui a la saisie : tout passe par `_menu_input`, p = decl = 0).
+Seulement dans les pas « reels » : un pas supplementaire d'un combat accelere (`tick(mute=True)`) n'en lit aucune, pour que la cadence des touches (repetition des fleches, premier appui) ne change pas.
+## FILE dq4_pc/window/menu_display.py
+@@ cac7088d026f t
+(D-238 : le texte est traduit ici ; un texte a trous doit l'etre avant d'etre formate : toast(tr('Etat %d') % n))
+@@ d489793d8ecb t
+hauteur (pixels du canevas) d'un echantillon de message : 3 lignes de 28 pixels + 3 de marge (voir ui_menu.limit_lines)
+@@ 2260620ccc8f t
+textes d'essai de l'editeur d'interface (1 a 3 lignes, comme une boite de dialogue) : un au hasard a chaque choix de « Dialogues » ; chaque ligne est traduite au dessin
+@@ 7b55d448e712 t
+fenetre d'origine : tout le canevas (512 x 512, en boucle) + defilement par decalage d'UV
+@@ cba8260e7386 t
+(test) lignes de texte du canevas : (premiere rangee, derniere rangee)
+@@ 422862b4f7f4 t
+message de combat de 4 lignes (4 groupes de monstres) : cadre d'origine
+@@ 33c1b46b8b6a t
+dessinee avec les fenetres d'origine (_draw_menus)
+@@ b6ace0703187 t
+taille du texte : 1 pixel du canevas = 1,3 pixel a 720p
+@@ af19ac4a882d c
+---- menus
+@@ eb38eef69154 t
+retours a la ligne -> espaces (resume d'action : « Attaquer ▼ cible »)
+@@ 480e3b2e7db3 t
+une touche : le curseur reprend la main (rangee entiere en surbrillance)
+@@ 309198d5511b t
+menu de saisie numerique (mise, jetons, montant) : fleches = colonnes et ▲ / ▼
+@@ 175333a7843a t
+L / R (page precedente / suivante) dans une liste a plusieurs colonnes (bestiaire) : gauche / droite y changent de colonne, ce sont donc les fleches ◀ ▶ de page de la fenetre qui sont pressees
+@@ 85f81e5acf19 t
+fenetre sans curseur du moteur ni bouton A (pages du Statut, types 13-17) : gauche / droite (Q, D, L, R) tournent les pages avec les fleches d'une autre fenetre (type 6), comme un toucher
+@@ c18c48d1771f t
+fenetre sans bouton de validation mais avec ses fleches de page (fiche du bestiaire) : gauche / droite les pressent
+@@ 35e6d22be9bc t
+« Action » de la fiche du bestiaire (manette 0x800) : la seule fenetre qui en a un
+@@ b1305d535cd6 t
+depart : le bouton en haut a gauche
+@@ 8c892dc7abb3 t
+quantite (types 58 / 59 : liste « Acheter », 63 : quantite a vendre) : la rangee du curseur porte ses propres fleches (boutons de meme numero, manette gauche 8 / droite 4 : liste « Acheter » d'une boutique, quantite a vendre) -> gauche / droite changent la quantite de la rangee choisie (comme le toucher d'une fleche) ; le curseur garde la rangee entiere
+@@ bf257ae660db t
+une seule colonne : gauche / droite tournent les pages si une autre fenetre porte les fleches
+@@ c4d0342668a3 t
+une touche : le curseur reprend la main
+@@ 173b21fccf27 t
+menu de saisie numerique : la colonne ▲ / ▼ choisie
+@@ 054adabb45ae t
+numero de type -> nom Make_* (une fois par partie : appele pour chaque fenetre a chaque image)
+@@ c15aacb2b038 t
+(texte d'essai : canevas a part, pas celui du moteur)
+@@ 8e7336591be7 t
+parties cachees tant que le moteur ne les demande pas (bandeau de l'equipe en combat, jetons du stade...) : l'apercu les montre toutes
+@@ 05214f7633a6 t
+cadre jaune : emprise de la fenetre
+@@ d3a1c996f1b4 t
+(cadre jaune : la pile Oui / Non)
+@@ ba6d53ceca91 t
+combat : le message se pose au meme endroit que le menu de commandes (meme bord bas, meme echelle)
+@@ 6ea4823cb38e t
+editeur d'interface : seul l'element choisi est montre (par le menu Echap), pas les fenetres du jeu
+@@ 10cc8949e0ad t
+(test) etat des fenetres a chaque changement : port, type, visible, fenetre d'origine ou menu simple
+@@ a751ac3b1728 t
+fin de combat : le jeu ferme le fondu au noir alors que la fenetre de statut est encore « visible » (le message, lui, reste : « Ragnar meurt ! » se lit sur le noir) : sinon l'ecran noir montre une boite seule en haut a gauche
+@@ 0dc8a9dc7f2a t
+ecran Sauvegardes ouvert : le menu de depart est cache (sinon il se devine a travers le cadre translucide)
+@@ 0db3176c61ce t
+menu de depart : groupe centre en hauteur, dans un cadre noir (dessine plus bas) ; plaque « Sauvegarde automatique » toujours visible, grisee et inactive sans data5.dat lisible
+@@ a0ca5d540e42 t
+le Oui/Non (type 1) suit la fenetre de message (D-231 : toujours, a sa place d'origine ou descendue)
+@@ ec5062651da9 t
+decalage vertical de chaque fenetre qui suit le message : le meme que lui, plus de quoi poser la pile Oui/Non sur le bord haut du message ; bords droits a aligner (D-231)
+@@ f00b302474aa t
+combat : echelle constante (la zone des menus de commandes compte toujours), sinon les fenetres changent de taille a chaque message
+@@ 80f05168f805 t
+'bas', 'haut' ou 'centre' : bord de l'ecran auquel est collee la fenetre
+@@ df9ccba215ed t
+(cy, echelle) du groupe de fenetres qui contient cette fenetre
+@@ d4ef4768c77c t
+fenetres modifiees par le joueur (taille, position) : dessinees a part, avec leur propre repere (les zones tactiles le suivent)
+@@ 0a6f9235019b t
+interfaces masquees (« Afficher cette interface a l'ecran » = Non) : calculees comme les autres (la mise en page ne bouge pas), seul leur dessin est omis
+@@ fa88a4594980 t
+Oui / Non : pose sur le coin haut droit de la boite de dialogue (reglages du joueur relatifs a celle-ci)
+@@ e75116b391e9 t
+sans boite de dialogue : a sa place, avec les reglages du joueur
+@@ 1ebf089398c7 t
+liste des journaux, choix du sexe : centrees a l'ecran dans un cadre noir (les boites de dialogue, elles, restent a leur place)
+@@ bc91bf515337 t
+appui en cours : l'element est sombre tant que le pointeur est dessus ; s'il en sort, plus rien (MenuPortItem.Update, etat 2 : SetPush(touche)), s'il revient, il se rassombrit
+@@ 5288f3afdf0f t
+souris : l'element pointe seul (-1 : fenetre non survolee, rien n'est allume par numero)
+@@ 9070703d7d31 t
+le message d'abord, puis chaque fenetre qui le suit (Oui/Non) a son propre decalage
+@@ a50acee42f21 c
+largeur : texte le plus large + zone etiquette/valeur
+@@ b7446606a43d t
+etiquettes/valeurs sur plusieurs lignes (PV / PM / Nv.)
+@@ e09ff0f134d5 t
+(fenetre redimensionnee, plein ecran, autre disposition : la largeur est recalculee)
+@@ d6183eb354fe t
+lignes d'information empilees, a la ligne dans la marge laissee libre par la colonne d'interface
+@@ 2ad0522c3ff8 t
+cadre noir translucide derriere le texte (lisible sur le decor)
+@@ f12b0cb8452b t
+(la largeur ne fait que croitre tant que F1 reste affiche : le bord gauche du bloc, colle a droite, et le texte ne bougent pas quand un chiffre change)
+@@ f695326b2767 d
+Messages, fenetres de menu du jeu et editeur d'interface ; fondus, vignette et petits messages des sauvegardes (toasts).
+@@ 6a39c0f61ad1 d
+Petit message en haut de l'ecran, SEULEMENT pour les sauvegardes (etats instantanes, sauvegarde du jeu impossible, import) : depuis #267 les autres notifications (vitesse de combat, plein ecran, memoire du moteur, reglages, son...) n'existent plus (D-228) ;
+les sauvegardes les ont retrouvees le 04/11/2026 (D-230). tests/test_save_notifications.py garde la liste des appels permis.
+@@ 8fff47059742 d
+Refait les fenetres de menu d'origine d'apres la memoire de l'interface (apres le chargement d'un etat).
+@@ 9a85610deebd d
+L'editeur choisit le texte d'essai montre dans la fenetre de dialogue : au hasard parmi SAMPLE_TEXTS (autre que le precedent).
+@@ cd8283122d28 d
+Canevas 512 x 512 de l'apercu des dialogues : le texte d'essai choisi, en police du jeu, range des la 1re rangee.
+@@ 39560c223225 d
+Texte visible du message (canevas du moteur) -> image RGBA blanche dont l'opacite est celle du texte.
+@@ 45fe5cd32bc2 d
+Copie l'image qui vient d'etre dessinee dans une texture (la capture que l'effet de debut de combat brise en morceaux, ou que les effets voyage, lampe et Riremito deforment : `battle` faux, voir capture_effects.py).
+@@ f0c2088b8f7a d
+Fond des villes (#111) : degrade vertical de la couleur `topmost` (haut de l'image) a la couleur `bottom`, tel que le dessine le `BackColor` du jeu (voir VERTEX_GRADIENT), par-dessus l'effacement (la moyenne des deux) et
+avant la scene ; la profondeur n'est ni lue ni ecrite. Rien a faire si les deux couleurs sont egales (l'effacement est deja cette couleur).
+@@ a8c5d13ef566 d
+Assombrit les bords de l'image de jeu (reglage Vignettage), sous le fondu et l'interface : degrade radial elliptique (centre intact jusqu'a 45 % du rayon, bords en noir
+d'opacite = reglage). Texture 512 x 288 etiree sur la fenetre (filtre lineaire), creee une fois.
+@@ 1b38d26287d4 d
+Plans de fondu d'ecran (Fade.FadePlane, bit 14 du paquet 9 = Fade.l_targetLayer) : `background` = plan « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres et les messages) ;
+sinon plan « FadeForMenu » (Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris).
+@@ c6e2268776ec d
+Cases d'une fenetre -> lignes (numero de ligne du moteur, texte, etiquette, valeur, est_un_titre).
+@@ 0e058a3bf69f d
+Port qui recoit le clavier : celui du menu actif du moteur, sauf si c'est une fenetre a un seul bouton (menu Divers : la saisie va a « Sauvegarde rapide », ouverte en dernier) alors qu'une fenetre
+visible plus fournie existe (la liste de la page) : c'est elle qu'on parcourt (le toucher agit sur toutes les fenetres).
+@@ 34e38122f8ad d
+Fenetre « Quitter » de l'arene des monstres (type 71) : en combat, sans bouton de validation ni curseur du moteur.
+@@ 70334fab421b d
+Port qui recoit la touche de manette `pad` (haut 2, bas 1, droite 4, gauche 8, A 16, B 32) : celui du menu actif s'il a un bouton pour elle, sinon la fenetre visible la plus recente qui en a un.
+Menu Divers : le moteur donne la saisie a la fenetre « Sauvegarde rapide », mais le bouton retour est dans la liste et les fleches de page dans une troisieme fenetre.
+@@ 0def2bfec175 d
+Touches -> menu actif, comme MenuPort.Send d'Unity : [1, numero de bouton, manette] (manette du jeu : bas 1, haut 2, droite 4, gauche 8, A 16, B 32).
+Menu a curseur du moteur (message 2 : colonnes x lignes, ex. Oui / Non) : les touches lui sont transmises, il deplace son curseur (messages 4) et valide ;
+gauche/droite sur une seule colonne = precedent/suivant. Menu tactile (boutons sans curseur du moteur) : curseur local deplace d'apres la position des boutons, A = toucher.
+@@ ca4a50bda4ce d
+Fleche de page ◀ (manette 8) ou ▶ (manette 4) de la fenetre `port` : (port, numero de bouton), ou None. Les fleches de quantite des boutiques (types 58, 59, 63 : une par rangee) n'en sont pas.
+@@ d9fd4873031f d
+Colonnes ▲ / ▼ d'un menu de saisie numerique (mise de la machine a sous et du poker, jetons, montant de la banque, pari de l'arene : Make_Casino_*, Make_Bank*) : numeros de bouton >= 0 qui ont
+a la fois un element de manette 0x2 (▲, valeur + 1 rang) et un de manette 0x1 (▼), de gauche a droite. Vide pour les autres fenetres (les ▲ / ▼ de numero -1 sont des fleches de page).
+@@ 8c5570fc83e0 d
+Colonne ▲ / ▼ choisie au clavier dans un menu de saisie numerique (la plus a droite au depart : les unites), ou None si la fenetre n'en a pas (ou si elle a plusieurs boutons de validation : curseur ordinaire).
+@@ 0072b2a4a0cf d
+Menu de saisie numerique au clavier (les boutons ▲ / ▼ sont des touches de manette 0x2 / 0x1, hors du curseur local) : gauche / droite choisissent la colonne (dizaines, unites...), haut / bas = ▲ / ▼ de la colonne
+(envoyes au moteur comme le toucher du bouton), A = le bouton de validation (Lancer, Donner, Valider), B = retour. Faux si la fenetre n'est pas de ce genre ou si aucune touche utile n'est pressee.

@@ -1,0 +1,703 @@
+## FILE dq4_pc/window/menu_display.py
+@@ 679a8126136c d
+Bouton voisin dans la direction pressee (z : numero -> centre en unites d'interface, Z vers le haut) ; au bord on boucle vers l'autre extremite de la rangee/colonne.
+@@ d0af31e41d53 d
+Etiquette de texte (mise en cache) ; `fonts` : familles essayees avant les polices du systeme (police du jeu pour le menu Echap).
+@@ 0953f5b8ed46 d
+(cote, largeur) du bloc d'infos de F1 : en haut a DROITE de l'ecran par defaut ; largeur = la marge libre a cote de la colonne d'interface (portrait 450 x 800 centre), pour ne pas cacher les fenetres du jeu (voir entrees.info_zone).
+@@ bb3d742bdbf6 d
+Bouton en surbrillance du menu actif : curseur du moteur (messages 4) ou, sans curseur du moteur, curseur local des fleches.
+@@ a0b7566350a6 d
+Colonne d'interface du jeu (portrait 450 x 800 centre, hauteur de la fenetre) : (x du centre, y du centre, pixels par unite).
+@@ f54eb18116f2 d
+Noms (Make_* de MenuPortItemTable, sans le prefixe) des fenetres du jeu qui ont une mise en page : {nom: [numeros de type]} (editeur d'interface).
+@@ e105d462d9c4 d
+Fenetre du jeu masquee par le joueur (editeur d'interface : « Afficher cette interface a l'ecran » = Non) ?
+@@ 54cb836fa4b4 d
+Pile Oui / Non (D-231) posee sur le coin haut droit de la boite de dialogue : -> (decalage vertical en unites qui pose le bord bas VISIBLE de la pile YESNO_BOX_SPACING au-dessus du bord haut visible de la boite,
+(bord droit visible de la boite, bord droit visible de la pile)). Les cadres ont des marges transparentes differentes (6 unites a droite pour la boite) : on aligne ce qu'on voit, pas les mailles. None si une mesure manque.
+@@ b5be3cae3817 d
+Oui / Non (type 1) regle par le joueur : il suit la fenetre de message comme d'habitude (base = (cx, cy, s) de celle-ci, D = decalage vertical d'unites qui l'y colle, e0 = son bord bas en unites),
+puis sa taille v[0] se change autour de son bord bas et de son bord droit, et il se decale de v[1], v[2] (fractions de l'ecran).
+bords = (bord droit de la fenetre de message, bord droit du Oui / Non) en unites : la pile de Oui / Non a son bord droit sur celui de la boite de dialogue (D-231). -> (cx, cy, s) de dessin.
+@@ bbe7c6607201 d
+Repere (cx, cy, s) d'une fenetre modifiee par le joueur (editeur d'interface) : taille v[0] autour du bord de son groupe (bas, haut ou milieu de l'ecran), puis decalage v[1], v[2] en fraction de l'ecran.
+@@ f93cfd349be4 d
+Fenetre d'apercu de l'editeur d'interface (gardee) : 'msg' = dialogues (texte d'essai), sinon le nom Make_* ; None si elle n'a pas de mise en page.
+@@ ca5ebffabf58 d
+Editeur d'interface : apercu de la fenetre `lookup_key` ('msg' = dialogues, sinon nom Make_*) a sa taille et sa place (mise en page d'origine, sans etat de jeu) -> (x0, y0, x1, y1) en pixels, ou None.
+@@ e3dff3af1736 d
+Apercu de Oui / Non : comme dans le jeu, la pile (Oui au-dessus de Non) est posee sur le coin haut droit de la fenetre de message (montree a sa place, avec ses reglages), bords droits alignes ; son cadre jaune est celui de l'element regle.
+@@ 155749505cae d
+Agrandissement des fenetres : intervalles [(bas, haut)] en unites d'interface -> (k, mode de chaque groupe).
+Les fenetres proches (moins de 60 unites) forment un groupe ; un groupe du bas (resp. du haut, resp. du milieu) est agrandi autour du bord bas
+(haut, centre) de l'ecran, pour rester colle a ce bord. k = UI_ZOOM, reduit (jusqu'a 1) tant qu'un groupe sort de l'ecran ou en recouvre un autre.
+@@ 04072dd6ed76 d
+Fenetre de message du terrain : l'original la pose au-dessus de la zone des menus du bas (portrait) ; en 16/9 on la descend en bas de l'ecran,
+sauf si une autre fenetre occupe le bas (elle resterait dessous).
+@@ 41aee43b002f d
+Zones tactiles de la fenetre d'un port : [(numero, manette, x0, y0, x1, y1, profondeur, identifiant de l'element)] en pixels.
+@@ 8efca3e74fef d
+Lignes d'information (F1), en haut a droite par defaut. Dessinees aussi pendant les ecrans noirs et l'effet de debut de combat : sans cela elles clignotent a chaque changement de scene.
+## FILE dq4_pc/window/options.py
+@@ 7876b2e54a07 c
+---- son par categorie (menu Echap > Son) : voir sound.py (CATEGORIES, Mixage)
+@@ 41de805f53cd c
+---- vitesse du texte des dialogues et defilement des messages de combat (menu Echap > Commandes > Defilement du texte)
+@@ b80bee8347d3 d
+Reglages du joueur appliques au jeu en cours (son, texte, defilement, vitesse).
+@@ 498191b7a92a d
+Volumes et interrupteurs des reglages -> son.mix, tout de suite pour les sons en cours. Au depart, les volumes de la musique et des bruitages sont ceux de la ligne de commande (Son les a deja).
+@@ 9cd4c3b2f6dd d
+Reglage d'un volume sur la page Son : un bruitage d'essai de la categorie (un par quart de seconde au plus) ; la musique, elle, se fait entendre pendant la page (Sound.ecouter).
+@@ 8259652ef3de d
+Page « Modifications » du menu Echap (ex-« Jeu ») : options qui changent une regle du jeu (PV et PM restaures au niveau superieur).
+@@ 0717298eff04 d
+« Vitesse de combat » -> OptionStatus.battleSpeed impose au moteur : 4 (messages a la main) en Manuel, 0 (attente la plus courte du jeu, 12 images) sinon (RG.scroll_code) ; Rapide et Tres rapide accelerent l'horloge, donc aussi l'attente.
+@@ dd224e96cb4b d
+Le jeu change lui-meme la vitesse des messages (fenetre Parametres d'origine) : 4 -> Manuel, toute autre valeur -> sortie du Manuel (RG.speed_after_game_code).
+## FILE dq4_pc/window/screens.py
+@@ 692388b679e9 t
+(position dans la liste de pyglet : retrouve l'objet Screen meme si un ecran illisible a ete ignore)
+@@ 6ca181147970 d
+Moniteurs du plein ecran : la logique pure (sans fenetre ni OpenGL), pour la tester avec de faux ecrans (tools/test_screens.py).
+Le plein ecran se fait toujours sur le moniteur ou se trouve la fenetre (aucun choix du joueur : retire le 03/11/2026 sur sa demande ; le reglage `ecran_plein` de #52 n'existe plus) :
+- lister : les moniteurs detectes par pyglet (`display.get_screens()`) -> descriptions (indice, position, dimensions, nom, principal) ;
+- screen_of : le moniteur qui contient le centre d'un rectangle (la fenetre) ;
+- cible : le moniteur du plein ecran (celui de la fenetre, sinon le principal).
+@@ 62958f938d1f d
+Nom du moniteur quand pyglet le donne (Windows : nom d'usage du moniteur, X11 : nom de la sortie) ; '' sinon (jamais d'erreur).
+@@ 87addfd0844e d
+Liste des ecrans de pyglet (dans l'ordre de `get_screens()`) -> [dict(indice, x, y, largeur, hauteur, nom, principal)] ; exactement un principal (celui que le systeme annonce, a defaut celui en (0, 0), a defaut le premier).
+Un ecran illisible est ignore ; `screens` illisible -> [].
+@@ ab34695aa88c d
+Indice de l'ecran qui contient le centre du rectangle (x, y, largeur, hauteur) de la fenetre, a defaut celui qu'elle recouvre le plus ; None si elle n'en touche aucun (ou rectangle illisible).
+@@ e97c5a61eb7d d
+Indice de l'ecran principal (0 si la liste est vide : jamais d'erreur).
+@@ bdb240674347 d
+Indice (dans `entries`) du moniteur du plein ecran : celui ou se trouve la fenetre (`window` : son indice, None si inconnu), a defaut le principal. Liste vide -> None.
+## FILE dq4_pc/window/shaders.py
+@@ 316b524f889c t
+Capture.SetBlur(vrai) pendant l'effet : la capture est adoucie (biais de mipmap)
+@@ ce783ba2418c c
+Fond des villes (#111) : `BackColor` du jeu = un quadrilatere plein ecran (sommets (1, 1), (-1, 1), (-1, -1), (1, -1) ecrits TELS QUELS en espace de decoupe : shader « BackColor », `gl_Position = in_POSITION0`,
+`SV_Target0 = vs_COLOR0`, file Background, ZTest Always, ZWrite Off, aucune fusion) dont les deux sommets du haut ont la couleur « haut » du paquet 8 et les deux du bas la couleur « bas » (BackColor.SetColor(haut, bas, 0),
+RVA 0xCC43F8) : un degrade vertical lineaire sur toute la hauteur de l'image, derriere tout le reste.
+@@ 5b7595f9ebf6 d
+Programmes de dessin (GLSL) de la fenetre.
+## FILE dq4_pc/window/snapshots.py
+@@ 67731422e323 c
+---- etats instantanes (savestates)
+@@ ab4b6766bfea t
+(cartes ev04 / ev05 : voir Global::setMinigame)
+@@ a30dfe0006f6 t
+la musique repart du moment enregistre
+@@ 758f43e8519d d
+Etats instantanes (sauvegarde / chargement a n'importe quel moment).
+@@ 7562f9b1037a d
+(infos, miniature PNG) de l'etat n, ou None.
+@@ 1ddf2fc21694 d
+Lieu note dans le fichier de l'etat : un texte FRANCAIS stable (marque N_), jamais traduit ici ; la page des etats du menu Pause le traduit en l'affichant (Pause._et).
+@@ ccf7084ca290 d
+Etat instantane du moteur + de la visionneuse (objets animes de la carte compris).
+@@ d9a61c74dd67 d
+Enregistre l'etat du jeu dans l'emplacement n.
+@@ cd527b393428 d
+Recharge l'emplacement n ; l'etat d'avant le chargement est gardé en memoire (cancel_loading).
+@@ fc7968526397 d
+Revient a l'etat juste avant le dernier chargement (un deuxieme appel refait le chargement).
+@@ 79105989b16e d
+Remet le moteur dans l'etat `d`, puis tout ce que la fenetre en a deduit (fenetres de menu, carte, objets animes, musique).
+@@ 1222dc8d6c80 d
+Copie l'image du jeu (sans le menu) dans une texture, sur la carte graphique seulement : le menu s'ouvre sans attendre une relecture ; le PNG n'est fait qu'a l'enregistrement d'un etat.
+@@ 71d6a416a838 d
+Texture de _clone_thumbnail -> PNG reduit (miniature des etats).
+## FILE dq4_pc/window/title_screen.py
+@@ 35bb8f23d193 t
+largeur du logo de l'APK, en fraction de la largeur de la fenetre (NDC : -1 a 1)
+@@ 69e0e63cec1d t
+(le ciel est seul dans son groupe de texture)
+@@ 80e712ae6fe1 t
+essai #130 : ciel agrandi autour du centre de l'ecran, sans bandes
+@@ 6411ccc1d4c0 t
+#174 (par defaut) : ciel a plat, hauteur de la texture = hauteur de la fenetre, repetition sur la largeur, effet de vague
+@@ 81194ede83d1 t
+sommets reecrits APRES le 1er trace de l'image : sans rebind + commit() ils ne partent pas (voir _paint_sky)
+@@ f4d57190e197 t
+coordonnees d'ecran normalisees : pas de projection
+@@ c7ac0b729308 t
+sommets crees ou reecrits APRES le 1er trace de l'image (le decor opaque vient d'etre trace) : sans rebind + commit() ils ne partent pas : a la 1re image du titre les bandes manquaient (cotes noirs), puis elles etaient en retard d'une image
+@@ 6cb84d30f2df t
+etat des journaux quand le moteur a construit le menu de depart (ses boutons grises / absents en dependent)
+@@ 8b2a7152e88f t
+(N_ : marque le texte, que toast() traduit)
+@@ 66647965a4cb t
+#174 (par defaut) : {'key': groupe du ciel du titre, 'ciel': WideSky, 'vl', 'nv', 'degrade', 'cle'} quand le ciel est dessine a plat a l'echelle de l'ecran (title_sky.screen_sky)
+@@ 13739b0ee320 t
+essai #130 (DQ_CIEL_AGRANDI=1) : {'key': groupe du ciel du titre} quand le ciel est agrandi (title_sky.screen_zoom) au lieu d'etre prolonge par des bandes
+@@ c00208b2821a t
+(l'ecran reste noir tant que la fenetre est ouverte : pas de reouverture automatique apres 6 s)
+@@ 75d3d0afcac8 t
+(retour : manette 0x20, muet comme dans MenuPortItem.Update)
+@@ 00890b206544 t
+barre de defilement : le curseur se glisse avec le pointeur
+@@ 21c58e668173 d
+Ecrans d'avant-partie : titre (ciel, logo), licence, saisie du nom, sauvegardes.
+@@ 175f0b53896c d
+Ecran-titre : logo (modele 8901 : « DRAGON QUEST », « IV », sous-titre) et eclat anime (8900) agrandis de AP.LOGO_SCALE autour d'un meme point (pre_game.upscale_logo), sans decalage de profondeur.
+ECART VOULU avec l'APK (Sylfried, 03/11/2026, #108). Le facteur est reduit si le logo agrandi depasserait la largeur de la fenetre (fenetre tres etroite) ; DQ_LOGO_ECHELLE=1 : le logo d'origine.
+@@ 0e6c765e3477 d
+Ecran-titre : le ciel (carreaux de nuages identiques qui glissent) est concu pour l'ecran portrait ; en 16/9 ses bords entreraient dans le champ et le meme carreau se repeterait 3 a 6 fois.
+Solution : la zone portrait garde le ciel d'origine ; de chaque cote, des bandes de meme geometrie dont la texture est etiree de facon variable (title_sky.py : raccord continu au bord de la zone, defilement suivi).
+Secours (structure inattendue, ou DQ_CIEL_COPIES : ancien comportement, pour comparer) : deux copies du ciel decalees de sa largeur, qui prolongent le motif tel quel.
+@@ bf7326937714 d
+Plan de ciel des cartes de EXTENDED_SKIES (dpout, ev09 ; MAP-05) : concu pour l'ecran portrait, il s'arrete avant les bords de la fenetre en 16/9 (coins noirs). De part et d'autre, une copie SYMETRIQUE du plan (bord gauche et bord droit
+servent de miroir, memes coordonnees de texture : l'image se prolonge sans couture, a la maniere des copies du ciel du titre) ; la zone portrait centrale garde exactement le ciel d'origine. Ajoutee a `ext_map` (dessinee et mise a jour comme les copies du titre).
+@@ 5a4f85db1377 d
+Ciel de l'ecran-titre a plat (#174), a la place du groupe du ciel d'origine : la texture a la hauteur de la fenetre et se repete sur la largeur, avec l'effet de vague (title_sky.screen_sky ; defilement de l'objet suivi,
+degrade de teinte des rangees d'origine). -> True s'il a ete dessine ; toute erreur : False (le ciel d'origine est dessine par l'appelant) et le rendu a plat est coupe.
+@@ ae2f7984a173 d
+Bandes de ciel de l'ecran-titre (apres le decor opaque, meme plan que le ciel d'origine : decalage de profondeur pour passer devant sa partie hors de la zone portrait). Toute erreur : on garde le ciel d'origine seul.
+@@ d261777f7f05 d
+Vrai si ce port est le menu de depart (type 53, Make_StartMenuSecond).
+@@ 5c42801087d8 d
+Des journaux viennent d'etre importes (le catalogue du moteur a deja ete relu par l'ecran Sauvegardes).
+@@ 3182bc2b7052 d
+Cadre noir (comme les autres menus du portage) derriere tout le menu de depart (ou de la fenetre d'avant-partie centree).
+@@ bccdf60b6602 d
+Port 12 = fenetre de type 73 (Make_TitleTouch) : le moteur ne lui donne aucune case, « Touchez l'ecran » et le copyright sont dessines par Unity (TapToStart) ; le code 0 est CountReset.
+@@ 98cd7db2a30c d
+Fenetre de type 80 (Make_License) sur le port 15 : le texte des licences est dessine par Unity (LicenseNobu).
+@@ bf4efc54580a d
+Fenetre de type 55 (StartNameEntry) : le clavier de saisie du nom est tenu par Unity ; il est visible tant que le moteur a envoye [12, 1, 1] (le message [12, 0, 8] donne le nombre de caracteres).
+@@ 76885248e8b7 d
+OK : [2, nombre d'octets] puis les octets UTF-8 du nom (deux par nombre, petit-boutiste), tous deux avant la prochaine image du moteur.
+@@ 13cedfef90ef d
+Retour : comme la touche B sur la fenetre 55, [1, -1, 32] (le moteur revient a la liste des journaux).
+## FILE dq4_pc/world/data.py
+@@ 32ee7299a5a3 t
+cle de la texture blanche 4 x 4 des materiaux sans texture (voir Data._texture)
+@@ df680a1115af t
+UnityPy partage un seul lecteur de fichier : une seule extraction a la fois (preparation en arriere-plan et jeu)
+@@ c72c1153f508 c
+---- UnityPy (charge a la demande, seulement si le cache ne suffit pas)
+@@ 7317caec2f0f c
+materiau NO_DEFAULT texture (aucune texture dans ses TexEnvs : 21 cartes de lieux, 10 decors de combat) : Unity echantillonne la texture blanche par defaut, la surface est donc dessinee en couleur de sommet x _Color
+(sol sombre, eau...). Avant, la surface etait absente de la visionneuse (groupe sans texture ignore au dessin).
+@@ 0266267f842c c
+---- une carte
+@@ b417309bf9cd t
+produite entre-temps par la preparation en arriere-plan
+@@ 284eb8ecee55 t
+decor d'un seul maillage porte par la RACINE (18 decors de combat : btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_*) : l'objet 0 de la carte est la racine elle-meme
+@@ c293654f87eb t
+ChunkFile.readPosition (CCEB58) lit x, y, z puis NEGUE y (fneg) : la position d'un objet de la carte est (x, -y, z) ; sans cela les arbres et la ruine des reliefs
+@@ d72160513fe4 t
+s'enfoncent (y du fichier = -hauteur du relief) ; c'est aussi la raison du « +1 » des coffres (fichier -0,5 -> monde +0,5)
+@@ 1b8fb269c9ee t
+FldObject.set_palette_data : textures de l'objet dont le nom contient celui de la palette
+@@ 0664fdb154cf t
+images de la sequence (FldObject.seq_build_mesh : Transform.GetChild(valeur de la cle)), meme nombre de sommets que le modele
+@@ 869cf2206f6d c
+FldObject.save_org_color (init_fld, RVA 0xCD811C) : _OrgColor = (1, 1, 1, alpha de _Color) ; FldObject.update_material_color (a chaque image, 0xCD79F4) : Material.color = _OrgColor x FldObject.m_color
+(teinte du paquet 33, blanc par defaut). La couleur RGB de _Color enregistree dans l'asset n'est donc JAMAIS utilisee en jeu (elle rendait noirs les cedres, sous-bois et arbres du decor de
+nuit des combats : _Color = 0, 0, 0) ; seul son alpha compte. Shader fld_*.vert : couleur du sommet x _Color.
+@@ 625020b601f0 t
+materiau transparent : groupe a part, trace apres le decor opaque dans la file 3000 + priorite (FldObject.set_priority)
+@@ c6a7a916324f t
+sequence jouee en continu (eau, lampes...)
+@@ ca68194ea271 t
+variantes des animations communes (porte ouverte, jarre ou tonneau casse, coffre ouvert...)
+@@ 869db122ea83 t
+ecriture atomique : jamais de fichier a moitie ecrit
+@@ befe19a232c2 c
+---- grand plan du monde (fenetre « Carte » de la carte du monde : MenuPortItemTable.Make_WorldLargeMap / LoadLargeWorldMap)
+@@ ab6c782e6cce c
+---- voile de la carte du monde (fenetre « Carte », ICityMap : code 5)
+@@ be891ee4b242 c
+---- modele 3D anime (FbxObject : Resources « fbx/c<numero> », paquets 31 et 32 du moteur)
+@@ 231f8ee8893b c
+materiaux : meme texture et shader « Custom/ImdChara » (couleur du sommet x _Color, fusion alpha, ZWrite on, Cull Back)
+@@ 7db9af7d40d0 t
+(modele 3D sans texture : refuse comme avant, la texture blanche ne sert qu'au decor des cartes)
+@@ 24dd9856cd2e t
+un seul os par sommet : poids 1 (maillage « rigide », cas du dragon)
+@@ 704a705f44ee c
+---- feuille de sprites d'un personnage
+@@ 83a184e3ca59 c
+---- preparation du cache en arriere-plan
+@@ f32a7b1d15c4 t
+le dragon de l'ecran-titre (FbxObject c1018) ; les autres modeles 3D, s'il y en a, se lisent a la demande
+@@ 0c71ce97c5d6 t
+ancienne liste (sans les plans de la fenetre de carte, ou sans les textures d'effets) : refaite
+@@ 08cb3930b8d9 t
+deja tout pret
+@@ 2edc450edce7 t
+rythme tranquille
+@@ d9771211e804 c
+Preparation du cache dans un processus a part (lance par la visionneuse, priorite basse) : dans un thread du jeu, les extractions (Python pur) lui prenaient le
+verrou de l'interpreteur et saccadaient l'ecran. Fin du processus : quand l'entree standard se ferme (la visionneuse s'est arretee).
+@@ 42bc527fd0f9 t
+(D-238 : la langue de l'outil, donnee par le jeu qui lance ce processus ; seul, la langue de l'ordinateur)
+@@ 9128bf3a501a d
+Lecture des donnees graphiques du jeu (datapack.unity3d, dans l'APK de donnees de l'utilisateur).
+Rien n'est fourni avec ce programme : tout est lu dans les fichiers du joueur puis mis en cache sur son disque.
+@@ 3ca4e19bf4c8 d
+Rotation d'un objet de carte (degres) comme FldObject.rotateXZY (0xCD47F0, lue au desassemblage) : q = (AngleAxis(ry, haut) * AngleAxis(-rz, avant)) * AngleAxis(-rx, droite) -- les axes sont les
+Vector3.up / forward / right statiques (decalages 0x18 / 0x48 / 0x3C), les angles X et Z sont inverses, et le produit de quaternions applique X en premier (dans le repere de l'objet), puis Z, puis le cap Y en
+dernier (dans le repere du monde) : matrice Ry . Rz . Rx. (Ce n'est pas Quaternion.Euler d'Unity, Z-X-Y, et ce n'est pas non plus l'ordre X, Y, Z note par erreur en #21.) Utilisee par init_fld (rotation de depart),
+SetCommonAnimation, pmv_func et c_pmv_func (mouvements) : le couvercle d'un coffre, cle X = -60, se releve autour de SA charniere quel que soit le cap du coffre (un coffre de cap 90, -90 ou 180 s'ouvrait de cote
+ou vers l'avant quand le cap etait applique avant la bascule).
+@@ 45ab1b31f89c d
+Decors voisins d'un decor de combat absent des donnees. Le moteur choisit la lettre finale selon l'heure du monde (`StageStatus::getBtlMapName` : _d jour, _e soir, _n nuit ET aube : la zone 1 -- 3264 a 127 --
+reprend `_n`, il n'existe aucun decor d'aube) ; `param_map_battle.dat` liste les decors de chaque lieu, mais `btlcc1` n'a que _d et _e : sans `_n` rien ne s'afficherait. Monde sombre sans zone horaire :
+la table du moteur demande `_dk` (btl_pl_dk, btl_se_dk, btl_sd_dk, btl_mt_dk, btl_po_dk, btl_wd_dk), mais le paquet de donnees n'a que pl, po, wd (et tc1) en `_dk` : se, sd, mt prennent la nuit
+(supposition : la table les demande, aucune ressource ne les porte). Dans l'ordre : la variante la plus proche en luminosite, les autres, puis le nom sans lettre. Un nom qui ne finit pas par
+_d, _e, _n ou _dk : aucune.
+@@ 18c15b06d7c2 d
+Rend la memoire du paquet de donnees (plus de 800 Mo) ; il sera relu a la demande si un element manque encore.
+@@ 2b1e8b2f25f9 d
+-> (cle, scale, offset, couleur _Color du materiau, genre) ; remplit tex_out[cle] = tableau RGBA (haut en premier) et name_out[cle] = nom de la texture.
+genre = shader choisi par FldObject.set_shader (CD5414) : 'trans' (Custom/fld_trans : fusion SrcAlpha / OneMinusSrcAlpha, ZWrite off) si le nom de la texture ne contient pas '.tim'
+ou si _Color.a != 1 ; sinon 'atest' (fld_atest) si la texture est en RGBA32 (format 4), 'normal' (fld_normal) autrement.
+@@ 88b366a67532 d
+Maillages d'image d'un modele (enfants sNN_*, FldObject.seq_build_mesh) : liste de MeshFilter, dans l'ordre ; l'image 0 est le maillage du modele lui-meme.
+@@ a679fd63365d d
+-> dict : 'groupes' {cle_texture: (positions Nx3, uv Nx2, couleurs Nx4)}, 'textures' {cle: RGBA}, 'objets' (FMAP), 'plages' {objet: [(cle, debut, nombre)]},
+'noms' {objet: nom du modele}, 'var' {(objet, modele): {'plages', 'images'}} : variantes de modele des animations communes (FCAN), cuites a la position d'origine de l'objet
+et placees apres les objets de la carte dans les groupes ; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
+'imgobj' {objet: images par sous-maillage} (sequences de maillages jouees en continu), 'pam' (FPAM : animations de palette) et 'pamdef' {cle de groupe: {'nom', 'pam', 'evenement', 'images': [RGBA]}} : surfaces dont la texture change d'image en image (eau, marais, sols qui font mal...), groupes a part
+@@ 96e5ba5b1d30 d
+Images d'un sous-maillage : {'pos': (images, n, 3), 'uv': (images, n, 2) ou None, 'col': (images, n, 4) ou None} ; UV et couleurs seulement si elles changent d'une image a l'autre (eau qui coule, lampe qui vacille).
+@@ 216bb2658f2b d
+Cle du groupe de texture d'une palette animee (une par nom, animation et evenement) ; ses images sont les textures 'pam/<nom>.NNN' (FldObject.init_fld). None si elles manquent.
+@@ bb8990e66c51 d
+{nom: objet Texture2D} (a appeler avec le verrou).
+@@ 7a31ebbe7a11 d
+Texture Unity par son nom (ex. `field` : tuiles de la carte du monde), RGBA haut en bas ; mise en cache.
+@@ 5a93d3201e53 d
+{'base': image 1024 x 1024 RVB (haut en premier), 'pieces': [(bit, x, y, image h x l x 3)]} : le fond `dsdq4lmap0_1024` et les pieces `P<bit>_<x>_<y>_<width_px>` (MAP_DIFF : posees sur le fond quand
+le bit du drapeau envoye par le moteur est leve ; x et y comptes depuis le coin haut gauche). Ce sont des TextAsset a donnees brutes (3 octets par pixel). Mis en cache dans world_plan.npz.
+@@ d7cb9aa51acb d
+Image 192 x 256 x 4 (RGBA) du TextAsset `dsdq4wmap01m` : silhouette grisee des terres que la fenetre de carte pose sur les blocs de 10 x 10 pixels (a partir de x = 48, y = 16) non encore explores. Mise en cache.
+@@ 66402824613f d
+Modele « fbx/c%04d » : hierarchie d'os, maillage skinne (un os par sommet, ou jusqu'a 4 avec poids), texture, clips d'animation (courbes de position / rotation / echelle de chaque os) -> dict
+(voir fbx.FbxModel) ; mis en cache sur le disque. L'exception de l'extraction (shader ou composant non gere) est propagee : l'appelant ignore alors le modele.
+@@ f34d7e4a5bf2 d
+[(genre, nom, fichier)] : tout ce que le jeu peut avoir a extraire du paquet de donnees.
+@@ 9924514e53ed d
+Supprime les cartes d'une ancienne version du cache (carte2_ a carte10_ : carte10_ : surfaces transparentes triees par une moitie des drapeaux et non par leur priorite, #203 ; sans les animations de palette et de sequence, coffres enfonces, couvercle a l'envers ou ouvert de cote : rotations des objets dans le mauvais ordre ; carte9_ : surfaces sans texture et decors portes par la racine absents), devenues inutiles.
+@@ 632846720ddd d
+Extrait en arriere-plan, au rythme tranquille, toutes les cartes, feuilles de sprites et textures de monstres pas encore en cache : le jeu n'a plus jamais a lire
+le gros paquet de donnees en pleine partie (la premiere carte inconnue, un puits par exemple, figeait l'ecran pendant la lecture). Quand tout est pret, la memoire est
+rendue, et les lancements suivants ne touchent plus au paquet. `stop` : Event pour interrompre.
+@@ 1058bc13ac36 d
+Geometrie d'un modele a la position d'origine de l'objet -> ([(cle, debut, nombre)], images ou None) ; ajoutee aux groupes.
+## FILE dq4_pc/world/fbx.py
+@@ 935d7c439e6b t
+le moteur compte en images de 1/30 s ; l'animation d'Unity avance en secondes (la duree de « Take 001 » du dragon, 21,98 s, vaut les 659 images que le moteur attend avant « Take 002 »)
+@@ 61ae542b3e8c t
+FbxObject.m_blend_time : duree du fondu enchaine (Animation.CrossFade) quand l'animation precedente est une boucle
+@@ 70e4f6d356b4 t
+WrapMode.Loop
+@@ 950eae43d65e c
+---- pose
+@@ ee636627e9f0 t
+une table {(os, genre): valeur} par clip
+@@ f3ea328045c4 t
+q et -q sont la meme rotation : on melange du meme cote de la sphere (chemin le plus court), sinon la moyenne s'annule ou fait un demi-tour
+@@ 6fd817db9d17 t
+matrice de skinnage de chaque os : os dans le monde x pose de liaison
+@@ b73086cbc743 t
+{nom: {'dur', 'wrap'}}
+@@ a3d399b99f7f t
+[nom, image de depart (flottante)]
+@@ 94b38fcf4091 t
+clips en attente (PlayQueued)
+@@ ebee3b04fa56 t
+(ancien clip [nom, depart], image de debut du fondu)
+@@ 51e1db537f2d t
+wrapMode du dernier clip lance (FbxObject.m_mode)
+@@ ffc8e7c9315e d
+Modeles 3D animes d'Unity (FbxObject : NativeManager.cmd_fbx_load = paquet 31, cmd_fbx = paquet 32).
+Le moteur charge un modele « fbx/c<numero> » (prefab Resources : maillage skinne + composant Animation de style « legacy »), le place (position / rotation / echelle du monde), le colore
+(Material.color de tous ses materiaux), lance ses animations (« Take 001 »...) et le montre ou le cache. Ici : les donnees extraites une fois du paquet de donnees (`Data.fbx_model`),
+l'evaluation des courbes d'animation (interpolation d'Hermite d'AnimationCurve), la pose des os, le skinnage (chaque sommet suit son os) et un lecteur qui reproduit Animation.Play / PlayQueued / CrossFade.
+Tout est en coordonnees du monde d'Unity (main gauche), comme le reste de la visionneuse.
+@@ c5f2f6ee8559 d
+Matrices de rotation (n, 3, 3) de quaternions (n, 4) x y z w (formule d'Unity).
+@@ fb3e323f95c0 d
+Quaternion.Euler (degres) : rotation de z, puis de x, puis de y (main gauche), comme `window.rot_unity`.
+@@ 877a0506936e d
+Transform.position / rotation (Quaternion.Euler) / localScale d'un objet sans parent -> matrice 4x4 objet -> monde.
+@@ c6161c443007 d
+AnimationCurve (cles : temps, valeur, pente d'entree, pente de sortie) : interpolation cubique d'Hermite ; une pente infinie = marche d'escalier.
+@@ 52863d68c647 d
+Un modele (donnees de `Data.fbx_model`) : hierarchie d'os, maillage skinne, texture, animations.
+@@ e8d28b8abd7b d
+Animation d'un objet (UnityEngine.Animation, ce que fait FbxObject.PlayAnimation) pilotee par les images du moteur :
+* pas d'animation lancee : modele a sa pose de repos ;
+* Play (force, ou rien ne joue) : le clip repart du debut ; sinon, si l'animation en cours est une boucle (m_mode = Loop) : CrossFade (fondu de 0,3 s) ; sinon PlayQueued (le clip attend la fin du courant) ;
+* temps du clip : Once / Default / ClampForever = bloque sur la derniere image, Loop = modulo la duree.
+@@ 9f4c693a2038 d
+Pose locale de chaque transformation : repos, remplace par les courbes des animations. `poses` = [(nom du clip, temps en secondes, poids)] (poids cumules = 1 : fondu enchaine).
+@@ b08320235ce4 d
+Positions monde (n, 3) des sommets du maillage skinne ; M_obj = matrice monde de la racine du modele (position, rotation, echelle donnees par le moteur).
+@@ 3bf51007eec6 d
+Passe aux clips en attente quand le courant est fini (le suivant part exactement a la fin du precedent).
+@@ fd06651fc013 d
+[(clip, temps en secondes, poids)] a l'image (flottante) du moteur.
+## FILE dq4_pc/world/flat_sceneries.py
+@@ cf3cfca1a288 t
+hauteur ajoutee par triangle empile (unites de ville)
+@@ 50d1b20c1959 t
+deux triangles plats dont la hauteur differe de moins que cela sont consideres comme coplanaires
+@@ d2d2d87d6baa t
+un triangle est plat si ses trois sommets ont la meme hauteur a cela pres
+@@ 9036564a5102 t
+(ordre de dessin, cle, triangles T (n, 3, 3), indices plats, hauteurs, decoupe ?)
+@@ dbc0e8592cca t
+(ordre de dessin, cle, indice du triangle, hauteur, triangle xz, decoupe ?) : seulement les triangles a une hauteur ou se trouve un triangle decoupe
+@@ 394552b2a1a3 t
+hauteur arrondie -> triangles (les seaux voisins sont aussi regardes : une limite de seau peut separer deux hauteurs proches)
+@@ e76e50c22e93 t
+hauteur, x min / max, z min / max de chaque triangle
+@@ db966c4f54bb t
+triangle -> triangles dessines avant lui, a la meme hauteur, qu'il recouvre (au moins l'un des deux est decoupe : deux triangles pleins et opaques ne scintillent pas visiblement)
+@@ e47064e39436 t
+dans l'ordre de dessin : le niveau d'un triangle suit celui des triangles dessous
+@@ 926c8a7eb657 d
+Decors a plat superposes a la meme hauteur (massifs de fleurs sur une autre bordure, chemin sur pelouse...) : correctif du scintillement par z-fighting.
+
+Deux triangles horizontaux a la meme hauteur ont la meme profondeur a l'arrondi pres : le test de profondeur donne l'un ou l'autre pixel par pixel, et le resultat change a chaque
+mouvement de la camera (les fleurs « scintillent »). Au chargement d'une carte on releve tres legerement (3 millimetres d'unite de ville, soit moins d'un dixieme de pixel) chaque triangle
+plat qui en recouvre un autre deja dessine a sa hauteur, d'autant que de triangles empiles ; le dernier dessine l'emporte, toujours. Les groupes de textures sont copies : le cache de carte reste intact.
+@@ ebde4c378531 d
+Les deux triangles (3 x 2, plan xz) ont-ils une intersection d'aire non nulle ? Axe separateur sur chaque arete.
+@@ fc8e11c4250c d
+Releve les triangles plats superposes de `c['groupes']` (remplace par un nouveau dictionnaire de groupes ; le cache de carte n'est pas touche). -> nombre de triangles releves.
+## FILE dq4_pc/world/fld.py
+@@ dd92d2da8148 t
+FldObject.Load : drapeaux int32 en +48 (billboards : 0x4, 0x20 ; 0x40000 = commun), PRIORITE int32 en +52 (file de rendu 3000 + priorite, FldObject.set_priority ; #203 : avant, `prio` etait la moitie haute des drapeaux)
+@@ 5248249b73ef t
+FLD_MAP_OBJ : seq_obj_id (entree de FSEQ : sequence de maillages jouee en continu), pmv_id (mouvement FPMV joue en continu), -1 = aucun ; canim_id (numero de la table d'animations communes de FCAN, -1 = aucune)
+@@ b0d67ca9d9ef t
+position des cles : readPosition nie y comme pour les objets
+@@ 1c9b9de1dd97 d
+FLD : suite de chunks 'TAG4' + taille(4, taille totale du chunk) ; FHDR a une taille propre.
+@@ 2f6612f4898b d
+FCAN : tables d'animations communes. -> liste de tables ; une table = liste d'entrees (modele, seq_obj_id, pmv_id) dont l'indice + 1 est le numero d'animation
+(FldObject.SetCommonAnimation : modele a afficher, sequence de maillages (FSEQ), mouvement (FPMV)).
+@@ 91a7984d03e8 d
+FPMV : mouvements d'objets (position, rotation, echelle en cles, image = 1/60 s). -> liste de {'fin', 'repeat', 'keys': [(image, pos, rot, scl)]}
+@@ cd61b2c2f334 d
+FSQD : sequences de maillages (cle = image 1/60 s, valeur = numero de maillage d'image) ; FSEQ : objets de sequence (FldObject.FLD_SEQ_OBJ, 20 octets).
+-> (liste d'entrees FSEQ [(obj, seq, groupe, delai de depart, delai entre deux tours, nombre de tours, _, nombre de tours d'origine)], liste de sequences {'fin', 'repeat', 'keys': [(image, valeur)]}).
+Nombre de tours : -1 = sans fin, N = N tours puis arret sur la derniere cle, 0 = jamais lancee d'elle-meme (seulement par une animation commune) ; delais en 1/60 s.
+@@ c790e5d0a747 d
+FPLP : palettes animees des objets (FldObject.FLD_PLP_DATA). -> liste de {'nom', 'pam', 'event', 'obj'} : l'objet `obj` de la carte (FMAP) voit ses textures dont le nom contient `name_str`
+remplacees, image apres image, par celles de l'animation de palette `pam` (FPAM) ; `event` >= 1 : seulement pendant l'animation d'evenement de ce numero (sinon image 0).
+Enregistrement de 24 octets : nom (16, termine par 0), numero d'animation (1), numero d'evenement (1), objet (2), 4 octets sans usage.
+@@ 4561f5908277 d
+FPAM : animations de palette (FldObject.FLD_PAM_DATA). -> liste de {'frame', 'cle', 'durees'} : image et cle de depart, duree de chaque cle (1/60 s ; les textures de chaque cle sont 'pam/<nom>.NNN').
+Entete (4 x int16 : image, cle, nombre de cles, drapeau) puis, par cle : duree (int16) + palette (16 couleurs de 2 octets, 256 si drapeau & 1).
+## FILE dq4_pc/world/hd.py
+@@ ef633e97facf t
+a incrementer quand un algorithme change (invalide les caches)
+@@ dc87f789c3c0 c
+Feuilles qui ne se decoupent pas en cases de personnage de 24 x 32 sur 3 colonnes. Chara.SetTexture (libdq4core, libunity 0xCCC6F8) : l'identifiant 193, le bateau de la carte du monde (deux sprites : le navire,
+rangees 0 a 4, et son sillage, rangees 5 a 9), prend le maillage « mesh12 » : carre de 0,8 x 0,8 (contre 0,48 x 0,64 pour un personnage), cases de 40 x 40, 12 colonnes ; 194 est un alias de 193.
+identifiant -> (largeur de case, hauteur de case, colonnes, rangees, rapport de largeur du panneau, rapport de hauteur du panneau)
+@@ 1996245254e7 c
+---- autres algorithmes -------------------------------------------------------------------------------------------
+@@ bd0362f23a3f c
+(nom affiche, identifiant de cache, fonction) ; l'indice 0 = sprites d'origine (pixels nets, sans agrandissement), 1 = EPX x8 ; le mode 4 (pixel perfect) est gere par window.py
+(« regions lissees » et « bicubique » ont ete retires : ils floutaient les contours au lieu de les affiner ; upscale_bicubic ne sert plus que de repli d'EPX pour les feuilles deja adoucies)
+@@ 058b14146630 c
+---- plans des fenetres de carte (256 x 256 affiches en 4:3) ------------------------------------------------------
+@@ a2e5c85efa81 t
+seuil un peu sous 0,5 : le contour recouvre la frange verte du plan sous la silhouette
+@@ 05a6c368fbc8 d
+Lissage HD des feuilles de sprites : agrandissement x8 EPX, calcule
+au chargement et mis en cache (aucun fichier du jeu modifie).
+
+Chaque case (24x32) est agrandie séparément puis replacée dans un nouvel atlas avec une marge (gouttière) qui répète
+les bords de la case : le filtrage bilinéaire et les mipmaps ne peuvent donc pas faire déborder la case voisine.
+Les pixels transparents reprennent la couleur du bord opaque voisin pour éviter les liserés sombres au filtrage.
+@@ 9b25de09dc2c d
+Decoupage de la feuille `h<ident>` : dict(ident, larg, haut, cols, nl, pw, ph, standard). ident : l'alias est deja resolu (193 pour 194) ; nl : rangees (4 pour un personnage, 8 si la 5e rangee n'est pas vide) ;
+pw, ph : rapport du panneau dessine a celui d'un personnage (1 sauf pour le bateau).
+@@ fbee5e322014 d
+(u0, u1, v0, v1) de la case (colonne, rangee) d'un atlas de feuille `f` (origine ou HD, gouttieres exclues) ; v1 = haut de la case (Unity : v = 0 en bas de la texture).
+@@ ef2eec03e149 d
+Clé de comparaison de pixels : RGBA sur 32 bits, tout pixel quasi transparent = 0.
+@@ 2898cdaa0703 d
+Donne aux pixels transparents la couleur d'un voisin opaque (alpha inchangé), `step` fois.
+@@ 6d76001c9135 d
+EPX (Scale2x) : chaque pixel devient 4 ; les coins prennent la couleur du voisin quand deux voisins adjacents sont identiques.
+@@ f091577fe6fa d
+Feuille de sprites -> (feuille, nettoyee). Les feuilles des heros (h100 a h127) ont un halo d'alpha 1 a 105 de couleur parasite (magenta) autour du corps (alpha 204 a 255) : le jeu
+d'origine ne le montre pas (rejet des pixels transparents) ; sans ce nettoyage il apparait en liseré violet et le corps, d'alpha 0,8 a 1, laisse voir le decor. Alpha < seuil -> 0,
+sinon 255. Les feuilles a alpha binaire (PNJ, monstres) sont rendues telles quelles.
+@@ be738948ffe0 d
+EPX/Scale2x itere (x8) ; repli bicubique si l'alpha est deja adouci (feuilles filtrees d'origine).
+@@ 9c5e698b75c8 d
+Feuille de sprites -> (atlas HD, case_l, case_h) ; `factor` = 1 pour les feuilles d'origine (gouttière seule) ; la case (col, ligne) commence à
+(col*(case_l+2*gout)+gout, ligne*(case_h+2*gout)+gout) dans l'atlas (origine en haut à gauche).
+@@ 21185c6e57bb d
+Matrice (n_in*f, n_in) d'interpolation bilineaire (centres de pixels alignes), suivie d'un flou gaussien (sigma en pixels de sortie).
+@@ e1172a995180 d
+Interpolation bicubique x f (alpha pre-multiplie, contraste d'alpha pour garder une silhouette nette).
+@@ 6ab6b630e55a d
+Plan de carte (RGBA 256 x 256, affiche en 4:3) agrandi en Lanczos puis legerement accentue : bien plus net qu'un simple filtrage lineaire de la carte graphique (alpha pre-multiplie).
+`epx` (plan du monde, dont les terres sont en pixel art sur fond peint) : deux passes EPX arrondissent d'abord les contours des terres.
+@@ 734197a9e1a2 d
+Pose sur le plan agrandi (1024 x 768) le voile des blocs non explores de la carte du monde. `mask` : silhouette grisee des terres (192 x 256 RGBA, alpha 255 sur la terre, 3 sur la mer),
+`lookup_key` : 16 entiers, bit leve = bloc de `block` x `block` pixels non explore (16 x 16 blocs a partir de (x0, y0) dans le plan de 256 x 192). Le jeu pose des blocs carres ; ici la silhouette (contour arrondi)
+et la limite des blocs sont lissees apres agrandissement, ce qui evite l'effet d'escalier sans changer ce qui est cache.
+## FILE dq4_pc/world/map_objects.py
+@@ 38daaf4814ca t
+FldObject.Update : s_seq_frame_rate_step = 2 par image
+@@ 912cb41456d1 t
+positions affichees (modifiees sur place)
+@@ 93a57bffba03 t
+objet -> [modele, ...] des variantes
+@@ 46c5343c05bf t
+variantes cachees tant qu'aucune animation ne les demande
+@@ 838539cac2b3 t
+objet -> images (positions, UV, couleurs) de sa sequence de maillages, par sous-maillage
+@@ 291f621db49f t
+UV et couleurs affichees : copies creees a la demande (groupes dont l'une ou l'autre change)
+@@ 74aa879b7f89 t
+panneaux de decor : objet -> drapeaux
+@@ feb051c2ea6a t
+orientation actuelle (autour de Y / camera complete) ; faux tant que les sommets ne la suivent pas
+@@ ca8896a208bb t
+caches : position/rotation/echelle d'origine, cles des mouvements en tableaux, matrices de rotation
+@@ 434bff3888d5 t
+nombre de tours d'origine 0 : jamais lancee d'elle-meme
+@@ 4e652319b8c7 t
+Quaternion.Euler(0, lacet, 0)
+@@ d4a73d6bd7bb t
+puis penche autour de l'axe horizontal du panneau (son pied reste en place)
+@@ d23b606f5c78 t
+rotation complete de la camera (axes x, y, z de l'objet = droite, haut, avant)
+@@ d9ad8f584671 c
+---- commandes du moteur
+@@ 8d26eb4c5dd1 c
+---- images
+@@ f4ffd48c3273 t
+animations en continu : delai de depart, tours, delai entre deux tours (FldObject.fld_motion_update), une horloge par animation
+@@ 9fe7134d5774 t
+animation commune : chaque mouvement et chaque sequence compte son propre temps (FldObject.fld_motion_update : repetition, repeat = -1 : sans fin, sinon tenue sur la derniere cle)
+@@ a9a3e20e0d28 t
+(l'identite est verifiee : un numero libere pourrait etre reutilise)
+@@ f0ed68588f78 t
+(etat d'une ancienne version : une seule horloge)
+@@ 16400d7a7430 t
+mouvement commun (FldObject.c_pmv_func) : le deplacement est lu dans le repere de l'objet, MultiplyPoint(TRS(position, rotateXZY(rotation), echelle)) de l'objet avant le mouvement (tiroir qui sort de SON meuble, quel que soit son cap)
+@@ 83cd99843fc3 t
+mouvement ordinaire (FldObject.pmv_func) : le deplacement s'ajoute tel quel
+@@ 9a1f67b628cb t
+le modele reste a sa place d'origine
+@@ 5eea77da04ed t
+panneau : l'orientation vient de la camera (le reste du mouvement s'y ajoute)
+@@ f1b4fe1c986b t
+monde d'origine -> monde actuel : (v - pos0) -> T, puis + pos  (= R . diag(scl) . inv(R0 . diag(scl0)))
+@@ 9d393f585503 t
+UV et couleurs qui changent d'une image a l'autre de la sequence
+@@ a12e025e9c46 d
+Objets animes des cartes de ville : portes qui s'ouvrent, jarres et tonneaux qui se brisent, coffres qui s'ouvrent, objets masques ou deplaces par le moteur.
+
+Reproduit cote Python ce que fait la couche Unity du jeu (FldObject) a partir des paquets du moteur :
+  * paquet 5 (cmd_fld_common_anim) : objet | numero << 16 -> SetCommonAnimation : la table d'animations communes de l'objet (FCAN, objet.canim)
+    donne, pour chaque numero, le modele a afficher (porte, jarre intacte ou cassee...), une sequence de maillages (FSEQ/FSQD : le modele se deforme
+    d'une image a l'autre, ex. la jarre qui eclate) et un mouvement (FPMV : position, rotation et echelle ajoutees a celles de l'objet, ex. battant de porte) ;
+    numero 0 = modele d'origine, immobile ;
+  * paquet 7 (cmd_fld_on_off) : objet | drapeau << 16 -> GameObject.SetActive(drapeau == 0) ;
+  * paquet 2 (cmd_fld_alpha) : objet | niveau (0..31) << 16 ; niveau 0 = invisible ;
+  * paquets 3 et 4 (cmd_fld_pos, cmd_fld_rot) : nouvelle position / rotation de l'objet.
+Les temps sont en soixantiemes de seconde dans les donnees ; FldObject.Update avance de 2 par image du jeu (30 images/s).
+
+Animations jouees en continu, sans ordre du moteur (FldObject.update_seq / update_pmv / update_plp) :
+  * sequence de maillages (FMAP : seq_obj_id -> entree de FSEQ) : eau qui coule, lampes qui vacillent... Le maillage est interpole d'une image a l'autre
+    (sommets, UV et couleurs : FldObject.seq_build_mesh) ; l'entree donne le delai de depart, le delai entre deux tours et le nombre de tours (-1 : sans fin) ;
+  * mouvement (FMAP : pmv_id -> FPMV) : objets qui tournent, balancent...
+  * palettes animees (FPLP / FPAM) : la texture d'une surface (eau scintillante, marais, sol qui fait mal) change d'image en image (classe MapPalettes).
+
+Panneaux de decor (FldObject, drapeaux FLD_OBJ_FLAG_BILLBOARD_Y = 4 et FLD_OBJ_FLAG_BILLBOARD_XYZ = 32 : arbres, bougies, torches, tonneaux, chaises...) : un quadrilatere dont l'origine est le pied ;
+il pivote autour de l'axe vertical (4) ou prend toute la rotation de la camera (32) pour rester de face. Les sommets sont cuits a l'orientation d'origine ; `orient` les recalcule
+quand la camera tourne (touches de rotation de la camera, villes et donjons).
+@@ 26b48d855d83 d
+TzKeys [(image, ...)] triees -> (indice avant, indice apres, fraction) a l'image t (tenue sur la derniere cle).
+@@ b0fb5aaedb1e d
+ExampleCounter d'une animation (un FldObject.FLD_MOTION : cur_frame, start_delay, repeat_delay, repeat_num, end_frame) : chaque mouvement (FPMV) et chaque sequence de maillages (FSQD) a SON horloge,
+avec sa duree et son nombre de tours (fld_motion_update 0xCD69DC, appele une fois par motion). Deux animations d'un meme objet (ex. le rayon de soin : sequence de 84 images, rotation de 800) ne partagent rien.
+@@ a66b92530702 d
+Une image du jeu pour une horloge (FldObject.fld_motion_update) : delai de depart, puis le temps avance de STEP ; au-dela de la fin : un tour de moins (rep = -1 : sans fin), retour au debut
+(reste du depassement) apres le delai entre deux tours, ou arret sur la derniere cle quand les tours sont epuises.
+@@ a3bd01abee6a d
+Etat enregistre par une ancienne version : une seule horloge (celle de la sequence, sinon celle du mouvement) pour les deux animations de l'objet. Les deux horloges reprennent le temps
+enregistre (celle du mouvement a son propre modulo).
+@@ 258a65a2015b d
+Palettes animees de la carte (FldObject.update_plp) : chaque animation (FPAM) enchaine ses cles ; la duree d'une cle est en 1/60 s, comptee par pas de 2 par image du jeu.
+Les surfaces concernees (groupes de texture 'pam', voir Data.carte) prennent la texture de la cle courante. Animation liee a un evenement (numero >= 1) : image 0 tant que l'evenement n'est pas en cours.
+@@ 53ddde719e4c d
+Nouveau chargement de la meme carte : tous les objets reprennent leur etat d'origine.
+@@ 2be321083e5f d
+Animations de depart : sequences de maillages et mouvements des objets qui en ont une en continu (FMAP seq_obj_id / pmv_id). Chacune a sa propre horloge (voir `_clock`).
+@@ 8b5df1b1d23b d
+Remet les objets dans un etat enregistre (etats instantanes) ; `auto` absent (ancien format) : animations en continu reprises au depart.
+@@ b70885ab5f52 d
+Tourne les panneaux de decor vers la camera. `yaw` : cap de la camera (radians, 0 = vers +Z, positif vers +X) ; `base` : (droite, haut, avant) de la camera ; `pitch` : inclinaison ajoutee a la camera
+(degres, 0 = vue du jeu) : les panneaux qui ne tournent qu'autour de Y (tonneaux, jarres...) se penchent d'autant, pour rester de face a la camera quand on la releve ou l'abaisse. -> True si des sommets ont change.
+@@ c04bf95e763b d
+Images du jeu pendant lesquelles le moteur doit attendre la fin de l'animation, ou None si l'objet n'a pas cette animation.
+@@ a0bf088c8511 d
+Une image du jeu : avance les mouvements et les sequences en cours. -> ensemble des groupes modifies depuis le dernier appel.
+@@ 2dcca6d584ab d
+Positions, rotations et echelles des cles d'un mouvement, en tableaux (n, 3).
+@@ 327303308f14 d
+(sommets, UV, couleurs) d'un sous-maillage : d'origine (UV et couleurs None), ou interpoles par la sequence de maillages en cours (FldObject.seq_build_mesh : entre les images
+des deux cles autour de l'image courante ; la valeur d'une cle est le numero de l'enfant du modele).
+@@ 32b50b17fa58 d
+Une image du jeu.
+@@ 60d9f0f697cc d
+Numero de l'image (texture) courante du groupe `key`.
+## FILE dq4_pc/world/map_tint.py
+@@ 174625fc8543 t
+FldObject.update_material_color : Texture.name.IndexOf("tz_") != -1 -> pas de teinte
+@@ 61461727c862 t
+palette animee : textures « <nom>.NNN » (FldObject.set_palette_data)
+@@ c87906def63f t
+lecture du seul nom (UnityPy recent)
+@@ 8e085af94e61 t
+sinon lecture complete de l'objet
+@@ 8abce70e4166 t
+on rend les 800 Mo si c'est nous qui avons lu le paquet
+@@ 7296af5998d4 c
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Couleur de fond des decors de combat (bloc FETC du fichier .map du decor)
+
+Cote Unity (lu dans libil2cpp) : `FldObject.init_fld` lit le bloc FETC (FLD_MAP_ETC) ; son premier champ `bg_color` est lu par `ChunkFile.readColor` (RVA 0xCCEC20 : 4 octets r, g, b, a divises par 255) ;
+`NativeManager.cmd_fld_load` (RVA 0xD11D64), en dernier, appelle `BackColor.SetColor(bg_color, 0)` (RVA 0xCC4364 : meme couleur en haut et en bas, tout de suite). Le moteur n'envoie AUCUNE couleur de fond
+en combat (pas de paquet 8) : le fond d'un combat est donc la `bg_color` du decor charge, variante par variante (`_d`, `_e`, `_n`, `_dk`) : c'est elle qui donne l'orange du coucher de soleil autour du sol.
+(Les villes, elles, recoivent ensuite un paquet 8 : `cmd_back_color` RVA 0xD14F44, alpha 1.) L'alpha du FETC vaut 0 dans les 140 decors : sans effet, le shader `BackColor` du paquet de donnees n'a
+pas de fusion (Blend One Zero, ZTest Always, ZWrite Off) : il ecrit la couleur de sommet telle quelle.
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+@@ e755ffa72a9d t
+decors de combat (btl_*, btlc*, btld*, btls*, btlt*, btlm*, btly*)
+@@ 46f20906470c d
+Teinte du decor (paquet 33, `cmd_map_color_rate`) : quels groupes de decor la recoivent.
+
+Cote Unity (lu dans libil2cpp, RVA 0xD14E44 `NativeManager.cmd_map_color_rate`, 0xCD79F4 `FldObject.update_material_color`, 0xCD811C `FldObject.save_org_color`) :
+  - le paquet donne trois flottants r, g, b : `FldObject.m_color` = (r, g, b, 1) (carte du monde : `Field.SetColor` = couleur du materiau des tuiles et de chaque symbole) ;
+  - `FldObject.Update` appelle `update_material_color` a chaque image : pour chaque materiau de chaque Renderer de la carte, `Material.color` = `_OrgColor` x `m_color`, SAUF si le materiau n'a
+    pas de texture principale ou si le NOM de cette texture contient « tz_ » (lampes, bougies, torches, vagues, sols qui font mal : `tz_akari1`, `tz_rousoku1`, `tz_nami`, `tz_damg01`...) : ceux-la
+    gardent `_OrgColor` seul (la teinte du jour / du soir ne les touche pas : ils restent allumes) ;
+  - `_OrgColor` n'est PAS la couleur `_Color` de l'asset : `FldObject.save_org_color` (RVA 0xCD811C, appele a la fin de `init_fld`) relit `Material.color` puis ecrit `_OrgColor` = (1, 1, 1, alpha d'origine) pour chaque
+    materiau de chaque Renderer (s0 a s2 reecrits a 1,0 dans le desassemblage). Donc `Material.color` = (m_color.rgb, alpha) a chaque image : la couleur RGB `_Color` stockee dans l'asset n'est jamais utilisee en jeu
+    (point precise par le coordinateur ; la correction du cache des cartes, `data.py`, est faite sur une autre branche : ce module et le uniforme `tint` supposent un cache NO_DEFAULT cette couleur d'asset) ;
+  - les shaders du decor (`Custom/fld_normal`, `fld_atest`, `fld_trans` : texture x couleur de sommet x `_Color`) ; la carte du monde (`Custom/Field` : texture x `_Color`).
+Les personnages (`Chara`), les ombres, les bulles et l'interface ne sont pas touches.
+
+Ce module ne contient que ce qui sert a reconnaitre les groupes « tz_ » : le cache des cartes ne garde pas le nom des textures, seulement leur identifiant (path_id) ; la liste des identifiants dont le
+nom contient « tz_ » est lue dans le paquet de donnees UNE fois (une demi-seconde apres le chargement du paquet, qui prend lui-meme quelques secondes) et gardee dans `tz_cles.json` du cache.
+@@ eeb13c87b99a d
+Vrai si la teinte ne change rien (1, 1, 1) : rien a faire, le dessin reste identique au pixel pres.
+@@ 8fe00be2286a d
+Vrai si le groupe de decor `lookup_key` (cle du cache des cartes : identifiant de texture, ('tr', priorite, cle) pour un materiau transparent, ('pam', nom, animation, evenement) pour une palette animee)
+est une texture « tz_ » donc non teintee. `ids_tz` : ensemble des identifiants de textures « tz_ » (None = inconnu : tout est teinte).
+@@ 4cca6443df17 d
+Ensemble des identifiants « tz_ » enregistre dans le cache, None s'il n'y est pas (encore) ou s'il est illisible.
+@@ d6446501c4d0 d
+Lit le paquet de donnees (sous le verrou de `data`), releve les textures dont le nom contient « tz_ », ecrit le fichier du cache et renvoie l'ensemble. Leve une exception en cas d'echec.
+@@ 8d7885daeb02 d
+Ensemble des identifiants « tz_ », lu dans le cache ou calcule en tache de fond ; `ids()` renvoie None tant qu'il n'est pas pret (le decor est alors entierement teinte : les lampes se
+rallument des que la liste arrive, quelques secondes, une seule fois).
+@@ d869fb8dcd0e d
+Couleur de fond (r, g, b) en flottants 0 a 1 du bloc FETC d'un fichier .map de decor (FLD_MAP_ETC.bg_color : octets 8 a 10 du bloc, apres 'FETC' et sa taille), ou None s'il n'y a pas de bloc.
+@@ c94028c7904a d
+{nom du decor: (r, g, b)} enregistre dans le cache, None s'il n'y est pas (encore) ou s'il est illisible.
+@@ 2d4ba9bf46d1 d
+Lit le paquet de donnees (sous le verrou de `data`), releve le FETC de chaque decor de combat, ecrit le fichier du cache et renvoie le dictionnaire. Leve une exception en cas d'echec.
+@@ 0d8538ebffd9 d
+Couleurs de fond des decors de combat, lues dans le cache ou calculees en tache de fond (une fois, quelques secondes) ; `color(name_str)` renvoie None tant que la liste n'est pas prete ou si le decor n'y est
+pas : l'appelant garde alors son estimation (Game._battle_background).
+## FILE dq4_pc/world/scenery_outlines.py
+@@ 063263e50dca t
+resolution de l'alpha et de la couleur apres traitement (2 passes EPX)
+@@ 07a20d7b67c3 t
+flou gaussien de l'alpha, en pixels de la texture agrandie (0,3 texel d'origine)
+@@ 76566c034af6 t
+plus petit cote (en texels) d'une texture traitee
+@@ 0264d291414d t
+part maximale de texels d'alpha intermediaire pour une texture « binaire »
+@@ 5cde9191aa92 t
+textures agrandies gardees sur la carte graphique (les plus anciennes sont rendues)
+@@ d0926c553e90 t
+texels transparents : couleur du bord opaque voisin (3 anneaux)
+@@ b613b19b3823 d
+Contours des decors de combat : arbres, montagnes, touffes d'herbe, rochers.
+
+Cause (mesuree, voir tools/test_scenery_outlines.py) : ces silhouettes sont dessinees dans des textures de 256 x 256 dont l'alpha est STRICTEMENT binaire (0 ou 255, jamais de valeur
+intermediaire : 41 textures sur 140 decors) ; le decor est agrandi x6 puis affiche sur 1280 a 2560 px de large, un texel y couvre 4 a 10 pixels d'ecran. Le filtrage bilineaire adoucit
+la couleur mais le contour (alpha 0,5) suit la grille de texels : marches d'escalier de 4 a 10 px sur toute la bordure, que le MSAA (qui ne lisse que les marches d'UN pixel) ne
+touche pas. Les texels transparents sont en outre NOIRS (0, 0, 0) : le bilinaire assombrit d'un liseré sombre la bordure des feuillages.
+
+Remede, sur la seule texture, sans toucher au reste du dessin :
+  - l'alpha passe a une resolution x4 : deux passes EPX (Scale2x, qui redresse les marches en pentes droites sans perdre les pointes) puis un flou gaussien de 0,3 texel qui arrondit les
+    coins et donne une rampe d'un pixel d'ecran (l'alpha-to-coverage et le seuil de `FRAG` en font un bord anticrenele) ;
+  - la couleur (RGB) est agrandie x4 par une interpolation bilineaire (memes positions d'echantillon que le GPU : l'interieur du dessin reste celui de l'original filtre lineairement, a moins d'un niveau
+    de gris en moyenne, 9 au pire sur un coin tres contraste) apres avoir donne aux texels transparents la couleur du bord opaque voisin (plus de liseré noir).
+Seules les textures decoupees a alpha binaire d'au moins 128 px de cote sont traitees (feuillage, relief, rochers) : les ciels, sols, textures opaques ou semi-transparentes (melange),
+petites textures de motifs (grilles, torches) restent telles quelles.
+@@ 4bac73a06da2 d
+Vrai si la texture RGBA `arr` est un decoupage a alpha binaire (feuillage, relief) a traiter. `lookup_key` : cle du groupe du decor ; ('tr', ...) = materiau transparent (melange), exclu.
+@@ eb13ac27e030 d
+Agrandit x f par interpolation bilineaire en boucle (REPEAT), centres de texels comme le GPU : le resultat, filtre lineairement, redonne l'image filtree de l'original (ecart < 1 niveau en moyenne).
+@@ b4f5c1ea6106 d
+Meme resultat que `_bilinear` (uint8) par le redimensionnement bilineaire de PIL (centres de texels), 10 fois plus vite ; bord en boucle par une marge de 2 texels. None si PIL manque.
+@@ b58fec15879b d
+Donne aux texels transparents la couleur du texel opaque le plus proche, sur `step` anneaux (texture en boucle).
+@@ c26da14349bf d
+Flou gaussien separable en boucle.
+@@ 3bb048ee7868 d
+Flou gaussien de PIL sur un masque uint8 (0 a 255), en boucle (marge de 4 sigma) ; None si PIL manque.
+@@ b5e757bf036e d
+Masque binaire (h, w) de bool -> alpha float32 (h * 2^passes, w * 2^passes) entre 0 et 1, en boucle.
+@@ eb4956024752 d
+Texture RGBA uint8 (h, w, 4) a alpha binaire -> texture RGBA uint8 (h * f, w * f, 4) a contour adouci (voir l'en-tete du module).
+@@ a2a9af2bb95f d
+Texture a donner au GPU pour un groupe d'un decor de combat : adoucie si c'est un decoupage a traiter, sinon `arr` inchange.
+## FILE tools/dump_il2cpp.py
+@@ abfc65c8887b t
+net472 = .NET Framework, deja present dans Windows 10/11
+@@ 0df605582953 t
+l'outil vise .NET 6 : accepte aussi .NET 7/8/9 s'ils sont installes
+@@ 1a8b03a6ffd0 t
+l'outil attend une touche a la fin
+@@ b4f1688a00a4 t
+un code non nul apres l'ecriture (attente de touche) est sans importance
+@@ 63cfe00abb4c d
+Extrait la STRUCTURE du code C# du jeu (classes, champs, methodes, adresses) avec Il2CppDumper.
+
+Entrees (tes fichiers, jamais modifies) : libil2cpp.so et global-metadata.dat, pris dans tes APK.
+Sorties : <racine>/data/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignore par git (code du jeu).
+## FILE tools/measure_toggle.py
+@@ d5961fed20a8 t
+trames comptees apres la fin de l'appel de bascule
+@@ 6d8b8aa08fc1 c
+ce que le joueur voit : la fenetre est « montree » (visible(True)) ; une image complete est « affichee » par le premier flip ; ce qui est dessine ou deplace entre les deux se voit
+@@ 7da2c167dc9d t
+une image a deja ete affichee depuis la recreation : la fenetre apparait avec son contenu
+@@ f169d3f099a2 t
+reconstructions des tampons du rendu hors ecran pendant que la fenetre est visible sans image
+@@ 45745ef89f0c t
+sequence compacte (les repetitions consecutives sont regroupees)
+@@ 5ab24d22a78a c
+---- crochets sur la classe du jeu
+@@ a856fdc86953 t
+selon l'etat du code mesure
+@@ 1ab4b17525fb c
+changements de mode du moniteur (ancien plein ecran exclusif) : set_mode ; restore_mode est appele par pyglet a chaque retour en fenetre, sans effet sous Windows tant que set_mode n'a jamais ete appele

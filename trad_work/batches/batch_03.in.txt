@@ -1,0 +1,802 @@
+## FILE dq4_pc/menus/hud_mobile.py
+@@ 92c98b84e8d5 t
+bouton de vitesse de combat : False = a sa place de la grille, sur le bord gauche de l'ecran (defaut depuis #188 : « remets-le sur le bord gauche pour le moment ») ; True = rattache au coin bas gauche de la boite du bas (#47)
+@@ 11418c43be6d t
+bouton « Vitesse de combat » (propre au portage) : montre en combat seulement, a la place des trois boutons du terrain
+@@ 099e1f708fb0 t
+tous les boutons rectangulaires
+@@ 4dbee0c4635a t
+tous les elements places dans l'editeur d'interface
+@@ 06c5eb099c50 t
+interface « Boutons et croix de l'ecran » : Carte, Commandes, Discussion et la croix (le bouton de vitesse de combat a sa propre interface)
+@@ e825efcbeac3 t
+interface « Combat : bouton de vitesse »
+@@ 2ff8c9d8ca73 t
+coin superieur gauche (colonne, ligne) : colonne de gauche (la croix est en bas a droite), Carte en haut, Commandes puis Discussion plus bas ; vitesse des combats entre les deux : a gauche des fenetres de combat (colonne portrait centree), elle n'en cache aucune
+@@ 1ac6146f9849 t
+(noms des elements dans l'editeur d'interface : traduits au dessin)
+@@ 8bc82d484df4 t
+ordonnee de la rangee d'icones dans la feuille (PartsInfo[3])
+@@ eaaf2b5f960d c
+Plaques des boutons (TouchPad.CreateMenuButton 0xD2377C : plaque (t x 40 + 32) x (t x 32 + 32) pour une taille t) en unites de l'interface d'origine (450 x 800) : (largeur, hauteur, cote de l'icone = 48 x taille d'icone)
+@@ f4e9d4e3e4c9 t
+(le bouton de vitesse des combats n'a pas d'icone : plaque plus large qui porte « Vitesse » et la vitesse courante)
+@@ 04df9902bf75 t
+coins de la plaque 9 tranches (feuille « Button », partie 7), en unites d'interface
+@@ cc831d017298 c
+---- croix (TouchPad) : morceaux de la feuille « Button » (512 x 512), (x, y, largeur, hauteur) en pixels depuis le haut a gauche
+@@ 34dd28e431d3 t
+(CurLight 384, 128 et CurBS 320, 128 : boule orange et halo du clignotement de la croix, TouchPad.SetPadBlink ; #131)
+@@ 4b128b8a52eb c
+Valeurs d'origine (TouchPad, libil2cpp.so, RVA ; audit de fidelite du 01/11/2026) : c_PadScaleTBL, MPad 256 x 0,63, Dirs a 104 unites du centre, c_MoveThreshold 10, c_moveNakaLimit 36,5, c_padColRad 95 pour un rayon de 80,64
+@@ 9c208c17387b t
+diametre de l'anneau en unites de l'interface d'origine (800 de haut : echelle H / 800) avant l'option du jeu et le reglage du portage : UNE FOIS ET DEMIE celui du mobile (256 x c_PadBaseScaleXY 0,63 = 161,28). Historique (04/11/2026) : le double (#169, 10 h 46 : la croix, petite sur un ecran de PC, se manie a la souris), puis « reduit la taille de la croix de 25 % par defaut » (11 h 30, #172) : 0,75 x 2 = 1,5 ; le reglage « Taille de la croix » (50 a 200 %) s'applique par-dessus
+@@ 64166ace65d6 t
+option « Taille de la croix » du jeu (g_pad_size : 0 Grande, 1 Moyenne (defaut), 2 Petite) -> facteur (c_PadScaleTBL)
+@@ f4f766f3910b t
+distance du centre de l'anneau au centre d'une pastille (fraction du diametre ; le quad de 128 x 64 va de 72 a 136 unites)
+@@ 74ade6b8916d t
+deplacement maximal de la boule (fraction du rayon de l'anneau : 36,5 / 80,64)
+@@ 5918a45dbc75 t
+en dessous (fraction du rayon : 10 / 80,64), aucune direction
+@@ 178572c0da6d t
+diametre maximal de la croix (fraction de la largeur de la fenetre) : au portrait 9:16 le double du mobile en prend 0,72 ; une fenetre plus etroite la reduit pour qu'elle tienne
+@@ 503bf708add1 t
+course a la croix : le pointeur atteint le bord de l'anneau (fraction du rayon, 1 = le bord dessine ; la prise va jusqu'a 1,178) ; en dessous, le heros marche. Valeur choisie (suppose : « quand le joystick touche les bords »)
+@@ 8f6a2b9079ca t
+clignotement du rond central (secondes par cycle) : valeur choisie par le portage (les constantes du jeu, MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA, sont inutilisees ; supposé)
+@@ 5c55f56959a4 t
+rayon de la zone de prise (fraction du rayon de l'anneau : collider de 95 / 80,64, un peu plus large que l'anneau dessine)
+@@ cb49c2c12f5b c
+---- style des fenetres du jeu mobile (capture du menu des commandes) : fond bleu nuit translucide, cadre en cinq traits (gris, gris clair, blanc, gris, gris fonce), coins arrondis ;
+boutons = plaques grises a degrade (claires en haut, sombres en bas), bordure gris clair. Dessines en tableaux (distance au bord) puis gardes en textures : aucun cout par image.
+@@ 8bac6b4d0a4a t
+fond des fenetres du jeu : noir a 68 % d'opacite (mesure sur les fenetres du terrain, a travers lesquelles on voit le decor)
+@@ 019a237bb793 t
+traits du cadre de l'exterieur vers l'interieur
+@@ 6140e6d64757 t
+degrade du fond d'une plaque (haut -> bas)
+@@ 86335cad84e7 t
+t : 0 en haut, 1 en bas
+@@ 1d1889d6b887 t
+(nom, decalage x, decalage y) pendant un deplacement
+@@ dc1cdd8e3ccd t
+croix tenue par la souris ; position de la souris relative au centre (rayon de l'anneau = 1) ; textures
+@@ 405edecea01b c
+---- geometrie
+@@ 147aaaa2c616 t
+(#188) pas d'ancre : le bouton est a sa case de la grille, sur le bord gauche, des la premiere image
+@@ 5ad74f0377d6 t
+meme plaque que « Fuir » (a la taille du reglage du bouton)
+@@ fa3396f002b5 t
+fenetre plus etroite que le portrait du mobile (9:16) : la croix doublee ne doit pas depasser de l'ecran
+@@ ca6d41c1a51a t
+d'origine : en bas a droite, a une demi-case du bord
+@@ 966e2de4785b t
+sous le coin inferieur gauche de la boite (le haut de la plaque touche son bord bas)
+@@ 7000c3a90dc7 t
+(le bouton de vitesse a son propre reglage d'affichage)
+@@ 5c6882483d7d t
+carte ouverte : plus de bouton a l'ecran (le bouton « mode » et le retour sont ceux de la fenetre de la carte, type 22)
+@@ 70788d03b2d1 c
+---- souris
+@@ fdcb0ea1aabd c
+---- edition des positions
+@@ 8c934b88987a t
+coin inferieur gauche demande
+@@ 61a903be72d9 c
+---- croix a la souris
+@@ df0b28d79052 t
+sorti du rond central : c'est un glissement (une direction), plus un toucher
+@@ c101ebfd9729 c
+---- dessin
+@@ 74838c3801b8 t
+hauteur et largeur d'un triangle, ecart entre deux
+@@ 76fa0346ce40 t
+Manuel : triangle creux
+@@ ea579c115103 t
+(masquee, elle reste entiere dans l'editeur : le voile « Masquée » de pause.py l'assombrit comme les autres elements)
+@@ 955ff28afa29 t
+toucher en cours, ou course (pointeur au bord de l'anneau) : boule eclairee
+@@ efee5a2920e0 t
+une action est possible (bulle affichee) ou le jeu fait clignoter le rond central : la boule orange et son halo apparaissent et disparaissent doucement
+@@ 80f436d3e3ca t
+voile sombre et grille (facultative)
+@@ c5c2cb0812d0 t
+comme la plaque « Fuir » : un petit cadre de fenetre du jeu (fond noir translucide, cadre en cinq traits) qui porte la plaque du bouton
+@@ 4967074c20e0 t
+sans les menus d'origine : fond de bouton dessine (fenetre bleu nuit a cadre blanc, comme celles du jeu mobile)
+@@ d92b7a1f799d d
+Boutons tactiles de la version mobile, affiches a l'ecran hors combat : Carte, Commandes (menu), Discussion de groupe, et la croix (manette tactile, utilisable a la souris).
+En combat, seul le bouton propre au portage « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide ; clic = vitesse suivante) est montre : pas de bouton equivalent dans le jeu mobile, il n'envoie rien au moteur.
+Il est sur le bord gauche de l'ecran (case de la grille, depuis #188 ; DQ_VITESSE_ANCRE=1 le rattache au coin inferieur gauche de la boite du bas (commandes ou message), comme le bouton « Fuir » l'est au coin inferieur droit des commandes, c'etait le defaut de #47), et n'a pas de libelle : des fleches disent la vitesse
+(triangle creux : Manuel ; un triangle : Normal ; deux : Rapide ; trois : Tres rapide). Un joueur qui le deplace dans l'editeur d'interface le garde a l'endroit choisi.
+
+Le jeu d'origine les dessine dans la couche Unity (TouchPad : « Map Button » = touche 0x1000, « Command Button » = 0x800, « Talk Button » = 0x400 ; icones 3, 4 et 15 de la feuille
+MenuTexture, rangee de 32 px a y = 224). Le moteur dit quand ils sont visibles par le mot Global.Flag (premier mot de sa sortie) : (Flag & (8 | 0x30047)) == 8 (pad present, ni verrou du
+joueur, fondu, effet d'ecran, interface verrouillee ni pause) ; la Carte exige en plus le bit 0x20. Les positions se reglent sur une grille de 32 x 18 cases (aimantation facultative).
+
+La croix est celle de TouchPad (feuille « Button » : anneau, huit pastilles de direction avec leur fleche, boule) ; dans le code d'origine l'anneau ne bouge pas (seule la boule suit le doigt) et il est toujours opaque. Sur PC
+elle est fixe (en bas a droite par defaut, a deplacer dans l'editeur d'interface) : un appui dans sa zone de prise (1,178 rayon) la prend, la boule suit la souris (limitee a 0,4526 rayon), la direction est l'un des huit secteurs de
+45 degres, comme les touches du clavier (elle suit donc la camera). Son diametre est une fois et demie celui du mobile (DPAD_DIAMETER ; le reglage « Taille de la croix » a 67 % redonne la taille d'origine). Tenue au BORD de l'anneau
+(`dpad_run` : TRAVEL_THRESHOLD du rayon ou plus), elle fait courir le heros comme la touche d'accelerateur ; plus pres du centre il marche normalement. Le bouton « mode de la carte » n'est plus ici : c'est celui de la fenetre de la carte (type 22).
+@@ 01e35f32891c d
+Le bouton de vitesse de combat se rattache-t-il a la boite du bas ? Non par defaut (#188) : il reste sur le bord gauche de l'ecran, a la case de la grille (DEFAULT) ou la ou le joueur l'a place. Essai : variable d'environnement DQ_VITESSE_ANCRE=1 (rattache au coin bas gauche de la boite, #47) ou 0.
+@@ a82483abfdef d
+Elements de l'editeur d'interface de la cible choisie (reglages.SCREEN_TARGET, reglages.SPEED_TARGET) ; vide pour une autre interface.
+@@ 08874b487980 d
+Distance signee (positive a l'interieur) de chaque pixel au bord d'un rectangle a coins arrondis w x h (rayon r), tableau (h, w).
+@@ 510fcbf76980 d
+Melange alpha de la texture blittee : pyglet.shapes le coupe a la fin de chaque dessin, il faut le remettre avant un blit (sinon coins et fond translucide sortent opaques).
+@@ 13c2958d3ce3 d
+Fenetre a la maniere des menus du jeu mobile : fond translucide (bleu nuit par defaut ; `background` et `opacity` : autre couleur), cadre en cinq traits de 1,25 px a 720 p, coins
+arrondis (transparents hors du cadre). `highlight` (0 a 1) : fond plus clair (bouton enfonce).
+@@ 8e152218fd5f d
+Fond d'un bouton comme ceux du menu des commandes du jeu : bordure gris clair, degrade gris, coins arrondis. Choisi : plus clair (comme un bouton du jeu enfonce), sans autre marque.
+`outline` (r, g, b) : encadrement de cette couleur, plus epais que la bordure (selection a la souris).
+@@ c27a6a18e62c d
+Encadrement (anneau de 2,8 px a 720 p, coins arrondis, interieur transparent) de la couleur donnee : selection a la souris d'un bouton.
+@@ fab79baa55ba d
+Grille de placement de l'ecran (COLS x LIGNES cases) : traits blancs translucides.
+@@ 547aab724ccf d
+Le bouton de vitesse des combats est-il montre ? Pas pendant l'ecran noir qui attend la scene du combat (State.load_wait), ni quand un fondu au noir monte ou que l'ecran est noir (debut et fin du combat) :
+comme les boutons du terrain, que le moteur cache pendant les fondus. Un fondu qui redescend (entree du combat) le laisse apparaitre.
+@@ 978a77f4af85 d
+Pixels par unite de l'interface d'origine (800 de haut), reglage « Taille des boutons » compris (le bouton de vitesse de combat : sa propre taille).
+@@ 771dd693131e d
+Rattachement du bouton de vitesse de combat a la boite du bas (dict x, y, w, h en pixels, calcule par la fenetre : bord gauche et bord bas de la boite, taille de la plaque « Fuir »), ou None : hors combat, dans
+l'editeur, quand le joueur l'a place lui-meme, ou tant qu'aucune boite n'a ete vue (position de la grille).
+@@ 473bd4952a0f d
+Le bouton de vitesse n'est montre que s'il a une place : celle que le joueur lui a donnee, ou, avec les menus d'origine, son ancre sous la boite du bas (calculee par la fenetre avant le dessin : jamais la position par defaut de la grille, qui est a gauche de l'ecran).
+@@ eda086181799 d
+(largeur, hauteur) en pixels : plaque d'origine d'un bouton (72 x 64, 63 x 56,8...) ou diametre de l'anneau de la croix.
+@@ 3e64bd76df85 d
+Diametre de l'anneau de la croix en pixels : echelle de l'interface d'origine, option « Taille de la croix » du jeu, reglage du portage.
+@@ c3cbf3519cab d
+(x, y, largeur, hauteur) en pixels, origine en bas a gauche.
+@@ 23eac1eea312 d
+Boutons a montrer : ceux que le moteur autorise (hors menu Echap, combat, effets d'ecran) ; en combat, le seul bouton de vitesse des combats (hors ecran noir et fondu au noir).
+@@ 6fc6422fe028 d
+Le moteur autorise-t-il ce bouton du terrain (Carte, Commandes, Discussion) en ce moment, que le reglage « boutons » l'affiche ou non ? Le clavier y joue le bruitage du bouton (D-156 : les mêmes situations qu'au doigt).
+@@ 1cf1ad9a5d5e d
+-> nom du bouton (clic complet : relachement sur le bouton appuye) ou None.
+@@ 4c7906257266 d
+Souris deplacee (ou appuyee) : position relative au centre de l'anneau, en rayons.
+@@ 2ea723391e47 d
+Bouton de la souris relache sur la croix. -> True si c'etait un TOUCHER du rond central : appuye puis relache sans jamais en sortir (sans glissement) ; le jeu y voit la touche d'action (comme la touche A).
+@@ 6781762a32aa d
+Secteur de 45 degres de la direction tenue (0 haut, 1 haut-droite, 2 droite... dans le sens horaire) ou None (zone morte, croix non tenue).
+@@ 8846a9ffd703 d
+La croix est-elle tenue au BORD de l'anneau (a TRAVEL_THRESHOLD du rayon ou plus, dans une direction) ? Le heros court alors (comme avec la touche d'accelerateur) ; plus pres du centre, il marche normalement.
+@@ 69956da4ecaa d
+Direction de la croix en bits de la manette du jeu (haut / bas / gauche / droite), comme celle des touches de deplacement.
+@@ 91a2bdd13eb9 d
+Icone d'origine 32 x 32 (RGBA), couleur des pixels transparents propagee d'un pixel (pas de liseré sombre quand le filtre melange les bords).
+@@ c1fd0feeaf85 d
+Sprite de l'icone pour un bouton de c pixels de cote. L'icone est d'abord agrandie par un entier n (plus proche voisin : chaque pixel d'origine devient un bloc net), puis
+reduite au pixels exacts par le filtre lineaire : les pixels restent francs, seule la frontiere entre deux pixels est adoucie (un agrandissement lineaire direct de 32 a 72 px les ecrasait).
+@@ 2b4d669e5c4c d
+Plaque d'origine du bouton (feuille « Button », partie 7, 9 tranches a coins de 16 unites, image « appuyee » quand le bouton est enfonce), comme les boutons des fenetres du jeu : Render.plaque.
+-> False sans les menus d'origine (le repli dessine le fond).
+@@ eb1decca8de5 d
+Vitesse de combat en fleches, sans libelle : un triangle creux (gris) en Manuel, puis un, deux ou trois triangles pleins (Normal : blanc ; Rapide : jaune ; Tres rapide : orange, plus chaud quand ca accelere), comme le
+curseur triangulaire des menus du jeu. Groupe centre dans la plaque.
+@@ ebbde2bd96b5 d
+Sprites de la croix (morceaux de la feuille « Button », ancres au centre pour tourner autour).
+@@ c25f8c2c10dd d
+Une action est-elle realisable maintenant ? (#131 : la croix s'anime alors, comme sur mobile.) Oui quand le jeu fait clignoter le rond central (paquet 19, TouchPad.SetPadBlink, tutoriel) ; sinon, sur le terrain
+libre, quand une bulle d'icone est affichee (le jeu pose la bulle sur la cible que le heros peut parler, fouiller ou ouvrir : supposé, le jeu d'origine ne lie le clignotement de la croix qu'a son tutoriel).
+@@ 4cdb3b1c5849 d
+Croix : anneau, huit pastilles (celle de la direction tenue s'allume), boule qui suit la souris. Toujours opaque ; la boule orange et son halo (SetVisibleColMove) pulsent quand une action est possible
+(voir action_possible) ; MOVE_WAIT_TIME / MOVE_LIMIT_ALPHA sont des constantes inutilisees.
+## FILE dq4_pc/menus/message_font.py
+@@ b8f7c8829720 t
+le fichier du jeu : les donnees suivent la table (SFont::Load copie 0x40000 octets de table)
+@@ a8f0f8a03f31 t
+rangee de la cellule ou passe la ligne de base : le bas des majuscules est a la rangee 19 (mesure sur le canevas du moteur : cellule du haut a 15 unites sous le cadre, 1re ligne de base a 35 unites, 20 + 15)
+@@ 6096b267c6e5 t
+glyphe des codes absents de la police : le « @ »
+@@ 73eb911e067d t
+colonnes de marge a gauche de la texture (un glyphe a drapeau deborde d'un pixel a gauche de la position d'ecriture)
+@@ 38072604a51b t
+une unite d'interface par pixel du canevas (mesure : 434 unites de large pour 0,8477 x 512 pixels de canevas)
+@@ 194e6f958a12 t
+largeur d'une ligne de dialogue en pixels du canevas (`CTextAutoReturn` : [0x2523c4], valeur lue dans le moteur pendant un dialogue)
+@@ 11ba768665e7 t
+(pour les outils qui testent `code in font.G`)
+@@ da29145de36e c
+---- glyphes
+@@ fbaf1d55e8d4 c
+---- placement
+@@ 02b0b285a352 t
+cand = (i, longueur de sortie) apres le dernier point de coupure
+@@ 7aa54379531f t
+filtre bilineaire, comme la texture du canevas du jeu
+@@ db74d692dc5f d
+Police des messages du jeu : celle que le moteur utilise pour dessiner les dialogues et les messages de combat dans son canevas de texte (SDrawCTRL / TextCanvas), pas la police de menu SE-GARRIR.
+
+Le fichier (`assets/English.font` du paquet de donnees, copie dans le cache par `extract_message_font`) est lu tel quel, avec TOUS ses glyphes : un caractere que le patch ou un autre jeu de la serie (DQ5, DQ6) ajoute a la police
+s'affiche donc sans rien changer ici. Format (relevé dans `SFont::Load`, `FontHeader::GetGlyph`) :
+  - 28 octets d'en-tete : « TNOF », puis (a l'octet 24) la hauteur d'une cellule de glyphe (24) ;
+  - table de 65 536 entrees de 4 octets (code UTF-16 -> entree) : octet de poids fort = largeur du glyphe (bits 0 a 6) et drapeau (bit 7), les 24 autres bits = position du glyphe dans les donnees ;
+  - donnees : pour chaque glyphe, `width_px x height_px` octets d'opacite (0 a 255), en ligne, compresses : un octet « 1xxxxxxx » repete le octet suivant `xxxxxxx` fois, un octet « 0xxxxxxx » est suivi de `xxxxxxx` octets
+    tels quels, un octet 0 termine.
+Placement (`SDrawCTRL::PutChar` 0x1575a0 et `TextCanvas::PutChar` 0x152820 de libdq4core.so ; verifie pixel pour pixel contre le canevas du vrai moteur, tests/test_message_font.py) : la position d'ecriture avance de la
+largeur du glyphe ; un glyphe a drapeau (V, W, t, v, w, y du patch) est pose un pixel plus a gauche et avance de deux pixels de moins (crenage) ; l'espace avance de la largeur d'espace du moteur (6, `obj + 0x38`) et pas de la
+largeur du glyphe (5) ; la tabulation de `obj + 0x3c` ; l'espace large U+3000 de `obj + 0x3a` ; les retours a la ligne (U+000A, U+000D) ne font rien ; « $ » n'est pas dessine pour la langue 1 (anglais) et « ; » n'est dessine
+(comme une espace) que pour la langue 2 ; un code absent de la police est dessine avec le glyphe du « @ » (entree 0x40 de la table : `[FontHeader + 0x128]`). Chaque glyphe REMPLACE les pixels de sa cellule (il n'y a pas de
+melange) ; un ecart entre les lettres (`g_letterSpace`, 0 en jeu) s'ajoute a chaque avance.
+Module sans pyglet : seule `line` (la texture d'une ligne) en a besoin.
+@@ 15d5bf9b355f d
+Police des messages du jeu (voir le module). `width_px(text)` : avance de la position d'ecriture (pixels du canevas = unites d'interface, 1 pour 1) ; `line(text)` : la texture d'une ligne, comme BitmapFont.
+@@ 028fd8803cef d
+Copie la police des messages du paquet de donnees du jeu (split_UnityDataAssetPack.apk, assets/English.font) dans le cache, une seule fois. -> True si elle y est.
+@@ 8a69b5e0a86f d
+-> (drapeau, largeur, bitmap hauteur x largeur uint8) du glyphe de `code` (celui du « @ » si la police ne l'a pas : GetGlyph).
+@@ e489ec707527 d
+-> (cellules, fin) : cellules = [(x, glyphe)] avec x la colonne de la cellule (position d'ecriture, moins 1 pour un glyphe a drapeau) ; fin = position d'ecriture a la fin du texte.
+@@ 77e8c0784025 d
+Avance de la position d'ecriture sur une ligne (pixels du canevas) : de quoi couper les lignes comme le moteur.
+@@ 00d93c042447 d
+Largeur qu'un caractere ajoute a une ligne pour le calcul des coupures (`CTextAutoReturn::AutoReturn`) : comme l'avance du dessin, mais « $ » compte sa largeur (il n'est pas dessine) et « ; » compte 0.
+@@ 0b9af236134d d
+Lignes d'un texte coupe comme le moteur (`CTextAutoReturn::AutoReturn`, 0x157ed0) : la largeur de la ligne est cumulee caractere par caractere ; quand elle atteint la limite, on revient au dernier point de coupure
+(apres une espace, un « ㈠ » ou un tiret) et on passe a la ligne ; sans point de coupure le caractere qui depasse reste sur la ligne. Un saut de ligne du texte remet la largeur a zero, et celui qui suit
+immediatement une coupure automatique est avale. -> liste de lignes (l'espace qui precede une coupure reste en fin de ligne).
+@@ c8ba367e14c7 d
+Image (hauteur x largeur, uint8) de la ligne, la position d'ecriture a la colonne PAD : exactement ce que le moteur ecrit dans son canevas (chaque glyphe remplace sa cellule).
+@@ 2ed1b49a63b9 d
+-> (texture, largeur, hauteur, base) en pixels du canevas ; base = distance du haut de l'image a la ligne de base (comme BitmapFont.ligne).
+## FILE dq4_pc/menus/name_entry.py
+@@ abe7d6f1d05b t
+case vide de la grille (C_NA)
+@@ 8567ad73d94d t
+C_ALPHABET : minuscules, majuscules
+@@ 118ab9383dcb t
+C_LOCALIZE
+@@ f1fb1a7346fa t
+C_ALPHABET_ETC (non localise dans le jeu)
+@@ 07c197b83191 t
+(dessines par Pause._et, qui les traduit ; les libelles de FUNCTIONS sont ceux du jeu : on n'y touche pas)
+@@ 93a64996533e t
+bruitage d'appui sur un bouton de menu (comme fenetre.SFX_BUTTON)
+@@ 1a90cc3f85a4 t
+35 cases ; puis 35 a 39 = boutons de fonction ; 40 = Retour
+@@ 56783bc74ee8 t
+caracteres acceptes au clavier
+@@ 5c9b788efccf c
+disposition (unites d'interface, origine au centre de la colonne de 450 x 800, Y vers le haut)
+@@ d42cfaace85b c
+---- etat
+@@ 1b3f717336ad c
+---- entrees
+@@ 791c03e83bdb t
+vers le bas : Retour (a droite) ou le haut de la grille
+@@ b95c02b04234 t
+le clavier est a la saisie : aucune autre touche n'agit sur le jeu
+@@ b4d0bd37f9b4 c
+champ : une fente par caractere possible
+@@ e76194a1e806 t
+dernier peripherique utilise : souris = encadrement jaune de la touche survolee ; clavier / manette = curseur dore (fleche) sur la touche choisie
+@@ a60457113887 t
+(souris : la plaque sous le pointeur s'assombrit, sans encadre jaune)
+@@ 872aac58aa6c t
+(la fleche ne sort pas du cadre : « Alphabet » est collee a son bord)
+@@ ecdc2ca875ea d
+Saisie du nom du heros (classe InputName de la couche Unity d'origine, ecran « Saisir un nom » de la creation d'un journal).
+
+Dans le jeu, c'est Unity qui tient ce clavier : le moteur ouvre la fenetre de type 55 (port 15), envoie `[12,0,8]` (8 caracteres au plus) puis `[12,1,1]` (clavier visible) et attend :
+  - OK : `[2, n]` puis les n octets UTF-8 du nom empaquetes deux par deux (petit-boutiste), envoyes a la MEME image (sinon le moteur plante) ;
+  - Retour : `[1, -1, 32]` (touche B sur la fenetre).
+Les jeux de caracteres sont ceux de InputName (cctor) pour la langue francaise : alphabet (minuscules / majuscules, + espace - , . ! ?) et lettres accentuees, en pages de 5 colonnes x 7 lignes.
+Les positions exactes de l'original (origine de la grille, boutons de fonction) n'ont pas ete retrouvees dans le code : la disposition est dessinee ici dans le style des fenetres du jeu.
+Le clavier de l'ordinateur sert aussi (tout caractere de la grille), comme la souris et les fleches + Entree.
+@@ b69dfb2d6ab5 d
+Appui sur la case i (grille, bouton de fonction ou Retour). -> vrai si quelque chose a change (son de bouton).
+@@ 266d7ced0cd9 d
+Case voisine de i dans la direction (dx, dy ; dy > 0 = vers le haut) : la grille de 5 x 7, puis la rangee des boutons de fonction, puis Retour ; on boucle.
+@@ 843b35aa70b9 d
+Fleches : saute les cases vides de la page.
+@@ 9b5b9372ea21 d
+Touche physique. -> vrai si elle a ete prise (les lettres arrivent par texte()).
+@@ a8b689e0e16d d
+Caracteres tapes au clavier : ceux de la grille sont ajoutes (le curseur passe sur OK pour valider d'un Entree) ; chaque lettre ajoutee joue le bruitage du bouton, comme le clic sur la lettre (#60, D-156).
+@@ dad0da24f794 d
+(cx, cy, ech) : repere de la colonne d'interface (Game._ui_reference) ; la fenetre est reduite pour tenir dans la hauteur de l'ecran.
+@@ 34df7beacbda d
+Texte de `size_value` unites de haut centre (ancre 1), a gauche (0) ou a droite (2) en (x, y) (unites).
+## FILE dq4_pc/menus/pause.py
+@@ 216f571f7ba9 t
+emplacements d'etats instantanes (touches 1 a 9)
+@@ f49b4c6c43c7 c
+Palette de texte du jeu (MenuPortItemTable : blanc, jaune, rouge, gris) ; fenetres noires cadrees de blanc et boutons dans le style du menu des commandes du jeu mobile (voir hud_mobile.cadre et hud_mobile.plaque)
+@@ 57d2bd689a55 t
+intertitres de groupe des listes deroulantes (« Écran tactile », « Dialogues »...) : gris dore terne, plus petits ; l'or (OR) est reserve a la valeur courante
+@@ fa23f56c7108 t
+(fraction de la taille des valeurs)
+@@ 44eee932b047 t
+« pas de valeur par defaut » (None et False sont des valeurs possibles)
+@@ a54d37ce074f t
+fond des fenetres du menu : noir, avec l'opacite des fenetres des autres menus (hud_mobile.GAME_OPACITY, mesuree sur les fenetres du jeu)
+@@ 9847b533f43d t
+menu Commandes : largeur d'une case de touche et ecart entre les deux (a 900 px de haut, multiplies par k)
+@@ b3c20ae10d71 c
+barre de defilement
+@@ 5664aecc2c59 t
+curseur dore des menus du jeu dans la feuille MenuTexture (x0, y0, x1, y1)
+@@ 612c8812960b t
+croix rouge du jeu (effacer une touche)
+@@ a7cba6b1ba5b t
+icone du bouton retour du jeu (case 11 de la rangee d'icones)
+@@ 831b00e7a8b6 t
+interrupteur Oui / Non : taille a 900 px de haut (multipliee par k)
+@@ 1f4db32c0de5 t
+echelle des textes en police du jeu (par rapport aux polices du systeme)
+@@ 9bf90d5ff38b c
+gestes de la souris sur le terrain (page Commandes, lecture seule : ce ne sont pas des touches) : (geste, effet) ; la camera ne fait que tourner a gauche / a droite et se recentrer (D-233)
+@@ 4093979f3f04 t
+(D-238 : textes français, traduits en les dessinant)
+@@ d6a933ee6f21 c
+editeur d'interface : noms des fenetres du jeu (fonctions Make_* de MenuPortItemTable ; 'boutons' = boutons et croix de l'ecran, 'msg' = dialogues) et regroupements de la liste « Interface a modifier ».
+Une fenetre du jeu n'y figure que si elle a un maillage a regler (RG.REMOVED_WINDOWS : lancement du jeu, reseau, fenetres sans maillage) ; une fenetre inconnue va dans « Autres ».
+@@ ee6b244f6cc5 t
+interfaces de l'editeur qui ne sont pas des fenetres Make_* du moteur : boutons et croix de l'ecran, dialogues, bouton de vitesse de combat
+@@ 3dbc24936077 t
+valeur d'une liste deroulante qui est un intertitre de groupe (« #Dialogues ») : jamais choisie, sautee par le curseur
+@@ 6409d4e0357c t
+panneau de l'editeur : appui maintenu sans bouger (secondes) avant qu'il se souleve ; en dessous, sans bouger, c'est un appui court (replier / deplier)
+@@ 2c470ac5f6be t
+double clic sur la barre de titre : delai par defaut (secondes) entre le DEBUT du premier appui et celui du second, quand le systeme ne le dit pas (defaut de Windows : 500 ms)
+@@ 229871e1e6b1 t
+rectangle du double clic par defaut (pixels, centre sur le premier appui ; defaut de Windows : 4 x 4)
+@@ 7182de0de6d9 t
+deplacement (pixels) du pointeur, depuis le point d'appui sur la barre de titre du panneau, a partir duquel le panneau se deplace (en dessous : appui court)
+@@ 42ea67c623d6 t
+cadre jaune de l'element choisi dans l'apercu de l'editeur (le meme que celui des boutons de l'ecran : hud_mobile.py)
+@@ 06d827d8c547 t
+etiquette d'un element masque dans l'apercu de l'editeur : feminin (fenetre, croix), masculin (boutons)
+@@ 83b1b1f758f4 t
+(x0, y0, x1, y1) du cadre dessine a la derniere image (placement des boutons : un clic hors du cadre saisit un bouton)
+@@ 6935e9c0f5e1 t
+ligne -> (x0, y0, x1, y1) du bouton « valeur par defaut » des curseurs ; du bouton « muet » des lignes de la page Son
+@@ 2d8824d4bef4 t
+curseur maintenu par la souris (numero de ligne) ; valeur en cours de saisie [ligne, texte]
+@@ 94b1da120f07 t
+liste deroulante ouverte [ligne, valeur survolee] ; zones de ses valeurs (x0, y0, x1, y1, numero)
+@@ d1f74aa7f5bf t
+interrupteurs : position du bouton (0 = Non, 1 = Oui) par libelle, pour l'animation
+@@ f1b8f5ece437 t
+familles de la police du jeu (None : pas encore cherchee) ; hauteur des capitales par taille
+@@ f2974f48d3b7 t
+(ecran, ligne) sur lesquels la repetition d'une touche maintenue a commence
+@@ 85437645cbf2 t
+defilement : premiere ligne visible par ecran, derniere selection vue (la vue la suit quand elle change), barre dessinee, prise du curseur de la barre
+@@ 29889bd2bc0b t
+bouton retour (x0, y0, x1, y1), pointeur dessus ; (ligne, colonne) -> croix « effacer la touche »
+@@ 33b418b15c62 t
+feuilles du jeu (PIL) et textures des sprites du menu
+@@ 3f19e3a39dd1 t
+selection a la souris (la plaque sous le pointeur s'assombrit, comme au toucher sur mobile) ou au clavier (curseur dore) ; derniere position du pointeur
+@@ de189171fdc7 t
+fenetre modale Oui / Non : {'titre', 'detail', 'oui', 'sel' (0 Oui, 1 Non)} ; zones de ses boutons
+@@ 8889345edc69 t
+editeur d'interface : panneau replie ; barre de titre (plier / deplier) ; ligne survolee depuis (cle, instant) pour l'infobulle
+@@ 09c78d2c56be t
+menu des etats : action choisie (creer, charger, supprimer) ; emplacement dont la suppression est a confirmer
+@@ 106e1f5c0073 t
+liste deroulante : barre de defilement, prise du curseur, premiere valeur visible
+@@ 9d1cb22471d0 t
+editeur d'interface : element modifie ('boutons', 'msg' ou nom Make_* d'une fenetre du jeu) ; deplacement en cours (x, y de depart, decalage de depart)
+@@ 3525dce983d3 t
+editeur d'interface, panneau deplacable : coin haut droit (x, y) apres un deplacement (le temps de la session ; None = position d'origine, calculee d'apres l'interface choisie) ;
+@@ 2122ad8eb584 t
+appui en cours sur la barre de titre {t0, x, y, dx, dy, long (souleve : suit le pointeur), double} ; instant du dernier appui court (double clic) ; cadre de la liste deroulante ouverte
+@@ 24609e6d11a9 t
+(D-238 : tout texte dessiné par les pages passe par la traduction ; un texte sans traduction reste tel quel)
+@@ 0977940e8cac c
+---- sprites des menus du jeu
+@@ 524bc25bc581 c
+---- ouverture / fermeture
+@@ b51ac05c84ea t
+pages qui arretent le jeu derriere elles : AUCUNE (#178, D-229 : « il ne faut aucune pause dans aucun menu » ; l'historique et la question « Quitter » arretaient le jeu jusque-la). Le jeu tourne derriere toutes les pages, sans touche ni clic (voir Window.tick)
+@@ 42b9e7482b1a t
+la selection est au clavier tant que le pointeur ne s'est pas vraiment deplace (ecart cumule depuis son point d'ouverture : entrees.MouseGuard)
+@@ 2ad88fbfe458 t
+ouvre directement cette page (question de sortie : « Non » preselectionne, « Non » ou Echap ferment tout)
+@@ 5bb60a6989a9 t
+fin de l'edition de l'interface
+@@ 86676ffcc187 c
+---- entrees des ecrans : liste de dicts {'t': 'act'|'choix'|'curs'|'touche'|'sep', 'l': libelle, 'v': valeur affichee, 'ok', 'moins', 'plus', 'off'}
+@@ b296bf23b66e t
+identifiant de page (chaine) -> methode qui donne ses lignes
+@@ fb32f548dc69 t
+(page dessinee par ui_history.HistoryView : aucune ligne de menu)
+@@ cb63cc7c9a4c t
+« Non » preselectionne
+@@ c0d7cffd872c t
+(le menu se ferme, le jeu ouvre sa boite Oui / Non : le seul chemin de retour au titre du jeu ; la question « quitter l'application » n'est posee que par le menu de depart, page 'quitter')
+@@ f20010babd53 t
+(D-238 : noms français, traduits en les dessinant : `_value_name` rend des donnees)
+@@ 4bae74a76a95 t
+Manuel, Normal, Rapide, Très rapide (jamais x1, x2, x3)
+@@ 9313dced38eb t
+(les reglages sont enregistres a la fermeture du menu)
+@@ 8d6580b66caa t
+(D-238 : au-dessus de « Plein écran » ; s'applique tout de suite)
+@@ ebe979faabdd t
+(interrupteur : l'ancien reglage d'avant la #42 ; F11 et Alt + Entree font la meme chose)
+@@ 3c0896d99918 t
+(plein ecran : ligne inactive, relue a chaque image : voir _inactif)
+@@ 828fae802a8a t
+(ancienne note rouge : plus qu'une infobulle)
+@@ 8897493cf47b t
+(editeur de l'interface a l'ecran : boutons, dialogues, fenetres du jeu)
+@@ 43d7b50d48be c
+---- editeur d'interface : boutons de l'ecran, fenetre de dialogue et fenetres du jeu (taille, position, affichage)
+@@ 5b69c2028c3a t
+(une fenetre qui a une taille par defaut propre garde son entree, meme a 100 %)
+@@ 004eaa62449d t
+bouton de vitesse de combat : sa taille ; sa position se regle en le glissant (ou « Replacer sous la boîte »)
+@@ b6826c1875de t
+(pour toutes les interfaces)
+@@ 96abe00dd910 t
+(le son revient : on l'entend)
+@@ 586619c92b6b t
+volume d'origine ET son remis
+@@ 9ca200689c15 t
+(lecture seule : lignes d'information, ni choisies ni cliquables)
+@@ 8e9071fd88d3 c
+---- actions
+@@ 984f85c53f57 t
+(`model` + `value_list` : le titre est traduit avant d'y mettre le numero, voir _draw_popup)
+@@ 0324e8bf48ee c
+---- touches clavier
+@@ 59c653e5309f t
+une touche : retour a la selection au clavier (curseur dore), le pointeur reprend la main au premier vrai mouvement (ou au clic)
+@@ a6300867cb9c t
+(editeur : plier / deplier le panneau)
+@@ 872445e02a92 t
+(la touche des infos a l'ecran se regle dans Commandes)
+@@ 6525fda20b80 t
+le jeu a repris la main (combat, dialogue, scene : le jeu tourne derriere le menu, #178) : l'historique n'est accessible qu'avec la main sur son personnage (#187)
+@@ 132336539ac1 t
+le jeu tourne derriere l'historique (#178) : ce qu'il y ecrit s'ajoute en bas de la liste
+@@ dcd4a249ab0c t
+clic simple sur la barre de titre : le pliage a lieu quand le delai du double clic est ecoule sans second appui (#145)
+@@ f011c76b072e t
+appui maintenu sans bouger : le panneau se soulève (il suivra le pointeur au premier mouvement)
+@@ a79e73e5985b t
+la selection a change (souris, autre ecran) : la repetition s'arrete, elle ne doit jamais toucher un autre reglage
+@@ 3531153b5ae8 c
+---- liste deroulante
+@@ 1e8d3fc08f71 t
+(les intertitres de groupe sont sautes)
+@@ a8f36ddb68e9 t
+(les intertitres et les lignes inactives sont sautes ; page sans ligne active : la selection ne bouge pas)
+@@ 9b14b1147bfe t
+(une ligne de la page Son a son 'ok' : Entree coupe / remet le son ; la valeur se tape en cliquant dessus)
+@@ 16db34d75541 t
+le pointeur a quitte le rectangle du double clic : le clic simple est acquis, le panneau replie / deplie sans attendre la fin du delai (#145)
+@@ 0a1490c14c11 t
+le pointeur n'a pas vraiment bouge : la selection au clavier reste
+@@ a6769c4c1b99 t
+tout autre appui (ailleurs, trop tard) : le clic simple en attente replie / deplie aussitot, il ne peut plus devenir un double clic
+@@ 4627970bcbd4 t
+fenetre de confirmation : un bouton la valide, un clic droit ou ailleurs la ferme
+@@ 003f7ca015c7 t
+barre de titre du panneau : appui court = replier / deplier, appui long = deplacer, double clic = position d'origine
+@@ eb4b8d873f4d t
+liste deroulante ouverte : un clic sur une valeur la choisit, ailleurs (ou clic droit) la ferme
+@@ 8ace383627e4 t
+barre de defilement de la liste
+@@ a8414f5bb46a t
+(clic sur un intertitre ou la marge de la liste : elle reste ouverte)
+@@ 276696b18bf7 t
+bouton retour (en bas a droite de la fenetre)
+@@ 9c6a8716a982 t
+editeur : hors du panneau, un clic saisit l'element choisi (un bouton de l'ecran, ou la fenetre montree en apercu)
+@@ a28cc2c86689 t
+un clic ailleurs que sur la valeur en cours de saisie la valide
+@@ f362f5b864f1 t
+(ligne devenue inactive depuis la derniere image : le clic ne l'atteint pas)
+@@ 0ca346845cdf t
+bouton muet de la page Son : coupe ou remet le son
+@@ d31243290ee8 t
+bouton rond « valeur par defaut » (curseurs, choix, touches d'origine)
+@@ 07083c1675e8 t
+curseur : le clic maintenu le fait glisser (glisser)
+@@ 49129dff884b t
+clic sur la valeur : saisie au clavier
+@@ b556392f38d1 t
+croix : efface la touche de la case
+@@ e1e81cacf443 t
+ligne de la page Son : un clic a cote des boutons ne coupe pas le son
+@@ 617e33fa2991 t
+(dx, dy : decalage du pointeur par rapport au coin haut droit du panneau)
+@@ 005e7d9acbb8 t
+(le clic simple est acquis : plus de double clic possible sur lui)
+@@ 5ef82966e2e0 t
+appui court (sans mouvement) : un clic simple replie / deplie APRES le delai du double clic (voir maj) ; deuxieme appui d'un double clic : position d'origine, sans plier ni deplier (#145)
+@@ f503f54a11cb t
+clic simple : le delai du double clic court depuis le DEBUT de l'appui (comme Windows) ; deja ecoule au relachement (appui long de plus de ce delai) : replie / deplie tout de suite
+@@ 77b0191fe42b t
+panneau de l'editeur : il suit le pointeur des que celui-ci a quitte le point d'appui (le panneau se souleve, ni pliage ni double clic), ou apres un appui maintenu
+@@ 6aa85c790c63 t
+un clic puis un glisser tout de suite : le clic plie d'abord, puis le panneau suit le pointeur
+@@ ca7ac8fe41a5 t
+fenetre du jeu : elle suit le pointeur (decalage en fraction de l'ecran), aimantee a la grille si le reglage est actif
+@@ c7fbc3bd1f76 t
+liste qui defile : la molette fait defiler la vue (comme la barre)
+@@ 6ca83d4c04a8 t
+(sinon, sens inverse : molette vers le haut = ligne suivante)
+@@ 5e527c4e18d5 t
+pointe de fleche au debut de l'arc
+@@ 835f69f56028 t
+caisse du haut-parleur (x0 a x1), puis le cone qui s'evase (x1 a x2)
+@@ cf5f017acc46 t
+croix rouge a la place des ondes
+@@ d90ca27f234d t
+deux ondes (arcs de cercle) a droite du cone
+@@ 9ee612c22715 t
+premiere apparition : pas d'animation
+@@ f83e188155ae t
+piste entre les deux fleches
+@@ 194c5c413dd1 t
+curseur de la barre : assombri quand on le tient ou qu'on le survole
+@@ 0c2e8270eb33 t
+fleches : 75 % sous le pointeur
+@@ f1ab73ca3255 t
+seuls les boutons de l'ecran (les fenetres du jeu ne sont pas dessinees pendant l'edition)
+@@ 123174d6b0e6 t
+seule la fenetre choisie (ni les autres fenetres, ni les boutons)
+@@ 87119b8ab3cc t
+element non affiche en jeu (toute l'interface, ou la croix seule) : l'apercu reste visible pour le placer, mais assombri et marque
+@@ 3d0194b53a3b t
+(sur un fond sombre : le texte du message d'essai passe dessous)
+@@ 5757b26d3636 t
+le cadre jaune de selection reste aussi net que sur un element affiche (le voile le couvrait)
+@@ cb492d58fb29 t
+(animation des interrupteurs)
+@@ 28b733c66ca5 t
+panneau de l'editeur replie : seule la barre de titre reste
+@@ 6570db06da38 t
+(la selection saute les intertitres et les lignes inactives, y compris a l'ouverture de l'ecran ou quand la ligne choisie vient de devenir inactive)
+@@ e43b0de55609 t
+ligne fixe en haut (aucune page n'en a plus) : elle ne defile pas ; (`fixe` d'un curseur est une fonction, pas True : une page peut commencer par un curseur)
+@@ 25e1c32c1a49 t
+(identique en anglais : rien a traduire ; `_label` le traduirait au besoin)
+@@ 804a0c7f6b89 c
+hauteurs : le bouton retour est sous la fenetre ; si les lignes ne tiennent pas, elles defilent (barre a droite, dans la marge)
+@@ 7c50d522cb7b t
+(pas de bouton retour a la racine : « Reprendre » ferme le menu)
+@@ a8786f741911 t
+(plus de ligne d'aide en bas : les aides sont des infobulles ; le message d'information est dessine au-dessus du cadre)
+@@ 23213b592a8d t
+panneau compact
+@@ 2cb270eb4a55 t
+lignes hautes : les cases de touches ne touchent pas les bords (la liste defile)
+@@ 3320bd7e62f0 t
+lignes serrees : texte plus petit, pour qu'il tienne dans le bouton
+@@ 0d897c879981 t
+(la fenetre se referme sur la derniere ligne visible)
+@@ 81f8c9dee001 t
+marge droite du contenu des lignes (boutons : 42 px de marge a gauche comme a droite ; la barre de defilement est dans la marge)
+@@ 97968bf791d7 c
+largeur : le plus long libelle + la place des valeurs / curseurs / cases de touches
+@@ d1980a73f9c8 t
+(etats : la date des emplacements ne compte pas, la fenetre garde la meme taille avec ou sans etat enregistre ; la date se reduit au besoin)
+@@ 62e8f563fa4c t
+liste : valeur + fleche ; interrupteur : Oui / Non puis l'interrupteur
+@@ 9b443aed7ccd t
+(son : plus le bouton muet)
+@@ 60ce2222d1cc t
+replie : la barre de titre seule, pour voir tout l'ecran ; position : celle du joueur apres un deplacement, sinon celle d'origine (voir _panel_pos)
+@@ 942f250248bb t
+replie : la barre de titre garde la largeur du panneau deplie (elle reste sous le pointeur : appui court puis double clic)
+@@ 492fe8cca89b t
+appui sur la barre de titre : titre dore ; apres l'appui long, le panneau « se souleve » (cadre agrandi, contour dore)
+@@ 006db73ade3f t
+plier / deplier le panneau : fleche dans la barre de titre (vers le haut = replier, vers le bas = deplier)
+@@ f62d3fb466b7 t
+(collee au titre : elle le suit quand le panneau change de largeur)
+@@ b09c61b1b0d2 c
+vue : la selection reste visible quand elle change ; sinon la vue ne bouge que par la barre ou la molette
+@@ 4d2a681fdcee t
+boutons de chaque ligne a l'image precedente : sous le pointeur, c'est le bouton qui s'assombrit, pas la plaque de la ligne
+@@ a4041f6bbed1 t
+bord droit du contenu des lignes
+@@ d1d039b547e3 t
+boutons : meme marge a gauche et a droite
+@@ 79a507702d00 t
+ligne inactive (relue a chaque image) : toute la case est grisee, jamais choisie ni survolee, sans zone de clic
+@@ 3bddd486d187 t
+souris : la ligne est assombrie tant que le pointeur est sur elle (et pas sur l'un de ses boutons) ; il n'y a plus de selection quand il en sort
+@@ ccfa4c083cf7 t
+clavier : la ligne choisie, avec le curseur dore
+@@ fe4ed3559aef t
+fond du bouton, comme ceux du menu des commandes du jeu mobile : la plaque s'assombrit quand elle est choisie (clavier) ou survolee (souris), sans encadrement
+@@ f87f6741eb89 t
+curseur dore des menus du jeu (selection au clavier)
+@@ 7fadd3ce1da1 t
+ligne de la page Son dont le son est coupe : nom, valeur et jauge grises
+@@ feb3c11cf47a t
+texte centre dans le bouton
+@@ 928f61032cbe t
+ligne d'information (geste de la souris) : le geste a gauche, son effet a droite en gris, sans plaque, ni selection, ni zone de clic
+@@ 2a6186470146 t
+intertitre : au centre de la fenetre
+@@ 0657309df635 t
+largeur permise au libelle (0 : aucune limite)
+@@ 9eeac69d5613 t
+(jusqu'au lieu, a droite)
+@@ 0977db19e03f t
+(place du bouton rond « valeur par defaut » des choix, a droite de la ligne)
+@@ 432004472e95 t
+liste deroulante : valeur courante et petite fleche vers le bas
+@@ 6d44dcd86a4e t
+interrupteur Oui / Non : le texte de la valeur, puis l'interrupteur
+@@ 06d0cbb7042d t
+place du bouton muet (page Son), entre la valeur et le bouton « valeur par defaut »
+@@ 6c6e09052ca8 t
+bord droit de la valeur : le bouton « valeur par defaut » est a sa droite
+@@ 7d4f271f6b7e t
+(jauge jaune ; grise quand le son est coupe ou la ligne inactive)
+@@ 617d507a1fbd t
+(case choisie : au clavier, ou en attente d'une touche ; a la souris c'est la plaque qui s'assombrit)
+@@ 29ecc6af0dcb t
+case de la touche (plus claire quand elle est choisie), a distance des bords du bouton
+@@ a901c1fb2ed7 t
+texte centre dans la case (marges egales : la croix rouge est a droite, hors de la zone du texte)
+@@ b69c97667e6e t
+(ligne de base : le milieu de la hauteur des capitales sur le milieu de la case)
+@@ 03dd1163e993 t
+(a 75 % sous le pointeur ; terne quand la ligne est inactive)
+@@ dbf932bbc1d7 t
+(une ligne inactive n'a pas de zone : ni survol, ni clic ; sa zone ne sert qu'a l'infobulle)
+@@ df975ff1192c c
+pied du cadre : aide (centree, toujours dans le cadre)
+@@ ce08894a3bc8 c
+bouton retour, en bas a droite de la fenetre
+@@ 1157db1231d7 t
+(version enfoncee de la feuille Button sous le pointeur)
+@@ c12d07adebb9 c
+miniature de l'etat survole
+@@ 74455974022c c
+---- infobulles (aides au survol de la souris) et fenetre modale
+(D-238 : les aides sont des textes francais ; `_helptext_lines` traduit chaque phrase separee par trois espaces, voir le catalogue texts_en\pause.py : une aide assemblee (« ... » + KEY_HELPTEXT) se traduit donc phrase par phrase)
+@@ 8efa20ef9af1 t
+ligne inactive : pas de consigne de clavier ou de souris, seulement son aide propre (elle dit pourquoi)
+@@ 50fbaecb469c t
+texte propre a la ligne, avant la consigne generale
+@@ 6359b35d0b44 t
+(pas d'infobulle pendant un appui sur la barre de titre)
+@@ a797221636ec t
+(ligne inactive : seule son aide, si elle en a une, s'affiche)
+@@ f399d02f14c0 t
+consigne : sous la ligne choisie (au-dessus s'il n'y a pas la place)
+@@ 04e72482b752 t
+souris : le bouton sous le pointeur s'assombrit ; clavier : le bouton choisi, avec le curseur dore
+@@ dd92c95e619d t
+place de la barre de defilement, a droite des valeurs
+@@ e8a6b4afd6d3 t
+la valeur surlignee a change : la vue la suit ; sinon seule la barre ou la molette la deplace
+@@ 1bcac5ef5496 t
+(le premier choix d'un groupe montre son intertitre)
+@@ 9e893412ea9b t
+intertitre de groupe : au centre de la liste, en gris dore terne et plus petit (l'or est celui de la valeur courante), sans zone de clic
+@@ bf39529812f2 t
+souris : la valeur sous le pointeur est assombrie (plaque enfoncee), sans encadrement
+@@ 7ae895c325d7 t
+clavier : curseur dore
+@@ 98f80664cfab d
+Menu Echap : reprendre, etats instantanes (savestates), affichage, son, commandes (vitesses, touches, interface), retour a l'ecran titre.
+
+Pendant que le menu est ouvert le jeu CONTINUE de tourner derriere lui, sur toutes les pages, sans recevoir ni touche ni clic (#178 : aucune pause dans aucun menu ; la scene reste affichee, assombrie). Navigation : fleches ou touches haut / bas / gauche / droite / A / B reglees,
+Entree / Espace = valider, Echap / Retour arriere = retour, souris (survol, clic, clic droit ou bouton « retour » en bas a droite de la fenetre = retour, molette, barre de defilement).
+Deux modes de selection : au clavier, le curseur dore (fixe) devant la ligne ; a la souris, rien n'est encadre : comme au toucher sur mobile, la plaque (ou le bouton) sous le pointeur s'assombrit et se rallume quand il sort.
+Les reglages sont enregistres dans reglages.json. Fenetres noires, curseur dore et bouton retour : ceux des menus du jeu (feuilles MenuTexture et Button).
+@@ baab0d034a86 d
+(taille, couleur) d'un intertitre de groupe d'une liste deroulante : plus petit que les valeurs et d'un gris dore terne, jamais en or (l'or marque la valeur courante).
+@@ 4e12e3437e0b d
+Reglage de double clic du systeme, relu a chaque appui : (delai en secondes, largeur, hauteur en pixels du rectangle autour du premier appui). Windows : GetDoubleClickTime et SM_CXDOUBLECLK / SM_CYDOUBLECLK (le curseur
+« Vitesse du double-clic » du panneau Souris de Windows) ; la variable d'environnement DQ_DOUBLE_CLIC (secondes) force le delai ; sans Windows, les valeurs par defaut de Windows (0,5 s, 4 x 4).
+@@ 6ac6c4f34e0e d
+Etiquette en police du jeu (GMaruGoPro-M, cache/ui_font.otf, enregistree au premier appel) ; a defaut, les polices du systeme.
+@@ ccb5e0d50e8f d
+Feuille de texture du jeu (cache/<nom>, PIL RGBA) ; None si elle est absente.
+@@ 8533189a98b3 d
+Texture (filtre lineaire) d'une image PIL RGBA, gardee sous `lookup_key`.
+@@ 01f32449096e d
+Texture d'un morceau de la feuille `name_str` (boite x0, y0, x1, y1), couleur des pixels transparents propagee d'un pixel (pas de liseré sombre au filtrage) ; None si la feuille manque.
+@@ 3322e7ab3d35 d
+Les formes de pyglet coupent le melange alpha a la fin de leur dessin : on le remet avant une texture.
+@@ c8c86359e834 d
+Le pointeur de la souris est-il dans la zone z (x0, y0, x1, y1) ? Seulement en mode souris : au clavier, rien n'est survole.
+@@ 5c12b12ea42f d
+Zone survolee et active : comme _pointer_in, sauf sous une fenetre modale (fenetre Oui / Non, liste deroulante ouverte, attente d'une touche) qui garde le survol pour elle.
+@@ 26f807c8c226 d
+Curseur dore des menus du jeu (pointe vers la droite), de `topmost` pixels de haut, a gauche en x, centre verticalement en yc ; il reste fixe.
+@@ b99b1b046f08 d
+Bouton retour des menus du jeu : fenetre-bouton de la feuille Button (neuf morceaux, 32 px d'angle reduits de moitie, version enfoncee a 96 px a droite) et son icone fleche de retour.
+@@ de3e7c00b43c d
+Le jeu est-il arrete derriere le menu ? Non, sur aucune page (racine « Paramètres », reglages, historique, question « Quitter ») : le jeu tourne, il ne recoit aucune entree. Reste vrai seulement pour une page ajoutee a FROZEN_PAGES (vide : voir la regle ci-dessus).
+@@ 3b6e03b6990c d
+Entree a valeurs : Oui / Non = interrupteur (valider ou cliquer le bascule ; gauche = Non, droite = Oui) ; tout autre choix, meme a deux valeurs = liste deroulante
+(valider ou cliquer l'ouvre ; gauche / droite passent a la valeur precedente / suivante). `off` : la ligne ne peut pas etre modifiee dans l'etat courant (voir _inactif : grisee, ni choisie ni survolee ni cliquee).
+`default` : valeur d'origine du reglage (bouton rond « valeur par defaut » a droite de la ligne, Suppr / Debut) ; `restore_default` / `is_default` : a la place, pour un reglage qui se rend au jeu (fonction qui le remet, fonction qui dit s'il l'est).
+@@ 32fb64fb4a51 d
+La ligne ne peut pas etre modifiee dans l'etat courant (`off` : un booleen, ou une fonction relue a chaque appel ; les entrees sont de toute facon refaites a chaque image : une ligne grisee par une autre valeur
+redevient active des que cette valeur change). Une ligne inactive est grisee en entier (libelle, valeur, fleche, bouton rond, case) ; elle n'est ni choisie (le curseur dore et les fleches la sautent), ni survolee
+(pas de plaque assombrie), ni cliquee, ni validee, ni reglee (gauche / droite, Suppr, Debut) ; seule son infobulle (`helptext`, si elle en a une) reste. Valable pour tous les types de lignes de toutes les pages.
+@@ 2edb6d9698e1 d
+Ligne que le curseur peut choisir : ni intertitre (ou ligne d'information), ni ligne inactive.
+@@ 80b35c211620 d
+Vrai si la valeur d'une liste deroulante est un intertitre de groupe (« #Dialogues »).
+@@ 83db628446b7 d
+Indice de la premiere valeur qui n'est pas un intertitre, a partir de i dans le sens de d.
+@@ dc18f79dea28 d
+Curseur numerique de `minimum` a `maximum` (valeurs arrondies a `step`, fleches : `step_f`). Cliquer sur la valeur ou valider permet de la saisir au clavier : `mult` = facteur entre la valeur
+interne et celle qui est affichee et saisie (100 pour des pourcentages). `default` : valeur d'origine du reglage (bouton « valeur par defaut » a gauche du curseur, touche Suppr).
+@@ c1b6cd309d3a d
+Valeurs de la liste « Interface a modifier » : les elements modifiables par groupe (INTERFACE_GROUPS), chaque groupe precede de son intertitre (« #Dialogues ») ; seules les fenetres du jeu qui ont une mise en page y figurent.
+@@ 345b1fd20f15 d
+[taille, decalage x, decalage y] de l'element choisi (fenetre du jeu).
+@@ 14b01dcbc199 d
+Interface a modifier choisie : pour les dialogues, un nouveau message d'essai au hasard.
+@@ bf4773df4ce6 d
+L'interface c est-elle affichee a l'ecran ? Boutons et croix : reglage 'boutons' ; fenetre du jeu : absente de la liste des interfaces masquees. Chaque interface a son propre reglage.
+@@ 6978d2d2b341 d
+Page Interface : d'abord l'interface a modifier (liste par groupes), puis son affichage (propre a chaque interface), puis ses reglages.
+@@ bf5831b30f26 d
+« Rétablir cette interface » : l'interface choisie revient entièrement à son état d'origine (RG.Settings.reset_interface : position, taille, affichage et toutes ses options, et elle seule).
+Rien d'autre à faire : l'aperçu et le jeu relisent les réglages à chaque image.
+@@ 7508ef9f3ab2 d
+« Rétablir toutes les interfaces » : toutes les interfaces et les options de l'éditeur (grille, aimantation) à leur défaut (RG.Settings.reset_interfaces), et le panneau reprend sa place d'origine.
+@@ 9747dba9ba4a d
+Reglage de son (interrupteur ou volume) : enregistre la valeur, l'applique tout de suite aux sons en cours, et pour un volume fait entendre un bruitage d'essai (la musique, elle, joue pendant la page).
+@@ 2f238587a7bb d
+Ligne de la page Son : le nom du son, sa barre de volume (et sa valeur), le bouton muet (`active` = (lire, ecrire) l'interrupteur du son), le bouton « par defaut » (volume d'origine et son remis).
+Clavier : haut / bas change de ligne, gauche / droite regle le volume, Entree coupe ou remet le son, Suppr ou Debut remet la ligne par defaut.
+@@ 4ba6c27f0ebd d
+Une ligne par son (son.CATEGORIES, plus le son en general) : nom | barre de volume | bouton muet | bouton « par defaut » ; plus de sections.
+@@ 67b85f53007f d
+Section « Défilement du texte » de la page Commandes (juste sous la section Vitesses ; elle etait la page « Vitesse de defilement du texte » du menu racine) : « Vitesse du texte » (vitesse d'ecriture des dialogues),
+puis « Vitesse de combat » (Manuel, Normal, Rapide, Tres rapide : horloge du moteur pendant les combats et defilement des messages de combat).
+@@ 4e8b3a5a7b66 d
+Page « Modifications » (ex-« Jeu »), juste sous « Commandes » dans le menu racine : les modificateurs des regles du jeu, desactives par defaut (= comme le jeu d'origine) ; pour l'instant PV et PM restaures a chaque niveau gagne.
+@@ b59967869592 d
+Ligne d'une action au clavier : deux cases (touche principale, secondaire) ; Suppr efface la case choisie, le bouton rond (ou Debut) remet les touches d'origine.
+@@ af8c7bebb04c d
+Sections (intertitres) : deplacement (touches), « Camera » (touches gauche / droite, souris, sens, vitesse de camera ; un seul groupe depuis D-237), vitesses (marche, accelerateur : choix x1 a x4 ; touche et multiplicateur de l'accelerateur : curseur ; puis la touche « Changer la vitesse en combat »), defilement du texte (« Vitesse du texte » et « Vitesse de combat » : voir _text_scroll), actions du jeu, autres (touche speciale, infos) ; puis le retablissement des touches.
+@@ 81e9c89be706 d
+'2026-10-31 19:21:05' -> '31/10/2026  19:21:05' (nom d'un etat : sa date et son heure d'enregistrement).
+@@ 61ec8b0db490 d
+Lieu de l'etat seulement s'il parle a un joueur (le nom technique d'une carte, comme « mak1f1 », n'est pas montre).
+@@ cf752a791def d
+Etats instantanes : une liste deroulante choisit l'action (creer, charger, supprimer) appliquee a l'emplacement valide ; la suppression passe par une fenetre de confirmation.
+@@ fdf65b1538d9 d
+« Revenir à l'écran titre » : le menu se ferme (le jeu reprend) et le moteur ouvre la boite d'origine du bouton des Paramètres du jeu (texte du jeu, Oui / Non) ; la suite (Oui : fondu puis titre, Non : retour au jeu)
+est le travail du moteur (Engine.request_return_to_title).
+@@ 7bc95ffdb9d6 d
+Message d'information (4 secondes, au-dessus du cadre) : `model` est le texte FRANCAIS, a trous (%d, %s) s'il y a des `value_list`. `message[0]` est le texte francais complet ; l'affichage (`_message_text`) traduit le modele AVANT de mettre
+les valeurs (D-238 : l'anglais n'a pas le meme ordre des mots), et traduit aussi les valeurs qui sont des textes de l'outil (nom d'une action, nom d'une touche).
+@@ 7b23351a5ba9 d
+Le message d'information dans la langue de l'outil ('' s'il n'y en a pas, ou s'il date de plus de 4 secondes).
+@@ 1f16528762c5 d
+Supprimer l'etat n : une fenetre modale demande confirmation (Non preselectionne).
+@@ ab457a5fc647 d
+True si la touche est consommee (le menu est ouvert).
+@@ bda6fa9443cb d
+Une direction est enfoncee : elle se repetera (maj) tant qu'elle est maintenue, sur la ligne et l'ecran ou elle a commence.
+@@ 1a5c7ed5bf94 d
+Repetition des directions maintenues, appui long sur le panneau de l'editeur (appelee a chaque image). Page Son : les sons jouent (le jeu est arrete) pour qu'on entende les volumes qu'on regle.
+@@ 6e6acbab6f06 d
+Premiere valeur visible de la liste deroulante (la barre de defilement la deplace sans changer la valeur surlignee).
+@@ e2f753fdd8b5 d
+Ligne choisie, ou None quand elle est inactive (aucune action ne l'atteint : gauche / droite, Suppr, Debut, Entree) ; un intertitre cede la place a la ligne suivante.
+@@ c47b8adc4c99 d
+Indice de la ligne que le curseur doit occuper : i s'il est actif, sinon la premiere ligne active apres lui, puis avant lui ; i si aucune ligne n'est active (page sans rien a choisir : le curseur n'est pas dessine).
+@@ 77e930ee25e4 d
+Ce qui tenait une ligne devenue inactive s'arrete : liste deroulante ouverte, curseur maintenu a la souris, valeur en cours de saisie.
+@@ 45949eb08c42 d
+Remet le curseur, le choix ou les touches de la ligne choisie a leur valeur d'origine.

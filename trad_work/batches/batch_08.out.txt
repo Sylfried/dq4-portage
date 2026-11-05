@@ -1,0 +1,729 @@
+## FILE dq4_pc/window/game.py
+@@ f8bd2d93a659 t
+battle: monster textures (m<id>) and meshes
+@@ 273f97eec407 t
+F1: information lines at the top right + translucent black frame
+@@ 6ebbb6e5f441 t
+gradient background of towns (#111): program and full-screen quad, created on first need
+@@ f7e04385c463 t
+battle start effect: screen capture, simulation, vertices
+@@ 34cd12b8e70d t
+scenery tint (packet 33): "tz_" textures excluded; last value of the `tint` uniform
+@@ b53a180b00b7 t
+extracts maps, sprites and monsters not yet in the cache in the background: no more reading of the big data packet in the middle of a game
+@@ 30431e38ca5f t
+animated 3D models (fbx.py: the title dragon): number -> {'etat', 'm', ...} ; slot -> animation player
+@@ 1df3eca482c6 t
+the engine is left to start the saved map before the first display
+@@ 8661639bc294 t
+heavy loading happens here, not during the game
+@@ 6075a534b480 t
+the loading sound effects are lost, the map music stays
+@@ c00e25661a8d c
+fixed-step loop: the engine advances exactly at 30 Hz (like FixedUpdate in the original) whatever the display rate, and the displayed frame is computed between two steps
+@@ a0452a816d30 t
+(test) one step per displayed frame, no clock or interpolation; DQ_TEMPS_REEL=1: real clock (speed, running)
+@@ f9447ada413b t
+runs before the windows are drawn (pyglet.app.run(interval=0))
+@@ 099d9ee4ec11 c
+---- window mode: 0 window, 1 full screen (borderless, at the desktop resolution: the monitor's display never changes)
+@@ a1520b9f6ddf t
+(displayed by full_screen.py with tr)
+@@ d7925f3f65a1 t
+chapter title banner (type 12)
+@@ 6626bd77652b t
+first time: the title images are extracted before the logos (the engine loads in the meantime)
+@@ e4d0883aa51d t
+(the engine is still loading: black screen, no text)
+@@ 75edc3c271df t
+BELOW_NORMAL_PRIORITY_CLASS / nice
+@@ c66a2da3484b t
+(D-238: the preparation process speaks the tool's language, not the computer's)
+@@ 113bce618721 t
+closing during the logos: the constructor stops
+@@ c82bdabc0181 t
+WM_SYSCHAR: the Alt + Enter character. Without this handler, Windows (DefWindowProc) plays its "error tone" at every Alt + Enter. The other Alt + key combinations are left to Windows.
+@@ 50ce53595daa t
+the pointer selects nothing in the game's menus until it has moved away from its previous position (keyboard selection must not jump; see inputs.MouseGuard)
+@@ 8223b3a839cc t
+the window no longer has focus: the game and the sound are frozen (#235, poll of 2026-11-04: "pause on every focus loss"); see on_deactivate / on_activate and _loop
+@@ 04fa9172fb29 t
+(while the window is being created, nothing exists yet: `_loop` freezes the game and pauses the sound as soon as it runs)
+@@ e994555c14ca t
+(rotation requested with the mouse, return to north pending: not applied afterwards)
+@@ 3aa9500de6fa t
+sound effects already started during the current displayed frame when the battle is accelerated (None: no filter; see _loop and battle_speed.sounds_to_play)
+@@ 99de6cfb6647 t
+are the engine and the sound stopped behind the menu? (see _sync_freeze)
+@@ 6939600f1631 t
+window without focus: the engine is stopped (the sound: Sound.lose_focus), the frame stays that of the last step; on return, no catch-up (on_activate)
+@@ 0ca7b5fb68eb t
+(test) reproducible captures: waits for the HD computations to finish in a background task
+@@ 6431605df165 t
+page of FROZEN_PAGES (none since #178): the engine is stopped; otherwise it runs with no input (tick)
+@@ 173f8ea290c1 t
+play time of the save follows real time, walking and battle (#239: the engine counts only a share of the steps when f > 1, see Engine._game_time_hooks)
+@@ 74e336d24eee t
+accelerated walking: random encounters per second follow (1 + a) / 2 and not a (engine counter hook, see encounters.py); in battle, no change
+@@ aec983ecbcb3 t
+accelerated battle: the same sound effect is started only once per displayed frame (see VC.sounds_to_play); its playback speed does not change
+@@ d5fd38423220 t
+(15 % tolerance, catch-up and computation budget: see battle_speed.advance_time)
+@@ dc617c73afec t
+screen effect of the Capture class (travel, lamp, Riremito: the engine waits for it to end); battle entry cascade: game clock (its duration follows "Vitesse de transition", in engine frames: Engine._start_battle_effect); neither battle speed, nor walking speed, nor accelerator
+@@ 9e475f59e35d t
+battle, from the end of the cascade (black screen, arrival fade, "X apparait" message) through the end fade inclusive: "Vitesse de combat" alone ("Manuel" and "Normal": 1, "Rapide": 2, "Très rapide": 3); neither the walking speed nor the accelerator multiplier applies there
+@@ dabd65a57ed2 t
+"Paramètres" menu: no accelerated walking (no direction is sent to the game)
+@@ 1312aedfd520 t
+between two fades of a battle (the engine changes scene 1 to 3 frames later): game clock. The fade BACK to the map is no longer cut off outright (#127): only the player lock (further down) counts, as for the arrival fade on a map (#107)
+@@ d2b5c728c50b t
+casino, bestiary: never accelerated walking (the held arrows serve the menus there)
+@@ 4e62cff59ae7 t
+the game in control (scene, event without message, exit fade): its pace is its own, the held direction changes nothing there; a fade alone (arrival on a map, player free) no longer counts there (#107)
+@@ 4ed8c035a2c4 t
+running: accelerator key held, or on-screen cross held at the edge of its ring (hud_mobile.TRAVEL_THRESHOLD)
+@@ 73baee4cc6a9 t
+loop frame number at which event n occurs (None if not yet known)
+@@ 2be192e7f3d3 t
+@x@y: left click at (x, y) pixels from the top left; @x@y@1: right click; @x@y@2: hover only
+@@ d5c4b7212ba3 t
+^x^y: mouse moved with a button pressed
+@@ 0d4a7d3a8c0d t
+%x%y: middle button (the wheel) pressed; &x&y: pointer moved with the middle button pressed; *x*y: released
+@@ e4d8d33070f7 t
+$text: typed characters
+@@ ef694c062588 t
+short press: released 3 frames later
+@@ 58762c3cec5f t
+(the frame that lifts the loading hold is not interpolated from the camera of the hold)
+@@ 4a27c3fae174 t
+map pixels / town units per step; beyond that, it is a jump
+@@ a4ce2124dc9a t
+(town: the target, and the camera around it when it rotates; world map: map camera, further down)
+@@ eb202709645c c
+(test) closes the welcome message automatically
+@@ 1b7ab23a73bd t
+(test) loads this town or dungeon
+@@ b26cf5d228f4 t
+(test) simulated clicks: frame:x:y[:d] (d = right click), x and y in pixels from the top left; press at the frame, release 3 frames later
+@@ 53fa2b8d34c2 t
+d = 2: hover without click
+@@ 6534672f0506 t
+"Paramètres" menu open: the game runs but receives no key or click (the menu's keys do not make the hero walk)
+@@ a7a81183258f t
+camera rotation requested at this step: extra notches according to the set speed or the drag (camera.py)
+@@ 64ce1fcc7dc7 t
+engine heap almost full (ENG-01)
+@@ a8183dc8d782 t
+a save could not be written (#198): the game continues, the player is warned
+@@ 0959bbaaabce t
+dialogues and battles of this step -> history (see history.py)
+@@ be215f820619 t
+"Paramètres" button of the Divers menu: the Pause menu opens instead of the game's original settings (Engine._divert_params)
+@@ a4907d78bdc5 t
+MenuPortSendQuit: return to the start menu = quit the application (ApplicationQuit: Oui / Non question)
+@@ 4b450153980c t
+animations of the original windows, once per game frame
+@@ e2443e50c70c t
+damage numbers on monsters (HoppingNumber): one per hit
+@@ 6853e24c0145 t
+"volume" options of the game's Parametres window
+@@ 775200a9421e t
+(test) captures during the battle start effect
+@@ 57769eef98cf t
+(test) intermediate captures during a battle
+@@ eb49fdf21a40 t
+digit shortcut: the savestate and the thumbnail are taken from the frame that has just been drawn
+@@ 14987f7f44d1 t
+the game without the menu, for the savestate thumbnail (copy on the graphics card: no blocking readback)
+@@ 4aaa57751def t
+brief message at the top of the screen (saves only, D-230)
+@@ 7bce58b1e006 t
+(test) DQ_CARTE_TEST="name;x,y,z;cx,cy,cz": shows a town/cave map with a fixed camera (scenery animations)
+@@ c0aa463bfc03 t
+(test) without the engine's characters (the hero would overlap the objects under study)
+@@ d741dc53caa9 t
+(test) DQ_CARTE_DEPL="dx,dy,dz": the camera moves by this vector at every displayed frame (flicker in motion)
+@@ 3a8aa34d0987 t
+new battle start effect: the first frame is drawn normally then copied
+@@ 698c9d18b8a1 t
+screen effect of the Capture class (travel, lamp, Riremito): same principle, but the interface stays drawn on top (capture_effects.py)
+@@ 2c1dbe1410b9 t
+(for the first two frames the game is still displayed normally; on arrival of a travel it is the departure's black)
+@@ 86b254191d9c t
+end of the effect, battle scene not yet arrived: black (otherwise we would see the previous scene)
+@@ 675cd57d99d1 t
+world map (tiles) or town (3D scenery)
+@@ f401f3bfa2b6 t
+town: (right, up, forward) of the camera, for the character panels
+@@ 5e4001052f41 t
+map loading under a covered screen, scene not yet in place: only the black and the fades are drawn (State.update_loading)
+@@ 17edde6b6c30 t
+synchronous loading (several tenths of a second): the time spent is not caught up by the engine (the entry fade keeps its duration, instead of skipping 3 steps in one frame)
+@@ dd112e844bdd t
+battle background = bg_color of the loaded scenery (FETC, BackColor.SetColor of cmd_fld_load); estimate while waiting for the list / DQ_FOND_ESTIME=1: (test) the old estimate
+@@ cc0989f897a0 c
+world map not yet sent, or battle over and next scene not yet arrived: the previous scene is not shown with another one's camera (battle backdrop image on return
+from a flee); or map loading not yet complete (held): the engine has sent only the scenery, the camera and the characters arrive on the next frame
+@@ 0b9ab29179c2 t
+(prepares the off-screen rendering under the black: creating it does not delay the 1st visible frame)
+@@ ac1d8d89ee33 t
+(end of battle: the battle windows, like the party status at the top left, stay "visible" in the engine for a moment: on the black screen only that box could be seen)
+@@ ee819b38b421 t
+scene drawn off-screen if a display setting requires it (MSAA antialiasing, sharpness, brightness: postfx.py); otherwise directly into the window
+@@ dbebf689e330 t
+town: BackColor gradient background (#111)
+@@ 5c5af5754b17 t
+trees, candles...: facing the camera, whatever its rotation
+@@ 08b391056a48 c
+sprites: vertical panels turned toward the camera (persistent vertex lists, one per slot)
+@@ 76f0a63395c3 t
+world map: the top of the sprite is north (-Z)
+@@ f86d8aa16e0c t
+edge correction: intensity (0 to 1) and position of the viewer's camera
+@@ 400827420cfb t
+trial #134: share of the tilt of the world's verticals taken by the sprites
+@@ 637fc536aeb5 t
+world map: flat sprites, all at the same height, stacked according to field_depth_rank
+@@ 62dc66547e1a t
+packet 14: Chara.SetVisible
+@@ 7df5e91691ab t
+(boat: 12 columns of 40 x 40, see hd.SPECIAL_SHEETS)
+@@ 85bb21fa4091 t
+boat panel: 0.8 x 0.8 versus 0.48 x 0.64 for a character
+@@ e19bfb99a2b2 t
+lying character (packet 16): drawn flat by lying_pose, see further down
+@@ 127d5bea82c2 t
+cell (col, row) of the atlas (original or HD), gutters excluded
+@@ dddc8aa0c33d t
+world map: flat sprite (top view), the hero (slot 0) above the others
+@@ 3583dc47dcca c
+Chara.normalBillboard: the panel (0.48 x 0.64) takes the camera's rotation, so it faces the screen (not squashed by the tilt); its vertices
+are offset in depth (bottom 0.185, top 0.65 toward the camera, Chara.SystemInit): once on screen it behaves like a standing character for the z-buffer
+@@ 97cfd3af882a t
+packet 13, bit 11: Chara.SetScale (Transform.localScale of the panel, feet fixed); 1.0 almost everywhere, 0.738 for the hero and the partner in mlb1a, 0.952 in ev07 (the rest: start values of a frame)
+@@ a28a77ae7b6d t
+depth offsets at the panel's scale (the top tilts 36 degrees toward the camera: the panel is almost vertical in the world)
+@@ 4b3663f3b7fb c
+Original panel by default since #184 ("exactly as in the game": see _edge_correction, _sprite_reference and _town_panel): the top of the panel, being closer, moves
+away from the center of the image and the sprite "leans" outward near the left / right edges (up to 15 to 20 degrees in 16/9), as on mobile but more visible with the
+field of view of 16/9; the edge correction (vertical edges, constant proportions, unchanged size and depth, #134) remains available (DQ_CORRECTION_BORDS=100), as
+does the shear (DQ_SPRITE_INCLINAISON, see _sprite_tilt)
+@@ 1fe7089f9453 c
+Lying pose (packets 16 / 17, Chara.SetSleepPose, shader Custom/CharaSleep; see lying_pose.py): the panel is NOT standing, the edge correction (which straightens a
+standing panel) is never applied to it; seen from above, at full size, rotated according to the sleeping direction, with the depth of the flat body (z-buffer,
+overlaps by a bed, a wall...)
+@@ 685d23411f9e t
+packet 30: the balloon's panel (Field.SetFloatingObject) follows the field's scale, feet fixed: it keeps its on-screen size (MAP-02)
+@@ 449cb163a35c t
+packet 15: the engine can hide a character's shadow (world-map boats...); lying, the shadow goes 64 below the ground (Chara.lieBillboard) unless it is separate
+@@ 21eee581ea6d t
+packet 15, bit 14: the engine gives the shadow's position on the world map (the balloon: further south than its feet); otherwise the shadow is under the feet
+@@ 2bf7e9372c72 t
+(the uniform is 0 until it has been written: all black)
+@@ bdecd4475d9e t
+DssaMonster* shaders: ZWrite Off, Cull Off, ZTest LEqual
+@@ a8b655fb8027 t
+rewrites the vertices of the monsters/effects ("dirty" buffers: not yet sent to the GPU)
+@@ 1cd84aa85173 t
+forces the rebind + commit() on the 1st draw: otherwise the monsters come out with the previous frame's data
+@@ ce691e362b36 t
+enlarged texture: soft mipmap filtering; original: sharp pixels (nearest neighbor if smoothing is off)
+@@ b5e3df19b77f t
+DssaCharaTransparent: ZTest Always
+@@ b9a649195b42 t
+bestiary: the town map stays loaded (no packet 0) but the book's camera, at 83 units, sees only a slice of it (the church, at the edge of the far plane) behind the list and the sheet: the book shows only the monster (packets 21 / 22)
+@@ 07f18a8a588e t
+animated 3D models (the title dragon): same queue as the opaque scenery
+@@ db107ba961b1 t
+like Unity (Chara shader, normal ZTest): a character hidden by scenery is not visible at all
+@@ 0a6949f788b4 t
+icon bubbles (Riseup), in front of the characters
+@@ 7c29b7ef5733 c
+Mesh effects of the town (packets 21, 22: Morph spell, splashes, the prologue's sword strikes, credits and title logo), turned toward the camera. They go AFTER the
+characters (Custom/Chara: Transparent queue, 3000): DssaChara Transparent+100, DssaMonster0 +150, DssaMonster1 +200, DssaCharaTransparent Overlay-150 (3850, ZTest
+Always: in front of everything, like the Riseup bubbles, from the same queue). Before, they were drawn before the characters: a character hidden by the effect
+covering it (the cloud of the Morph spell went "behind" Elisa).
+@@ 73b2d42193ce t
+(not on the world map, which is entirely 2D)
+@@ 19cbeadda38f t
+Capture effect starting: the scene (without interface) is copied, then the normal frames continue (the black of a travel in progress covers everything)
+@@ f6a4bd31faa5 t
+capture of the game screen, without the help lines
+@@ 5b8929c1ad00 d
+16/9 PC window: runs the game engine and draws what it asks for (scenery, sprites, camera).
+The `Game` class is the core (startup, loop, scene drawing); the rest is arranged by theme in the neighboring modules (see docs/code_plan.md).
+@@ 4ab1e6634a64 d
+Appends `text` (lines ending with a newline) to the window's error log (window_errors.log, logs folder); never raises: -> True if written.
+@@ 0eb7909b966a d
+(test) DQ_SIM_ECHEC=1 (or 0, or 1,0): creating / switching to this mode (1 full screen, 0 window) fails, to try the fallbacks.
+@@ 109cf02b3eb3 d
+Original menu windows (layout read from the game's Unity code); without the file cache/ui_layout.json the simple menus are kept.
+@@ a0a172a92a6e d
+The engine loads in a thread while the entry logos (Boot.Logo: SQUARE ENIX, ArtePiazza) play, as on mobile where they cover the loading; a press skips the current logo.
+No logos for a direct launch on a save (--slot N), for test captures (except --logos) or with --sans-logos.
+@@ 2da0b25a1e8c d
+Black screen, with no text at all (the text goes to the console instead): the window stays alive during the startup loads.
+@@ 676005fe7ad4 d
+Cache preparation in a separate process, at low priority (data.py on the command line): in a thread, its extractions slowed the game down. Fallback: thread.
+@@ ff1d1107ba45 d
+"Paramètres" menu (Esc) open (yes) or closed. The game keeps running behind it, with no input (see `tick`), on all pages (#178); a page of Pause.FROZEN_PAGES (empty) would stop it (engine and sound: `_sync_freeze`, at every frame).
+On closing, keys already held do not count as a new press.
+@@ 9db477e0dc7c d
+The window loses focus (Alt + Tab, click on another window or another screen, minimizing): the game stops (`_loop`), the music and sound effects are paused (Sound.lose_focus, like Sound.SystemPause in the original) and held mouse buttons are released (the release outside the window never arrives: wheel camera, on-screen cross, pressed button).
+@@ 459b1c256fc4 d
+The window regains focus: the sound resumes where it stopped, the game resumes without catching up the elapsed time (clock reset to zero, as on closing the menu) and keys already held do not count as a new press.
+@@ c46f3a296783 d
+Esc menu > Quitter > Oui (and "Quitter" of the start menu): the same closing as the window's close button (settings, history, sound; no game save: like the original game, the automatic one is only written on arrival on a map, see docs/technical-notes-dq4-port.md).
+@@ ae4eeed1a611 d
+The "Revenir à l'écran titre" line of the Pause menu is active only in towns and on the world map (not on the title screen): there, the original box (Engine.request_return_to_title) receives the keys and clicks.
+@@ d0f373d2f747 d
+Pause menu > "Revenir à l'écran titre": the Pause menu is already closed; the engine opens the game's original box (its text, Oui / Non); "Oui" starts its return to the title, with its fade
+(Engine.request_return_to_title). The game's only way back to the title.
+@@ 6a5e43139e03 d
+Stops the sound and the engine clock when the menu moves to a page that stops the game (Pause.FROZEN_PAGES), resumes when it leaves it; on return, no catch-up of the elapsed time.
+@@ 3955265c0b37 d
+Advances the engine in 1/30 s steps (real clock, at most 3 catch-up steps per displayed frame; a longer stall is forgotten) then sets alpha, the fraction of the current step.
+@@ dc377b355caf d
+Speed factor of the game clock while the hero walks (settings: walking speed, accelerator while its key is held). Only on the field (town, dungeon, world map),
+with a direction held, with no message, menu, battle, screen effect or game event (player lock, Global.Flag 4): when the game is in control, its pace takes precedence over the setting. A fade alone (flag 1, player free) no longer prevents acceleration (#107): the arrival fade of a map lasts 30 frames while the hero is already walking
+from the 12th (measured on the real engine); before, the accelerator did not work during that second. Same thing on return from a battle (#127): the return fade lasts 30 frames, the player is locked until frame 11 then free
+(the hero walks from frame 13 on, measured on the real engine); before, `State.battle_transition` cut off the acceleration during the 30 frames, i.e. 0.6 s of normal walking despite the held run key. During the exit fade, the player is locked (flag 4): nothing changes there. The engine then does more steps per second (see _loop): the hero, the NPCs and the animations go faster together,
+the companions keep their distance (the position history advances at the same rate) and the encounter rate follows the distance traveled (it counts steps).
+@@ 93b2b95dd7df d
+Does the player have control of their character? Yes only on the field (town, dungeon, tower, world map), when the game has locked neither the player (event, scene, talking with an NPC, exit fade:
+Global.Flag 4, the same condition as accelerated walking, see _speed_factor), with no message, no game menu (commands, shop, Divers...), no screen effect or loading, and outside battle ("combat"
+part, entry cascade, black screen waiting for the battle scene, between two fades of a battle). A fade alone (arrival on a map, return from battle, player free) does not count (#107, #127).
+@@ b1989b2a5c3c d
+The history (H key, "Historique" line of the Paramètres menu) is only accessible when the player has control of their character (#187): not during a battle, nor when the game takes control (dialogue, scene, event,
+exit fade, game menu), nor on the title screen.
+@@ 08272502d5f7 d
+History key: opens the page if the player has control, otherwise nothing (no message: the player need not be informed, #194; the key is always acknowledged, it only serves this purpose).
+@@ 770f107cd2af d
+One engine step outside battle, accelerated (walking, accelerator). Returns False when a battle transition has just started during this step (start screen effect triggered by an encounter): VC.advance_time stops there
+and the rest of the frame resumes at the game clock; without this, the remaining catch-up steps of an accelerated walk would shorten the start of the cascade.
+@@ de80ab5335fb d
+(test) keys pressed at loop frame n, or "cN+k" = k loop frames after the battle has reached N frames: 'n:NAME' (NAME = pyglet key name;
++NAME / -NAME = held / released; @x@y = mouse click (@x@y@2: hover only); %x%y &x&y *x*y = press / drag / release of the middle button); captures '<shot>_<n>.png'; the last capture quits.
+@@ e3aa4fc31e66 d
+(test) Alt modifier of a simulated key event: the real keyboard supplies it (Alt held: MOD_ALT); +LALT then RETURN = Alt + Enter.
+@@ 553f51eabebd d
+(test) --options-test "frame:Label=value;frame:Label=value": applies options of the Affichage page at the given loop frame, through the same functions as the Esc menu (value read as JSON: 3, true, 0.5, [1280, 720]).
+@@ 36d7c60a0cec d
+(test) DQ_TEMPS_IMAGES=<file>: log "kind loop-frame engine-frame duration-in-ms" of each engine step and each draw (spots stalls on a first display:
+texture or model loaded on the fly).
+@@ 2c622d528b5f d
+State at the end of the step that has just finished: positions of the characters and the camera, for interpolation.
+@@ 0689072c5cca d
+Replaces, for the duration of a draw, the positions of the characters and the camera (world map, towns) with those of the instant between the previous step and the current step;
+a jump (map change, forced move) is not interpolated. Returns what is needed to put everything back.
+@@ 4e44bc6a891d d
+(position, target) of the town camera between the previous step `pr` and the current step, at fraction `a`, or None (nothing moved, or a cut: map change, scene shot, angle set in one go). The target follows the movement; the camera rotates
+around it (game camera buttons, scenes): its position RELATIVE to the target is interpolated, in heading (by the shortest path) and in radius, so that the rotation stays smooth between two engine steps (at 30 Hz, one rotation notch moves the camera by
+1.7 units: more than the jump threshold on a single coordinate); a relative movement of more than CAM_JUMP_ROT times the distance in one step is a cut.
+@@ 9d926956c289 d
+A very long frame (more than 4 engine steps: 133 ms) among the 3 that follow a map load (scenery and character textures, shaders, off-screen rendering: first frame of a scene) must not
+be caught up: otherwise the engine redoes 3 steps at once (VC.advance_time) and the entry fade skips by as much (on screen: the picture already appears half faded). The engine clock restarts from zero; the time
+of the stall is lost (loading screen). Limits: a slow machine (frames of 100 ms and more) does not freeze the game, only a real stall is absorbed, at most 3 times per load.
+@@ f84f32521e90 d
+(diagnostic, DQ_SUIVI) one line per drawn frame during the first 12 frames and during the 16 frames that follow a map load or a game part change: what was drawn (`_drawing_kind`:
+scene, loading black...), the scene state (camera, characters placed), the opacity of the two fade planes, the draw hold (`State.loading`).
+@@ 7e1958d36df5 d
+A savestate (digit shortcut, Ctrl + digit) could not be saved or loaded: one line in the console and in the error log, and the small on-screen message (D-230).
+@@ 55f324e95545 d
+A save that the engine could not write (GameCore.h_fclose, after two tries, #198): the old file is intact and the game continues; small on-screen message (D-230) and a line in the error log.
+@@ 4b4e6e58141c d
+Engine heap (ENG-01, audit of 2026-11-04: "Core.malloc" always advances, "h_free" frees nothing, 256 MB in all; about 480 battles or 7,000 map loads, i.e. hours of play): the engine would stop all at once
+at 256 MB. A line in the error log notes it at 200 MB (78 %), then at 240 MB (94 %) (no on-screen message since #267), once per threshold (again if the heap goes back down, for example after loading
+a savestate). Closing then relaunching the game resets the memory to zero; the game writes its automatic save (data5) on every arrival on a map, nothing is written here: a savestate would keep the heap full.
+@@ 184eac4a5db8 d
+Engine settings that the apk in use did not let install (Engine._record_missing: another engine version than the one studied): the game runs with the original behavior for those points. One line per point in the log
+of errors (no on-screen message since #267), only once (points found later, after loading a savestate, are announced in turn).
+@@ 2831c2d36d04 d
+One engine step (30 per second of game clock). `mute`: extra step of an accelerated battle while the engine waits for the player (menu, message waiting for a key): the engine advances (monster animations,
+windows, timers) with no key or click, those still being read at the normal rate (see _do_battle_step).
+@@ f79a2d3e2b71 d
+Information lines (F1): location and window, display settings, sound, performance. Nothing can be changed here: the settings are in the Esc menu.
+## FILE dq4_pc/window/helpers.py
+@@ 5c10b0d00cd4 d
+Small stateless functions of the window: usable screen area, depth rank, free camera, camera height, projection matrix...
+@@ 799f2bbe901d d
+Maximum (width, height) of a drawing area that fits on the main screen with its title bar and the taskbar; None if the screen is unknown.
+@@ 3c93aa1a2f63 d
+Brings a window size that is too large for the screen down to the largest size of the same shape that fits: Windows then shrinks the window without warning and the drawing kept the requested size (zoomed scene, partly outside the window).
+@@ d51350b88e20 d
+World map: stacking rank of each placed sprite (the greatest rank is in front; it sets the height 0.04 + rank x 0.0005 of the flat sprite).
+The game (FieldPartyDraw::draw, libdq4core 0x1ec5a8) sorts the party members by decreasing depth (selection sort; at equal depth, the lowest slot keeps the head) then gives them
+SpriteCharacter::setDepth 10, 9, 8... in that order: at equal depth, the hero (slot 0) is in front of the partner. Order here: engine height z (3rd value of the position), then the southernmost
+(a partner south of the hero is in front of the hero), then, at equal position (landing of a chimaera wing or of Zoom: the party is stacked on a single point, issue #135), the LOWEST slot in front
+for the party; vehicles (slots >= 10) keep the most recent in front.
+@@ 6f3b953c2c2a d
+3x3 matrix of a Unity rotation (Euler angles in degrees, order z then x then y, left-handed space): column = local axis in the world.
+@@ 08080b1dd75c d
+Free camera: position + rotation (as in battle), no target. Packet 11 bit 7 (scenes, title); casino: the engine sends the position and the rotation (packet 10, mask 5) without packet 11.
+@@ ea37c80fb7b2 d
+Is the town's background a real gradient (packet 8: colors of the top and bottom of the frame, `State.top_background` / `bottom_background`)? False without packet 8 (None) or if the two colors are equal: clearing
+the frame to that color is enough (no difference from before #111).
+@@ 3d461259941f d
+Window open with no confirm button (gamepad 0x10) and no engine cursor (Oui / Non): it has nothing to do with the A key (e.g. "Quitter" of the monster arena, a single back button 0x400).
+@@ 789d28055dc6 d
+Windows only: enables or disables the window animations done by the window manager (DWM: fade / zoom opening, minimizing, restoring; DWMWA_TRANSITIONS_FORCEDISABLED).
+Disabled while the game window opens, they do not pile on top (a fade of the window itself, over the black then the logos, looks like a curtain); restored afterwards (see on_draw).
+No error propagates (system without DWM, missing handle: nothing changes). -> True if the system accepted.
+## FILE dq4_pc/window/inputs.py
+@@ 444e22230fbf c
+---- pointer and keyboard
+@@ cbf8d6951e99 t
+pixels: distance, from the pointer position when the keyboard was last used, beyond which the mouse takes over again (hover, selection). CUMULATIVE count from that position
+@@ a59faba4edb0 c
+(and not from one event to the next: a modern mouse sends events of 1 to 2 pixels, never "large enough" one at a time); a tremor of the table or the sensor (1 to 2
+px) does not take over
+@@ 049abc570aff c
+---- wheel click
+@@ 937e4ffe8e4d t
+pixels: movement, since the press, beyond which a wheel click becomes a drag (below it: a click; a trembling hand does not make it a drag)
+@@ 91415478deb5 t
+horizontal drag: degrees of camera rotation for a movement equal to the window height (the sensitivity does not depend on the resolution); right = right arrow
+@@ 43d92123f1df c
+---- F1 info block
+@@ 052473eca468 c
+---- A key while waiting for a "touch"
+@@ dedea33ae124 d
+Viewer mouse / keyboard inputs: the pure logic (no window or OpenGL), so that it can be tested (tools/test_entries.py).
+- mouse_active / MouseGuard: when the pointer takes over again after keyboard use (hover and selection);
+- WheelGesture / rotate: wheel click (simple click = camera brought back to north by the game, drag left / right = camera rotation, adjustable direction);
+- info_zone: where the F1 info block is placed (top right).
+@@ 8e4bd3aa2c07 d
+Has the pointer really moved? `ref`: pointer position (x, y) when the keyboard was last used (None = the mouse already has control: a click, or a real movement since);
+`pos`: current position. True if the mouse has control or if the pointer has moved away from `ref` by at least `tol` pixels. A click never needs this test: it always acts.
+@@ d807d9a0d129 d
+Memory of the "last device": the keyboard (key pressed) freezes the reference position; the first real movement (mouse_active) or a click gives control back to the mouse, with no delay.
+@@ 0eaaf58aff2c d
+A middle-button gesture: press, movements, release. A click (release before having moved by DRAG_THRESHOLD pixels, in any direction) recenters the camera; a drag makes it rotate left / right
+(only the horizontal movement counts), from the point where the threshold is crossed (no jump at the start); after a drag, the release recenters nothing (a click followed by a movement is not a click).
+@@ e615d5dbcfcf d
+Horizontal drag of dx pixels -> camera rotation to perform, in degrees (positive: to the right, like the right arrow): same magnitude as the arrows. `requested`: what remained to rotate (the game only rotates in notches,
+see Game._camera_after_step); the total stays between -maximum and +maximum. `invert_gd` ("Inverser gauche / droite" setting): the drag direction is inverted; the keyboard arrows do not go through here.
+The location's limits, the locks and the scenes are the game's: it refuses the rotation (Engine.camera_wait) and the request is dropped.
+@@ 5fcca8863856 d
+F1 info block (location, settings, performance): (side, available width); the side is 'droite' by default (top right of the screen), 'gauche' if the interface column occupies the right.
+The width is the free margin next to the interface column (portrait 450 x 800, enlarged by ui_zoom; `column` false: no game windows, the whole screen), so as not to hide its windows; at least 260 pixels.
+@@ 3dc888d8f42c d
+(p, decl) sent to the engine. `is_waiting`: a game menu is waiting for the screen touch (Engine.awaits_touch: the king's experience gift); `touch`: the value it reads (exactly 0x100). A (key, click, Enter, Space) sends this touch
+alone, without A or B; the rest of the time nothing changes. An open message would otherwise receive A (0x10), which this menu does not read: the game stayed frozen on the last level message (#261).
+@@ 70a617533c0d d
+A key has just been pressed, the pointer is at `pos` (None: position unknown, the first movement counts).
+@@ b189913b4085 d
+Pointer movement to `pos`: true if the mouse has (or takes back) control, false if it is just a tremor after keyboard use.
+@@ 6398fce2e7ab d
+Pointer at (x, y), middle button down -> horizontal movement in pixels (to the right: positive) to apply to the camera; 0 as long as the gesture remains a click.
+@@ b3d13c93c24e d
+-> True if it was a simple click (the camera recenters), False after a drag or with no press.
+## FILE dq4_pc/window/keyboard_mouse.py
+@@ 19dfe3198434 t
+F11 / Alt + Enter: from anywhere (logos, title, game, Esc menu)
+@@ 2507ec38cb55 t
+Alt alone = party chat, on release (see on_key_release and _edges)
+@@ 32f5cecaa234 t
+keyboard in control: hover only takes over at the pointer's first real movement (a click takes control back immediately)
+@@ 29b90561b816 t
+name entry: the keyboard belongs to it
+@@ fb34c2d20255 t
+Sauvegardes screen (export / import)
+@@ 4d2badea59f3 t
+Licence screen: scrolling and back
+@@ a5e928699fbf t
+Esc: back in the game's menus and the map (like the Cancel key), otherwise the Esc menu
+@@ 312cfac51308 t
+Manuel -> Normal -> Rapide -> Très rapide (in battle as elsewhere)
+@@ 0eb9f3aa68f8 t
+message history key (#187: only when the player has control of their character)
+@@ 302b495f7d35 t
+savestate shortcuts: digit = save, Ctrl + digit = load
+@@ 661e1bb54c27 t
+Shift + modifier key (no digit): undoes the last load, on release
+@@ fbbfa7d2b0ef t
+Alt released: if nothing else was done meanwhile (not Alt + Enter), it is the press of the party chat key
+@@ bedf050d2d55 t
+start menu: Esc = Cancel (back from the root = quit)
+@@ 8027aad6f98d t
+casino, bestiary: Esc = back button of the open window (gamepad 0x20); reels spinning, message, cards being dealt: no back, the Esc menu opens
+@@ 8ea909780bdc t
+(during the logos, the engine is still loading: `self.engine` does not exist)
+@@ c5f5d2c54f45 t
+a click always acts, immediately: the mouse takes control
+@@ 2edd5013e4c6 t
+middle button: the camera only (never a menu, message or button click)
+@@ 6eb7523c8c3f t
+title: a touch anywhere confirms (the gamepad receives A)
+@@ fa8e31a7c0c2 t
+on-screen buttons (Carte, Commandes, Discussion) and cross
+@@ ddecc68c11f4 t
+free field: a left click anywhere = action key, like Space (#131; no more click on the bubble alone)
+@@ 91532e7facda t
+map window buttons (no number): back (gamepad key 0x400, closes the map) and mode (gamepad up, changes view), active on release
+@@ 452e6cee924b t
+(back and mode: gamepad 0x400 and 2, silent as in MenuPortItem.Update)
+@@ dde8a24e8234 t
+all the menus that wait for input: the frontmost button, then the most recent window
+@@ f019274a82dd t
+touching the message = next page
+@@ 501965400220 t
+(a movement with no button pressed: the middle button's release went unnoticed, outside the window or during a focus loss; the gesture is abandoned)
+@@ 2c8b31578f19 t
+simple tremor after keyboard use: neither the mode nor the selection changes (cumulative distance since the last key, see inputs.MouseGuard)
+@@ ec72d3e6e0a0 t
+outside a button: the last hovered element alone stays highlighted (the engine's cursor is there too); cleared by on_mouse_leave or a key
+@@ 78b3ec1e891c t
+button with no number (back, page arrows): only the element lights up, the menu's cursor does not move
+@@ 612d30782e57 t
+Esc menu: the pointer has left the window, nothing is hovered any more (the plates light up again)
+@@ 6fc296bab045 t
+game gamepad: down 1, up 2, right 4, left 8
+@@ 186651b68c95 t
+touch on the central circle of the cross (without dragging) = action key, as on mobile (#131)
+@@ 240c69fd01ff t
+battle screen speed button: passes nothing to the engine
+@@ ae13d10fbc82 t
+back button: MenuPortItem.Update adds 0x400 to the game's keys (the engine closes the map) instead of sending a message to the port
+@@ 74417812746f t
+"map mode" button of the window (type 22, icon 19 / 20 / 2 sent by the engine): gamepad up = changes view (handled with the Carte key)
+@@ db0999a84643 t
+"Sauvegardes" button of the start menu (in place of "Sauv. cloud"): specific to the port
+@@ bf2307c73417 t
+on-screen cross held with the mouse: one more direction (relative to the screen, like the keys)
+@@ e0cbab49bbde t
+(Alt: on release, see alt_tap: Alt + Enter must not start the party chat)
+@@ 23418d3b5bc8 t
+(a swallowed key released outside the window: the list empties)
+@@ 8345097b6955 t
+mouse clicks: next page / cancel
+@@ d23f3dd4b241 t
+buttons that have just been pressed
+@@ 92c0c01ef2bd t
+Enter and Space also turn the message pages
+@@ ddd3906cbe4a t
+repeat of held directions (menu cursors)
+@@ 4d1c6f1d8474 t
+end of the OK / Cancel press sent to the menu
+@@ ab7b8bf2ca01 t
+map open: first version
+@@ 75752655a144 t
+town with shops: the map has a 2nd view, the shop list (type 24)
+@@ 48fd9d1d99c0 c
+Carte key: 1st time the first version (in town: the plan), 2nd time the other version (in town: the shop list; gamepad up on the plan window: FieldImageMap::execute),
+3rd time closes (back button: 0x400, like Unity's MenuPortItem.Update); Cancel or the back button also close. The cursor and the arrows are not used here
+(except the arrows of the shop list: previous / next shop).
+@@ 2ac6fe95c7d9 t
+town: M = plan, then shop list, then closed; the "map mode" button alternates plan / list
+@@ c56f86e1acfe t
+list arrows: next / previous shop
+@@ 0a1584d6fcd8 t
+(the screen's "map mode" button changes view in both directions)
+@@ 013fc2c8aa0e t
+arena (battle): the only open window is "Quitter" (gamepad 0x400) and A must turn the message page (field key for the engine)
+@@ c0d4533ceb97 t
+memory criterion only: the message first
+@@ b9b4565fca1b t
+a menu waits for the keys: they are sent to it, not to the field
+@@ 7389c3841156 t
+L / R = left / right (previous / next page of single-column menus)
+@@ c2ff0ab0a2d9 t
+title screen: only A confirms (Space, Enter or touch); no walking, no camera
+@@ a8280a38734a t
+name entry, Licence screen: everything goes through the port's keyboard
+@@ 0015419d764d c
+on the field: A = talk / examine, Cancel, X or Start = open the menu (the engine wants these buttons alone)
+@@ 1731ec191ec6 t
+(the engine wants these buttons alone) A, then on-screen buttons, then Commandes / Discussion / Carte keys
+@@ 1be7a7222cf2 t
+(on the field, bits 4 and 5 of the held keys are the game's camera buttons: left, right, both = return to north)
+@@ de4b64f3288d t
+open message: A turns the page (0x10); the experience gift menu, in its last state, waits for the screen touch (0x100 alone)
+@@ a6ec7ba9acb7 t
+(no menu, no message, no title: a rotation requested with the mouse or a pending return to north are not triggered afterwards)
+@@ e06ea3042f3c d
+Keyboard, mouse and gamepad: window events and key reading.
+@@ b81f7dd61731 d
+Esc menu: entering a value with the keyboard.
+@@ 304bdc544aea d
+The only fixed key: Esc (menu). The others are those of the Commandes menu (pad, on-screen info); the open menu gets all the keys.
+@@ d0460b754734 d
+Esc serves as the Cancel key when a game window (menu, map) is open on the field: otherwise it opens the Esc menu (battle, messages and free field included).
+@@ 56e8fb90b90c d
+Does a visible game window currently have a Cancel / Back button (gamepad key 0x20)? (casino, bestiary: Esc presses it; otherwise it opens the Esc menu)
+@@ e1ed5aef2ac7 d
+Button of the `port` window under the pointer (frontmost first): (number, gamepad, depth, element identifier) or None.
+@@ f59142405300 d
+Mouse = mobile touch: press on a button of the active menu (MenuPortItem.Update, PUSH_STATE_BEGIN); right click = Cancel.
+@@ 9801ad3c6a76 d
+Mouse hover: the button under the pointer is selected as with the arrows. Touch menu (local cursor): immediate; engine-cursor menu:
+the cursor is brought to the button by direction presses, one frame in three (see _step_toward_hover).
+@@ 99c229aa6465 d
+True if the element has a button drawing (plate, part 7) or an arrow drawing (part 10): the window frame that covers the screen (gamepad 128) is not one.
+@@ fcc86e441baa d
+A direction press toward the hovered button (menus whose cursor is in the engine), as long as the cursor is not there (at most 24 presses).
+@@ 37ad436acf2a d
+Release on the same button (PUSH_STATE_FINISH): MenuPort.Send([1, button number, button's gamepad key]).
+@@ 857e095d6528 d
+Game gamepad from the configured keys: directions, A (action / confirm), B (cancel). On the field, the left / right arrows are the camera's (game camera buttons, see _bits_camera) and the directions
+are the screen's: the game rotates them according to its camera, as on mobile; in a menu, a message or a battle, the arrows become directions.
+@@ af921e90724f d
+Commandes / Discussion / Carte key on the field: sound effect 300 of the on-screen button, in the same situations as with a finger (#60, D-156; is the button allowed by the engine, whether displayed or not).
+@@ b43d1a7f6b3f d
+Presses (rising edge) of X, Start, L and R since the last engine frame.
+@@ 060500c7c02f d
+Keys and clicks of this engine step -> (p, decl): held buttons and just-pressed buttons, as the engine wants them (menu that has the input: everything goes through `_menu_input`, p = decl = 0).
+Only in "real" steps: an extra step of an accelerated battle (`tick(mute=True)`) reads none, so that the key rate (arrow repeat, first press) does not change.
+## FILE dq4_pc/window/menu_display.py
+@@ cac7088d026f t
+(D-238: the text is translated here; a text with placeholders must be translated before being formatted: toast(tr('Etat %d') % n))
+@@ d489793d8ecb t
+height (canvas pixels) of a message sample: 3 lines of 28 pixels + 3 of margin (see ui_menu.limit_lines)
+@@ 2260620ccc8f t
+sample texts of the interface editor (1 to 3 lines, like a dialogue box): one at random at each choice of "Dialogues"; each line is translated when drawn
+@@ 7b55d448e712 t
+original window: the whole canvas (512 x 512, looping) + scrolling by UV offset
+@@ cba8260e7386 t
+(test) text lines of the canvas: (first row, last row)
+@@ 422862b4f7f4 t
+4-line battle message (4 monster groups): original frame
+@@ 33c1b46b8b6a t
+drawn with the original windows (_draw_menus)
+@@ b6ace0703187 t
+text size: 1 canvas pixel = 1.3 pixels at 720p
+@@ af19ac4a882d c
+---- menus
+@@ eb38eef69154 t
+line breaks -> spaces (action summary: "Attaquer ▼ cible")
+@@ 480e3b2e7db3 t
+a key: the cursor takes control again (whole row highlighted)
+@@ 309198d5511b t
+numeric entry menu (bet, tokens, amount): arrows = columns and ▲ / ▼
+@@ 175333a7843a t
+L / R (previous / next page) in a multi-column list (bestiary): left / right change column there, so it is the window's page arrows ◀ ▶ that are pressed
+@@ 85f81e5acf19 t
+window with no engine cursor or A button (Statut pages, types 13-17): left / right (Q, D, L, R) turn the pages with the arrows of another window (type 6), like a touch
+@@ c18c48d1771f t
+window with no confirm button but with its page arrows (bestiary sheet): left / right press them
+@@ 35e6d22be9bc t
+"Action" of the bestiary sheet (gamepad 0x800): the only window that has one
+@@ b1305d535cd6 t
+start: the top left button
+@@ 8c892dc7abb3 t
+quantity (types 58 / 59: "Acheter" list, 63: quantity to sell): the cursor's row carries its own arrows (buttons of the same number, gamepad left 8 / right 4: "Acheter" list of a shop, quantity to sell) -> left / right change the quantity of the chosen row (like touching an arrow); the cursor keeps the whole row
+@@ bf257ae660db t
+a single column: left / right turn the pages if another window carries the arrows
+@@ c4d0342668a3 t
+a key: the cursor takes control again
+@@ 173b21fccf27 t
+numeric entry menu: the chosen ▲ / ▼ column
+@@ 054adabb45ae t
+type number -> Make_* name (once per game: called for each window at every frame)
+@@ c15aacb2b038 t
+(sample text: separate canvas, not the engine's)
+@@ 8e7336591be7 t
+parts hidden as long as the engine does not ask for them (party banner in battle, stadium tokens...): the preview shows them all
+@@ 05214f7633a6 t
+yellow frame: footprint of the window
+@@ d3a1c996f1b4 t
+(yellow frame: the Oui / Non stack)
+@@ ba6d53ceca91 t
+battle: the message is placed at the same spot as the command menu (same bottom edge, same scale)
+@@ 6ea4823cb38e t
+interface editor: only the chosen element is shown (through the Esc menu), not the game's windows
+@@ 10cc8949e0ad t
+(test) state of the windows at each change: port, type, visible, original window or simple menu
+@@ a751ac3b1728 t
+end of battle: the game closes the fade to black while the status window is still "visible" (the message stays: "Ragnar meurt !" can be read on the black): otherwise the black screen shows a lone box at the top left
+@@ 0dc8a9dc7f2a t
+Sauvegardes screen open: the start menu is hidden (otherwise it can be guessed at through the translucent frame)
+@@ 0db3176c61ce t
+start menu: group vertically centered, in a black frame (drawn further down); "Sauvegarde automatique" plate always visible, grayed out and inactive without a readable data5.dat
+@@ a0ca5d540e42 t
+the Oui/Non (type 1) follows the message window (D-231: always, in its original place or lowered)
+@@ ec5062651da9 t
+vertical offset of each window that follows the message: the same as the message's, plus what it takes to place the Oui/Non stack on the top edge of the message; right edges to be aligned (D-231)
+@@ f00b302474aa t
+battle: constant scale (the command menu zone always counts), otherwise the windows change size at every message
+@@ 80f05168f805 t
+'bas', 'haut' or 'centre': screen edge the window is stuck to
+@@ df9ccba215ed t
+(cy, scale) of the window group that contains this window
+@@ d4ef4768c77c t
+windows modified by the player (size, position): drawn separately, with their own frame of reference (the touch zones follow it)
+@@ 0a6f9235019b t
+hidden interfaces ("Afficher cette interface a l'ecran" = Non): computed like the others (the layout does not move), only their drawing is omitted
+@@ fa88a4594980 t
+Oui / Non: placed on the top right corner of the dialogue box (the player's settings are relative to it)
+@@ e75116b391e9 t
+no dialogue box: in its place, with the player's settings
+@@ 1ebf089398c7 t
+adventure log list, gender choice: centered on screen in a black frame (the dialogue boxes, for their part, stay in place)
+@@ bc91bf515337 t
+press in progress: the element is dark while the pointer is on it; if the pointer leaves, nothing (MenuPortItem.Update, state 2: SetPush(key)), if it comes back, it darkens again
+@@ 5288f3afdf0f t
+mouse: only the pointed element (-1: window not hovered, nothing is lit by number)
+@@ 9070703d7d31 t
+the message first, then each window that follows it (Oui/Non) with its own offset
+@@ a50acee42f21 c
+width: widest text + label/value area
+@@ b7446606a43d t
+labels/values on several lines (PV / PM / Nv.)
+@@ e09ff0f134d5 t
+(window resized, full screen, other layout: the width is recomputed)
+@@ d6183eb354fe t
+information lines stacked, wrapping within the margin left free by the interface column
+@@ 2ad0522c3ff8 t
+translucent black frame behind the text (readable over the scenery)
+@@ f12b0cb8452b t
+(the width only grows as long as F1 stays displayed: the left edge of the block, stuck to the right, and the text do not move when a digit changes)
+@@ f695326b2767 d
+Messages, game menu windows and interface editor; fades, vignette and small save messages (toasts).
+@@ 6a39c0f61ad1 d
+Small message at the top of the screen, ONLY for saves (savestates, game save impossible, import): since #267 the other notifications (battle speed, full screen, engine memory, settings, sound...) no longer exist (D-228);
+the notifications for saves were brought back on 2026-11-04 (D-230). tests/test_save_notifications.py keeps the list of allowed calls.
+@@ 8fff47059742 d
+Rebuilds the original menu windows from the interface memory (after loading a savestate).
+@@ 9a85610deebd d
+The editor chooses the sample text shown in the dialogue window: at random among SAMPLE_TEXTS (other than the previous one).
+@@ cd8283122d28 d
+512 x 512 canvas of the dialogue preview: the chosen sample text, in the game font, laid out from the 1st row.
+@@ 39560c223225 d
+Visible text of the message (engine canvas) -> white RGBA image whose opacity is that of the text.
+@@ 45fe5cd32bc2 d
+Copies the frame that has just been drawn into a texture (the capture that the battle start effect shatters into pieces, or that the travel, lamp and Riremito effects deform: `battle` false, see capture_effects.py).
+@@ f0c2088b8f7a d
+Town background (#111): vertical gradient from the `topmost` color (top of the frame) to the `bottom` color, as drawn by the game's `BackColor` (see VERTEX_GRADIENT), over the clear (the average of the two) and
+before the scene; depth is neither read nor written. Nothing to do if the two colors are equal (the clear is already that color).
+@@ a8c5d13ef566 d
+Darkens the edges of the game picture (Vignettage setting), under the fade and the interface: elliptical radial gradient (center untouched up to 45 % of the radius, edges in black
+with opacity = the setting). 512 x 288 texture stretched over the window (linear filter), created once.
+@@ 1b38d26287d4 d
+Screen fade planes (Fade.FadePlane, bit 14 of packet 9 = Fade.l_targetLayer): `background` = "FadeForBG" plane (Custom/BackFade, Background queue: in front of the scene, behind the windows and messages);
+otherwise the "FadeForMenu" plane (Custom/FrontFade, Overlay queue: in front of everything, windows and messages included).
+@@ c6e2268776ec d
+Cells of a window -> lines (engine line number, text, label, value, is_title).
+@@ 0e058a3bf69f d
+Port that receives the keyboard: that of the engine's active menu, unless it is a single-button window (Divers menu: input goes to "Sauvegarde rapide", opened last) while a fuller visible window exists
+(the page's list): that is the one that is traversed (the touch acts on all windows).
+@@ 34e38122f8ad d
+"Quitter" window of the monster arena (type 71): in battle, with no confirm button or engine cursor.
+@@ 70334fab421b d
+Port that receives the gamepad key `pad` (up 2, down 1, right 4, left 8, A 16, B 32): that of the active menu if it has a button for it, otherwise the most recent visible window that has one.
+Divers menu: the engine gives the input to the "Sauvegarde rapide" window, but the back button is in the list and the page arrows in a third window.
+@@ 0def2bfec175 d
+Keys -> active menu, like Unity's MenuPort.Send: [1, button number, gamepad] (game gamepad: down 1, up 2, right 4, left 8, A 16, B 32).
+Engine-cursor menu (message 2: columns x rows, e.g. Oui / Non): the keys are passed to it, it moves its cursor (messages 4) and confirms;
+left/right on a single column = previous/next. Touch menu (buttons with no engine cursor): local cursor moved according to the position of the buttons, A = touch.
+@@ ca4a50bda4ce d
+Page arrow ◀ (gamepad 8) or ▶ (gamepad 4) of the `port` window: (port, button number), or None. The shop quantity arrows (types 58, 59, 63: one per row) are not page arrows.
+@@ d9fd4873031f d
+▲ / ▼ columns of a numeric entry menu (slot machine and poker bet, tokens, bank amount, arena bet: Make_Casino_*, Make_Bank*): button numbers >= 0 that have
+both a gamepad 0x2 element (▲, value + 1 place) and a gamepad 0x1 one (▼), from left to right. Empty for the other windows (the ▲ / ▼ of number -1 are page arrows).
+@@ 8c5570fc83e0 d
+▲ / ▼ column chosen with the keyboard in a numeric entry menu (the rightmost at the start: the units), or None if the window has none (or has several confirm buttons: ordinary cursor).
+@@ 0072b2a4a0cf d
+Numeric entry menu with the keyboard (the ▲ / ▼ buttons are gamepad keys 0x2 / 0x1, outside the local cursor): left / right choose the column (tens, units...), up / down = ▲ / ▼ of the column
+(sent to the engine like a button touch), A = the confirm button (Lancer, Donner, Valider), B = back. False if the window is not of this kind or if no useful key is pressed.

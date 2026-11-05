@@ -1,0 +1,926 @@
+## FILE tests/test_battle_history.py
+@@ 0b554b296537 t
+l'etat charge pouvait avoir le meme objet Etat : l'ecart d'images le trahit
+@@ 2103bfe53147 t
+(le premier n'a pas fini : jamais rapporte)
+@@ 5bede7d62cb8 t
+retour au titre, sauvegarde chargee... : on ne garde pas un faux combat
+@@ c9b276a0113e t
+le capteur continue de servir
+@@ 06be300fa3bb t
+(les crochets avalent l'erreur : l'emulateur ne s'arrete jamais)
+@@ 889d524eb0b8 c
+---------------------------------------------------------------------------------------------------------------------------------- moteur reel (facultatif)
+@@ 995805455f24 t
+composition de la rencontre : 4 groupes au plus, (numero de monstre, nombre) a Encount + 0x34 / 0x44
+@@ f3a78afcb62a c
+-- outils
+@@ 0140abb1c52e t
+(un monstre peut s'enfuir : « Le gluant s'enfuit ! » -- compte comme tel, comme le message du jeu)
+@@ ac035285329c c
+-- scenarios
+@@ 2b8a85434d47 t
+2 rats volants : 3 d'experience et 7 d'or chacun, doubles
+@@ cc80b1e3701e t
+le moteur ne verse rien pour une fuite
+@@ fe77ab68d20a t
+(le jeu retire la moitie de l'or a un groupe anéanti)
+@@ 61ec349b48bc c
+-- #141 : monstres enfuis / disparus, objets gagnes
+@@ d0a3c80f7abd t
+(le jeu ecrit le butin du monstre quand il meurt : on pose le notre juste apres, avant la victoire)
+@@ 5daacbc2223b d
+Test de la capture des resultats de combat (dq4_pc/battle_history.py) : ennemis vaincus, or, experience.
+
+Trois niveaux :
+- calcul pur (Suivi, noms des plaques, build_battle) : aucun moteur ;
+- colle (BattleSensor) sur un FAUX moteur (memoire et emulateur simules : les crochets sont declenches a la main) : debut / morts / victoire / fin, ruptures, abandons, erreurs ;
+- moteur REEL facultatif : DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> (la sauvegarde 1 : Ragnar et Doc dans une ville). Les combats sont forces dans un moteur jetable (la composition de
+  la rencontre est ecrite dans Encount quand BattleRoot::setupMonster va la lire ; Global::startBattle lance le combat) ; chaque dict est compare au TEXTE du jeu (« reçoit N points d'expérience »,
+  « N pièces d'or ») et aux compteurs du groupe dans la memoire (or avant / apres, experience de chaque membre avant / apres).
+
+    python3 tools/test_battle_history.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_battle_history.py        (une minute environ)
+@@ a30e3c98ac2b d
+Debut, deux monstres, plaques, deux morts, victoire, fin ; -> les dicts rendus.
+@@ 944c6c180fe1 d
+Les noms longs sont coupes sur deux lignes par le jeu (« ; » et « $ » des textes) : le nom complet est rendu, le nombre de monstres (ligne commencant par une tabulation) retire.
+@@ 82fb3f9410cf d
+#141 : chaque monstre a UN sort (vaincu, enfui ou disparu) ; ce qui n'a aucun sort est encore la a la fin.
+@@ 40a19a73cb2b d
+Crochet au milieu d'une fonction du moteur : regs = {'x20': valeur, 'x0': valeur}.
+@@ 1f429ec51812 d
+rangement : ce que giveItem a renvoye (indice du membre, ou -1 : dans le sac).
+@@ 77b96ecdbc5b d
+Comme Interface.appliquer : de nouveaux dicts a chaque rafraichissement.
+@@ 9d08def2307c d
+Une instruction differente a l'endroit du crochet (autre moteur) : pas de crochet au hasard ; le reste de la capture fonctionne.
+@@ d75bebc64c55 d
+3 Gluants et 1 Golem : le 1er Gluant meurt, un autre s'enfuit, le dernier disparait, le Golem meurt ; puis victoire (or 13, experience 6), les objets, la fin.
+@@ f60de99816e2 d
+#141 : qui est mort, enfui ou disparu (par espece), l'or et l'experience, les objets (le nom est demande au moteur, le « ; » est retire ; qu'ils aillent a un membre ou dans le sac).
+@@ 5c4642be0566 d
+Attaque surprise (pas de plaque) : le nom vient du moteur par le numero du monstre, avec une majuscule ; sans reponse du moteur : « Monstre ».
+@@ 3a5c231d736e d
+Le groupe s'enfuit : le monstre qui s'etait enfui est note, ceux qui restent n'ont aucun sort.
+@@ b1c8ade89d47 d
+BattleSensor.pour(mo) : l'unique ligne d'integration ; les crochets ne sont installes qu'une fois.
+@@ 7ee8af6e0c25 d
+execMonsterDeath(i) : i compte les emplacements OCCUPES (getMonsterStatus), pas les emplacements.
+@@ 56194c759bc5 d
+Experience de chaque membre du groupe (HaveStatus +8 de HaveStatusInfo + 0x48 ; -1 = pas d'experience, ex. un invite).
+@@ 7a0bf6da8c75 d
+Joue le combat comme le fait test_battle_speed (A sur le menu, avance des messages) ; `actions` : une par menu de tete, 'combattre' ou 'fuir' (bouton 3 du menu de type 30).
+@@ e6be234b7ed5 d
+Le dict, le texte du jeu et la memoire disent la meme chose.
+@@ 44cee715aef9 d
+Le groupe a plusieurs membres : « Chaque membre de l'équipe reçoit N points d'expérience » (N = la valeur par membre, la meme pour tous) et « L'équipe reçoit M pièces d'or » (M = le total).
+@@ 519fccc7c233 d
+Le jeu double l'or et l'experience (BaseAction::doubleFlag_) au moment de les verser : le dict donne le nombre du message, pas celui des monstres.
+@@ eafde8e9e004 d
+« Mais l'ennemi bloque le passage ! » : BattleExecEscape::setup tourne a chaque tentative ; seule la derniere termine le combat.
+@@ 27b0dbce3f27 d
+Etat pris en ville, charge en plein combat : rien de faux, pas de plantage, et le combat suivant est bien rapporte.
+@@ 93d4dac2e493 d
+Etat pris en plein combat : le combat joue jusqu'au bout est rapporte ; l'etat recharge puis termine ne l'est pas (on n'a pas vu le debut de ce combat-la).
+@@ a9208fe22086 d
+Un capteur installe quand le moteur a deja execute le code de combat (blocs traduits par l'emulateur) fonctionne aussi.
+@@ 40d91a624ff9 d
+Lance un combat contre `ids` (un de chaque) et joue jusqu'a ce que le capteur ait lu les plaques (ouverture du choix de la cible) ; -> ({numero: nom}, messages d'apparition).
+@@ a0dc41a091dd d
+Le nom du dict est celui que le jeu ecrit dans son message d'apparition (sans les marques de coupure « ; » et « $ »), meme quand la plaque le coupe sur deux lignes.
+@@ 5d32ef802879 d
+Quatre especes distinctes, dans un ordre qui n'est ni celui des numeros ni l'alphabetique : chaque numero de monstre recoit SON nom (verifie par le message d'apparition).
+@@ 8dac4045a3d2 d
+Fait partir un monstre comme le fait le jeu : etat « mort » (setDeath) et drapeau de fuite (bit 4 de HaveStatusInfo + 0x424) ou de disparition (bit 5) ; checkDeathMonster le compte alors a l'image suivante.
+@@ 6e2ed122fd6b d
+Un monstre enfui et un monstre disparu (forces dans la memoire du jeu) sont notes par espece ; les autres sont vaincus par le groupe ; l'issue est une victoire.
+@@ 5e1d20a5f1c8 d
+Un objet donne par le jeu en fin de combat (« Le londuleux laisse tomber un coffre au trésor ! ... Il contient un arc de chasseur ! » ; le butin est ecrit dans le groupe de monstres comme le jeu le fait a la mort du monstre, BattleExecItem le donne) : son nom est celui du message du jeu.
+## FILE tests/test_battle_scenery_time_of_day.py
+@@ 5c3a511eba23 t
+GOT : StageStatus (g_StageStatus)
+@@ ca37ae3d6270 t
+(heure du monde, zone attendue, lettre du decor)
+@@ 3f6525e3a8d5 t
+btlcc1 n'a que _d et _e dans les donnees
+@@ 036d4542da30 t
+monde sombre : le moteur demande btl_se_dk, absent des donnees (seuls pl, po, wd et tc1 l'ont)
+@@ 57c78b2429a3 t
+btl_mt_e : le rouge orange du coucher de soleil
+@@ e1350d6e3909 t
+alpha 0 dans les 140 decors, shader BackColor sans fusion
+@@ 73fca1beabbb t
+et le cache est relu tel quel
+@@ 47a70fda5b04 t
+couleur de sommet moyenne : la teinte du moment est cuite dans l'asset
+@@ c7dbae20c236 d
+Decor de combat selon l'heure du monde (retour de Sylfried, 14 h 08 : « le crepuscule ou le leve de soleil dans le decor du combat »).
+
+Moteur reel (Unicorn) : `StageStatus + 0xcc` = heure du monde (0 a 3391, elle avance en marchant), `+ 0xc8` = zone horaire que `WorldLocation::setCurrentTimeZone` en tire :
+    0 a 127 : zone 1 ; 128 a 1983 : zone 2 (jour) ; 1984 a 2239 : zone 3 (soir) ; 2240 a 3263 : zone 4 (nuit) ; 3264 a 3391 : zone 1.
+`StageStatus::getBtlMapName` (0x1a4580) remplace la derniere lettre du decor par l'octet `zone` de l'octet-table « d n d e n » : zones 1 et 4 -> `_n`, zone 2 -> `_d`, zone 3 -> `_e`.
+Il n'existe donc PAS de decor d'aube : le debut et la fin de nuit (zone 1) reprennent le decor de nuit. Le soir (`_e`) existe, est demande par le moteur et chaque decor de la carte du monde en a un.
+Le moteur n'envoie en combat ni teinte (paquet 33) ni couleur de fond (paquet 8) : la couleur du jour, du soir et de la nuit est dans les assets (couleurs de sommet + textures `_d`, `_e`, `_n`).
+Le FOND du combat est la `bg_color` du bloc FETC du decor charge (`cmd_fld_load` -> `BackColor.SetColor`, lu dans libil2cpp) : orange / rouge au soir, bleu sombre la nuit (map_tint.fetc_background, Fonds).
+
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_battle_scenery_time_of_day.py        (DQ_CACHE=<cache des cartes> : verifie aussi les assets)
+@@ c017965a7f7a d
+Les 140 decors de combat du paquet de donnees (lecture du paquet : plusieurs secondes, ~1 Go : a lancer via engine_slot.sh).
+@@ 52dfed956ca2 d
+Fichier .map minimal : un bloc FETC (40 octets) dont les 4 premiers octets utiles sont r, g, b, a.
+@@ f994c562a57a d
+-> (zone lue, nom du decor, teintes et fonds recus au debut du combat) pour une rencontre sur la carte du monde a cette heure du monde (slot 4).
+## FILE tests/test_battle_speed.py
+@@ d24a646ff160 t
+(pas de pyglet / moteur ici : les tests qui en ont besoin sont ignores)
+@@ fc7221628281 t
+absent : Normal
+@@ 9fbe387dcdbf t
+Normal -> Rapide -> Très rapide -> Manuel -> Normal
+@@ 1cf848b1174c t
+valeur invalide : lue comme Normal
+@@ 6697e17e29a0 t
+aucun conflit avec les touches existantes
+@@ dd510c9c7d04 t
+une autre action a deja pris V : la nouvelle action n'a pas de touche (et la sienne est gardee)
+@@ ef0a710d8671 t
+un reglage de jeu, pas d'interface ; le bouton a sa propre interface (RG.SPEED_TARGET : bouton_vitesse, _taille, _pos)
+@@ e1bfdb802365 t
+Manuel et Normal : l'horloge du jeu
+@@ d92f519d6e4b t
+valeur invalide : Normal
+@@ a2a6469397c0 t
+Manuel choisi dans le jeu
+@@ 9fd12fdea7a9 t
+autre valeur : on sort du Manuel (Normal)
+@@ e154e8301eef t
+hors Manuel : le cran est garde
+@@ 39beb1e8d114 t
+ancien « Manuel » : devient la vitesse Manuel
+@@ 01325f4bb453 t
+autres crans : plus d'equivalent, la vitesse de combat enregistree reste
+@@ 08e16a1e941f t
+non impose : la sauvegarde du jeu decidait, pas le joueur
+@@ 471eafee08cd t
+tout ancien « Defilement automatique : non » impose
+@@ eee42b268aa2 t
+(rien n'etait impose : la sauvegarde du jeu decidait)
+@@ 690e1d44cf62 t
+les anciennes cles disparaissent du fichier
+@@ fd3a6cba627a t
+(le temps d'affichage n'entre pas dans le budget des pas)
+@@ e34bd03367ab t
+30, 60, 90 pas par seconde reelle (60 Hz)
+@@ e4db47b3c070 t
+pas bon marche (12 ms) : cadence complete, rien n'est coupe
+@@ 0f5e600a2484 t
+pas lourd (35 ms) : un seul pas par image, donc 60 pas par seconde (x2 au lieu de x3)
+@@ 9650ca87487f t
+x2 demande un pas par image a 60 Hz : tient meme avec un pas lourd
+@@ 034aa8605df8 t
+jamais sous x2 par image affichee
+@@ e58dc2d539a2 t
+(a x1 le budget ne s'applique pas : comme avant)
+@@ b2d1a8cec01b t
+0,15 s de moteur a faire (4 pas) : un seul est fait
+@@ 791e31811760 t
+le 2e pas ouvre un menu
+@@ 636f3daac1f2 t
+image suivante : de nouveau joue
+@@ 4ead84a9e288 t
+musique et arrets : intacts
+@@ c6c3557876bf t
+un arret libere le bruitage
+@@ 05159bac1f64 t
+trois pas du moteur dans la meme image affichee
+@@ 3e09592318b5 t
+duree du fichier (0,5 s) + marge de liberation : la meme a toutes les vitesses
+@@ fcbc4c0a5e60 t
+le module son ne connait pas l'horloge acceleree
+@@ 286551fdecf5 t
+(l'Etat reel : battle_transition() decide de l'horloge de la cascade et des fondus)
+@@ cad35b2da11c t
+ni cumule ni applique
+@@ 1c2aa1ed6bc6 t
+la vitesse des combats n'agit pas sur le terrain
+@@ 06b29e5f4ef2 t
+marche x2
+@@ 8d370ba96264 t
+marche x2 x accelerateur x1,5 : comme avant
+@@ 46ff953082d5 t
+(arret : vitesse normale)
+@@ 09889cd01c2a t
+effet qui brise l'ecran
+@@ f99fc7042c0d t
+ecran noir avant la scene du combat
+@@ 9c44063cc237 t
+menu de commandes, de cible...
+@@ fac54b6408a3 t
+message qui attend une touche (curseur ▼)
+@@ 7d88c931d8fc t
+message qui defile seul
+@@ 1d284c1b03c0 t
+Manuel : l'horloge du jeu
+@@ 3c792472e6da t
+1er pas : lit les touches ; les 2 suivants (meme image affichee) : muets
+@@ 36b1bb66ac12 t
+1 / 30 s plus tard : un pas qui lit les touches
+@@ cbea2a34e830 t
+le moteur ne tient pas le joueur : tous les pas sont ordinaires
+@@ 7ae4d0c8c1ef t
+(bouton a l'ecran ou non : jamais de message)
+@@ daefb49617d9 t
+curseur de cible (2) et clignotement des lieux de la carte du monde (1)
+@@ 4a1547c3ef71 t
+« Afficher cette interface » = Non (celle du bouton de vitesse : « Combat : bouton de vitesse »)
+@@ e26cbfc7962c t
+menu Pause ouvert
+@@ 16bdd65f7a31 t
+fondu au noir qui monte (fin de combat)
+@@ a6d51dafc7e0 t
+ecran noir
+@@ 5b62e5313543 t
+(plan de fond aussi)
+@@ 4c4f6bba6ed4 t
+fondu d'entree : le bouton apparait
+@@ 7ec7c604fb44 t
+relache ailleurs : pas de clic
+@@ 72320a29728b t
+pas visible : pas atteignable
+@@ eeba8d794674 t
+ne passe rien au moteur
+@@ f08410466ce3 t
+(position propre : plus dans 'boutons_pos')
+@@ 1c27357684f1 t
+« Rétablir cette interface » le remet en place
+@@ a852df33c84c t
+pas du moteur compares (1100 = 37 s de combat, une trentaine de secondes de test)
+@@ 4aff413211f1 t
+(+ nombres de degats, que la visionneuse prend puis vide a chaque pas)
+@@ 4a2de760a2b4 t
+(le rejeu lit les touches a chaque pas : attente = vitesse normale, comme avant les pas muets)
+@@ e1d3c1c36acf t
+memes paquets (hors maillages), memes messages, meme etat, pas pour pas
+@@ 3b1f3560d403 d
+Test de la vitesse de combat (Manuel / Normal / Rapide / Tres rapide) : reglage, cycle, horloge du moteur, independance de l'accelerateur, musique et bruitages non accelerees, bouton de l'ecran de combat.
+Sans fenetre ni moteur (faux objets) ; la partie « moteur reel » est facultative : DQ_APK=<dossier des APK> DQ_SAVES=<dossier des sauvegardes> la lance (rejeu d'un combat a 1, 2 et 3 pas par image).
+
+    python3 tools/test_battle_speed.py       (Linux sans ecran : pyglet en mode « headless »)
+@@ 4d48bee1768d d
+La « Vitesse de combat » fixe aussi OptionStatus.battleSpeed : 4 (a la main) en Manuel, 0 (12 images, la plus courte) sinon (#45).
+@@ a45356ecba99 d
+Tout ce que la visionneuse anime pendant un combat doit suivre les pas du moteur (moteur.images + alpha), pas l'horloge reelle : sinon, a x2 / x3, ils se desynchronisent des actions.
+@@ 08492af7b4e8 d
+Moteur reel : meme combat (memes entrees par pas du moteur) rejoue a 1, 2 et 3 pas par image affichee avec la boucle de la visionneuse (VC.avancer) : memes paquets, memes messages, meme fin ; seul le temps change.
+@@ e4481d752b76 d
+Rejoue `seconds` d'images affichees a `fps` avec un moteur factice de `cost` secondes par pas -> (nombre de pas, temps de pas maximal dans une image, nombre d'images coupees).
+@@ 855dabe5941d d
+Pas du moteur plus couteux que ce que le PC supporte : le temps de calcul d'une image reste borne (budget + un pas), le jeu ralentit au lieu de geler l'affichage.
+@@ 1123be0aac36 d
+Quand un pas ouvre un menu (do_step renvoie False) on n'enchaine pas d'autres pas dans la meme image, et le reste d'horloge est oublie.
+@@ e94421bc5873 d
+La boucle deplacee dans VC.avancer fait exactement ce que faisait Game._boucle (marche acceleree comprise).
+@@ 03b675a724bf d
+Une image affichee a x3 envoie plusieurs pas : le bruitage est lance une seule fois, avec la duree de son fichier (aucune notion de vitesse dans le module son) ; la musique garde son horloge reelle.
+@@ d41a105854f1 d
+#47 : la cascade d'entree en combat est a l'horloge du jeu (x1 quelle que soit la vitesse de combat, de marche ou l'accelerateur ; sa duree suit « Vitesse de transition » : voir tools/test_battle_transition.py) ;
+des qu'elle est finie, l'ecran noir qui attend la scene (puis le fondu d'arrivee et le message « X apparait ») va a la vitesse de combat.
+@@ 737afd92b552 d
+Les monstres suivent la vitesse de combat meme pendant les menus : l'horloge reste celle du reglage ; seule la lecture des touches est a cadence normale (pas muets : test suivant).
+@@ c9bece274f41 d
+Moteur en attente du joueur : un seul pas sur f lit les touches (un par 1 / 30 s reelles), les autres sont muets ; sinon tous les pas sont ordinaires.
+@@ fe4c806cadf8 d
+Touche ou bouton : le reglage change, est enregistre, le defilement des messages suit (Manuel : a la main) ; aucun message a l'ecran (retire depuis #267 : le faux jeu n'a pas de `toast`).
+@@ 61e0d7a691d2 d
+ui_menu : la fleche de cible clignote en temps reel (BattleUpCursor, 0,7 s) : c'est une attente de saisie du joueur, qui n'est pas acceleree (la vitesse n'agit pas quand un menu a la saisie).
+@@ 747a47750a49 d
+A gauche de la colonne portrait (450 x 800 centree) des fenetres du jeu, aux formats usuels ; sans recouvrir les autres boutons montres dans l'editeur.
+## FILE tests/test_battle_transition.py
+@@ 62c9792b257a t
+paquet 9 : sortie au noir en 30 images (4126, vu a la fin de chaque combat)
+@@ 04fec2698085 t
+paquet 9 : entree en 30 images
+@@ 46477664b125 t
+chargement de la scene de combat (bit 8) puis fondu d'entree, meme image du moteur
+@@ 6e33ff9c20ac t
+(la retenue du dessin apres un chargement retarde le DEBUT du fondu, pas sa duree : test_loading)
+@@ fa8ae817c220 t
+le moteur change de scene 1 a 3 images plus tard
+@@ 09a770ac2a4f t
+fondu du plan de fond (encore dans la partie combat) : meme regle
+@@ 5d9b91512106 t
+(Engine.step : la partie quitte le combat)
+@@ e81e13f55bac t
+la transition est finie : la marche reprend ses reglages
+@@ a61282ec678c t
+(dernier dessin : la cascade est quasi finie)
+@@ 9af845ad21fd t
+(etat enregistre avant la cle 'duree' : 57 images)
+@@ d4f8b1cf4594 t
+un changement de carte ordinaire reste raccourci
+@@ fbc5f0181dfe t
+(plan de fondu sans la cle 'combat')
+@@ f712d98e6500 t
+hors transition : la vitesse de combat s'applique
+@@ 2d0d78c65e1e t
+(les attentes du joueur aussi : les monstres gardent leur allure)
+@@ bbd977c22a60 t
+la cascade vient de commencer pendant ce pas : stop
+@@ 507b7cbea403 t
+(deja en transition : on continue normalement)
+@@ d7f64596e9ce t
+idem pendant un combat accelere (fondu de sortie)
+@@ 2e18e2fd0299 t
+une entree par pas du moteur (etat APRES le pas) : image, partie, cascade, ecran noir, plan de devant (n, sortie ?), transition ?, facteurs par reglage
+@@ cca1f9dc32d1 t
+(marche : la rencontre forcee se declenche en marchant)
+@@ 369dd4141801 t
+(apres le pas qui le lance : d - 1 images restantes)
+@@ 2d19c87230a2 t
+le fondu au noir de fin : encore accelere
+@@ 847cf549c50b t
+(la premiere image apres la cascade est deja de l'ecran noir ou du combat)
+@@ 08f4365509ae t
+le retour a la carte : horloge du jeu tant que le joueur est verrouille ou entre deux fondus ; le reglage de marche des que le verrou tombe (#127)
+@@ 3f9061394eb6 d
+Transitions d'un combat (retours de 22 h 29, #47 ; avant : #45, retour de 14 h 08).
+
+Sylfried : « L'accélération du combat doit être prise en compte dès la fin de l'animation de transition en cascade et dès l'apparition du message indiquant qu'un ennemi apparaît, et finalement je veux qu'elle dure
+jusqu'à la fin donc pendant le fondu au noir » ; « Les effets de transitions au début et à la fin d'un combat eux doivent en tous cas être affectés par l'accélération de transition des paramètres, comme tout effet de transition ».
+
+La transition = effet d'ecran de debut (la « cascade » : 57 images du jeu), ecran noir qui attend la scene, fondu d'arrivee du combat, fondus de sortie du combat, fondu de retour a la carte. Regles verifiees :
+  - DUREE (images du moteur) : la cascade et chaque fondu durent ce que demande le jeu divise par « Vitesse de transition » (x1 a x4), comme un fondu de changement de carte (game_priority.fade_duration) ;
+  - HORLOGE (temps reel) : la cascade est a l'horloge du jeu (30 images par seconde) quels que soient « Vitesse de combat », vitesse de marche et accelerateur ; des la fin de la cascade (ecran noir, fondu d'arrivee,
+    message « X apparait ») et jusqu'au fondu de fin de combat compris, « Vitesse de combat » (x1, x1, x2, x3) s'applique ; le retour a la carte est a l'horloge du jeu tant que le joueur est verrouille (flag 4) ; des qu'il est libre (image 12 du retour, le heros marche des la 13), la marche acceleree et l'accelerateur agissent (#127, comme #107 pour un changement de carte).
+
+    python3 tools/test_battle_transition.py        (Linux sans ecran : pyglet en mode « headless »)
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> tools/session_flow/engine_slot.sh python3 -W ignore tools/test_battle_transition.py     (ajoute le rejeu d'un vrai combat du moteur)
+Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
+@@ 9f371a179787 d
+Rejoue de vraies rencontres (carte du monde, rencontre forcee, attaque jusqu'a la victoire) avec « Vitesse de transition » x1, x2 et x4 : durees en images du moteur ; temps reel simule avec la vraie fonction
+Game._speed_factor pour toutes les combinaisons de reglages (vitesse de combat x marche x accelerateur x touche tenue).
+@@ 223e9d5f6a8f d
+Engine._start_battle_effect / _battle_effect (sans moteur : le drapeau d'effet est simule) : 57 images a x1, 57 / facteur ensuite ; la simulation de la visionneuse atteint ses 57 images au dernier dessin.
+@@ f5091e0befa8 d
+Un fondu lance bien apres le chargement du combat (ou une carte ordinaire) reste soumis a « Vitesse de transition ».
+@@ ee726c99fc16 d
+Fondu de retour : horloge du jeu tant que le joueur est verrouille (flag 4, images 1 a 11) et entre deux fondus ; des que le verrou tombe, la marche et l'accelerateur agissent (#127).
+@@ 4e722beb41bb d
+Marche acceleree (jusqu'a 8 pas par image) : quand un des pas leve l'effet de debut de combat, les pas restants de l'image n'ont pas a raccourcir la cascade : le rattrapage s'arrete (True = on continue).
+@@ 73d8a0ab00e7 d
+Suites d'images consecutives qui verifient `cond` : [(indice du premier pas, nombre de pas)].
+@@ 1d1679b3622b d
+Fondu au noir de fin (dans la partie combat) : le moteur le demande en 30 images ; Etat le rejoue en 30 / facteur.
+@@ cd24bfe376bf d
+Temps reel = somme des 1 / (30 x facteur) : la cascade dure (57 / vitesse de transition) / 30 s quels que soient les reglages ; le fondu de fin de combat, lui, suit la vitesse de combat ; le retour a la carte reste a l'horloge du jeu tant que le joueur est verrouille, puis suit la marche (#127).
+## FILE tests/test_capture_effects.py
+@@ 65d188fd8a15 t
+(bit 7 : sans effet hors voyage)
+@@ 10678e7a3c3f t
+le rendu s'allume au 3e appel (la capture a ete faite au debut du 2e)
+@@ 132494122511 t
+le depart n'eteint rien : l'ecran reste noir (les deux materiaux a l'alpha 0)
+@@ b0d0ff64bd9d t
+l'arrivee remet le jeu : dernier appel = rendu coupe
+@@ 58128176396d t
+x1 : un appel par image du moteur (le premier a l'image du paquet)
+@@ c319a10120fd t
+cAlpha tombe a 0 avant la fin, bAlpha pas
+@@ 90582c507e95 t
+a l'appel 3 : la grille est reguliere, tout l'ecran
+@@ 6ecd18f556c1 t
+colonne centrale : tombe a 0 au compteur 19
+@@ b33644294b6e t
+colonnes du bord : tres lentement, 0 au compteur 57
+@@ 9b4bd5394791 t
+nuit : rouge et vert baissent, bleu (et alpha) restent a 255
+@@ c206fe9a7a39 t
+« paupiere » : bias de 1 a 0,588 (compteur 27), puis jusqu'a 1,09
+@@ e9da70340faa t
+matin : seul le bleu baisse (teinte jaune) ; cbias part de 0 : rien n'est retire a la 1re mise a jour
+@@ 71d678a35659 t
+fin : centre a 0, colonnes du bord jamais a 0 (7)
+@@ 1e99194b4896 t
+centre de chaque copie : (+-3 u, +-u), u = 0,0005 (i + 1) c
+@@ cae1f9a37ef2 t
+0,11 degre par image
+@@ c0c30a9ca5b3 t
+fond (b, b, b, 1) ; copies : noircies, opacite 0,18
+@@ 56cfbbd4842c t
+c = 1 : u = 0,0005, copie 0 vers la droite et le bas
+@@ 765f9deb5097 t
+le noircissement commence au compteur 30
+@@ f3a1af1d2493 t
+appels 2 et 3 : le rendu n'est pas encore allume dans l'etat de l'image precedente
+@@ 2ce47e2b3690 t
+fond : l'ecran entier
+@@ 897eb2a81ce9 t
+quatre copies
+@@ 89d48d6a9098 t
+4 : debut de combat (autre effet, Engine._start_battle_effect)
+@@ f305990cff61 t
+un seul effet a la fois
+@@ 486f2b30aedb t
+(ce n'est pas la transition d'un combat)
+@@ 3d81de81c2ea t
+appel d'origine = n + 1 (le premier a l'image du paquet)
+@@ 0c12029d9b3d t
+opaque, noir, immediat ; il reste ainsi
+@@ eb839dce2790 t
+fin du depart : l'ecran reste noir
+@@ b7e526b5b8f8 t
+(le noir n'est pas un plan de fondu : l'interface reste dessinee)
+@@ 3b240e188506 t
+Fade.SetFadeIn(30) a l'appel 3 : de l'opacite courante a 0 (30 images, une deja ecoulee a la fin de cette image)
+@@ 1edf6f5f379c t
+dernier appel (etat 4) : la scene reparait ; le drapeau retombe a l'image suivante
+@@ 67ab0102ae46 t
+jamais d'arrivee : le jeu est rouvert au bout de 60 s
+@@ b659385c85b4 t
+retour au titre : plus de noir
+@@ 7ce1c41e2208 t
+attributs de classe
+@@ b02cd9874e3f d
+Effets d'ecran de la classe `Capture` (paquet 34, valeurs 3 : voyage / ailes de Chimere, 5 : lampe / Ranaruta, 6 : Riremito ; audit UNI-06) :
+
+1. modules purs (rendu/tabi_effect.py, lamp_effect.py, riremito_effect.py) : nombre d'appels de MoveNext (64, 45 a l'arrivee, 64, 63), moment ou le rendu s'allume et s'eteint, valeurs de controle lues dans la
+   specification (sommets de Tabi, octets de la lampe, deplacements de Riremito), passes de flou (une par image, deux textures en alternance, la premiere lit « rien ») et tampons de dessin ;
+2. moteur (Engine._start_screen_effect / _screen_effect, sans moteur : le drapeau est simule) : bit 7 de la valeur (arrivee, matin), duree qui suit « Vitesse de transition », noir immediat de la lampe et de Riremito
+   (State.sharp_black_fade), fondu d'entree et fin de l'ecran noir a l'arrivee d'un voyage, garde-fous, un seul effet a la fois, un etat enregistre avant le correctif.
+
+  python3 tests/test_capture_effects.py
+@@ 94a20bc1e0d6 d
+Fait tourner l'effet jusqu'a sa fin (ou jusqu'a l'appel `toward`) ; rend la liste des (appel, render_active).
+@@ c73e9d21bb3a d
+Tableau de la specification (ecran 16/9 : 9 rangees, 170 sommets) : coin haut gauche (sommet 0) et bas droit (dernier) aux appels cites.
+@@ 1f0aa9cde931 d
+Montee sur 4 images (bAlpha : 0,23125 par pas au depart, cAlpha : 0,70625 puis -0,0625 par pas), puis decroissance a partir du compteur 30 (depart seulement) ; arrivee : 0,24375 / +0,0625.
+@@ a3869e9d1875 d
+28 rangees (m_divY = 56 de l'ecran portrait d'origine) : 17 x 29 sommets, 2 x 16 x 28 triangles ; les uv couvrent la capture.
+@@ 5f7911b62257 d
+Colonnes 0 et 16 : y inchange ; rangee du haut (y = 1) : la colonne centrale prend la valeur de `bias`, sa voisine 0,1 + 0,9 bias ; `bias` oscille entre 0,588 et 1,09.
+@@ 68a506c14eb3 d
+La passe a lieu avant chaque appel tant que SetBlur est vrai (a partir du 2e) ; deux textures en alternance ; la premiere passe lit « rien » ; le rendu repasse sur l'etat de l'image PRECEDENTE.
+@@ 3080794c2a92 d
+Fond d'abord (texture floue x couleur, remplace l'ecran), puis la capture ; positions en coordonnees d'ecran normalisees ; une couleur par sommet.
+## FILE tests/test_casino_bestiary.py
+@@ 8e6972f58304 c
+machine a sous (type 47) : une colonne ▲ (manette 0x2) / ▼ (0x1) de numero 1, « Lancer » (0x10) de numero 0 ; retour 0x20 de numero -1
+@@ cbe8459b0ffd c
+jetons (type 44) : cinq colonnes (1, 10, 100, 1000, 10000) de gauche a droite : 10000, 1000, 100, 10, 1 (positions croissantes), validation numero 0, retour -1
+@@ 309b793b5090 d
+Test du casino et du bestiaire (parties 0xf et 0x10 du moteur), sans fenetre ni moteur (faux objets) :
+
+1. constantes du moteur : PART_CASINO, PART_BESTIARY, MINIGAME_PARTS ;
+2. camera libre du casino (`camera_free`) : position + rotation du paquet 10, sans paquet 11 ; pas ailleurs ;
+3. vitesse de marche : jamais acceleree dans le casino et le bestiaire (les fleches tenues y servent aux menus) ;
+4. Echap : bouton retour de la fenetre ouverte (manette 0x20) dans le casino et le bestiaire, sinon menu Echap ;
+5. menus de saisie numerique au clavier (mise de la machine a sous, du poker, jetons, arene) : colonnes, ▲ / ▼, validation, retour ;
+6. code de fenetre a masque de bits (poker : zones tactiles des cartes et « Donner », valeur 63 hors du tableau exporte) ;
+7. combat de l'arene : fenetre « Quitter » sans validation, A tourne la page du message.
+
+  python3 tools/test_casino_bestiary.py        (Linux sans ecran : pyglet en mode « headless »)
+@@ 41cc244b6a32 d
+Fenetre de menu du jeu (ui_menu.Window) reduite a ce que lisent les fonctions testees : typ, boutons() = (numero, manette, x0, z0, x1, z1, profondeur).
+@@ 7f46065df41b d
+Combat de l'arene : la seule fenetre ouverte est « Quitter » (type 71, un bouton de manette 0x400). A tourne la page du message (la fenetre n'a pas de bouton de validation) et
+la fenetre n'est pas une attente du joueur (la vitesse des combats s'applique au combat de l'arene).
+@@ 429a718874b3 d
+Poker (type 48) : le code 2 de la fenetre recoit un MASQUE (63 = tout actif) ; le tableau `fx` exporte ne connait que 0 a 5.
+@@ 1678c66dbc06 d
+Les tests de camera passent un faux etat sans `part` : camera de ville, pas d'erreur.
+@@ fca18b44c360 d
+Une liste (cadeaux, bestiaire) n'a pas de colonne ▲ / ▼ : curseur ordinaire. Les fleches de page (numero -1) ne comptent pas.
+@@ 45743a9ecf59 d
+Une fenetre qui a plusieurs boutons de validation (choix a faire) garde le curseur ordinaire.
+@@ a56299807a7d d
+Rouleaux en marche, cartes en cours de distribution : la fenetre n'a plus de bouton retour actif.
+@@ ac2866b7d9bb d
+Un tableau qui n'a pas la forme « bit n = bouton n » : on n'invente rien (comportement d'origine).
+## FILE tests/test_critical_hit.py
+@@ 44cbfce47691 t
+messages automatiques
+@@ 77310485b992 t
+pas d'effet d'ecran (cmd_screen_effect) : eclair, secousse...
+@@ ad9d00af8390 d
+Coup critique (« kaishin », retour de Sylfried, 14 h 08 : « il manque l'effet de coup critique sur les ennemis ? ») : ce que le moteur demande a la visionneuse.
+
+Moteur reel (Unicorn), slot 4, un monstre faible (Encount + 0x34 / 0x44). Le critique est force sur le heros en posant `BaseAction::kaishinFlag_` (LIB + 0x25c6ed) a la sortie de
+`BaseAction::checkActorKaishin` (0x1a81dc) quand l'acteur est de notre cote (`[acteur + 8]` = 0 ; 1 = monstres, qui le tirent au sort : `rand(0x20) == 0`). Constat :
+  - un SECOND modele d'effet (5344, emplacement 3) est charge au meme instant que l'effet du coup (5303, emplacement 2), 17 images ; la visionneuse le dessine comme tout modele de combat ;
+  - le bruitage 407 (`SE0407.akb`, present dans les donnees) est demande, plus un 0 (aucun fichier : sans effet) ;
+  - le nombre de degats est 2,5 a 3 fois plus grand (8 -> 26, 11 -> 27 mesures) et le texte « Coup critique ! » s'ajoute ;
+  - AUCUN paquet 34 (`cmd_screen_effect`), pas de secousse de message, pas d'eclair : les effets d'ecran 3, 5 et 6 n'ont aucun rapport avec les critiques.
+
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_critical_hit.py
+@@ bed548c1b340 d
+-> dict(modeles, sons, types, degats) vus jusqu'au premier nombre de degats du heros sur le monstre.
+## FILE tests/test_day_clock.py
+@@ 10139ebfe3ab t
+(defaut : transparent)
+@@ f93acd45d140 t
+a un appel pres
+@@ e7cb1627eb75 t
+de la case de depart au couloir (y = 354)
+@@ 92f206da213b t
+rencontre declenchee (sans combat) : le compteur repart, le heros peut marcher
+@@ 2db548cd0f37 t
+x1 : exactement 2 par pas ; sinon (1 + a) / (2 a) de cela, a quelques unites pres
+@@ d6af5b726583 t
+le temps avance toujours par 2 : les zones et la palette restent celles du jeu
+@@ 7e44da7462d6 t
+memes positions image par image : seul le temps du monde est ralenti
+@@ a0ae93d882ea d
+Arrivee de la nuit a marche acceleree (#163) : (1 + a) / 2 fois plus vite par seconde reelle, pas a fois (comme les rencontres aleatoires, #45).
+
+    python3 tools/test_day_clock.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_day_clock.py      (ajoute les tests du vrai moteur : le crochet sur FieldPlayerDoku::checkDokuDamage)
+
+Sur la carte du monde, le temps du monde (`status::g_Stage + 0xcc`, cycle de 0xd40) avance de 2 par image du moteur ou le heros a change de position (`FieldStage::ChangeTime(0)`). A la vitesse `a`, le moteur fait
+`a` fois plus d'images par seconde reelle : chaque pas doit donc compter (1 + a) / (2 a) fois ce qu'il comptait.
+@@ 5534bbb6b8d7 d
+Les appels sautes sont repartis (3 sur 4 a x2 : jamais deux saut de suite) : le temps n'avance pas par a-coups.
+@@ ffff10c01d8f d
+Pas par seconde (a) x temps par pas (2 x facteur) = 2 x (1 + a) / 2 : x2 -> 1,5 fois, x1,5 -> 1,25 fois, x4 -> 2,5 fois.
+@@ ab86bee7da06 d
+Moteur sur la carte du monde (sauvegarde 4), le heros dans le couloir sans entree ni sortie de tools/simulate_encounters.py, sans combat (Encount::brew renvoie faux) ; -> (moteur, lecteur du temps du monde).
+@@ ec18dce4601e d
+Marche allers-retours dans le couloir (le sens s'inverse quand le heros est bloque) a la vitesse `v` : -> (pas, avance du temps du monde, positions du heros apres chaque image).
+## FILE tests/test_dialogue_name.py
+@@ 5f1d61ec6862 t
+le paquet d'apres est de nouveau une commande
+@@ 6c3ebd48e71c t
+cadre + canevas + texte (le curseur de fin de page est cache)
+@@ 965b1fa3ae98 t
+onglet : 246 de large, 32 de haut
+@@ de2dbc1dc222 t
+meme largeur de cadre
+@@ 39a04cb82e8d t
+l'onglet depasse de 32 au-dessus du cadre
+@@ d0bce4b6c14e d
+Nom de l'interlocuteur dans la boite de dialogue du jeu (MenuMessage, commande 4 du port 1), sans fenetre ni moteur :
+
+1. protocole : `[4, 0]` = pas de nom ; `[4, 1]` annonce le nom, que le PAQUET SUIVANT du port porte (un entier par caractere) ; le nom est efface quand la fenetre se cache (SetVisible(false)) ;
+   les autres commandes (type, curseur, defilement) continuent de marcher, et ni elles ni les autres ports ne sont pris pour le nom ;
+2. `MessageWindow.select_language(typ, y, feed, who)` : le nom n'est montre que sur la fenetre du terrain (type 0) ; le cadre devient frameData 191 (onglet) et un texte « qui » apparait (m_who : ancre haut-centre,
+   taille 10, position locale (-104,5 ; 4 ; dy - 104)) ; sans nom, ou en combat (types 1 a 3), le rendu reste EXACTEMENT celui d'avant (cadre 192, aucun noeud « qui ») ;
+3. les cotes qui posent la fenetre (etendue, bas) ne changent pas avec l'onglet (le Oui/Non et l'echelle gardent leur place) ;
+4. (si le cache d'interface existe : DQ_CACHE_UI, sinon /tmp/uicache4) les VRAIS cadres : 191 = 192 + onglet de 246 x 32 qui depasse vers le haut.
+
+  python3 tools/test_dialogue_name.py        (Linux sans ecran : pyglet en mode « headless »)
+@@ 5349ee761cca d
+Cadre minimal : un rectangle de 452 x 126 (x -223..229, z -251..-125) ; avec onglet : + un rectangle x -223..23, z -125..z_top.
+@@ 5989a73067cf d
+Le paquet du nom commence par un caractere (ici 1 = « curseur », 2 = « type »...) : il ne doit etre lu que comme du texte.
+@@ 126aa462ad0e d
+Render._items doit trouver le texte (un maillage sans sommets + un texte) et ne rien dessiner d'autre pour ce noeud.
+## FILE tests/test_dpad_and_click.py
+@@ 0eeefc6fa031 t
+window.py a besoin de pyglet, numpy, unicorn... (l'import seul suffit, aucune fenetre n'est creee)
+@@ 380e023698f1 t
+ce n'est pas une bulle
+@@ 84c3c0aa802c t
+(tout emplacement >= 16)
+@@ bacebd5db6dd t
+(15 est encore une bulle, 16 le clignotement)
+@@ 0b5dceb4f9b8 t
+appui puis relachement sans glisser = toucher
+@@ 02a14598c8bf t
+direction : droite
+@@ c8eee299c646 t
+haut
+@@ 6c159dd35ea2 t
+(le rond central seul n'envoie aucune direction)
+@@ 6381d2843139 t
+(emplacement 0 compris)
+@@ abaa01e39685 t
+menu, message, combat...
+@@ 21d75edba798 t
+(le dessin lui-meme demande un contexte GL : verifie en vrai, voir les notes de l'avance)
+@@ 6e4881ce8cb8 t
+menu d'Echap : son propre clic
+@@ ad2ae8c92aa5 t
+menu du jeu : ses boutons
+@@ bc798c42bd79 t
+(inchange : toucher le message)
+@@ 6f533a8b6f71 t
+l'action vient au relachement
+@@ 2dae80c30b9f t
+(un message apparu entre-temps : pas d'action fantome)
+@@ 6114c3ed3211 d
+Test (#131) : un clic gauche sur le terrain libre = touche d'action ; rond central de la croix = touche d'action qui s'anime quand une action est possible (comme sur mobile).
+
+    python3 tools/test_dpad_and_click.py
+
+1. Moteur : le paquet 19 avec un emplacement >= 16 n'est pas ignore, c'est le clignotement de la croix (`pad_blink`) ; les vraies bulles (emplacements 0 a 15) restent inchangees.
+2. Croix (`hud_mobile.Buttons`) : un TOUCHER du rond central (appui puis relachement sans en sortir) est reconnu ; un glissement (meme bref, meme s'il revient au centre) et un appui hors du rond non ; les directions ne changent pas.
+3. Animation : `Buttons.action_possible` = le jeu fait clignoter la croix OU, sur le terrain libre, une bulle d'icone est affichee.
+4. Fenetre (vraies methodes de `window.Game` sur un faux jeu) : clic gauche n'importe ou sur le terrain libre = touche A (`click_a`) ; clic droit = B ; ni dans un menu, ni dans un message, ni en combat ; toucher du rond central = A.
+@@ 28df46f2c1bb d
+`Buttons.action_possible` : la croix s'anime quand une action est realisable.
+@@ 44de77a453d3 d
+Les vraies methodes de `Game` (clic sur le terrain, relachement de la croix) sur un faux jeu.
+## FILE tests/test_dpad_run.py
+@@ ac82b0e18f5f t
+(le double de #169, moins 25 % : #172)
+@@ 7a794d14635b d
+Test : la croix de l'ecran fait DEUX FOIS la taille du mobile, et le heros court quand elle est tenue au bord de son anneau (04/11/2026).
+
+    python3 tools/test_dpad_run.py
+
+1. Taille : `hud_mobile.DPAD_DIAMETER` = 1,5 x 161,28 (le double de #169 moins 25 %, #172) ; diametre a l'ecran = H / 800 x DPAD_DIAMETER x option du jeu x reglage « Taille de la croix » (67 % = la taille du mobile).
+2. Course : `Buttons.dpad_run()` vaut vrai au bord de l'anneau (TRAVEL_THRESHOLD du rayon ou plus, dans une direction), faux plus pres du centre, dans la zone morte, croix lachee ou non tenue ; la direction envoyee au jeu ne change pas.
+3. Vitesse (vraie `Game._speed_factor`, faux jeu et vraie croix) : marche normale (x vitesse de marche) tant que le pointeur est dans l'anneau, x multiplicateur de l'accelerateur au bord ; la touche d'accelerateur
+   fait toujours courir, et les deux ensemble ne se cumulent pas.
+## FILE tests/test_encounters.py
+@@ 6ab51c6eeb75 t
+chaque pas compte moins ...
+@@ 2d1ac776caab t
+... sans jamais descendre sous 1 / 2
+@@ e47c9126d237 t
+... et la vitesse augmente toujours la frequence par seconde
+@@ 753037314386 t
+a une unite pres
+@@ 944bba1e53b0 t
+jamais plus que le jeu
+@@ cb89640e7ab8 t
+le jeu : 2 x [+0x10] par appel
+@@ 169f1f0c37c0 t
+plus lent que x1 : jamais touche
+@@ ea94a51acb92 t
+(1 + a) / (2 a) de la perte du jeu, a une unite pres
+@@ bc650c578ee6 t
+pas par seconde x perte par pas : (1 + a) / 2
+@@ 23ea5479f625 t
+8326 / 846 : le jeu d'origine
+@@ a0fbe9df3e83 t
+8326 / (846 x 0,625) = 15,7 appels -> 16
+@@ eb24635d38d7 d
+Tests des rencontres aleatoires a marche acceleree (#45) : (1 + a) / 2 rencontres par seconde reelle, pas a.
+
+    python3 tools/test_encounters.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_encounters.py      (ajoute les tests du vrai moteur : le crochet sur CountDown::exec)
+
+La simulation statistique (marche reelle sur la carte du monde et dans un donjon, nombre de rencontres par pas a x1 / x2 / x4) est dans tools/simulate_encounters.py.
+@@ 959249d79e08 d
+n appels de CountDown::exec du vrai moteur a la vitesse de marche `speed` : perte totale du compteur.
+@@ 052565f4fc0a d
+Le compteur passe sous zero apres (compteur / perte) appels a x1, apres (compteur / perte) x 2a / (1 + a) appels a x4 : meme tirage, simplement moins de pas comptes.
+@@ 68f516bca1be d
+Apres le declenchement le moteur continue d'appeler exec : le crochet ne doit jamais remonter le compteur.
+## FILE tests/test_enemy_chest.py
+@@ 6a8154ef5281 t
+bâton de cyprès ; londuleux (le monstre du combat)
+@@ cf5d365e6e76 t
+bruitage joue par ui_MsgLoop au debut de chaque message quand le joueur vient de reprendre la main
+@@ 807385f5b187 t
+rencontre imposee : un londuleux
+@@ 06a08f2a23ec t
+tirage de fin de combat : un coffre contenant FORCED_ITEM (ou aucun)
+@@ ceedce39a5f0 c
+fenetre : du debut du 1er message (le bip precede le texte d'une image) a celui du dernier (+ 3 images)
+@@ fe065284f231 d
+Test du coffre au tresor lache par un ennemi a la fin d'un combat (« Le londuleux laisse tomber un coffre au tresor ! », « Ragnar l'ouvre. », « Il contient ... », « Ragnar met ... dans le sac. »).
+
+Question posee (retours de 22 h 29) : le jeu d'origine joue-t-il un bruitage d'ouverture de coffre pendant ces messages ? Reponse etablie en lisant le moteur et en le faisant tourner :
+  - la suite est la tache BattleExecItem (4 sous-taches BattleExecVictory30 a 32, messages 801876 et suivants) : elles ne font que poser un message (TextAPI::setMACRO0, BattleMessage::setMessage,
+    BattleAutoFeed::setMessageSend) et donner l'objet (PartyStatus::giveItem) ; aucune ne passe par SoundManager / Sound::sePlayDirect ;
+  - Unity n'appelle Sound.PlaySE directement que dans InputName.Update, MenuPortItem.Update et TouchPad.internalUpdate (boutons : bruitage 300) ;
+  - dans le moteur reel, avec un butin force, les seuls paquets de son de toute la suite sont le bruitage 300 (« bip ») du debut de chacun des 4 messages, joue par ui_MsgLoop.
+Ce test garde cette observation : si un jour le moteur demandait un autre son pendant ces messages, `State.sounds` le contiendrait et la visionneuse (Sound.evenements) le jouerait ; le test echouerait pour qu'on le sache.
+
+Le butin est force dans un moteur jetable : MonsterParty::getDropItem / getDropItemMonster (champs +0x3eac et +0x3eb0 de MonsterParty, ecrits par checkDropItem au tirage de fin de combat) renvoient un objet
+et un monstre imposes (la meme methode que test_battle_history force la composition d'un groupe).
+
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_enemy_chest.py        (une minute environ)
+Sans DQ_APK et DQ_SAVES, le test du moteur reel est saute.
+@@ d84e83f168ef d
+Combat force joué jusqu'a son terme (A partout). -> (textes [(image, texte)], sons [(image, type, valeur)]) ; sons = State.sons, ce que la visionneuse transmet a Sound.evenements.
+## FILE tests/test_engine_camera.py
+@@ b90aef9e9d67 t
+(le jeu tourne au pas suivant celui du bouton)
+@@ 9b8071374d0f t
+a droite : le cap avance vers +X
+@@ c555d9c366ba t
+bouton relache : la camera s'arrete
+@@ 92fcab752163 t
+n crans exactement (le cran du bouton est l'un d'eux)
+@@ 318b7253d7dd t
+(sans pas avant : aussi)
+@@ abaa87b8fe11 t
+UN seul pas suffit : le jeu fait le reste
+@@ f6411d339fde t
+le joueur est tenu pendant le retour, puis rendu
+@@ f2d6055047af t
+retour sans a-coup, par le chemin le plus court, qui s'arrete au nord
+@@ a3f75b6bb920 t
+vers le fond de l'ecran
+@@ f6597bb7b52c d
+La camera des villes avec le VRAI moteur (D-234) : la rotation du joueur est celle du jeu, pas une rotation de la visionneuse a cote de lui.
+
+Sur le terrain d'une ville, les bits 4 et 5 des touches tenues envoyees a GameUpdate ne sont pas A et B mais les boutons de camera du jeu (window::NormalControl::checkCamera : 1 = tourne a gauche, 2 = a droite, 3 = retour au nord) ;
+TownPlayerManager::setCameraRot tourne la camera d'un cran (0x200 sur 65536 par tour : 2,8125 degres) par pas du moteur, borne selon les limites du lieu, tient le joueur pendant le retour au nord, et le jeu tourne lui-meme
+les directions de marche et les rangees des sprites selon sa camera. On le verifie sur le jeu d'origine (carte `mak1f1`, sauvegarde 1, joueur libre ; avec un message ouvert les memes bits sont A et B, d'ou l'envoi des boutons de camera sur le terrain libre seulement, voir test_entries.py) :
+
+  1. un bouton de camera tenu fait tourner la camera de 2,8125 degres par pas (a droite : le cap avance vers +X), l'autre en sens inverse ; le jeu garde le bouton en attente apres le pas (`Engine.camera_wait`) ;
+  2. `Engine.camera_turn(direction, n)` : exactement n crans de plus (reglage « Vitesse de camera », glissement du clic molette), meme apres un pas qui a pris le bouton ;
+  3. les deux boutons ensemble, un seul pas : le jeu ramene la camera au nord (cap 0) et tient le joueur pendant ce temps (Global.Flag 4), puis le rend ;
+  4. camera tournee, la marche vers le haut va dans le sens de la camera (le jeu tourne les directions : la visionneuse n'a rien a faire) et le sprite du heros garde la meme rangee ;
+
+Sans DQ_APK et DQ_SAVES (dossier des APK patches et dossier des sauvegardes), les tests du vrai moteur sont ignores.
+
+    DQ_APK=... DQ_SAVES=... python3 tests/test_engine_camera.py
+@@ 4fb96529b456 d
+Ferme le message d'arrivee (touche A) et laisse le joueur libre : aucun message, joueur non verrouille.
+@@ ecda015ff335 d
+Camera tournee d'un quart de tour : « haut » fait marcher le heros vers le fond de l'ecran (dans le sens de la camera), et le sprite montre toujours la meme rangee : c'est le jeu qui s'en charge.
+## FILE tests/test_entries.py
+@@ 9b536e786465 t
+pas de fenetre cachee : le test tourne sans serveur d'affichage
+@@ abc31f5b824e t
+evenement sans deplacement (envoye par Windows quand le dessin change sous un pointeur au repos)
+@@ 0c743fe29e13 t
+tremblement du capteur
+@@ 6ad17760dd5f t
+vrai mouvement
+@@ 339da911c9d6 t
+59 evenements de 1 pixel
+@@ d7bf94f6a808 t
+(le defaut d'origine : la souris restait inutilisable tant que le geste n'etait pas rapide)
+@@ f5268d69617d t
+4 evenements de 1 pixel : quelques millisecondes, pas une seconde
+@@ 5e87d5115b7f t
+la souris a la main : tout evenement compte, meme sans deplacement
+@@ f8e824dad09b t
+plus de tolerance : le survol suit chaque evenement
+@@ 5a2fcd442abf t
+une nouvelle touche : le clavier reprend la main
+@@ 2be126ad6a2a t
+sous le seuil
+@@ 1ee1c39f7492 t
+seuil franchi : le geste devient un glissement, la camera ne bouge pas encore (pas de saut des 20 premiers pixels)
+@@ de5e69874aa8 t
+ensuite : l'ecart horizontal a l'evenement precedent (le vertical ne compte pas)
+@@ e9183e605786 t
+apres un glissement le relachement ne recentre rien
+@@ c895c1a13fb6 t
+(on a tourne la camera : ce n'est plus un clic)
+@@ 1f5415fa4e39 t
+droite = fleche droite
+@@ 1b62b4070738 t
+la moitie de la hauteur = la meme rotation
+@@ 72c035c392c0 t
+= glisser de l'autre cote
+@@ 862d52173d73 t
+sans fenetres du jeu : tout l'ecran, toujours a droite
+@@ c96af57b162f t
+ne recouvre pas la colonne centree
+@@ b2d982c60551 t
+pause.py a besoin de pyglet (sans affichage : l'import seul suffit)
+@@ 3940e5f630bb t
+six lignes de 36 px, la premiere en haut
+@@ 3ca86e022865 t
+une touche (sans effet) : retour au clavier
+@@ ddb79d680e81 t
+le pointeur descend d'un pixel par evenement, de y = 300 (ligne 2, entre 276 et 320 : la ligne 3 est entre 236 et 276)
+@@ 2fd21b907750 t
+au 4e pixel : aucune attente
+@@ 2bb3ea8ca00b t
+la selection suit le pointeur
+@@ 6a18ecd87a5f t
+clic gauche juste apres la touche
+@@ 605f6a5c9e38 t
+rotation en attente depuis le pas d'avant (non consommee par camera_turn) : le jeu tourne d'un cran
+@@ 1d14577c5c88 t
+les deux boutons de camera ensemble, une seule fois : le jeu anime le retour au nord (et tient le joueur)
+@@ 595cd5fa17fd t
+100 px vers la droite, ndy vers le haut (y pyglet vers le haut)
+@@ ed4ea1806afe t
+sans inversion : droite = a droite, comme la fleche droite
+@@ f48ec4808827 t
+le deplacement vertical ne change rien
+@@ 240f629a8b04 t
+(le dernier cran est consomme au pas d'apres)
+@@ 9e7d68a07952 t
+revenu au point de depart : toujours un glissement
+@@ 3a8ef238bcc3 t
+un simple tremblement reste un clic
+@@ 658524c644f2 t
+le relachement d'un glissement ne demande aucun retour au nord
+@@ b68e81f64de5 t
+la camera tourne a droite, par le bouton de camera du jeu
+@@ da9eb42a3036 t
+purement vertical : rien ne tourne
+@@ b14202c7cb92 t
+un grand glissement : plusieurs crans dans le meme pas
+@@ 2db514a92271 t
+moins d'un demi-cran : rien
+@@ 4826f205df3e t
+(les fleches ne sont pas abandonnees : le jeu peut la reprendre la fin de la scene)
+@@ bdc281478b19 t
+un clic simple, mais le terrain n'est plus libre
+@@ cdc71e36e4f8 t
+(la croix et les boutons de l'ecran sont tenus a la souris : ils ne bloquent que le clic molette, pas les fleches du clavier)
+@@ f490a77640dd t
+pas de rotation sur la carte du monde (comme les fleches)
+@@ e7ba3e5d84e0 t
+un cran par pas, par le jeu : 84,4 degres par seconde
+@@ 5631c51eb617 t
+(la fleche restante apres la pression double)
+@@ bd40c42a5bd6 t
+tout relache : la rotation demandee a la souris repart
+@@ 3c9415932e98 t
+(ils ne servent que dans les menus : plus d'inclinaison)
+@@ b0b7dad90a1a t
+les deux boutons de camera du jeu au premier pas seulement : le jeu fait le reste (animation, joueur tenu)
+@@ 7b0f607c7ec5 t
+la fleche restante (relachement jamais simultane) ne tourne pas
+@@ 37bb30014ed1 t
+(l'autre re-enfoncee alors que la premiere est restee tenue : pas de nouveau retour au nord)
+@@ df3ec2c53cb8 t
+tout relache, puis une fleche seule : la camera tourne a nouveau
+@@ 0bb927ee6883 t
+une fleche tenue, l'autre s'y ajoute : pression double, retour au nord
+@@ c635f9470719 d
+Test des entrees souris / clavier : logique pure (inputs.py) et branchement dans la fenetre (fenetre.Game), sans ouvrir de fenetre.
+
+    python3 tests/test_entries.py
+
+1. La souris apres le clavier (« passer du clavier a la souris rend la souris inutilisable pendant 1 s ») : le survol reprend la main au premier vrai mouvement (ecart CUMULE depuis la derniere touche, petite
+   tolerance de bruit), un clic agit toujours, aussitot. L'ancien test (ecart d'un evenement au suivant) est rejoue pour montrer qu'une souris qui envoie des mouvements de 1 a 2 pixels ne reprenait jamais la main.
+2. Le clic molette (D-233, D-234) : clic = la camera revient au nord (par le jeu), glisser a gauche / a droite = rotation demandee (pas de saut au debut, le deplacement vertical ne tourne rien), un clic suivi d'un deplacement
+   n'est pas un clic ; sens du glissement inversable (reglage `camera_inverser_gd`), fleches du clavier non. Le zoom, l'inclinaison et leurs gestes (molette, Ctrl) ont ete retires en #264 et ne reviennent pas.
+3. Le bloc d'infos de F1 : en haut a droite par defaut.
+4. Branchement dans Jeu (D-234) : la camera est celle du JEU. Fleches gauche / droite = boutons de camera du jeu (bits 4 et 5 des touches tenues), les deux ensemble = retour au nord (une seule fois), vitesse de camera = crans de plus
+   par pas, l'accelerateur n'y change rien ; la visionneuse ne tourne NI la camera NI les directions du heros a cote du jeu (le jeu s'en charge, comme sur mobile, y compris dans ses scenes) ; le clic molette n'agit que sur le terrain
+   libre d'une ville, ne fait rien d'autre, et la molette ne fait plus rien sur le terrain. Le test avec le vrai moteur (rotation, marche relative a la camera, retour au nord) est tests/test_engine_camera.py.
+@@ 5db7d79b926f d
+Menu Echap : une touche remet la selection au clavier ; la souris reprend la main au premier vrai mouvement (pas apres un tremblement), un clic aussitot.
+@@ 9bafc26c4a63 d
+Le jeu vu par la visionneuse : accepte (ou refuse) le bouton de camera de ce pas, le garde en attente (TownPlayerManager + 0x698) et tourne d'UN cran au pas suivant, sauf si `camera_turn` en a fait n tout de suite.
+@@ f0dddee813d7 d
+Un `Game` minimal : les vraies methodes de fenetre.Game (liees a cet objet) travaillent sur un moteur factice qui accepte ou refuse les boutons de camera.
+@@ 4b17edb5206d d
+Mouvement lent : 1 pixel par evenement. L'ancien test (ecart d'un evenement au suivant < 3 px) ne la reprenait jamais ; l'ecart cumule la reprend au bout de quelques evenements (sans delai).
+@@ 885901a2dd6c d
+L'ecart est mesure depuis le point de la derniere touche, pas somme d'un evenement a l'autre : aller-retour de 2 px mille fois ne fait pas un mouvement.
+@@ 925c8559dff6 d
+Un grand glissement ne fait pas tourner la camera longtemps apres le relachement : la rotation demandee est plafonnee (et ne boucle pas : le jeu tourne par crans, il n'y a plus de cap a ramener entre -180 et 180).
+@@ 63934d4f31b0 d
+Un pas du moteur avec ces boutons de camera.
+@@ 7cca84d1ba4c d
+n pas du moteur : les boutons de camera que la visionneuse envoie (`Game._entries`, terrain), puis le suivi du pas (`Game.tick`).
+@@ 509d4f5c4017 d
+Fleches gauche / droite tenues 30 pas : memes boutons de camera et meme nombre de crans quel que soit le reglage d'inversion.
+@@ 5dfccfe609ea d
+La rotation demandee est faite par des crans du jeu (ENGINE.CAM_STEP chacun, au plus CAM_DRAG_STEP par pas), puis s'arrete : le reste de moins d'un demi-cran n'est pas tourne, il s'ajoute au glissement suivant.
+@@ eedf705a9fb3 d
+Verrou du joueur, scene, lieu qui interdit de tourner, limite atteinte : le jeu ne prend pas le bouton (rien en attente). La visionneuse n'ajoute aucun verrou a elle (elle envoie le bouton, le jeu decide) mais abandonne la rotation demandee a la souris.
+@@ 267ab7e32111 d
+Un message qui s'ouvre pendant que le bouton du milieu est enfonce : le relachement ne demande rien, et le glissement ne tourne rien.
+@@ 1d90ae746213 d
+Rotation demandee ou retour au nord demande, puis un message s'ouvre avant le pas : ils sont oublies (`Game._entries` : hors terrain), ils ne partent pas a la fermeture du message.
+@@ 796f045a79b3 d
+Clic molette (retour au nord) alors qu'une rotation de la souris restait a faire : le jeu ramene la camera au nord, la rotation restante n'est pas faite apres coup.
+@@ d9304e281ba1 d
+Le bouton du milieu enfonce pendant un message, le message se ferme, puis il est relache : ce n'est pas un clic sur le terrain (le geste n'a jamais commence).
+@@ c409d09adb44 d
+Sur le terrain d'une ville, (Global + 0xe0) >> 4 & 3 : 1 = gauche, 2 = droite, 3 = retour au nord (NormalControl::checkCamera). Ce sont les valeurs de A et B des menus : la visionneuse retire A et B du terrain (le moteur y veut BTN_TALK).
+@@ 79aecff37f27 d
+x2 = deux crans par pas, x4 = quatre ; le premier cran est celui du bouton (pas d'appel), les autres sont ajoutes tout de suite.
+@@ 21ce98abc20f d
+Le jeu tient la camera (retour au nord en cours : le type en attente est celui du nord, pas celui du bouton envoye) : la visionneuse n'y ajoute aucun cran, ni pour les fleches ni pour le glissement.
+@@ 2fb94bbdae6e d
+Les deux fleches tenues pendant un message, puis le message se ferme : pas de retour au nord (ce n'est pas une pression double sur le terrain).
+@@ 966f2aca15c5 d
+Les directions de marche sont celles de l'ecran, tournees par le jeu selon sa camera (comme sur mobile) : plus de rotation faite par la visionneuse.
+@@ a85032fc4e8e d
+Branchement (le code est relu, la fenetre n'est pas ouverte) : `_entries` ajoute les boutons de camera apres avoir retire A et B, dans la branche du terrain ; ailleurs elle oublie les demandes ; `tick` suit le pas avec _camera_after_step.
+## FILE tests/test_exp_gift_touch.py
+@@ 28251c72307e t
+(touches du portage ; toucher d'ecran, voir fenetre/constantes.BTN_TALK)
+@@ 7e22836641ba t
+(les autres cases : d'autres menus)
+@@ c06adaa23a3d t
+comptage de l'experience, niveaux, ... : A tourne les pages du message comme d'habitude
+@@ e75807dd5c2a t
+l'etat reste a 2 apres la fermeture : sans le tableau, chaque message suivant du jeu recevrait le toucher au lieu de A
+@@ 6abea00bb6d6 t
+jamais d'exception dans la boucle des touches
+@@ 2a79fa73005d t
+MenuManager::execute et gMaterielMenu_EXTRA_PRESENT_EXP (relus dans la bibliotheque)
+@@ c6421108cd81 t
+A et B retires des touches tenues, la direction reste
+@@ 56fb9382baa8 t
+exactement 0x100 : 0x110 ne passerait pas
+@@ c3540b564bd0 t
+une direction, B seul : seul A (ou clic, Entree, Espace qui deviennent A) vaut un toucher
+@@ 19b73b222955 t
+touche A : g_Pad + 2 reste nul, le menu attend sans fin (le blocage)
+@@ b270843739c0 t
+0x110 non plus : le toucher doit etre seul
+@@ 1f154270c8f4 t
+le toucher de l'ecran : il passe
+@@ 3358b78cbd88 t
+apres la branche du terrain (sans message) : elle garde la priorite

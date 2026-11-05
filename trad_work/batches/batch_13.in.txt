@@ -1,0 +1,1006 @@
+## FILE tests/test_magic_entries.py
+@@ ac6888ed5bf5 d
+Menu Magie du terrain (Make_NameButton, Make_MagicInfo, Make_TargetCharaList) et usages sans effet : le moteur d'origine decide.
+
+    python3 tools/test_magic_entries.py                                          (partie interface : Linux sans ecran, pyglet en mode « headless »)
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_magic_entries.py      (ajoute les scenarios du moteur reel)
+
+Partie interface (sans moteur) : la liste de boutons nommes (type 8) recoit du moteur son code 6 = preset de mise en page (`MenuPortItemTable.name_button_param`). Sans lui, la 5e rangee restait
+visible et cliquable : un toucher y envoyait au moteur un sort inexistant (<ERR 0x07000000.0> a l'ecran, « Cout en PM  0/ 30 »).
+  1. preset 0 (4 rangees : liste des sorts) : seules les rangees dont le code n'est pas 0 sont des zones tactiles ; les rangees 4 et 5 n'existent pas ;
+  2. preset 1 (5 rangees : menu Utiliser / Transferer / Abandonner) ; presets 2 a 4 : ordonnee de la premiere rangee, rangees suivantes a 67 au-dessous ;
+  3. le code 6 rejoue (ou arrive apres les codes de rangee) ne decale pas deux fois ; un preset inconnu est ignore ; revenir au preset 0 remet les rangees en place ;
+  4. la ligne de cout « Cout en PM:<tab>  2 » (TextMesh.tabSize 8) : la tabulation devient 8 espaces dans la liste des magies seulement (un texte sans tabulation ou sans tabSize ne change pas).
+
+  4 bis. la ligne de cout de la fiche d'un sort (type 7, texte 2) porte la limite droite de son cadre (Render._texte la comprime pour qu'elle y tienne) ; les autres textes de la fiche ne le sont pas.
+
+Partie moteur (DQ_APK et DQ_SAVES : les sauvegardes sont ouvertes en lecture seule, le moteur ecrit dans un dossier temporaire ; groupe de l'emplacement 1 : Ragnar sans PM et Doc, 30 PM, qui sait « Premiers secours ») :
+  5. liste de Doc : une seule rangee, « Premiers secours », code de rangee 2, rangees 1 a 3 cachees ;
+  6. Premiers secours sur Ragnar blesse : PM 30 -> 28, PV 20 -> 47 ; sur Ragnar aux PV pleins : AUCUN PM depense (BaseAction::useMp ne depense que si l'action a eu un effet) et, hors combat, « Mais il ne se passe rien. » (message officiel d'Evac', id 0xc3d6d) a la place du message de succes
+     des soins (crochet Engine._magic_hooks ; ATTENDU CHANGE VOLONTAIREMENT : avant, le moteur affichait « Les blessures de Ragnar guerissent ! » sans depenser de PM) ;
+  7. usages sans effet decides par le moteur : Rappel sur un vivant, Antipoison sans poison : « Mais rien ne se passe. », aucun PM depense ; PM insuffisants : « Pas assez de PM ! » ;
+  8. Rappel sur un mort : « revient a la vie », PM depenses ; Antipoison sur un empoisonne : « n'est plus empoisonne » ;
+  9. regle « sort qui coute des PM et n'en depense aucun » : soins a PV pleins (Premiers secours, Soins partiels, Soins complets), soin de groupe (Multisoin : un seul message, pas de bruitage de soin en attente) ;
+     non-regressions : sort a effet (PM depenses, message du jeu), Multisoin avec un blesse (messages de soin gardes), messages d'echec propres au jeu (Evac' hors donjon), sorts a 0 PM (Mappille, Sifflet).
+ 10. bruitages (SoundManager::playSe, #137) : le bruitage de lancement (306, le meme pour tous les sorts) est joue dans tous les cas ; le bruitage de soin (501) n'est PAS joue quand le sort n'a eu aucun effet (Premiers secours, Soins partiels,
+     Soins complets sur PV pleins ; Multisoin en pleine forme) et reste joue quand le sort sert (deux fois pour un soin sur une cible, une fois par cible pour Multisoin) ; un soin utile apres un soin inutile joue de nouveau son bruitage.
+@@ fc28ed56597c d
+Make_NameButton minimal : la racine puis 6 rangees (parts[1 + k], bouton k, ordonnee 382 - 67 k) avec un texte fils chacune.
+@@ ae8d7ea9f263 d
+« Cout en PM:<tab>  2 » : TextMesh.tabSize (8) fait de la tabulation 8 espaces ; la police du jeu n'a pas de glyphe pour la tabulation (largeur nulle) et le nombre collait a l'etiquette au lieu d'etre dans la colonne de droite.
+@@ 0d877fa62e20 d
+Fiche d'un sort (Make_MagicInfo, type 7) : « Cout en PM 10/ 30 » (FR) est plus long que « MP Cost 10/ 30 » et sortait de son cadre : la ligne de cout (texte 2) porte la limite droite de son cadre (fit_x) : Render._texte la comprime pour qu'elle y tienne
+meme avec la police d'origine ; le nom, la description et « Lancer » gardent leur mise en page.
+@@ 0ab6fa79e880 d
+Render._adjust_description : la description francaise d'un sort a 3 ou 4 lignes (cadre de 2) est recoupee a la largeur du cadre (police fictive : 9 unites par caractere, cadre de 361 unites = 40 caracteres).
+@@ 660930ee9dd4 d
+Les 5 presets du moteur (NAME_BUTTON_Y / NAME_BUTTON_DY) : nombre de rangees, ordonnee de la premiere, pas.
+@@ 0b75787856cf d
+Doc sait un sort : codes 0 = 2 (deux lignes), 1 a 3 = 0, code 6 = 0. Seule la rangee 0 est une zone tactile (la 5e, fantome, menait a <ERR 0x07000000.0>).
+@@ e352d5d52622 d
+Sort de groupe ou sans cible : la fiche du sort (port 8, bouton « Lancer » = rangee 2), pas de choix de cible.
+@@ b1e9d7a04391 d
+Liste (remplie au fil de l'eau) des bruitages `SoundManager::playSe` joues par le moteur a partir de maintenant ; le bruitage 300 (validation d'une touche dans les messages) est ecarte.
+## FILE tests/test_map_items.py
+@@ 9b46b6804f0f c
+---- reference independante : quaternions de Unity
+@@ 3fb66fefd92f c
+---- cartes minuscules
+@@ 33b898be2faa c
+couvercle de coffre : charniere le long de l'axe X local (au pied du modele : origine = charniere), s'etend vers l'avant du coffre (-Z local), un peu d'epaisseur (Y)
+@@ fbf695f42863 t
+cle d'ouverture des 194 coffres du jeu : rotation X = -60
+@@ 5f4b0867bd94 t
+cle -60 : le bord avant du couvercle monte et recule
+@@ 3c6fa2b3dfb2 t
+coffre de cap 0 : le bord avant se leve (0,6 x sin 60 = 0,52)
+@@ 3d5c44d46a42 t
+les deux sommets de la charniere ne bougent pas
+@@ 837c265516ed t
+l'avant du coffre (axe de la charniere vers l'avant)
+@@ e178a30fb998 t
+axe de la charniere -> bord avant du couvercle ouvert : dans le plan vertical de l'avant du coffre
+@@ 609c94e76829 t
+axe de la charniere : le deplacement lateral doit rester nul (ouverture « en livre », pas de roulis)
+@@ 7f0e7a636f35 t
+3 images du jeu = 6 / 60 s sur 10
+@@ 3240466b0f73 t
+entre fermé et ouvert
+@@ 742259ee3e62 t
+le tiroir sort de 0,5 vers l'avant du meuble
+@@ b8a8aa3a5cb2 t
+MultiplyPoint(TRS) : l'echelle de l'objet s'applique aussi au deplacement (z x 3, tourne de 90 degres)
+@@ e29c669be66b t
+pmv_func : position de l'objet + cle, sans rotation
+@@ d753faa6ed5c c
+---- animations en continu : une horloge par animation
+@@ 14bea6d76822 t
+(objet, sequence, groupe, delai de depart, delai entre deux tours, nombre de tours, _, nombre de tours d'origine)
+@@ 78a5a291d1cf t
+a la fin exacte on reste sur la derniere cle ; au-dela, retour au debut par le reste du depassement
+@@ 141a80ef5174 t
+delai 5 : 3 images a l'image 0 (5, 3, 1 >= 1), puis le temps avance
+@@ e3de84373a36 t
+2 tours puis tenue a la fin
+@@ 5466b2cb3a4e t
+2, 4, (6 > 4 : reste 2), delai de 4 : 2 images a 0
+@@ 0a15ff05e952 t
+400 / 60 s = 200 images : 1,8 degre par image, sans aucun retour en arriere
+@@ 59de30ba5efd t
+a mi-course : demi-tour exact (pas une rotation nulle)
+@@ 3b0cd8ed0db4 t
+le deuxieme tour reprend exactement le premier
+@@ e9439b77f1e6 t
+Quaternion.Euler(lerp(x), lerp(y), lerp(z)), pas la rotation du quaternion intermediaire
+@@ 17178b98023c t
+120 > 100 : 2e tour a 20 / 100 (18 degres), puis 90 pour toujours
+@@ d174960f84ca t
+chacune son temps (avant : 32 pour les deux)
+@@ ac4f0faa258c t
+la meme rotation (90 degres), avec ou sans sequence
+@@ 7ff739dd38f4 t
+la sequence ne fait que deplacer les sommets d'une image a l'autre
+@@ ea9d13009c9e t
+800 / 60 s = 400 images : 0,9 degre par image
+@@ eddb352e4270 t
+a partir de la, chacune boucle a sa duree
+@@ 44c6ff70a175 t
+SetCommonAnimation 2 = ouverture (TownFurnitureObject::openObject), 4 = fermeture
+@@ ea287f5cec5b t
+rotation rigide autour de l'origine du modele (la charniere)
+@@ 420aad45298e t
+la charniere est l'axe X du coffre
+@@ 20c940ba6ecc t
+aucun mouvement le long de la charniere : le couvercle ne roule jamais de cote
+@@ 5c32297b0054 t
+le bord libre monte...
+@@ c42db51264e3 t
+... et recule vers l'arriere du coffre (+Z du modele, le devant est -Z)
+@@ d5f2ca6de4ac t
+les caps non nuls existent dans les donnees (ss5b1b, hcy1b1, tcf1, mdi1f1...)
+@@ c59b9df3e335 t
+fermeture
+@@ 16caa89b2aba t
+cle d'arrivee de l'animation 2 : un tiroir sort vers l'avant (-Z) de son meuble, de 0,25 (ou 1) selon le modele
+@@ 9c97caf1b216 t
+tournee du cap du meuble (repere de l'objet)
+@@ eae8f118b18b t
+des tiroirs de caps differents (0, 90, -90, -6, -2)
+@@ 1f8edcd9a749 t
+la porte tourne autour de la verticale : aucune hauteur ne change
+@@ fddff37ab1f3 t
+donnees : 0 -> 180 -> 360 en 800 / 60 s, sans fin
+@@ a97a9681afbf t
+mouvement seul (sans la sequence de maillages) pour mesurer la rotation
+@@ a02177458751 t
+0,9 degre par image : 45 degres a 50 images, 90 a 100, 180 a 200
+@@ 4eff6bd720d5 t
+sequence de 84 : sa propre horloge
+@@ 0a4ceae29095 t
+des dizaines d'objets ont les deux animations (torches, oiseaux, cascades, rayons de soin...)
+@@ d1002d3ce738 d
+Test de la logique pure des objets animes des cartes (sans fenetre, sans moteur, sans APK) : orientation propre des objets et sens des animations (coffres, tiroirs, portes) :
+
+1. `data.euler_mat` = FldObject.rotateXZY (0xCD47F0) : q = (AngleAxis(ry, haut) * AngleAxis(-rz, avant)) * AngleAxis(-rx, droite) : X appliquee d'abord, puis Z, puis Y (le cap en dernier).
+   Re-calcule a part avec le produit de quaternions de Unity (celui du desassemblage : R = q2 * q3 puis R * q1) ;
+2. coffre qui s'ouvre (couvercle : mouvement commun, rotation -60 en X) : le couvercle pivote autour de la charniere DU COFFRE, quel que soit son cap (0, 90, -90, 180, -27 degres : tous les coffres de la
+   meme famille s'ouvrent « vers l'arriere du coffre », jamais de cote), et a la meme vitesse ;
+3. tiroir (mouvement commun avec une cle de position) : le deplacement est dans le repere de l'objet (FldObject.c_pmv_func : MultiplyPoint(TRS(position, rotateXZY(rotation), echelle)) ; un
+   mouvement ordinaire (pmv_func) ajoute le deplacement tel quel ;
+4. porte (rotation autour de Y seulement) : inchangee (cap de la porte + cap du mouvement) ;
+5. animations en continu (mouvements FPMV et sequences de maillages FSQD) : CHACUNE a son horloge (FldObject.fld_motion_update, une FLD_MOTION par animation) ; interpolation lineaire des angles d'Euler
+   COMPOSANTE PAR COMPOSANTE (pmv_func : rotateXZY de la rotation interpolee, jamais de quaternion ni de plus court chemin) : 0 -> 360 degres tourne vraiment, boucle sans saut ; le rayon de soin
+   `kifk01a` (rotation 0 -> 180 -> 360 en 800 / 60 s, sequence de 84 / 60 s) tourne d'un tour complet et non de 38 degres avant de revenir ;
+6. (si le cache de cartes existe : DQ_CACHE_CARTES, sinon /tmp/uicache_coffres) les VRAIS objets : les 194 coffres, les tiroirs et des portes de toutes les cartes.
+
+  python3 tools/test_map_items.py
+@@ 0684e0f9ae7b d
+Produit de Hamilton a * b (b appliquee d'abord), (x, y, z, w) : formules du desassemblage.
+@@ e442c39c7423 d
+FldObject.rotateXZY lue au desassemblage : q1 = AngleAxis(-rx, droite), q2 = AngleAxis(ry, haut), q3 = AngleAxis(-rz, avant) ; R = q2 * q3 ; resultat = R * q1.
+@@ c9fe6894cf53 d
+Une carte d'un objet : sommets `local_pts` (repere du modele) cuits a la position / rotation / echelle d'origine, une table d'animations communes a 4 entrees dont la 2e (numero 2) est
+un mouvement a deux cles (image 0 : rien ; image `end` : `lookup_keys`).
+@@ 9cfd1f31f039 d
+Une carte d'un objet qui tourne : mouvement FPMV a cles (image, rotation) joue en continu (ou lance par SetCommonAnimation 1 si `common`), avec en plus, si `seq_end`, une sequence de maillages
+de duree propre (deux images de sommets : l'objet et le meme decale de 0,5 en hauteur).
+@@ 66dd7a436367 d
+ExampleCounter d'une animation (FldObject.fld_motion_update) : delai de depart, tours, delai entre deux tours, tenue sur la derniere cle.
+@@ c9ab9e7c204e d
+Interpolation des rotations d'un mouvement : angles d'Euler, lineaires, composante par composante (pmv_func : rotateXZY(rotation interpolee)) ; une image du jeu = 2 / 60 s.
+@@ 0818645037b9 d
+Cause du faisceau de soin qui « tournait de 5 degres puis revenait » : le mouvement (800 / 60 s) et la sequence de maillages (84 / 60 s) de l'objet partageaient UNE horloge qui bouclait a 84.
+@@ 77ca213a6b91 d
+Cartes du cache de l'utilisateur (carte10_*.pkl) : `DQ_CACHE_CARTES`, sinon /tmp/uicache_coffres ; vide si le cache n'existe pas (les tests ci-dessous sont alors ignores).
+@@ df00aaa8bf76 d
+Les vrais objets du jeu : tous les coffres (modele `tbox02` = le couvercle, `tbox01` = le corps), tiroirs (`hikidashi1b`) et portes de toutes les cartes, joues de bout en bout.
+@@ c8e7bed79c11 d
+Les vraies cartes : rayon de soin (`kifk01a`, cartes cmf1c, dmb2, tab1a) et toutes les animations en continu.
+@@ 996705f63cc2 d
+La bascule en X (couvercle) se fait dans le repere de l'objet, puis le cap le tourne : Ry . Rx.
+@@ 519c5056d826 d
+Quel que soit le cap, le couvercle fini = celui du coffre de cap 0, tourne du cap (autour de la charniere).
+@@ 25ddf724cfd0 d
+SetMapObjPos / SetMapObjRot (paquets 3 et 4) puis mouvement commun : la base du mouvement est la position et le cap COURANTS de l'objet (c_pmv_func lit les champs de l'objet).
+@@ 11f56f120839 d
+0 -> 270 degres : le jeu passe par 135 a mi-course ; un slerp de quaternions irait en arriere vers -45.
+@@ 20e1958a7dfb d
+Un etat instantane d'avant la correction (une seule horloge : `clock`, entrees `auto` a plat) se recharge et continue sans erreur.
+@@ b76896ef4e56 d
+[(carte, c, i)] des objets dont le nom de modele finit par `pattern` et qui ont des animations communes.
+@@ 663e781b831a d
+Pour toutes les cartes : chaque mouvement et chaque sequence en continu (sans delai) a son temps = (2 x images) replie a SA duree.
+## FILE tests/test_map_textures.py
+@@ e9d6da412ad5 d
+`Data._texture` : un materiau de decor sans aucune texture (21 cartes de lieux, 10 decors de combat : petites surfaces de couleur unie, sol sombre, eau...) donne la texture blanche 4 x 4
+(cle `WHITE_TEX`, couleur du sommet x _Color du materiau, comme Unity avec sa texture blanche par defaut), pas `None` (le groupe etait ignore au dessin : la surface manquait) ;
+un materiau avec texture est inchange ; un materiau illisible garde `None`.
+
+    python3 tools/test_map_textures.py
+## FILE tests/test_map_tint.py
+@@ db2cbc9ac5b7 t
+la derniere teinte gagne (fondu de teinte : un paquet par image)
+@@ 7bad75cc4b32 t
+le moteur envoie la teinte APRES le paquet 0, dans la meme image
+@@ 2d9e1ea635b3 t
+aucune methode : un acces au paquet de donnees leverait
+@@ d1ccbedaefa3 t
+1re mise a jour (le personnage est place) : echelle de depart sans suite (0,062, puis 1,0 une image apres), ignoree ; les flottants suivants restent alignes
+@@ d3463fd95998 t
+deja place
+@@ 9b3f67b58681 d
+Test de la teinte du decor (paquet 33, `cmd_map_color_rate`) et de l'echelle des sprites (paquet 13, bit 0x800) : decodage dans `State.apply`, reconnaissance des groupes « tz_ »,
+interrupteur de debogage ; partie « moteur reel » facultative (--apk et --saves : la teinte arrive apres le paquet 0 a chaque chargement de carte).
+
+    python3 tools/test_map_tint.py [--apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>"]
+Sans ecran, sans GL. Les sauvegardes ne sont ouvertes qu'en lecture (le moteur ecrit dans un dossier temporaire).
+## FILE tests/test_maps_npcs.py
+@@ fbdc5336fa04 t
+charge, pas encore pose : rien a dessiner
+@@ fb8bad4a1cb4 t
+1re pose, 1 image apres : la position des autres personnages arrive a cette image ou la suivante, rien n'est dessine encore
+@@ f3d235c9f9e2 t
+pose 1, cap 2, toujours aucune position : le personnage est a l'origine
+@@ 81614288e530 t
+position + pose dans le meme paquet
+@@ 554aec2ffc8f t
+pose seule ensuite : la position ne bouge pas
+@@ 3a2ffc06ba9e t
+(la couleur n'est pas une preuve de position : seule la pose en est une)
+@@ 7e69cd330335 d
+Tests de la mission « cartes, PNJ, interrupteurs » de l'audit (sans fenetre, sans moteur, sans APK) :
+
+1. un personnage de ville qui recoit une pose (paquet 13, bit 0x4000) sans jamais avoir recu de position est a l'ORIGINE (0, 0, 0) : le moteur ne renvoie une position que si elle change
+   (son enregistrement du personnage vaut (0, 0, 0) : relu dans la memoire du moteur sur mqtf3, mom2f1 et msm1f1, emplacement 8 : Fix32 a 0x1026a688 + 0x1c0 x (emplacement - 8)) ;
+
+  python3 tools/test_maps_npcs.py
+## FILE tests/test_menu_key.py
+@@ aff10478163a t
+(action_of(K.RETURN) est None : pyglet nomme 0xff0d « ENTER » ; le jeu lit les touches par `codes`, voir Game._tenue)
+@@ c09a0ae4804d t
+(liste d'une seule touche)
+@@ 1743faef6628 t
+(fichier complet d'avant)
+@@ 9694087e2ae6 t
+le choix du joueur prime
+@@ 9c5c50f4bff1 t
+(touches abandonnees ou absentes : les defauts)
+@@ 6695ad667953 t
+↺ : les deux touches reviennent
+@@ 89be703775e3 t
+Tab donne a « Infos » : « Menu » n'a plus que Entree
+@@ aa56c923861c t
+↺ reprend Tab (et le dit : message)
+@@ 8dd9e361d505 t
+« Rétablir les touches par défaut » aussi
+@@ 43544048929d t
+un appui = un front « Menu » (ouvre le menu du terrain, valide, tourne les pages des messages)
+@@ 9796c7ecc42a t
+les deux ensemble : un seul front
+@@ 1537df764fa7 t
+menu Pause : la touche lui appartient
+@@ 262063a95201 t
+saisie du nom : Tab change de mode (name_entry.py)
+@@ 89e4d4a5ae3e t
+ecran Sauvegardes : bouton suivant
+@@ 558d348cc92f d
+Test de la touche « Menu » (menu du terrain : Objets / Magie / Carac. / Divers) : defaut Entree et Tab, migration d'un ancien reglages.json (sans ecraser un choix du joueur), Tab libre ailleurs, ligne de la page
+Commandes et bouton ↺ (vrai code de settings.py, de pause.py et, sans fenetre, de Game.on_key_press / _fronts).
+
+    python3 tools/test_menu_key.py
+@@ dd383ab2752d d
+Vrai code de Game.on_key_press / _fronts sur un faux Jeu (comme test_window_mode.py).
+@@ c2acb3f22596 d
+Les seuls usages de Tab (K.TAB) : replier le panneau de l'editeur d'interface (menu Pause), changer de mode dans la saisie du nom, passer au bouton suivant de l'ecran Sauvegardes. Ces trois ecrans
+prennent la touche dans Game.on_key_press AVANT les actions du jeu (menu Pause ouvert, saisie du nom, ecran Sauvegardes) : Tab n'y est jamais la touche « Menu ». Un nouvel usage doit etre examine ici.
+@@ 36321536dfea d
+Apres la migration le fichier est enregistre en v5 : Tab retire ensuite par le joueur (case videe) n'est pas remis.
+@@ 86a94d32c0f2 d
+Lier Tab a « Menu » dans la page Commandes (case secondaire) : la capture de touche prend Tab comme n'importe quelle touche.
+@@ f0e680ed3622 d
+Dans l'editeur d'interface, Tab replie le panneau (il ne declenche rien d'autre) ; hors editeur, Tab ne fait rien dans le menu Pause.
+## FILE tests/test_menu_language.py
+@@ b4183d6fbad3 t
+(la langue de l'ordinateur ne compte pas ici : chaque test choisit la sienne)
+@@ 810e7e339fa7 c
+---------------------------------------------------------------------------------------------------------------------------------- faux objets
+@@ dc7f1f25ecc8 c
+---------------------------------------------------------------------------------------------------------------------------------- ecran Sauvegardes : messages de resultat
+@@ f5fa874cd10e c
+-- ce que les boutons demandent
+@@ a56333a7a94d c
+-- export
+@@ 90fb1fdf8d5f c
+-- import
+@@ cb15d5c40fbb c
+-- dessin de l'ecran
+@@ 54ada740476b t
+(sans le titre ni les deux boutons)
+@@ 178e2dd26391 c
+---------------------------------------------------------------------------------------------------------------------------------- historique
+@@ 64bf769097ad t
+(la ligne de texte : police bitmap du jeu ou du systeme)
+@@ c01b537fc79b c
+-- l'entete, les onglets, l'aide
+@@ a24e3f940aae t
+(police bitmap du jeu, ou repli sur la police du systeme)
+@@ 31cf108fa901 t
+(le message, coupe en lignes aux espaces : les lignes mises bout a bout le redonnent)
+@@ cd70aeb25838 c
+-- un combat : entete (issue), lignes composees autour des noms du jeu
+@@ 5845ec424bb1 t
+(l'entete de chaque boite : l'issue du combat)
+@@ 7d9bdf2bd8a1 t
+(les noms de Slime, Golem, objets : ceux du jeu, jamais traduits)
+@@ d0aeb3a29a74 t
+aucun ennemi connu
+@@ fe92c62769db t
+victoire sans ennemi connu
+@@ 6a8283c4f806 c
+-- la console
+@@ 15d8ee28c687 t
+un moteur sans les symboles attendus
+@@ 50942841ccc4 c
+---------------------------------------------------------------------------------------------------------------------------------- saisie du nom, licence, editeur d'interface, notifications...
+@@ f4ad46a39721 t
+(les libelles des boutons de fonction viennent du jeu : non traduits)
+@@ 13b7776ce734 t
+liste blanche : « à À » = le libelle du jeu (C_ALPHABET_ETC) du bouton de la page des lettres accentuees
+@@ 05b1cfdf9376 t
+« Privacy Policy » : le texte du jeu
+@@ 587d60079319 c
+le texte d'en-tete du portage est deja en anglais, la liste d'origine suit : rien de tout cela ne depend de la langue
+@@ b0d4a935ed01 t
+(en edition, chaque element porte son nom)
+@@ 84d77ae5f6cd t
+(tous les textes d'essai, pas seulement celui du test)
+@@ fe416f78fbfc t
+rien a annuler
+@@ 609a3fe0e34e t
+(la page des etats affiche « Carte du monde » et « Combat » avec Pause._et : la traduction doit exister)
+@@ 21b35c7b8a33 c
+---------------------------------------------------------------------------------------------------------------------------------- le catalogue
+@@ 557d25fadf86 t
+(tout le catalogue : un texte commun n'a qu'une entree, dans le fichier du premier lot qui l'a ecrit)
+@@ 56fbcd9f85a8 t
+(identiques en anglais : « Dialogues », « Casino »...)
+@@ a805273b6ea9 d
+Version anglaise de l'outil (D-238), lot « menus » : tout ce que l'outil ecrit lui-meme hors des pages Parametres, en anglais puis en francais, avec de faux objets (ni fenetre, ni moteur, ni GL).
+
+  - ecran Sauvegardes (menu de depart) : titre, boutons, explications, messages de resultat d'un export / import (reussi, annule, ignores, echec), boites de dialogue de fichiers (titres, filtres) ;
+  - fenetre Historique : titre, onglets, case « Favoris seulement », aide, listes vides, entete et lignes d'un combat (textes que l'outil compose autour de ceux du jeu), favori dont le message manque ;
+  - saisie du nom, licence (titre ; le texte d'origine du jeu et le « Privacy Policy » ne changent pas), noms des elements de l'editeur d'interface, textes d'essai des dialogues, infos F1, notifications,
+    lieu des etats instantanes, messages de la console de ces modules ;
+  - en anglais : aucun mot francais ne reste (hors la liste blanche, courte et justifiee) ; en francais : exactement les textes d'avant ;
+  - le catalogue (texts_en\menus.py) n'a pas d'entree orpheline.
+Les regles generales du catalogue (memes trous, memes bords, pas de francais dans l'anglais, pas de doublon, tout `tr('...')` / `N_('...')` du code a sa traduction) sont dans tests/test_language.py.
+
+    python3 tests/test_menu_language.py
+@@ 0b0a9807f9f3 d
+Chaque test choisit sa langue ; on revient au francais a la fin (les autres tests ont des attentes francaises).
+@@ eee20492812e d
+Faux pyglet.text.Label : memorise le texte et le releve quand il est dessine.
+@@ 996a2d05d723 d
+Ce que les ecrans demandent a la fenetre : `_lbl` (fait les etiquettes), `pause` (les pages), taille, peripherique.
+@@ ee9b8ddb7d48 d
+La page-outil `Pause` sans ses dessins : `_label` est la vraie (elle traduit), le reste ne fait rien.
+@@ e581048f0f0e d
+Pas de GL : `gl` des modules et les formes de pyglet.shapes sont remplaces par des objets muets.
+@@ 1c80ab2f1547 d
+Remplace S.Dialogue (tkinter) : memorise ce qu'on lui demande.
+@@ 1e0b8b647059 d
+Dialogues et combats d'essai (textes neutres : les noms et les dialogues sont ceux du jeu, jamais traduits).
+@@ 9d6ec74c117e d
+Police bitmap du jeu : seulement ce que dessiner() lui demande.
+@@ 535895a52725 d
+{texte: [fichier:ligne]} des textes passes a tr(...) / N_(...) dans ces fichiers de dq4_pc.
+@@ 952076a856a2 d
+Aucun des `texts` ne contient de francais (hors `whitelist` : textes du jeu, noms propres), et il y en a.
+@@ cbe6f151262b d
+Les filtres du « Enregistrer sous » / « Ouvrir » (tkinter) : memes motifs, libelles traduits.
+@@ c404ceca3a4b d
+Fenetre etroite : les phrases d'aide passent sur plusieurs lignes. L'anglais n'a pas le meme ordre des mots : la phrase est traduite
+d'un bloc PUIS coupee (sinon les morceaux francais n'ont pas de traduction et restent en francais).
+@@ 6a33c0f74ee0 d
+Le portage pose son bouton « Sauvegardes » dans le menu de depart (a la place de « Sauv. cloud »).
+@@ ed4d46d1111f d
+Quand la touche de l'historique est retiree, la ligne « H : suite » disparait (comme avant).
+@@ 8d82d25f12cf d
+Chaque ligne d'essai de l'editeur est traduite, et c'est la ligne traduite qui est ecrite dans le canevas.
+@@ 49643488a005 d
+Annulation d'un chargement (rien a annuler, puis annule) et import des sauvegardes : les trois messages que l'outil ecrit lui-meme.
+@@ 878889745e61 d
+Les messages a trous (« État 3 enregistré ») sont formates AVANT d'arriver a toast : ils passent sans changement.
+@@ f40e08033572 d
+Le lieu ecrit dans un fichier d'etat est un texte francais stable (traduit par la page qui l'affiche), quelle que soit la langue.
+@@ d2d2c9df85b9 d
+Les messages de la console des ecrans et des ressources (appeles pour de vrai avec un jeu absent ou en panne) : anglais sans francais, francais comme avant.
+@@ cb563b9e8968 d
+Pas d'entree orpheline : chaque texte du catalogue `menus` est marque dans le code (tr / N_) ou dessine par Pause._et sous une constante marquee. Une faute de frappe dans une cle ne laisse plus passer un texte en francais.
+## FILE tests/test_menu_tab.py
+@@ 346a7462b2b1 t
+type 20 « Ordre de marche » : avant, seule la liste des magies (Make_NameButton) etait traitee
+@@ 0a5384eefd33 t
+type 31 : « nom \n \t×N », tabSize 25
+@@ b31203bbd59a t
+un seul monstre : pas de tabulation, rien ne change
+@@ 08365e45b6c9 t
+Make_MonsterName : caractere de taille 9,3925 (1 px de police = cs * 0,1 unite), texte ancre a gauche en x = -74, plaque de -71 a +71
+@@ 1ac2af4ca9cc t
+(\u00d710 et plus : fin vers x = 79, 8 unites au-dela du bord, comme avec les memes constantes dans Unity : suppose, voir #208)
+@@ f4727be2ad43 t
+« x N » finit dans la plaque (a gauche : tabulation ignoree, ca finissait vers -63)
+@@ d27825322a10 d
+#208 (audit UI-03) : `TextMesh.tabSize` : une tabulation `\t` d'un texte de menu vaut `tabSize` espaces, dans TOUTES les cellules qui en portent un (avant : liste des magies seulement).
+Cas reels : « Nv. » de l'ordre de marche (type 20, tabSize 8), « x N » des plaques de groupe en combat (type 31, tabSize 25). Sans moteur ni fenetre ; avec la police du jeu (DQ_UI_CACHE : dossier de ui_garrir.json / .png), « x2 » a « x9 » tiennent dans la plaque.
+    python3 tests/test_menu_tab.py
+@@ d2b94ea2f60f d
+Une plaque et son texte (cellule (0, 0), tabSize donne) ; code 0 (« plaque de monstre ») : -1 montre la plaque, 1 le texte.
+## FILE tests/test_message_fallback.py
+@@ 1744c0a019e3 t
+chaque ligne r porte la valeur r % 251 + 1 (jamais 0)
+@@ 4a07fefe69fc t
+lignes 453 a 511 puis 0 a 52 (avant : du vide apres la ligne 511)
+@@ 6cdd803aff66 t
+(4 lignes de 28, defilement -3)
+@@ 5edbd954e895 d
+#231 (audit CMB-04) : `Engine.read_message` (repli « menus simples », sans ui_layout.json) lit le canevas du message comme une texture circulaire de 512 lignes (REPEAT d'Unity) : le defilement du moteur
+croit sans borne, apres une dizaine de lignes il depassait 512 et le texte devenait vide. Moteur factice (memoire et canevas simules), sans carte ni donnees.
+    python3 tests/test_message_fallback.py
+@@ 014b12672c74 d
+Moteur dont seuls `read_canvas` et la lecture des reglages (nombre de lignes, hauteur d'une ligne, defilement) existent.
+## FILE tests/test_message_font.py
+@@ a8b40a1daf19 t
+absent : le « @ »
+@@ ab00e4efaa0e t
+ni l'un ni l'autre n'est dessine (anglais)
+@@ 63bdeb254d05 t
+« ; » est une espace pour la langue 2
+@@ 33f3c5384db6 t
+la coupure tombe pile a la fin de la ligne : le saut qui suit est avale
+@@ d60d71d902c2 t
+coupure apres un tiret
+@@ 1d941c7f77c0 t
+« -- » n'est pas un point de coupure (anglais)
+@@ c89f6367f329 t
+deja la : rien a relire
+@@ 013f7174f05b c
+---------------------------------------------------------------- vraie police et vrai moteur (facultatif)
+@@ 8b377b585a0c t
+quelques images : le moteur pose ses parametres de texte quand un dialogue s'ouvre
+@@ aa482d89d405 t
+espace, espace large, tabulation (valeurs du jeu)
+@@ 59fc26e059bb t
+canevas vide : chaque test part de zero
+@@ 3cb24a64f651 t
+la position d'ecriture est a la colonne PAD
+@@ 0b789db2586a d
+Test de la police des messages du jeu (dq4_pc/menus/message_font.py) : celle que le moteur utilise pour dessiner les dialogues (et que l'historique reprend, #269).
+
+    python3 tests/test_message_font.py                                      (regles, avec une police synthetique : sans pyglet ni moteur)
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tests/test_message_font.py     (en plus : la vraie police, comparee au vrai moteur)
+
+Sans moteur : lecture des glyphes (octets repetes / octets tels quels / fin), avance de la position d'ecriture (largeur du glyphe, glyphe a drapeau pose un pixel a gauche et avance de deux pixels de moins, espace du moteur et pas
+de la police, tabulation, « ; » et « $ » non dessines, code absent -> glyphe du « @ »), pixels d'une ligne, coupure des lignes (`CTextAutoReturn::AutoReturn` : points de coupure, tiret, saut de ligne, mot plus long que la ligne),
+extraction de la police dans le cache.
+Avec le moteur reel (facultatif, ignore sinon) : les pixels de `SDrawCTRL::PutChar` dans le canevas du moteur sont ceux de `MessageFont.pixels` pour une phrase francaise, les lettres russes du patch (я, и) et les glyphes
+a drapeau ; les lignes de `MessageFont.wrap_text` sont celles d'`AutoReturn` sur des messages du jeu. Aucun caractere n'est ecrit « en dur » : tout vient du fichier de police (DQ5 et DQ6 : meme format).
+@@ 8a2f941e3b0b d
+Donnees d'un glyphe (hauteur x largeur octets, a plat) en 'repete' (1xxxxxxx + octet) quand un octet se repete, sinon 'tels quels' (0xxxxxxx + octets), puis 0.
+@@ 43e05783601d d
+Fichier TNOF minimal : glyphes = {code: (largeur, drapeau, octet)} ; le glyphe est une colonne de rampe 1..255 (octet = valeur de base) pour reconnaitre chaque cellule.
+@@ 0d3f0f1a342e d
+Un caractere ajoute a la police (DQ5, DQ6 : autres lettres) s'affiche, sans rien changer dans le code.
+@@ a16833469d78 d
+Pose 1 pixel a gauche, avance de 2 de moins (crenage).
+@@ 6821317404b4 d
+Le glyphe a drapeau remplace le dernier pixel du glyphe precedent (pas de melange), comme dans le canevas du moteur.
+@@ 6e75af59f3fc d
+« AAA AAA » fait 7 x 6 + 6 = 48 ; avec la 2e espace 54 ; la limite 60 est atteinte dans le 3e mot : retour apres la 2e espace.
+@@ b183847dfdbd d
+Sans point de coupure le caractere qui depasse reste sur la ligne ; la coupure laisse une ligne vide a la fin quand le texte s'arrete juste apres (comme le moteur).
+@@ e3fe6b347bd7 d
+Chaque glyphe de la police (tous les codes que la table connait), par paquets : les pixels et l'avance sont ceux du moteur.
+@@ 35f4bfc88f8b d
+Lignes d'un texte telles que `CTextAutoReturn::AutoReturn` du moteur les coupe (lignes vides et espaces de fin ignorees : comme `wrap_like_the_game`).
+@@ 6a6a3a04382a d
+Des messages du jeu (un sur ~7 de chaque fichier, par page) : les lignes sont celles du moteur.
+@@ 4716536ea731 d
+« $ » (largeur comptee pour la coupure, pas dessine), « ; » (largeur nulle), tirets, espaces larges, lettres russes, mot trop long : textes construits pour que la coupure tombe pres de ces caracteres.
+## FILE tests/test_message_history.py
+@@ 057d6a9f4dd7 t
+le « *: » est le texte du jeu : garde
+@@ 8ce537e791e4 t
+l'espace insecable (typographie francaise) est gardee
+@@ dbd0aea21cd1 t
+un favori enregistre avant la correction se relit sans « ; » (et reste reconnu)
+@@ ea2ff20d8867 t
+les retours a la ligne du texte sont gardes
+@@ 60514274273e t
+jamais coupee a l'espace insecable
+@@ 26e9a3b98758 t
+numeros d'ordre distincts
+@@ 9207041bbebd t
+le moteur a reaffiche le message
+@@ 6d02a76d2e70 t
+plus tard : un autre dialogue
+@@ 11577e5ac8ca t
+autre nom affiche : un autre dialogue
+@@ a3d553e5a460 t
+pas d'or ni d'experience sans victoire
+@@ eb0f54e52679 t
+rien n'est ecrit tant qu'il n'y a pas de favori
+@@ 9bdf43d0342c t
+ecrit tout de suite
+@@ c28b8bf5d07c t
+nouvelle session : les dialogues et combats ont disparu, les favoris restent
+@@ 3e26367c7e86 t
+« Favoris seulement » : les favoris du fichier, du type de la liste (aussi ceux d'une session precedente)
+@@ 0d0e180ae262 t
+(copie independante)
+@@ 9b2b1af09dab t
+(favori invalide : ignore)
+@@ 9e17064ad351 t
+la liste de session est vidée : le favori reste
+@@ 6106699b88ca t
+deuxieme appui sur l'etoile : retire
+@@ 8b66a1253673 t
+« desetoiler » le favori lui-meme
+@@ e94a1bd8d879 t
+l'element de la session perd son etoile aussi
+@@ 324e4cef2161 t
+pas de chemin : tout reste en memoire, sans erreur
+@@ d9dec862ff2a t
+jamais un numero deja pris
+@@ 726bab7e92d4 t
+le fichier est garde : seules les entrees invalides sont ignorees
+@@ d62391b1cb50 t
+trop tot : groupee
+@@ 7ef745b95ab5 t
+(plus rien a ecrire)
+@@ f8a265e4c1f3 t
+la fermeture force l'ecriture
+@@ ee7ad517bd1c t
+un fichier a la place d'un dossier
+@@ 71c74aeca9ae t
+la page 2 n'a pas encore ete lue
+@@ b674448e9a6d t
+fin de la page 1 : curseur allume
+@@ f56add13c262 t
+le joueur tourne la page
+@@ cdd3a751cc91 t
+la fenetre s'ouvre une image apres le texte
+@@ 54fec002a9ab t
+ni dans les dialogues, ni dans les combats (ceux-ci viennent du BattleSensor)
+@@ 3e031049d581 t
+noms differents : deux messages, pas deux pages
+@@ 89434c2cbcab t
+(visionneuse sans moteur de messages : rien ne casse)
+@@ eb24f95c6dd8 t
+chaine des pointeurs de cadre
+@@ 9483bf4b0ee6 t
+message de combat lance depuis un menu de combat
+@@ cff80a4c6fff t
+pas de conflit avec une autre action
+@@ 2a11b64ad64e t
+largeur d'une chaine (unites) : 9 par caractere
+@@ 33a948bbdf2c t
+la 3e ligne tient dans le cadre
+@@ ce3a2e3d5970 t
+(mise en page absente ou inutilisable : valeurs mesurees)
+@@ cf5728311228 t
+hauteur du cadre : une seule valeur
+@@ bc0cc7df17c1 t
+(le texte, lui, garde ses lignes)
+@@ 4c97c1f41197 t
+l'onglet du nom s'ajoute au-dessus, seulement avec un nom
+@@ 1e7afe6dcadb t
+le nom n'est que sur la premiere page
+@@ d55e3e151f9e t
+une seule boite
+@@ 979183a7fc75 t
+une rangee par espece + l'or et l'experience
+@@ e5682ba98af0 t
+pas d'or, d'experience ni d'objets sans victoire
+@@ ccde0f129586 t
+(20 especes + l'or et l'experience)
+@@ 4659afda6740 t
+la derniere boite a la hauteur de son texte, pas plus
+@@ 49a29b15735c t
+le bas ne bouge pas
+@@ e988a3c01ba8 t
+(gardee)
+@@ fa8f2e2791dd t
+(la mise en page d'origine n'a pas ete modifiee)
+@@ d346796d02d5 t
+le plus ancien en haut
+@@ c66c4aee0512 t
+meme ecart partout
+@@ 116f4ffa509f t
+hauteur du contenu : marges comprises
+@@ 6b205673b8cd t
+5 messages de 100 : debuts 5, 115, 225, 335, 445 ; fins 105, ..., 545 ; hauteur 550
+@@ 08c052bcf5fb t
+fenetre de 250 : a decal 0, elle montre de 300 a 550 depuis le haut du contenu
+@@ c9755a286301 t
+(le premier va jusqu'au haut du contenu, le dernier jusqu'au bas)
+@@ cb6b799ea461 t
+entierement visibles : inchange
+@@ b371ed76d9ad t
+225 a 325 : coupe en haut (la fenetre commence a 300) : il faut monter de 75 exactement
+@@ cbf0e1f85128 t
+hors fenetre : son bord haut en haut de la fenetre ; le premier : jusqu'au haut du contenu (marge comprise)
+@@ cf9b84789d18 t
+fenetre en haut (0 a 250) : les deux premiers y sont deja
+@@ e777db48bcb5 t
+coupe ou hors fenetre en bas : son bord bas rejoint le bas de la fenetre (le dernier : jusqu'au bas du contenu)
+@@ 2f474d79f70c t
+toujours entierement visible
+@@ 898c237989e5 t
+un message plus haut que la fenetre (100 > 90) : son debut en haut de la fenetre
+@@ f5ce0b04d068 t
+liste plus courte que la fenetre : rien a defiler
+@@ 2b5b02fdac82 t
+l'element 2 (225 a 325) est coupe : visible en partie seulement
+@@ 5b222aeb92f9 t
+tout en bas : le plus recent visible, et actif
+@@ 62f495f1214d t
+le message choisi est toujours entierement visible
+@@ a8bcebfe4b06 t
+son bord haut est exactement en haut de la fenetre : pas un pixel de plus
+@@ 53b7dbf8853c t
+(la vue a defile par moments seulement)
+@@ f88b3115d6e6 t
+butee en haut
+@@ fc6055fc5c23 t
+son bord bas est exactement en bas de la fenetre
+@@ 627698fe49e9 t
+(repetition de la touche maintenue : Pause.maj)
+@@ e54517ff5836 t
+butee en bas
+@@ 9a390e2cd4ca t
+le message juste au-dessus du premier entier est coupe (ou tout juste hors fenetre)
+@@ 41f8de11d826 t
+une page : la fenetre moins deux lignes (le contexte reste visible)
+@@ 909e6207dd0b t
+le message choisi est sorti de la fenetre : il devient le dernier message entierement visible
+@@ 07b17f7b08ad t
+butee en haut : le premier message
+@@ c04f2cbeb6ba t
+molette vers le haut : les plus anciens, un pas fin et constant
+@@ ba4fcaf342fe t
+(jamais au-dela de la liste)
+@@ bea5d0588136 t
+pave tactile : proportionnel au mouvement
+@@ 72b5b42582a8 t
+curseur en bas (position 0)
+@@ 7d292c8b912a t
+fleche du haut : une ligne
+@@ 270011cae4bf t
+fleche du bas
+@@ 4f68dbd00332 t
+piste au-dessus du curseur : une page
+@@ cdd70fd573ce t
+curseur saisi : il se deplace sans cran
+@@ 865d17df87e0 t
+tire tout en haut : le plus ancien
+@@ b5ab70cbba0a t
+milieu : position intermediaire, proportionnelle
+@@ 0e04a980264b t
+sous la tolerance : pas un glissement
+@@ ebb700e2b6e0 t
+le pointeur descend de 160 : le contenu descend de 160 (on voit des plus anciens)
+@@ c6e891cebfe6 t
+un pixel de plus : un pixel de plus (pas de palier)
+@@ 7c0f7f218130 t
+le pointeur remonte au-dela de son point de depart : butee en bas
+@@ 92ded9a29756 t
+un par un, sans en sauter un seul
+@@ 6042b0ce24a0 t
+(fenetre plus basse qu'un message : le dernier est montre par son debut)
+@@ 64de84e6f575 t
+... et la vue n'a pas bouge
+@@ 9d90b2bce51b t
+un clic choisit le message
+@@ 42b9063a2a03 t
+la molette defile, le message choisi reste le meme
+@@ f188d510a518 t
+... meme s'il sort de la fenetre
+@@ 98b2deab120c t
+au clavier : le plus proche message visible remplace le message sorti (le dernier de la fenetre) ...
+@@ aef2af01df2b t
+... sans avancer d'un rang de plus ; l'appui suivant avance
+@@ 7804c543dfc5 t
+le cadre seul : aucun rectangle blanc translucide par-dessus
+@@ 7c3fff3cee80 t
+au milieu de la fenetre
+@@ 9691b82d4476 t
+(bornee : jamais au-dela du haut de la liste)
+@@ 91e02e34e196 t
+l'echelle double : la position aussi (meme endroit de la liste)
+@@ b703cc00cc76 t
+plus d'onglet « Favoris » : c'est une case a cocher
+@@ e89a68739c15 t
+retour au premier
+@@ 612577c4c8ae t
+2e appui : les combats
+@@ 06abb539f70e t
+3e appui : ferme tout
+@@ 56dcb82ca3c1 t
+« Favoris seulement » coche : le cycle de H ne change pas (ici sur les combats : ferme)
+@@ f8d6e72ea6da t
+toute touche est consommee : rien n'arrive au jeu
+@@ e86d8460a7fb t
+pas d'historique du tout (jeu lance sans)
+@@ ecc8ab73089c t
+l'element actif a l'ouverture : le plus recent
+@@ 5963686ac3bc t
+Entree : bascule
+@@ 0c0f37dc9cc0 t
+(un element choisi par un clic ou par la liste : actif jusqu'au prochain defilement)
+@@ 769607c62b64 t
+clic droit : retour
+@@ 91e5fc17ba05 t
+deux dialogues et un combat en favori
+@@ 5cd6222f2aaa t
+(case decochee : toute la session)
+@@ 03a7f1d06f15 t
+les favoris de l'onglet, dans l'ordre ou ils ont ete mis
+@@ a5473a7b9bc6 t
+le filtre est conserve d'un onglet a l'autre
+@@ 7b373a4cbb77 t
+etoile retiree : l'element disparait de la liste filtree
+@@ dc3e55d44bb7 t
+(et l'element de la session perd son etoile)
+@@ 0cb45b0bd44c t
+liste vide : rien a basculer
+@@ 9498333331f1 t
+case decochee : toute la session de nouveau
+@@ 2dcd9b323f9c t
+F : coche
+@@ 9486cf61d78a t
+F : decoche
+@@ d07489d5fc95 t
+la touche Carte (M) fait de meme
+@@ 58614399ca85 t
+clic sur la case : decoche
+@@ 7f2943beabbe t
+(a cote de la case : rien)
+@@ b247dca9f674 t
+(la touche est consommee : rien n'arrive au jeu)
+@@ 0f513be04cd6 t
+l'element choisi, s'il est un favori, reste choisi (la vue se recentre sur lui)
+@@ bc1eddd321ac t
+molette et glissement bornes a la liste filtree (le message choisi ne change pas)
+@@ 0785ae64dc1c t
+decoche : la liste complete, l'element actif (un favori) reste actif
+@@ 212c60b1baef t
+l'element choisi n'est pas un favori : on se place sur le plus recent de la liste filtree
+@@ e4386356faed t
+nouvelle session : lit le fichier
+@@ 29fcd93c2c45 t
+etoile retiree : le fichier suit
+@@ 1a282bed24cd t
+« Favoris seulement » reste coche quand on rouvre la fenetre
+@@ aa602393cd2d t
+(puis plus rien a faire)
+@@ 30204e0997c2 t
+le message choisi reste le meme
+@@ 4ba0c594619f t
+la lecture ne saute pas
+@@ abd232a1e9cb t
+retour en bas : mise a jour
+@@ 4756eb85bf22 t
+un dialogue ne change pas l'onglet des combats
+@@ f7648287b501 t
+(meme longueur : la limite de l'historique)
+@@ c9288d2029a9 t
+depuis #187 : seulement quand l'historique est accessible (sinon la page se referme)
+@@ 02114d6a5b77 t
+(decochee par defaut ; une valeur invalide y revient)
+@@ 97a70de114c9 t
+pas de ligne dans le menu Pause : la case est dans la fenetre elle-meme
+@@ 858915b5d414 t
+coche : ecrit tout de suite, sans attendre la fermeture
+@@ 06ad1b9209d0 t
+(les autres reglages ne bougent pas)
+@@ 153491c14827 t
+fichier d'avant cette cle : decoche
+@@ d59f5e7ad378 t
+illisible : valeurs par defaut, sans erreur
+@@ ba115aff4309 t
+nouveau lancement
+@@ db79dacccec4 t
+decochee : la session est vide (le reste de l'historique n'est pas conserve)
+@@ 049df8a26b82 t
+... et la case decochee est conservee aussi
+@@ dbd001d05eb0 t
+les favoris, eux, sont toujours la
+@@ bc6ce262abea t
+(pas de reglages du tout : la case marche quand meme)
+@@ 30fa5121c19a t
+(la page Commandes porte la section « Défilement du texte »)
+@@ 3b4d3a3021a1 t
+1er appui : les messages, le moteur est arrete
+@@ b59017009b79 t
+2e : les combats
+@@ 8cbdc878a79e t
+3e : tout est ferme
+@@ 50b09e40b727 t
+(rouvert : de nouveau sur les messages)
+@@ 8c6bb1892fbf t
+Echap : retour = fermeture (page unique de la pile)
+@@ 4df8d73eea00 t
+(B n'est « Annuler » que si c'est la touche reglee : ici B n'est pas attribuee)
+@@ 7720f7340cfe t
+retour au menu Pause, pas au jeu
+@@ d14d3d645a21 t
+depuis le menu : H, H ferme aussi tout le menu
+@@ b182ac1ac7cb t
+clic droit : retour, comme dans les autres pages
+@@ ec628c240ca8 t
+police d'essai : 10 unites par caractere
+@@ 018b319a43fc t
+aucun mot perdu ni change
+@@ b2136ed18c9d t
+la liste vide passe par la coupure (plus de ligne unique)
+@@ b99c025790b9 d
+Test (sans fenetre ni moteur) de l'historique : dq4_pc/historique.py (donnees pures, favoris, pages d'un message, crochet du moteur avec un faux emulateur) et ui_history.py (onglets, touche H, etoile, defilement).
+
+    python3 tools/test_message_history.py
+
+Verifie : nettoyage du texte (le « *: » des paroles sans nom est garde), coupure des lignes, doublons, bornes de taille, mise en forme des combats, favoris (seuls conserves : fichier ecrit tout de suite,
+relu a l'ouverture, retrait par l'etoile, fichier corrompu / entrees invalides / version inconnue), pages d'un message (notees quand le joueur les a lues), messages de combat jamais ranges dans les dialogues,
+combats termines recus du BattleSensor, crochet TextBuffer::cat (nom affiche ou non, combat), onglets (Dialogues, Combats : plus d'onglet Favoris), case « Favoris seulement » (clavier, souris, conservee d'un onglet a l'autre,
+favoris des sessions precedentes), touche H en cycle (Dialogues -> Combats -> ferme), etoile au clavier et a la souris, defilement ; haut / bas message par message (defilement du minimum necessaire, #48), aucun grisé sur le message choisi.
+Taille unique des boites (la boite de dialogue du jeu : 1, 2 ou 3 lignes, dialogue ou combat ; une page de plus au-dela de 3 lignes).
+`fill(h)` met une trentaine d'elements varies dans un Historique (captures d'ecran).
+@@ b604541fcc7f d
+Moteur minimal pour History.maj : capteur (sortie, actif), etat, ui.msg['feed'], msg_visible, battle_sensor.
+@@ a04829956cd7 d
+Le moteur prepare toutes les pages d'un message d'un coup : l'historique ne doit noter la page suivante qu'une fois la precedente lue (curseur de fin de page eteint) ou la fenetre fermee.
+@@ 3a755786fd4b d
+Emulateur factice pour Sensor._cat : registres, chaines C, memoire et noms de fonctions.
+@@ ff1e9354987d d
+Le crochet de TextBuffer::cat : texte, nom que le jeu affiche (2e argument), combat ou terrain, heure de jeu.
+@@ e051f16371a9 d
+Une trentaine d'elements varies (dialogues avec ou sans nom affiche, combats) : captures d'ecran. Les dialogues sont dans h.dialogues, les combats dans h.combats.
+@@ 440b7f7b03ba d
+Ce que dessiner() fait a chaque image, sans police ni GL : empile les elements de v (boites de 126 pixels, onglet de 32 pour un dialogue avec nom, ecarts du dessin a l'echelle 1) et met a jour la geometrie du defilement
+(hauteur du contenu, repere, element actif). A appeler apres chaque action qui change la liste ou la position.
+@@ e00fe4f081ee d
+Des touches, avec une image dessinee entre deux.
+@@ 0f0cc1d8ba32 d
+Taille des boites de l'historique : la boite de dialogue du jeu (3 lignes) pour un dialogue, que le texte fasse 1, 2 ou 3 lignes (au-dela : une page de plus) ; un combat grandit avec son texte (#141).
+@@ a6da4b411c91 d
+Onglets, touche H, etoile et defilement (sans dessin : la geometrie du defilement est simulee par `place`, comme dessiner() la met a jour a chaque image).
+@@ febd2935da22 d
+#178 : le jeu ne s'arrete plus derriere l'historique (aucune pause dans aucun menu) : ce qu'il y ecrit pendant que la fenetre est ouverte s'ajoute a la liste (`follow_game`, appele a chaque image par Pause.maj).
+@@ 2aece3dad1de d
+Point 2 : les favoris (historique_favoris.json) ET l'etat de la case « Favoris seulement » (reglage historique_favoris_seuls dans reglages.json) survivent a la fermeture et a un nouveau lancement. Fichiers temporaires seulement.
+@@ cf9bbefadb4d d
+L'historique dans le menu Pause : entree de la racine, ouverture par la touche (page directe), cycle de la touche H, retour, ligne de la page Commandes.
+@@ 9a2ee2781b51 d
+#140 : le message de la liste vide (surtout « Aucun dialogue en favori : ... », long) etait dessine sur une seule ligne et depassait du cadre : il est coupe aux espaces.
+@@ f937a252e490 d
+#139 : le « ; » des noms d'objets du patch (marque de coupure, toujours apres une espace) ne s'affiche pas dans l'historique ; l'espace qui le precede reste.
+@@ 046f462a7635 d
+#141 : les enfuis, les disparus et les objets sont gardes dans le fichier des favoris ; un favori d'avant le #141 (ni fuis, ni disparus, ni objets) est relu tel quel.
+@@ b4293c895ba3 d
+Boites calculees comme dessiner() les place (sans GL) : police du systeme simulee (P._et), echelle 1, fenetre de la liste de `topmost` pixels. -> (vue, boite, boites du plus ancien en haut au plus recent en bas,
+chacune (element, boite, nombre de boites, haut, haut du cadre, haut de l'onglet, rangees de texte)).
+@@ 4d4b7676c62e d
+Meme echelle que les fenetres du jeu a l'ecran : H / 800 x UI_ZOOM (window.py) ; reduite si la fenetre de la visionneuse est trop etroite.
+@@ 47ec0c89c565 d
+#141 : un combat n'est plus coupe en pages de 3 lignes : sa boite a autant de lignes que son texte (entete comprise), 3 au moins, et le cadre du jeu s'allonge d'autant.
+@@ 6278cc0b79fc d
+Cadre a neuf morceaux (coins de 12 unites) : seuls les sommets de la moitie haute montent ; la mise en page d'origine n'est pas modifiee.
+@@ cfc13e77c4a5 d
+Avec la vraie mise en page : le cadre d'un combat de 5 lignes est plus haut de 2 lignes (56 unites), ses coins gardent leur taille, le cadre d'un dialogue n'est pas touche.
+@@ 9eed239d549d d
+Toute la liste est posee d'un coup, du plus ancien (en haut) au plus recent (en bas), sans trou ni chevauchement, QUELLE QUE SOIT la hauteur de la fenetre : plus de pages, plus de « dernier element visible ».
+@@ e9c41b0d64a8 d
+Aucun cran : la position du defilement ne fait que deplacer le contenu, les boites ne bougent pas les unes par rapport aux autres.
+@@ db918109329e d
+Message deja entierement visible : rien ne bouge. Coupe en haut ou en bas, ou hors fenetre : la vue ne defile que de ce qui manque (le bord du message rejoint le bord de la fenetre). Premier et dernier : avec la marge de la liste.
+@@ bf6b9a4d689f d
+(debuts, fins) des elements de v comme poser() les place.
+@@ 638f60379ec3 d
+Le message i est-il entierement dans la fenetre de la liste ?
+@@ 4346307b41d8 d
+Haut / bas : le message precedent / suivant, un a la fois (jamais une ligne ni une page) ; la vue ne defile que si ce message n'est pas entierement visible, du minimum necessaire (son bord rejoint le bord de la fenetre).
+@@ 611322f19577 d
+Un message coupe par le haut de la fenetre : un seul appui sur Haut le choisit ET defile juste de ce qui manque ; un message coupe par le bas, de meme avec Bas.
+@@ fe448a60fde9 d
+Les touches « Page precedente / suivante » du jeu (L / R : A et R par defaut, PAGE_UP / PAGE_DOWN) font les memes pages.
+@@ 2623115285de d
+Le contenu suit le pointeur, pixel par pixel (aucun palier).
+@@ 7bf1d5bbe724 d
+Apres n'importe quelle touche de la liste, le message choisi (cible de la touche Entree) est entierement visible (si la fenetre peut le contenir).
+@@ 7b2249f31c93 d
+Quelle que soit la longueur de la liste et la hauteur de la fenetre, des appuis sur Haut parcourent TOUS les messages un par un (du dernier au premier), puis Bas les reparcourent (liste plus courte que la fenetre comprise : la vue ne bouge pas).
+@@ e3b53c57a3be d
+Liste plus courte que la fenetre : rien a defiler (la molette ne fait rien), le dessin la colle en bas de la fenetre (hc < hv) ; Haut / Bas deplacent le message choisi sans bouger la vue.
+@@ 70933b48de92 d
+Derogation a la regle generale des menus : ni eclairci ni grise au survol ou au choix (souris ou clavier), seule la petite fleche marque le message choisi. La boite est dessinee de la meme facon qu'elle soit choisie ou non.
+@@ 26f2ad402076 d
+Case « Favoris seulement » : ne garde, dans l'onglet ouvert, que ses favoris ; l'etoile retire l'element de la liste filtree ; la case reste cochee quand on change d'onglet.
+@@ b7e06faa33a8 d
+Les favoris du fichier (sessions precedentes) ne sont pas dans la session : seule la case « Favoris seulement » les montre, avec leur etoile.
+@@ e10cb61a53a1 d
+Une « session » du jeu : Historique (fichier des favoris), Reglages (reglages.json) et la fenetre d'historique, comme window.py les cree.
+@@ 99c01071ce44 d
+Fermeture de la visionneuse (Window.on_close) : reglages et favoris ecrits.
+@@ 68dec72aa48a d
+Session 1 : un dialogue et un combat en favori, case cochee, fermeture. Session 2 (nouveaux objets, memes fichiers) : la case est cochee a l'ouverture de la fenetre et les favoris sont dans la liste, avec leur etoile.
+@@ 5b4e40ec4796 d
+Les favoris sont ecrits au moment de l'etoile : une fermeture brutale (sans on_close) ne les perd pas.
+## FILE tests/test_missing_hooks.py
+@@ f25b9da906a1 t
+adresse de la fonction simulee
+@@ eda15a6c39f6 t
+add w0, w9, #imm des trois constantes de drawSymbol (masque 0xffc003e0 = 0x11000120)
+@@ b68446ac7ce9 t
+deja elargie (apres le chargement d'un etat) : ni erreur ni message
+@@ 793723c9091c t
+rien n'a ete touche
+@@ 9153eca548cf t
+deja patche
+@@ 4d060e43cfcc t
+autre version : nop au lieu de la comparaison
+@@ 45c12b3efd79 t
+(sans `toast` : depuis #267 aucun message a l'ecran, seulement le journal)
+@@ 5e8e0d29526d t
+trouve apres le chargement d'un etat
+@@ 4e6987a01aa4 t
+chargement d'un etat : toujours rien
+@@ 7228579cc35f d
+#217 (audit ENG-08) : les reglages / crochets que le moteur d'un AUTRE apk ne laisse pas installer ne sont plus silencieux : `Engine.missing_hooks` (ligne de console + liste sans doublon), puis la fenetre
+les note dans `window_errors.log` et affiche un message (Game._report_missing_hooks). Sans moteur : faux moteur (memoire simulee). Avec l'APK du jeu (DQ_APK, DQ_SAVES) : le moteur d'origine n'en manque aucun.
+    PYGLET_HEADLESS=1 python3 tests/test_missing_hooks.py
+@@ 8849a7cae4f6 d
+Moteur sans emulateur : la memoire est un dictionnaire d'octets ; export() renvoie BASE ; LIB_BASE = 0 (cmp du bouton Parametres a CMP_PARAMS).
+@@ 9ff06aa1e2e0 d
+Un moteur dont les fonctions sont introuvables : chaque installateur le dit au lieu de se taire.
+## FILE tests/test_missing_monster_texture.py
+@@ f858b11bb255 t
+(le monstre 199 plantait le processus)
+@@ fdbd5fe67e53 t
+transparente
+@@ e2c2e0cb9835 t
+gardee en memoire : une seule ligne de console
+@@ 1b93c40d589f d
+#225 (audit CMB-03) : `BattleMixin._monster_texture` : une texture de monstre absente des donnees (`data.texture` renvoie None : 25 numeros de monstre) ou illisible (exception) est remplacee par une petite texture
+transparente au lieu d'arreter le jeu. Sans moteur ni fenetre : les appels OpenGL sont remplaces.
+    PYGLET_HEADLESS=1 python3 tests/test_missing_monster_texture.py
+## FILE tests/test_nonbreaking_space.py
+@@ f2e803442860 t
+meme largeur que l'espace normale
+@@ be22338f6edb t
+« l'air !» comme « l'air ! » : meme largeur avec l'insecable
+@@ fa3e6adfd779 t
+plusieurs de suite : autant d'espaces
+@@ b7d611aeef21 t
+(le glyphe 160 garde son advance : seul le dessin des espaces change)
+@@ 37fc534ae10b t
+la police a bien le defaut que le portage corrige
+@@ 9afe9e9a8629 t
+l'espace normale reste a 5
+@@ 8d7f67a2bfa9 d
+Espace avant « ! », « ? », « : » dans les boites de dialogue (issue #73) : le patch FR met une espace insecable (U+00A0) avant ces signes ; la police du jeu (SE-GARRIR) donne 11 px d'advance
+a son glyphe 160 contre 5 px a l'espace normale, d'ou une espace presque double. Le portage dessine U+00A0, U+202F et U+2009 comme l'espace normale.
+
+    python3 tools/test_nonbreaking_space.py
+
+Sans donnees du jeu : police factice (espace 5, insecable 11, « ! » 6). Avec la vraie police extraite (DQ_CACHE_UI=<dossier du cache des menus>, ui_garrir.json / .png) : les memes controles sur ses vraies metriques.
+@@ cf77fc43db6f d
+La texture d'une ligne avec l'insecable a la meme taille que celle avec l'espace normale (besoin d'un contexte GL : fenetre cachee).
+## FILE tests/test_page_language.py
+@@ 671785300501 t
+systeme -> en
+@@ de753265643a d
+Reglage « Langue » (D-238) : cle `language` de reglages.json (defaut `system`, valeur inconnue remplacee), ligne de la page Affichage au-dessus de « Plein écran » (Système / Anglais / Français,
+System / English / French en anglais), effet immediat du choix, et traduction par les pages (`Pause._label`). Faux « jeu » du test des pages du menu Pause.
+
+    python3 tests/test_page_language.py
+@@ 8047e1928a4d d
+Le faux jeu des pages, avec ce que la page Affichage lui demande.
+## FILE tests/test_params_without_pause.py
+@@ 5bfea4f4fe34 t
+(D-238 : N_() marque le texte, traduit au dessin)
+@@ 9971ac0af7b6 t
+#178 : « le menu historique met le jeu en pause, il ne faut aucune pause dans aucun menu »
+@@ fd8c2426ec78 t
+(toutes les pages du menu, pas seulement celles que ce test connait)
+@@ d1fafbafc1c8 t
+(le mecanisme reste, vide)
+@@ da0ea7152a28 t
+ni son coupe, ni horloge remise a zero
+@@ d2be1832715a t
+racine : rien ne s'arrete
+@@ 55d6f879658e t
+(0, 0) : ni touche ni clic ni direction pour le jeu
+@@ d7fff6088177 t
+seul le retour anticipe d'une page figee (aucune par defaut) arrete le moteur
+@@ 3052f2e4ec48 t
+l'ancien arret general a disparu

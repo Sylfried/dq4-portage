@@ -1,0 +1,751 @@
+## FILE dq4_pc/__main__.py
+@@ d6c82df4f49a d
+`python -m dq4_pc` lance le jeu.
+## FILE dq4_pc/battle/battle_effect.py
+@@ 3e1be38067e9 t
+int(32 / ASPECT_DEF) de l'original : fixe la duree de l'effet
+@@ f00c5386ba8f t
+nombre de mises a jour avant la fin (A de 0 a 56)
+@@ dec99050b242 c
+sommets d'un morceau : 0 haut gauche, 1 bas gauche, 2 haut droit, 3 bas droit -> deux triangles
+@@ 2be804cc8552 t
+rangees d'origine par rangee affichee
+@@ a3bb7d41499c t
+numero de rangee d'origine (flottant)
+@@ 3e6e3d9c4088 d
+Effet de debut de combat (Capture.BattleEffect de la couche Unity) : une capture de l'ecran, decoupee en 32 colonnes de morceaux, se brise et tombe
+rangee apres rangee, du haut vers le bas, puis s'assombrit jusqu'au noir.
+
+Reproduit les regles du jeu, une mise a jour par image (30 Hz) :
+  * deux compteurs : A (0, 1, 2...) et B (0 jusqu'a l'image 21, puis il suit A avec 20 images de retard) ; a chaque image et pour chaque morceau, le jeu tire
+    au hasard (1 chance sur 3 pour B) le compteur qui commande ce morceau ;
+  * un morceau de la rangee r bouge si l'un des deux compteurs depasse r ; la vitesse de chute est -0,001953125 - (32 - r - colonne + compteur) * 0,0015625
+    (en coordonnees d'ecran normalisees, -1..1), la moitie quand c'est le compteur « de retard » qui l'a fait bouger ; les bords gauche et droit se rapprochent
+    d'environ 0,001 par image (le morceau s'etrecit) et le morceau derive de 0,002 vers la gauche ;
+  * l'opacite d'un morceau perd 8/255 par image de mouvement ;
+  * quand A depasse la moitie de la hauteur, la luminosite de la capture baisse de 2/56 par image ; l'effet s'arrete quand A depasse 56.
+Le jeu d'origine decoupe l'ecran portrait en 32 x 56 morceaux carres (56 = 32 / 0,5625). Sur un ecran 16/9 on garde des morceaux carres (32 x 18) et chaque rangee
+prend la place de 56 / 18 rangees d'origine, donc le deroulement dans le temps (57 images) est le meme.
+@@ f73528ab881b d
+Une mise a jour (une image du jeu).
+@@ fd79363482a6 d
+Un RGBA par sommet : blanc, opacite du morceau.
+## FILE dq4_pc/battle/battle_history.py
+@@ 901934018002 t
+g_Monster : 12 monstres au plus
+@@ 2dfc32390387 t
+g_Monster + 8 : tableau de MonsterStatus
+@@ e9ad7003882c t
+dans un MonsterStatus : numero du monstre (-1 = emplacement vide), numero du groupe de la rencontre
+@@ f1613535c1d5 t
+dans g_Party : experience et or du combat en cours (versees a la victoire)
+@@ f7c8a1a57245 t
+g_BattleResult + 0x509 : le groupe a perdu (ExitTask::terminate le teste avant d'appeler endBattle)
+@@ d07d96fef865 t
+(nom de remplacement quand le moteur ne repond pas : traduit a la capture, voir BattleSensor)
+@@ 9ff791297b8d t
+images de suite hors de la partie « combat » avant d'abandonner un suivi (la fin normale arrive toujours avant le changement de partie)
+@@ 95615d6409dd t
+ecart maximal de Engine.images entre deux appels de maj sans parler de rupture (etat instantane charge...)
+@@ 3c0c17ef4ca5 c
+crochets (symboles du moteur) : evenement -> nom
+@@ 5b5e177e30ce c
+crochets au MILIEU d'une fonction : (evenement, symbole, decalage, instruction attendue a cet endroit). L'instruction est verifiee avant d'installer le crochet : un moteur different ne recoit pas de crochet
+au hasard (seul l'evenement correspondant est alors perdu, la capture continue).
+@@ 336b7a5e6d5f t
+ldr w8, [x23, #0xd24] : compteur de fuites de monstres
+@@ b8035f3e5598 t
+ldr w8, [x23, #0xd28] : compteur de disparitions
+@@ 79425d775dfe t
+cmn w0, #1 : juste apres PartyStatus::giveItem
+@@ d5fa9e5e7d20 t
+« nom d'objet » dans les macros de texte du jeu (setMACRO0(0xa, 0x4000000, numero))
+@@ 294a02f31564 t
+« nom de monstre » (BattleActorMacro::setMacroActor : setMACRO0(1, 0x6000000, numero de monstre))
+@@ 96d3f29e1de9 t
+BattleExecVictory32 : numero de l'objet a donner
+@@ 814289615325 c
+---------------------------------------------------------------------------------------------------------------------------------- partie pure (sans emulateur)
+@@ c5ea0eac2668 t
+« \t×3 » : le nombre de monstres du groupe
+@@ 0ec29bfeb346 t
+un par monstre vu, dans l'ordre d'apparition : {'num': numero du monstre, 'vaincu': bool, 'fui': bool, 'disparu': bool} (au plus un des trois)
+@@ 7d3a88fc4cb0 t
+objets gagnes : {'id': numero, 'nom': nom}, dans l'ordre
+@@ 12d8261a5d06 t
+emplacement -> indice dans monstres (occupant actuel)
+@@ 63862979da87 t
+numero de monstre -> nom
+@@ 5128b33bdb7e t
+monstres vaincus (crochet execMonsterDeath)
+@@ 674a5c82c457 t
+BattleExecDefeatMonster::initialize a eu lieu
+@@ e35ddf0e7957 t
+BattleExecEscape::setup (reussie ou non)
+@@ 7f3114177407 t
+plus grands relevés des compteurs du groupe (g_Party + 0x2f8 / 0x2fc)
+@@ 43298882efd3 c
+---------------------------------------------------------------------------------------------------------------------------------- lecture du moteur
+@@ 553bdb51512c t
+(secours si le moteur refuse un attribut en plus : id -> (moteur, capteur))
+@@ 5e0ead7ce96a t
+(en cas de moteur different, seul cet evenement est perdu)
+@@ 9598888d895b t
+(blocs deja traduits avant les crochets : un capteur cree apres quelques combats)
+@@ a64437474acc c
+---- verification : le moteur est celui qu'on a etudie
+@@ 3dd3f0890be2 t
+indice dans les monstres PRESENTS (getMonsterStatus compte les emplacements occupes), pas l'emplacement
+@@ b73ca5b6a730 t
+w20 : indice du monstre dans la boucle de checkDeathMonster (meme indice que pour execMonsterDeath)
+@@ 5181fbc8bbc8 t
+x20 : la tache BattleExecVictory32 (le numero de l'objet est a +0xc)
+@@ 16ae6684891f t
+(garde-fou si maj n'est jamais appelee)
+@@ 6cf8f24c3ebe c
+---- une image
+@@ ed8879940eb2 t
+etat instantane charge (ou images sautees) : le combat suivi n'est plus celui de la memoire
+@@ cdc726372866 t
+hors combat : rien d'autre a faire (chemin le plus frequent)
+@@ 69a86fe611cd t
+la capture ne doit jamais arreter le jeu
+@@ cfc3a614ed1f t
+(plaques deja la : celles du combat precedent, a ne pas lire)
+@@ f01b22fef73c t
+combat dont on n'a pas vu le debut : ignore
+@@ 4ec59db7508d t
+monstres sans plaque (attaque surprise...) : le nom vient du moteur, par le numero
+@@ 415120c8589e t
+on a quitte le combat sans passer par endBattle (retour au titre...) : abandon
+@@ ef97c7ff8ac0 d
+Capture des resultats des combats pour l'historique des combats : ennemis vaincus, or gagne, experience gagnee.
+
+    capteur = BattleSensor(moteur)         # une fois, apres la creation du Moteur (installe des crochets en LECTURE SEULE dans l'emulateur ; n'ecrit rien dans la memoire du moteur)
+    for combat in capteur.maj(moteur): ...  # UNE fois par image du moteur, apres moteur.step ; renvoie les combats TERMINES a cette image (le plus souvent une liste vide)
+
+Chaque combat : {'t': temps de jeu a la fin (1/60 s, status::g_Game + 4), 'ennemis': [{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 0}, ...] (un element par espece, dans l'ordre
+d'apparition ; ce qui reste, total - vaincus - fuis - disparus, est encore la quand le combat se termine : fuite ou defaite du groupe), 'or': int, 'xp': int, 'issue': 'victoire' | 'fuite' | 'defaite',
+'objets': [{'nom': 'Herbe médicinale'}, ...] (les objets que le jeu donne au groupe a la fin du combat : « Le gluant laisse tomber un coffre au trésor ! »)}. Or et experience : ceux du message de victoire
+du jeu, 0 pour une fuite ou une defaite (le moteur ne les verse pas).
+
+Methode (ETABLI par lecture du moteur desassemble puis par mesure : voir tools/test_battle_history.py) :
+- Les MORTS sont notees par un crochet sur BattleActorManager2::execMonsterDeath(this, i), la fonction que le jeu appelle une fois par monstre vaincu (pas pour un monstre qui s'enfuit ou disparait) et qui ajoute
+  l'experience du monstre a g_Party + 0x2f8 et son or a g_Party + 0x2fc. Ce sont ces deux compteurs que BattleExecVictory01 / BattleExecVictory20 lisent pour fabriquer les messages « N points d'experience » et « N pieces d'or »
+  (getBattleExp / getBattleGold, apres le doublement eventuel de reflectBattleExp / reflectBattleGold) : on prend donc le plus grand de leurs relevés d'une image a l'autre, jusqu'a leur remise a zero.
+- Les monstres qui S'ENFUIENT et ceux qui DISPARAISSENT sont notes par deux crochets au milieu de BattleActorManager2::checkDeathMonster (la routine qui, a chaque image, passe en revue les monstres morts,
+  enfuis ou disparus ; elle les compte inline dans +0x7d24 / +0x7d28, les lit BattleEndTask::initialize, et n'appelle execMonsterDeath que pour un mort) : juste avant l'incrementation du compteur de fuites
+  (+0x98, `ldr w8, [x23, #0xd24]`) et de disparitions (+0xc0, `ldr w8, [x23, #0xd28]`), w20 est l'indice du monstre (meme indice que pour execMonsterDeath). Chaque monstre n'y passe qu'une fois
+  (un masque des monstres deja traites, +0xd30, l'en protege).
+- Les OBJETS gagnes sont donnes par BattleExecVictory32::setup (la tache qui suit la victoire : « laisse tomber un coffre au trésor ! », « Ragnar l'ouvre. », « Il contient un arc de chasseur ! ») : elle appelle
+  PartyStatus::giveItem(objet = tache + 0xc), qui renvoie l'indice du membre qui le prend, ou -1 quand il va dans le sac (mesure : « Ragnar met l'arc de chasseur dans le sac. » avec -1) ; dans les deux cas l'objet est
+  obtenu. Crochet juste apres l'appel (+0x28, `cmn w0, #1`) : x20 = la tache. NON VERIFIE : ce que fait le jeu quand le sac lui-meme est plein. Le nom de l'objet est demande au
+  moteur lui-meme (TextAPI::extractText(tampon, 0x4000000 | numero), ce que le jeu fait pour la macro « nom d'objet »), entre deux images, jamais dans un crochet ; le « ; » (marque de coupure des noms du patch) est retire.
+- Le DEBUT est PartyStatus::startBattle, la FIN est Global::endBattle(bool) (argument vrai = groupe anéanti), la VICTOIRE BattleExecDefeatMonster::initialize (la routine « tous les ennemis sont vaincus »,
+  qui verse l'experience), la FUITE BattleExecEscape::setup (appelee a chaque TENTATIVE de fuite, reussie ou non : la fuite reussie est donc « tentative faite, pas de victoire, combat termine »).
+- Les ENNEMIS sont relevés a chaque image dans g_Monster (12 emplacements de 0x538 octets a partir de +8 ; +0x4f8 = numero du monstre, -1 si vide ; +0x4fc = numero du groupe) : un monstre = un emplacement occupe ;
+  l'espece est le numero du monstre. Les renforts appeles en cours de combat s'ajoutent au total.
+- Les NOMS sont ceux des plaques de monstres que le moteur envoie a Unity (Engine.ui, fenetre de type 31 : « Rat volant », « Gluant\n\n\t×3 » -> « Gluant »), associes aux groupes dans l'ordre (la plaque j porte le
+  j-ieme groupe), seulement quand il y a autant de plaques que de groupes et avant la premiere mort. Sans plaque (attaque surprise : le jeu n'en affiche pas ; plaques d'un autre nombre de groupes), le nom
+  est demande au moteur lui-meme a la fin du combat, par le numero du monstre (TextAPI::extractText(tampon, 0x6000000 | numero) : « londuleux », « armure ;errante », « scara$somniaque » -> « Londuleux »,
+  « Armure errante », « Scara-somniaque ») ; « Monstre » si le moteur ne repond pas.
+Tout est protege : une erreur ne renvoie rien et ne s'ecrit qu'une fois dans la console. Un combat dont on n'a pas vu le debut (etat instantane charge en plein combat, capteur cree pendant un combat) n'est jamais
+rapporte : mieux vaut ne rien dire que de dire faux.
+@@ 83bdc59c650c d
+Nom affiche sur une plaque de monstre ; None si vide. Le jeu ecrit « Gluant\n\n\t×3 » (la mention du nombre, qui commence par une tabulation, est retiree) et coupe les noms longs sur deux lignes :
+« Armure \n\nerrante » -> « Armure errante » ; « Scara-\n\nsomniaque » -> « Scara-somniaque » (un tiret en fin de ligne est recolle sans espace). Limite : « Psaro l'Exter-\n\nminateur » donne
+« Psaro l'Exter-minateur » (le moteur ne dit pas si le tiret est une coupure de mot ou un vrai trait d'union).
+@@ c8c7d9fa3c5a d
+Associe les noms des plaques aux monstres. groupes : [(numero de groupe, numero de monstre)] des emplacements occupes ; plaques : [nom, ...] dans l'ordre des plaques (la plaque j = le j-ieme groupe,
+les groupes etant pris dans l'ordre de leur numero). -> {numero de monstre: nom} ; {} si le nombre de plaques n'est pas celui des groupes (on n'invente pas).
+@@ 0c0d6989a48d d
+Ce que l'on sait d'un combat en cours (donnees pures : aucune dependance au moteur ; voir BattleSensor pour la lecture de la memoire).
+@@ df06b54507ce d
+Le combat termine : dict de l'API (voir l'en-tete du module). Or et experience ne comptent que pour une victoire.
+@@ 5b406127c68a d
+Decalage d'un `ldr wN, [xM, #imm]` (acces 32 bits, offset non signe) ; None si ce n'est pas cette instruction.
+@@ 72812e11d73f d
+Un relevé des emplacements : occupants = [(emplacement, numero de monstre)] des emplacements occupes. Un nouvel occupant (emplacement libre qui se remplit, ou autre numero) est un nouveau monstre ;
+un emplacement qui se vide est oublie (le monstre vaincu ou parti est deja compte).
+@@ 752e29d7608b d
+Le jeu declare que le monstre de cet emplacement est vaincu / enfui / disparu (cle : 'vaincu', 'fui' ou 'disparu'). Un monstre jamais vu (parti dans l'image de son apparition) est ajoute, de meme qu'un monstre
+dont le sort est deja note (autre monstre arrive dans le meme emplacement).
+@@ d8a82f565612 d
+Le jeu declare vaincu le monstre de cet emplacement (crochet execMonsterDeath).
+@@ d4f19f26f807 d
+Le monstre de cet emplacement s'est enfui (le jeu le compte dans checkDeathMonster).
+@@ af9f1ccdb9f2 d
+Le monstre de cet emplacement a disparu (idem).
+@@ 3b95b7d7aa6d d
+Le jeu donne un objet au groupe a la fin du combat.
+@@ 42da9074335d d
+Relevé des compteurs d'experience et d'or du combat : ils ne font que croitre (doublement compris) jusqu'a leur remise a zero apres le message ; on garde le plus grand.
+@@ cafb19b4af12 d
+Issue du combat a sa fin : la routine de victoire du jeu a tourne (victoire) ; sinon le groupe est anéanti (defaite) ; sinon tous les monstres vus sont vaincus (victoire) ; sinon le groupe est parti (fuite).
+@@ 8cc61159372b d
+[{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] une entree par espece (meme nom, ou meme numero quand le nom est inconnu), dans l'ordre de la premiere apparition.
+@@ e33dd2e4dfbb d
+Le capteur de ce moteur : cree a la premiere demande, toujours le meme ensuite (les crochets ne sont installes qu'une fois). Permet de n'ajouter qu'UNE ligne a la boucle d'images, sans rien
+creer ailleurs : `for battle in BattleSensor.for_(eng).do_update(eng): ...` juste apres `eng.step`.
+@@ e88f689f3330 d
+Les structures lues sont celles du moteur etudie : getBattleExp / getBattleGold lisent bien g_Party + 0x2f8 / 0x2fc, MonsterStatus::isEnable lit bien +0x4f8 (numero de monstre).
+@@ 3b18d464446d d
+[(emplacement, numero de monstre, numero de groupe)] des emplacements occupes de g_Monster, dans l'ordre des emplacements.
+@@ 613391e12554 d
+Temps de jeu en 1/60 s (status::g_Game + 4, comme historique.Sensor.time_and_key).
+@@ 99fc8983e100 d
+A appeler UNE fois par image du moteur, apres moteur.step. -> liste des combats termines a cette image (dicts de l'API).
+@@ dbd50e23826d d
+Relevé de l'image pour le combat suivi : emplacements, compteurs, noms.
+@@ 348983d6814b d
+Texte que le moteur donne pour (genre, numero) -- TextAPI::extractText, ce que le jeu appelle pour une macro de nom -- ; None sans reponse. Appele entre deux images (maj), jamais depuis un crochet.
+Le « ; » (coupure des noms du patch) est retire, le « $ » (coupure avec trait d'union) devient un tiret.
+@@ 7e3b0b6e81a8 d
+Nom de l'objet (le nom que le jeu affiche) ; garde. Sans reponse : « Objet n°12 ».
+@@ 1a763408c413 d
+Nom du monstre, avec une majuscule (le moteur donne le nom comme dans une phrase : « londuleux ») ; garde. None sans reponse.
+@@ b67c12941707 d
+{fenetre: (dict de chaque plaque, ...)} des plaques de monstres que Engine.ui a en memoire (fenetre de type 31). On garde les objets eux-memes : le moteur en cree de nouveaux a chaque rafraichissement.
+@@ ab7d19eb0753 d
+Noms des plaques de monstres envoyees par le moteur a Unity, tant qu'aucun monstre n'est vaincu. Seules comptent les plaques arrivees depuis le debut de ce combat (objets differents de ceux d'alors).
+## FILE dq4_pc/battle/battle_speed.py
+@@ 5ec716b03819 t
+le moteur d'origine avance a 30 Hz
+@@ b3730e7affa9 t
+duree maximale (s) des pas du moteur dans une meme image affichee quand l'horloge est acceleree : au-dela, le jeu prend du retard au lieu de figer l'affichage
+@@ 130c0064aaaa t
+un pas est fait des que 85 % de sa duree s'est ecoulee (ecran de 60 Hz : un pas toutes les 2 images exactement, sans gigue 2 / 3 images)
+@@ 386b1037b596 t
+au plus 3 pas de rattrapage par image affichee a vitesse normale (un blocage plus long est oublie)
+@@ 82fc070083fe d
+Vitesse des combats : l'horloge du moteur pendant un combat (logique pure, sans fenetre ni moteur : testee par tools/test_battle_speed.py).
+
+Principe : le moteur d'origine avance par pas de 1 / 30 s (Time.fixedDeltaTime). La visionneuse lui fait faire, par seconde reelle, 1, 2 ou 3 fois plus de pas pendant un combat (reglage « Vitesse de combat » :
+Manuel et Normal : 1 ; Rapide : 2 ; Tres rapide : 3), au lieu de changer quoi que ce soit dans le moteur. Chaque pas est exactement celui du jeu : le resultat d'un combat (degats, ordre des actions, tirages au hasard, delais comptes en
+images) ne depend donc pas de la vitesse ; seule la duree reelle change. Tout ce que la visionneuse anime pendant un combat est compte en pas du moteur (`engine.frames` + fraction `alpha`) : nombres de degats,
+secousses des plaques, fondus, effet de debut de combat, defilement des messages (ecrit par le moteur), animation des modeles 3D ; ils suivent donc l'horloge accelere.
+
+Ce qui n'est PAS accelere, a dessein :
+  - la musique et les bruitages : ils sont lus par pyglet a leur vitesse normale (heures reelles, duree du fichier) ; seule la DATE de declenchement d'un bruitage suit le moteur. Si l'acceleration fait arriver le meme
+    bruitage plusieurs fois dans la meme image affichee, il n'est lance qu'une fois (`sounds_to_play`) ;
+  - la LECTURE des touches pendant les attentes du joueur (menu de commandes, choix de la cible, message « Manuel » qui attend une touche) : le moteur y tourne a la vitesse du reglage (les monstres gardent leur animation
+    de repos a cette vitesse) mais seuls les pas a cadence normale (un toutes les 1 / 30 s reelles) lisent les touches ; les autres sont « muets » (fenetre.tick(muet=True)) : curseur et repetition des touches inchanges ;
+  - la touche d'accelerateur : elle ne multiplie que la marche et la camera hors combat. `factor` n'a volontairement aucun parametre pour elle.
+@@ dffaa2c020a1 d
+Facteur d'horloge du moteur pendant un combat ; None hors combat (l'appelant applique alors la vitesse de marche). `speed` : reglage « Vitesse de combat » (0 Manuel, 1 Normal, 2 Rapide, 3 Tres rapide) :
+Manuel et Normal gardent l'horloge du jeu (facteur 1 ; Manuel passe en plus les messages a la main, voir reglages.scroll_code). Meme quand le moteur attend le joueur (menu de commandes, cible, message qui attend
+une touche) le facteur reste celui du reglage : les monstres gardent leur animation de repos a la vitesse choisie, et c'est la LECTURE des touches qui reste a cadence normale (pas muets, voir fenetre._do_battle_step).
+@@ f32ed072a4b7 d
+Une image affichee : l'horloge du moteur avance de `dt * f` secondes ; `do_step()` fait un pas du moteur autant de fois qu'elle l'exige (au plus 3 x ceil(f)), en bornant le temps de calcul a `budget`
+secondes quand f > 1 (marche acceleree, combat). `do_step()` renvoie False quand le moteur vient de se mettre a attendre le joueur : on s'arrete la, sans rattraper le reste.
+-> (acc restant en secondes de moteur, nombre de pas faits, budget depasse). Le reste d'horloge est oublie si le rattrapage est au maximum, si le budget est depasse ou si le moteur attend le joueur.
+@@ 6d76caf10cad d
+Ordres de son d'un pas du moteur [(type de paquet, valeur)] -> ceux a jouer, en ne lancant pas deux fois le meme bruitage (paquet 35) dans la meme image affichee : `already` est l'ensemble des bruitages
+deja lances depuis le debut de cette image (mis a jour ici). Un arret (paquet 36) libere son bruitage : un nouveau depart apres lui est joue. La musique (paquet 37) n'est jamais filtree. `already` None : tout passe.
+## FILE dq4_pc/battle/full_screen_effects.py
+@@ 508f9e68d881 c
+Modeles d'effets (5000 + numero de l'effet) dont le quad couvre tout le champ 4:3 : l'effet 35 (paquet 25, quad de 12,9 x 12,9 : une teinte violette sur tout l'ecran). Les autres quads larges (l'effet 9, 7 unites) sont
+plus grands que le champ et restent corrects ; ajouter ici un modele seulement apres l'avoir vu a cote d'une bande non teintee.
+@@ 6c9aaf1044ac t
+le quad a ete dessine pour cet ecran
+@@ 2a0414096a9a d
+Effets de combat faits d'un quad plein ecran (teinte, flash) : calles sur l'ecran 4:3 du jeu d'origine, donc trop etroits quand le combat est elargi en 16/9 (#223, audit CMB-02).
+@@ 7c41c6e18eb2 d
+Coordonnees locales (n x 3, axe 0 = horizontal de l'ecran) d'un maillage de combat : celles d'un quad plein ecran sont etirees en largeur de aspect / (4/3) autour de leur centre, pour couvrir tout l'ecran large. Les
+autres maillages, et un ecran de proportions 4:3 ou plus etroites, sont rendus tels quels (meme objet). -> coordonnees a utiliser.
+## FILE dq4_pc/core/emu_core.py
+@@ 187ee398c428 c
+----------------------------------------------------------------------------------------------
+Journal : ecran + fichier
+----------------------------------------------------------------------------------------------
+@@ f90096bc8aec c
+----------------------------------------------------------------------------------------------
+ELF 64 bits AArch64
+----------------------------------------------------------------------------------------------
+@@ 51a2884afe12 c
+----------------------------------------------------------------------------------------------
+Fichiers du jeu : lus dans les APK
+----------------------------------------------------------------------------------------------
+@@ 7ba051863e2b c
+----------------------------------------------------------------------------------------------
+printf minimal (va_list AArch64)
+----------------------------------------------------------------------------------------------
+@@ e95f7c4753e8 c
+----------------------------------------------------------------------------------------------
+Emulateur
+----------------------------------------------------------------------------------------------
+@@ cffa4dd939b7 t
+autorise FP / NEON
+@@ b9063db35ec8 c
+memoire
+@@ aee88b4e6604 t
+"ret" partout
+@@ 8efdda19789c t
+adresse de retour des appels (stub 0)
+@@ 53962e57eefd t
+canari de pile (bionic)
+@@ 1753f638d679 c
+lib
+@@ 3caff6568670 c
+compteurs
+@@ 4cdb5ba96479 c
+-- acces memoire
+@@ 4a66d6ee8108 t
+ENG-01 : le tas n'est jamais libere (h_free ne fait rien) et fait 256 Mo ; la fenetre previent le joueur a 200 Mo (78 %) puis a 240 Mo (94 %) : voir Game._watch_heap
+@@ 6f8a058522c7 c
+-- imports
+@@ ccd142750458 t
+faible et inconnu -> NULL
+@@ 6c07315256ba t
+on ne lit que les registres dont le gestionnaire a besoin (appel tres frequent)
+@@ 9d1aa5a943ef c
+-- symboles
+@@ cd7763fb2c32 c
+-- appels
+@@ d8779fbb3e2f c
+-- fichiers virtuels
+@@ 4573bcd8ca4e c
+-- memoire / chaines
+@@ bc280f2ad37a c
+-- C++ / systeme
+@@ d97339c5868c c
+-- OpenGL (comptage seulement)
+@@ af6f82368596 c
+----------------------------------------------------------------------------------------------
+Scenario du test sur DQ4
+----------------------------------------------------------------------------------------------
+@@ fff2073e3942 c
+Le 1er argument de DevInit est le chemin de l'ARCHIVE (APK de donnees) : le moteur lit son contenu lui-meme
+@@ 25e428738639 c
+Tampons de communication des menus : valeurs lues dans les constantes C# du jeu
+(c_portNum=32, c_unityTotalSize=129, c_nativeTotalSize=1089, en demi-mots de 16 bits)
+@@ 0d068dfd4a7b d
+Test de faisabilite (voie A) du portage PC de Dragon Quest IV.
+
+Charge libdq4core.so (code ARM 64 bits du moteur du jeu) dans un emulateur (Unicorn) sur PC,
+sans Unity, puis appelle ses fonctions d'entree : IsLoadNativeCode, DevInit, GameInit, GameUpdate...
+Les fichiers du jeu sont lus directement dans TES APK (rien n'est copie ni distribue).
+Le resultat complet est ecrit dans rapport_test.txt (a la fin, a envoyer a Claude).
+
+Usage normal : lancer_test.bat
+Options : --apks DOSSIER  --lib FICHIER.so  --lang N  --frames N  --dry  --variant n
+@@ e237e49bbf98 d
+Applique les relocations dans l'image. stub_for(nom, liaison) -> adresse d'un import externe.
+@@ 0d9352b948dd d
+Adresses des constructeurs, dans l'ordre d'appel (apres relocation).
+@@ d20d5cfbcc3b d
+Octets du tas deja alloues (le pointeur ne recule jamais, sauf au chargement d'un etat instantane).
+## FILE dq4_pc/core/encounters.py
+@@ 364afc9c92ef d
+Rencontres aleatoires, horloge jour / nuit et vitesse de marche (#45, #163).
+
+Ce que fait le jeu d'origine (lu au desassemblage de libdq4core.so) :
+  - Chaque image du moteur ou la position du heros a change (carte du monde : FieldPlayerDoku::checkDokuDamage ; villes et donjons : TownDamageFloor::checkDamageFloor, tous deux par
+    CommonWalkDamage::checkWalk) appelle `Encount::execWalk`. Il compte 16 appels, puis lance `Encount::exec` (une fois, ou cinq fois quand [+0x2c] est non nul).
+  - `Encount::exec` appelle `CountDown::exec` (0x1f454c) : le compteur [Encount+0x134] perd `2 x [Encount+0x144]` ; la rencontre est declenchee quand il devient negatif (etat [+0x1c] : 0 -> 1 -> 2, puis `brew`
+    et `Global::startBattle`). Le compteur est tire par `CountDown::setup` (0x1e00 + table[rand(31)]) a chaque initialisation de la carte (`Encount::setup`, donc aussi au retour d'un combat) ;
+    sa perte par appel (`[+0x144]`) vient de `TileSubtractValue[tile] x table du terrain >> 8` (setTileIdRate / setLandType, recalcules a chaque `exec`).
+  - Rien de tout cela ne depend du temps reel : le jeu compte des IMAGES DU MOTEUR ou le heros avance (donc des pas).
+
+Ce que fait la visionneuse : la marche acceleree (« Vitesse de marche », accelerateur) fait tourner le moteur `a` fois plus vite, donc le heros fait `a` fois plus de pas par seconde reelle, et, sans correction,
+`a` fois plus de rencontres par seconde. On veut (1 + a) / 2 : x1 inchange, x2 = 1,5 fois, x3 = 2 fois, x4 = 2,5 fois (la marche accelere sans que les combats deviennent insupportables). Chaque pas compte donc
+(1 + a) / (2 a) fois ce qu'il comptait : `factor_per_step`. La correction est faite sur le compteur du moteur lui-meme (un crochet sur l'ecriture de `CountDown::exec`, voir Engine._encounter_hooks),
+pas par un tirage supplementaire : la perte du compteur a chaque appel est multipliee par ce facteur (fractions cumulees : `Reducer`), la distribution des groupes de monstres, le tirage du compteur et tout le
+reste restent ceux du jeu. Seulement quand a > 1 (x1 : le crochet ne fait rien).
+@@ 7723e8980d0b d
+Part de la perte du compteur de rencontres qui reste appliquee a chaque pas quand le moteur tourne a la vitesse `a` (1 = normale) : (1 + a) / (2 a) si a > 1, sinon 1 (jamais plus que le jeu).
+@@ 4d5d50d4cf9d d
+Rencontres par seconde reelle, en multiples de celles de x1, a la vitesse `a` : a x factor_per_step(a) = (1 + a) / 2 pour a > 1.
+@@ 169d79cd07f5 d
+Multiplie la perte du compteur par `factor` (0 a 1), avec report des fractions : la somme des pertes appliquees est, a une unite pres, `factor` x la somme des pertes du jeu.
+@@ 311e2c0881c8 d
+Laisse passer la fraction `factor` (0 a 1) des appels, regulierement, avec report des fractions : sur n appels, floor(n x facteur) (a un pres) sont passes ; a 1 ou plus, tous.
+@@ 5a417148da48 d
+Perte (entier >= 0) du compteur du jeu pour cet appel -> perte a appliquer.
+@@ 0561cbdd8b87 d
+True si cet appel doit avoir lieu.
+## FILE dq4_pc/core/engine.py
+@@ 70be4d914827 t
+bornes de l'echelle de la carte du monde (paquet 30 ; le moteur n'envoie que 1,0 a 1,25 : la borne ne sert qu'a ecarter une valeur aberrante)
+@@ da6be8d411cd t
+curseurs d'ecriture (entiers / flottants) dans la bibliotheque
+@@ 4c3560fb6165 t
+menu de depart (GameStartPart : liste des journaux, creation, suppression, licence)
+@@ 345f1d75eb7b t
+ville, donjon, tour (decor 3D)
+@@ c3dd3a39fac7 t
+FieldPart : carte du monde
+@@ fb67b879f047 t
+Global::startCasino : machine a sous (carte ev05) et poker (carte ev04), fenetres des types 44-48
+@@ aa7ec4a1b555 t
+Global::startBook : livre des monstres (fenetre de type 28) ; garde la carte de la ville
+@@ 4070f2566297 t
+carte de l'ecran-titre (ciel, logo, ile, dragon : scene sans heros)
+@@ f848c93b80d9 t
+parties « plein ecran » du moteur qui dessinent leurs elements par maillages dynamiques (paquets 21 / 22) avec leur propre camera
+@@ fd78a1e7ee3c t
+(test) journal des etats du message du moteur
+@@ 1c8709e6c47a t
+(test) journal des paquets 32 (dragon du titre : position, rotation, couleur, sequence)
+@@ 7355dea9aaa1 t
+singleton Global
+@@ 1557f88e56a0 t
+nom de la ressource carte demandee a Unity (ex. m/ma/in/mak1f1)
+@@ 050c32c9945e t
+Global+0xd8 : copie, a chaque GameUpdate, du premier entier du tampon de sortie (mot d'etat partage avec Unity) ; son bit 1 = « effet d'ecran en cours » (Global::IsScreenEffectEnd attend qu'il retombe)
+@@ cdbc01d6f3ae t
+octet g_isAmazon du moteur : a 1, la case « Sauv. cloud » du menu de depart n'existe pas
+@@ 1178497ca15a t
+identifiant du message de la boite « Revenir a l'ecran titre » des Parametres d'origine (TownMenu_OPERATION_SETTING::menuUpdate + 0x1c8 : `mov w1, #0xba2f ; movk w1, #0xc, lsl #16` puis TownMenu_MESSAGE::addMessage(int)) : b0834000.mpt, 834095
+@@ e7bc81f8c3d9 t
+TownMenu_MESSAGE + 0x10 : reponse de la boite (1 = Oui, 2 = Non ; remis a 0 a l'ouverture) ; lue par TownMenu_OPERATION_SETTING::menuUpdate (etat 5)
+@@ b617ad786d4a t
+paquet 34 (cmd_screen_effect) : valeur & 0xf = 4, Capture.BattleEffect (les morceaux de l'ecran tombent)
+@@ 10d4616f0b4d t
+Capture.BattleEffect : le compteur va de 0 a divY (56) inclus, une image du jeu chacun
+@@ 3b2ff48bc44d t
+images (30 Hz) d'ecran noir apres le depart d'un voyage (Capture.Tabi) avant de renoncer a attendre l'arrivee (garde-fou : le jeu la lance toujours, bien avant)
+@@ de83abecbe4b t
+opacite (0 a 1) d'un plan de fondu a partir de laquelle l'ecran est « couvert » : un chargement de carte qui arrive alors n'est montre qu'une fois la scene en place (State.chargement)
+@@ a6f76d3e7435 t
+images du moteur apres le paquet 0 : au moins 1 (le moteur place la camera et les personnages a l'image suivante, sur 529 cartes), 2 au plus pour attendre les positions des personnages visibles, 6 : garde-fou (jamais d'attente plus longue)
+@@ a8e0e2ae8684 t
+images (30 Hz) d'ecran noir avant de renoncer a attendre le chargement de la scene de combat
+@@ 9d0acb6db8b5 t
+images apres le chargement de la scene d'un combat (paquet 0, bit 8) pendant lesquelles un fondu lance par le moteur est le fondu d'arrivee du combat (State.battle_transition)
+@@ 89c32e7d282a t
+images apres la sortie de la partie combat pendant lesquelles un fondu lance par le moteur est le fondu de retour a la carte
+@@ bee1882de726 t
+images ou la transition de combat reste « en cours » apres la fin de l'un de ses fondus (le moteur change de scene 1 a 3 images plus tard, puis lance le fondu suivant)
+@@ 649581bcd00e t
+octet de la bibliotheque lu par Global::NativeExec : decompte (en images) du bruitage de sortie ; startTown, startField, ChangeGamePart, startFirstTown et startDebugTown l'arment a 15 quand le jeu quitte une ville ou la carte du monde,
+@@ 6d9cade88312 c
+NativeExec le decremente a chaque image et, a 0, appelle TownSystem::playTownExitSE / FieldSystem::playFieldExitSE (bruitage 305 : seulement si l'ancienne scene vit encore, son octet 0 = 1) ; voir Engine._exit_countdown
+@@ f26e3d218e95 c
+touches (masque envoye a GameUpdate) : haut, bas, gauche, droite verifies ; A/B a confirmer
+@@ 41921376d75d t
+sur le terrain d'une ville, les bits 4 et 5 des touches tenues ne sont pas A / B mais les boutons de camera du jeu (window::NormalControl::checkCamera lit (Global + 0xe0) >> 4 & 3) : 1 tourne a gauche,
+@@ 80d698263391 c
+2 a droite, 3 (les deux) ramene la camera au nord ; le moteur applique lui-meme limites, verrous et scenes (TownPlayerManager::setCameraRot) et tourne les directions de marche et les rangees des sprites
+@@ aa022f7b5506 t
+degres d'une rotation de camera du jeu (TownCamera::rotateL / rotateR : 0x200 sur 65536 par tour), une par pas du moteur tant que le bouton est tenu : 84,4 degres par seconde
+@@ cb33cb587a8b t
+CAMERA_ROT_TYPE : TownPlayerManager + 0x698 (rotation demandee, en attente du prochain setCameraRot) ; 3 / 4 = retour au nord en cours / fini
+@@ b36421b119c9 t
+objet SDrawCTRL (canevas de texte des messages) dans la bibliotheque
+@@ 9f489a2daa5b t
+texture du canevas de message d'Unity (MenuMessage : Texture2D(512, 512)) ; le moteur y ecrit en boucle
+@@ ef9bfec60709 t
+taille reelle allouee pour la file des messages (Unity en annonce 1089)
+@@ 12d5ed221546 t
+ui_MsgLoop : message ouvert (octet), etat (1 lecture d'un code, 2 ecriture des lettres, 3 / 5 attente d'une touche), indice de la lettre courante et de la fin de ligne, lettres par image / 4 du type de fenetre
+@@ 3aefec559392 t
+ui_MsgLoop + 0x128 : `sxth w20, w8` apres `lsl w8, w8, #2` (etat 2 : nombre de lettres ecrites a cette image)
+@@ 4eb8cdb4017a t
+OptionStatus.battleSpeed : 0 a 3 = attente de 12 / 22 / 32 / 42 images entre deux messages de combat (BattleAutoFeed::setMessageSpeed), 4 = pas d'avance automatique
+@@ 29a4512a97ed t
+Global.Flag (mot d'etat partage, Engine.drapeaux) : un fondu est en cours ; le jeu a verrouille le joueur (evenement, scene : Global.PLAYER_LOCK)
+@@ 0191c46c420c t
+status::HaveStatus::levelup(bool) + 0x3f8 : `tbz w20, #0, ...` (w20 = l'argument ; vrai : le personnage retrouve tous ses PV et PM, ses PV max/MF max venant d'etre recalcules)
+@@ 5d1e439be731 t
+MenuManager : pointeur vers le gestionnaire (a +8, jusqu'a 8 menus ouverts, un pointeur chacun) ; gMaterielMenu_EXTRA_PRESENT_EXP (don d'experience) : etat a +0x30, 2 = derniere attente (voir awaits_touch)
+@@ 2a645f6f0a3f t
+CountDown::exec + 0xc : `str w8, [x0]` (w9 = compteur de rencontres avant, w8 = compteur apres avoir perdu 2 x [x0 + 0x10])
+@@ 1a90a30038a4 t
+FieldPlayerDoku::checkDokuDamage + 0x38 : `b FieldStage::ChangeTime` (saut terminal, via le stub PLT 0x2246b0 ; w1 = 0, le temps du monde avance de 2), + 0x44 : le `ret` de la fonction
+@@ cf9049182ce5 t
+les 4 instructions du stub PLT 0x227d90
+@@ 33603d173ea5 c
+Global::NativeExec + 0x14 : `mov w1, #2` ; + 0x20 : `bl GameStatus::addPlayTime` (via le stub PLT 0x227d90 : x0 = status::g_Game, w1 = 2, void) : une fois par pas du moteur, +2 unites (1/60 s) du temps de jeu
+@@ d33e7805496f t
+TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 et TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188 : `bl UseAction::execUse` (via le stub PLT 0x2269c0) du menu Magie du terrain
+@@ 955e31dd8cf1 t
+PlayerStatus + 0x7e : PM courants ; UseActionParam + 0x210 : liste des messages de resultat (se termine par 0), + 0x1d8 : numero de l'action
+@@ ed74c464f976 t
+TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x100 : `sub w8, w8, #0xc4` (w8 = numero de l'action ; si le resultat est <= 2, c'est un sort de soin et le moteur joue le bruitage 501, `playSe(0x1f5)`, quel que soit son effet)
+@@ e0ccddfef445 t
+gTownMenuItemUseManager + 0xaa : nombre de cibles dont le moteur affiche le resultat (et dont il joue le bruitage de soin, une fois chacune) ; useMagicNoTarget + 0x2e0 : sortie de cette boucle
+@@ 6bfcb5e76144 t
+identifiant du message du moteur « Mais rien ne se passe. » (champ d'echec de la table des actions : Resurrection, Antipoison, Sifflet...) ; sert de repere de version du moteur (action 201) : il n'est plus affiche par la regle des sorts sans effet
+@@ 2837bd38d134 t
+identifiant du message du moteur « Mais il ne se passe rien. » (celui qu'Evac' hors donjon met dans param + MAGIC_RESULT ; mesure : le champ 5 de la table des actions donne 0xaae7e pour l'action 204, mais ce n'est pas le message affiche) : texte officiel affiche par la regle « sort qui coute des PM sans effet » (demande de Sylfried, #48)
+@@ 10a43ceeb81b t
+images (30 Hz) avant de dire au moteur qu'une animation d'objet (porte...) est finie
+@@ e190075814f4 t
+images apres sa creation au bout desquelles un personnage anime sans position est place a l'origine (voir State.appliquer, paquet 13)
+@@ 7984ee73928f t
+(test) quand le moteur ouvre un fichier de sauvegarde
+@@ 15efc8cee248 t
+fichiers de sauvegarde que le moteur n'a pas pu ecrire (liste de phrases, lue et videe par la fenetre : petit message + journal)
+@@ b84ce81ad8ed t
+(persistance/ecriture.py : partagee avec l'import de sauvegardes)
+@@ 4afffa6f24a3 t
+le moteur continue (il croit avoir ecrit, comme avant) : la fenetre previent le joueur
+@@ c04907d6844a c
+Etats instantanes enregistres avant le passage du projet a l'anglais (05/11/2026) : leurs objets `State` (ex-`Etat`) et `Interface` gardent les anciens noms d'attributs, en francais, dans leur pickle.
+`__setstate__` les remet sous leur nom actuel a la lecture ; un etat enregistre depuis (noms anglais) passe tel quel.
+@@ 5431baeec177 t
+les fondus au noir durent 1 / fade_speed de leur duree d'origine : FIXE a 1 (duree du jeu) depuis #101, plus un reglage du joueur (les tests la font varier)
+@@ 01b95e5090ba t
+paquet 1 (cmd_map_effect_sepia : FldObject.calculateExecSepia) : le decor des villes passe aux shaders `Custom/fld_*_sepia` (retours en arriere) jusqu'au chargement de carte suivant ; attribut de classe : un etat instantane enregistre avant #254 n'a pas cet attribut
+@@ d6f512eb0dbe t
+paquet 30, entier < 0 : Field.SetScale(echelle) : la camera orthographique de la carte du monde voit echelle x plus de terrain (ballon : 1,0 a 1,25, renvoyee a chaque image par FieldData::setOffset) ; attribut de classe : un etat instantane enregistre avant #252 n'a pas cet attribut
+@@ 884569aee5af t
+paquet 34, valeurs 3 (voyage), 5 (lampe), 6 (Riremito) : effet de la classe Capture en cours {'n': images ecoulees, 'duree': images du moteur, 'images': appels de MoveNext d'origine, 'genre', 'inverse', 'matin'} (voir Engine._start_screen_effect) ; attribut de classe : un etat instantane enregistre avant #256 n'a pas cet attribut
+@@ 80d926c24560 t
+fin du depart d'un voyage (Capture.Tabi : les deux couches passent a l'alpha 0, la camera du jeu reste coupee) : {'n': images ecoulees} tant que l'ecran reste noir, jusqu'a la fin de l'arrivee (voir Engine._screen_effect)
+@@ bc59f3a492ef t
+paquet 30, entier >= 0 : Field.SetFloatingObject(emplacement) : le panneau de ce personnage (le ballon : emplacement 12) est agrandi de `field_scale` (Field.FloatingObject.SetScale), il garde donc sa taille a l'ecran quand le terrain est vu de plus loin ; son ombre n'est pas touchee
+@@ 2bd98cb2e8e7 t
+carte du monde : icones (paquet 29) idx -> {genre, x, y (coin haut-gauche en px), alpha, visible}
+@@ 4f4dc5dc8c9d t
+combat : emplacement -> id de modele (texture m<id>) ; emplacement -> maillage dynamique (paquet 22)
+@@ dd67de695d14 t
+combat : emplacement -> {'shader', 'vis', 'col', 'off'} (paquets 21, 23, 24, 25, 26 : MeshChara cote Unity)
+@@ ba1308e3c47c t
+paquet 11 : near, far, yOffset (None = valeurs de Global.CameraInitParams), camera libre (sans cible), lookDownAdjust (None = 0,2 du .cctor de SceneCamera)
+@@ 8778176a076c t
+paquet 11 (camera_sub) : champ de vision nominal en degres (Unity le multiplie par 4/3, SceneCamera.Update) ; None = valeur du combat (48)
+@@ fc73fd2453ce t
+paquet 19 avec un emplacement >= 16 (TouchPad.SetPadBlink) : le jeu fait clignoter le rond central de la croix (boule orange et halo) tant qu'une action est possible / attendue ; numero d'icone < 0 = fin (#131)
+@@ ab3fcb2620d6 t
+paquets 19/20 (Riseup) : emplacement (0..15) -> {'id' (case 32 x 32 de la feuille MenuTexture), 'pos', 'alpha'} : bulle « ! » au-dessus d'un personnage
+@@ 8595e00b3f19 t
+fond : moyenne des deux teintes du paquet 8 ; top_background / bottom_background : teintes du haut et du bas de l'ecran (BackColor, degrade ; None = pas de paquet 8) ; object_cmds : ordres sur les objets de la carte (paquets 2 a 5 et 7), vides par la fenetre : (genre, objet, valeurs...)
+@@ eee0f62dc82d t
+partie du jeu (0xc ville, 0xe carte du monde) ; carte du monde : tuiles a afficher
+@@ f34fb6400e57 t
+combat : emplacements dont le maillage (paquet 22) est arrive a CETTE image : Unity dessine en mode immediat, pas de paquet = rien a l'ecran (clignotement d'un coup recu, monstre vaincu)
+@@ 38b6ee017201 t
+Fade.FadePlane : opacite courante, opacite visee, pas par image, images restantes, couleur, images passees tout noir. DEUX plans (Fade.l_fade, bit 14 de l'entier du paquet 9 = Fade.l_targetLayer) : 0 = « FadeForMenu » (shader Custom/FrontFade, file Overlay : devant tout, fenetres et messages compris) ; 1 = « FadeForBG » (Custom/BackFade, file Background : devant la scene, derriere les fenetres)
+@@ dcc65ecbed98 t
+paquets 35/36/37 : ordres de son en attente (type, valeur), vides par la fenetre a chaque image ; musique demandee en dernier (None = arret)
+@@ 9189fa3ac10b t
+effet d'ecran de debut de combat en cours : {'n': images ecoulees} (le moteur attend sa fin, voir Engine._battle_effect)
+@@ f2cc1d796464 t
+chargement de carte (paquet 0) alors que l'ecran est couvert par un fondu : {'n': images du moteur depuis le paquet 0, 'cam': paquet 10 recu depuis} tant que la scene n'est pas en place ; la fenetre ne dessine alors que le fondu (voir update_loading)
+@@ 7dbd7eb41dcc t
+dernier fondu au noir lance par le moteur : (image du moteur, duree jouee / duree d'origine) ; 1.0 = duree du jeu (voir Engine._exit_countdown)
+@@ 20da74a1a18a t
+transition de combat (voir battle_transition) : images restantes de la fenetre « arrivee en combat », de la fenetre « retour a la carte », de la garde entre deux fondus
+@@ 92bc5456fbe4 t
+{'base': nombre de chargements de scene deja vus, 'n': images attendues} : ecran noir tant que la scene du combat n'est pas arrivee
+@@ ce9828e22fc8 t
+carte du monde entiere lue dans le moteur : {'ids': tuiles (H x L) apres animation, 'l', 'h'} ; None hors de la carte du monde
+@@ 02a842ac8124 t
+paquet 33 (cmd_map_color_rate) : teinte du decor (FldObject.m_color, ou Field.SetColor sur la carte du monde) : multiplie la couleur de chaque materiau du decor (sauf les textures « tz_ » : lampes, bougies, vagues) ; 1, 1, 1 = neutre
+@@ fd4cbf3a4a55 t
+paquet 17 (Chara.SetSleepNear) : hauteur du corps des personnages couches (composante Y de s_lieOffset, statique de Chara : elle survit aux changements de carte) ; 0 tant que le moteur n'a rien envoye
+@@ 05010e0a5914 t
+modeles 3D animes (paquets 31 / 32 : le dragon du titre) : emplacement -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(image du moteur, numero de sequence, force)]} ; image : numero du pas du moteur en cours (rempli par Engine.step)
+@@ d8d1c80cb2a6 t
+'combat' : fondu de la transition d'un combat (duree du jeu, voir battle_transition)
+@@ 243edde6b4c0 t
+etats enregistres avant les deux plans de fondu (et avant le passage a l'anglais : voir OLD_ATTRIBUTES)
+@@ 55540d30037b t
+Fade.FadePlane.CheckFade : images restantes > 0 sur l'un des deux plans
+@@ bc8ce05085bf t
+ecran deja couvert par un fondu au moment du chargement de carte ?
+@@ 3063e3164854 t
+scene de combat (cmd_fld_load, bit 8) : le fondu lance dans la foulee est le fondu d'arrivee du combat
+@@ d8467d18e9c9 t
+nouvelle carte : FldObject neuf, m_color blanche (FldObject.init_fld) ; le moteur renvoie la teinte de la carte apres le paquet 0
+@@ 76db3eed4aeb t
+cmd_fld_color (D12C98) = cmd_map_effect_sepia : aucun argument ; FldObject.calculateExecSepia (CDD9E0) remplace le shader de chaque materiau du decor par « <nom>_sepia » (pas celui des personnages)
+@@ a0cef3d4d376 t
+couleur d'effacement : moyenne des deux teintes (repli, rendu hors ecran) ; le fond lui-meme est un degrade vertical (#111)
+@@ 1a917f1fb046 t
+cmd_back_color (RVA 0xD14F44) : 6 flottants -> BackColor.SetColor(haut, bas, 0) (0xCC43F8) : haut = sommets 0 et 1 du quadrilatere plein ecran, bas = sommets 2 et 3
+@@ 28d2e1f172ae t
+cmd_map_color_rate (D14E44) : r, g, b ; FldObject.m_color = (r, g, b, 1) (decor des villes et des combats : FldObject.update_material_color, a chaque image, Material.color = _OrgColor (1, 1, 1, alpha) x m_color, sauf les materiaux dont la texture a « tz_ » dans son nom) ; sur la carte du monde : Field.SetColor (tuiles et symboles)
+@@ f32985fd5ccc t
+cmd_field_load : Field.Init, materiau neuf (couleur blanche) ; le moteur renvoie la teinte de la carte du monde ensuite
+@@ 7c897a40981a t
+(Field.Init remet la taille de camera d'origine ; le moteur enregistre le ballon (paquet 30, emplacement 12) juste apres, a chaque chargement de la carte du monde)
+@@ b8eef1b67444 t
+cmd_field_scale (D12794) : entier >= 0 = Field.SetFloatingObject(Chara de cet emplacement) ; entier < 0 = Field.SetScale(flottant)
+@@ 68e077980638 t
+(FieldData::setOffset : 1 + decalage / 128, decalage <= 32 : de 1,00 a 1,25)
+@@ 9d4f9eb4de80 t
+FieldData::drawBlock : fenetre de tuiles 16x16 de la carte du monde (cols x lignes) autour de la camera
+@@ 7c1cdd5f8665 t
+FieldData::draw_symbol : idx | genre << 8 + [x, y, alpha] ; 0x8000 | idx = cacher ; 0xc000 | idx = remontrer
+@@ 93c3ed77d6ce t
+cmd_chara_on_off : Chara.SetVisible(valeur != 0) = Renderer.enabled du personnage (et de son ombre)
+@@ bb30ed14ff53 t
+cmd_chara_sleep_pose (D132FC) : personnage = v & 0xff ; bits 8-9 : Chara.SetSleepPose(bit 8) ; bit 10 : Chara.SetSleepDir(v >> 12) (voir lying_pose.py)
+@@ 2dd1f8a3c876 t
+SetSleepPose(vrai) : quadrant 0, rotation identite (la direction suit dans le meme paquet)
+@@ 1864403634fb t
+cmd_chara_sleep_near (D133E4) : (defNear, decalage) ; Chara.SetSleepNear : hauteur du corps couche
+@@ 530c1789da3b t
+cmd_chara_pose (D13474) : v = personnage | numero << 8 : Chara.SetTexture(numero) = le personnage change de feuille de sprites (TownCharacterDraw::changePose)
+@@ 4ad2833892f3 t
+cmd_chara_shadow (D13150) : personnage = v & 0xff ; bits 8-9 : ombre visible (bit 8) ; bits 10-11 : ombre separee (bit 10) ; bit 12 : position de l'ombre (3 flottants,
+@@ 135fd494956d t
+SetShadowPosition) ; bit 13 : opacite (SetShadowAlpha) ; bit 14 : position de l'ombre sur la carte du monde (SetFieldShadowPosition)
+@@ afef96c48249 t
+SetFieldShadowPosition : (x, y, hauteur) en pixels de la carte ; le ballon : 32 pixels (2 tuiles) au sud de ses pieds
+@@ 9167f884e130 t
+cmd_rise_icon_load avec un emplacement >= 16 : pas une bulle, le clignotement de la croix (TouchPad.SetPadBlink) ; numero < 0 = arret
+@@ ac177b5c00f8 t
+cmd_rise_icon_load : emplacement, numero d'icone (< 0 = liberation) ; objet Riseup, materiau Custom/Riseup sur la feuille MenuTexture
+@@ 6bc89b8037b1 t
+cmd_rise_icon : emplacement ; x, y, z (SetPosition) puis alpha (Material.color = 1, 1, 1, alpha)
+@@ 94f5f81d7748 t
+cmd_fade : duree en images = v & 0x7ff ; bit 12 : sortie vers une couleur (sinon entree) ; bit 11 : couleur r, g, b en flottants ; bit 13 : blanc (sinon noir) ; bit 14 : plan de fond « FadeForBG » (derriere les fenetres ; sinon plan « FadeForMenu », devant tout : voir State._fondu)
+@@ 3d49062ff554 t
+cmd_fld_common_anim : objet = v & 0xffff, numero d'animation commune = v >> 16 (FldObject.SetCommonAnimation)
+@@ 09947ec8c942 t
+cmd_fld_on_off : objet = v & 0xffff, drapeau = v >> 16 (SetMapObjOnOff : drapeau non nul = objet masque)
+@@ 5046b01fcb39 t
+cmd_fld_alpha : objet = v & 0xffff, niveau (0..31) = v >> 16 & 0xff (SetMapObjAlpha : opacite = niveau / 31)
+@@ 768fa60f1ceb t
+cmd_fld_pos : objet ; x, y, z
+@@ d5cc670cbfea t
+cmd_fld_rot : objet ; rotation x, y (z = 0)
+@@ ff11060d8b43 t
+combat : rotation (tangage, lacet, roulis) en degres
+@@ a6ba39eeb848 t
+DSSAObject::send_unity_load(emplacement, id de modele) ; id < 0 = liberation
+@@ 2b71c7e39b24 t
+MeshChara..ctor : shader 1 (DssaMonster0) sauf id > 999 (DssaCharaTransparent) ; couleur blanche
+@@ 8087a889500d t
+cmd_fbx_load : emplacement, numero de modele (« fbx/c<numero> », FbxObject) ; < 0 = liberation. Le modele est cree cache, sans rotation (le constructeur de FbxObject n'en pose pas ; le moteur envoie la rotation absolue au 1er paquet 32 : FbxObject.SetRotation = Quaternion.Euler puis Transform.set_rotation, 0xCD1748), echelle 1
+@@ f427cacbdcee t
+cmd_fbx : emplacement = v & 0xff ; bits 8-9 : visibilite (bit 8 = visible) ; 10 : forcer l'animation ; 11 : echelle (3 flottants) ; 12 : couleur (4) ; 13 : position (3) ; 14 : rotation, degres (3) ; 15 : animation (un entier : sequence)
+@@ a1a68140db4c t
+(test) DQ_FBXLOG=1 : tous les paquets 32 (position, rotation, echelle, couleur, sequence)
+@@ b9269c549766 t
+cmd_mesh_on_off : emplacement, visible
+@@ 967896ed0d36 t
+cmd_mesh_shader : emplacement | numero de shader << 8 (0 Chara, 1 DssaMonster0, 2 DssaMonster1, 3 DssaCharaTransparent)
+@@ 839c6592aba2 t
+cmd_mesh_color : emplacement ; r, g, b (Material.color, alpha 1)
+@@ 5c8b4d442cbf t
+cmd_mesh_tex_offset : emplacement ; u, v (Material.SetTextureOffset)
+@@ b8bbc0f08011 t
+cmd_camera_sub : bit 0 near, 1 far, 2 fov, 4 yOffset, 5 lookDownAdjust (un flottant chacun, dans l'ordre des bits), 7 camera libre (s_targetCamera = faux)
+@@ d3904075336a t
+SceneCamera.SetFOV2 : borne a 78
+@@ 82b1a20269b8 t
+maillage dynamique : [emplacement, nb sommets, couleurs (1 octet/sommet, 4 par entier), indices...] + flottants [x, y, z, (u, v, x, y, z) * nb sommets]
+@@ 75664218eba5 t
+col : un octet par quad (4 sommets), 255 = opaque
+@@ 1cc3787af688 t
+cmd_se_play / cmd_se_stop / cmd_bgm (Sound.PlaySE, StopSE, PlayBGM ; valeur >= 4096 = StopBGM)
+@@ e30225c33fca t
+cmd_chara (D12EA8) : bit 11 = Chara.SetScale(echelle) : Transform.localScale = 1,8 x echelle sur le panneau du personnage (pas sur son ombre)
+@@ 08e6c2624d19 t
+(la 1re mise a jour d'un personnage, celle qui le place, porte une valeur de depart sans suite : 0,0253 a 0,08 puis 1,0 en une image ; observee sur 529 cartes, 1062 personnages : ignoree)
+@@ fdfb64644972 t
+0x8000 : meme position, version carte du monde (pixels)
+@@ 3c03b888bafa t
+le moteur n'envoie une position que si elle change de celle qu'il croit deja posee (son enregistrement du personnage : (0, 0, 0)) :
+@@ f702685010cc c
+un personnage anime qui n'en a pas recu au bout de quelques images est a l'origine (Chara cree a (0, 0, 0) par Unity) ; mqtf3, mom2f1, msm1f1, emplacement 8 : le PNJ
+du milieu de la piece n'etait pas dessine. (Les positions des autres arrivent 1 image apres la creation : pas d'apparition d'une image a l'origine.)
+@@ e7e86d45bab0 t
+chargement de carte : dessin retenu (voir update_loading) si l'ecran est couvert, soit par un fondu deja la, soit par le fondu d'entree lance avec ce chargement (il repart de l'opacite 1)
+@@ e4afc7133454 t
+fondu lance par une commande de script du jeu (marque posee par Engine._fade_hooks) : sa duree est celle du script
+@@ 6abe562f7b7a t
+bit 14 : Fade.l_targetLayer (NativeManager.cmd_fade D14D10), le plan qui recoit la commande
+@@ a4c7c4a5387a t
+fondu d'un combat (arrivee dans la scene, sortie, retour a la carte) : marque pour battle_transition (sa duree suit « Vitesse de transition » comme tout fondu au noir, #47)
+@@ 9903e9b6ea70 t
+fondu au noir (changement de carte, arrivee en combat, fin de combat, retour a la carte) plus court : reglage « vitesse des transitions » (pas pour un fondu de script)
+@@ 0569c3d5a04e t
+fondu au noir raccourci : le decompte du bruitage de sortie du moteur suit (Engine._exit_countdown)
+@@ 9f43ed2fb27f t
+images du moteur depuis le chargement (0 a l'image du chargement : compte propre, pas de difference d'images : un etat charge peut remettre le compteur d'images a zero)
+@@ fd10576b4ffa t
+carte du monde : attendre aussi ses tuiles (paquet 28)
+@@ 5ddfafc43b33 t
+retenue du dessin apres un chargement : un fondu d'entree ne commence qu'avec la scene en place
+@@ 8ce29a524f7e t
+sortie au noir d'un combat finie : le moteur change de scene dans 1 a 3 images, puis lance le fondu d'entree ; l'horloge ne doit pas changer entre les deux
+@@ f54863a6dab7 t
+fenetre de message (port 1) : type de fenetre, defilement du canevas, curseur de fin de page, nom de l'interlocuteur (« qui ») ; qui_att : le paquet suivant du port porte ce nom
+@@ e43b6cc7b79f t
+nombres de degats a faire sauter sur les monstres : (monstre, hauteur, degats), vides par la visionneuse
+@@ 28712f414af1 t
+messages du port 0 adresses a l'hote : (code, arguments...) ; 999 = quitter (MenuPortSendQuit), 6 = portail, 4 / 5 = volumes, 7 = taille du nom, 8 = manette
+@@ 6a8b3171b369 t
+observateur facultatif (visionneuse) : ouvrir(port, type), fermer(port), param_int/param_str/code/selection
+@@ 9d8e00d11d44 t
+fenetre de message : dessinee d'apres le canevas du moteur ; MenuMessage.NoticeReceive : 0 type, 1 curseur, 2 secousse, 3 defilement, 4 nom de l'interlocuteur
+@@ fd4e726d4991 t
+[4, 1] a annonce un nom : le paquet suivant du port en est le texte (un entier par caractere, comme les textes des cases des menus)
+@@ 9b80d1c5f736 t
+[4, 0] : pas de nom (cadre sans onglet) ; [4, 1] : le nom suit (cadre avec onglet, seulement pour la fenetre du terrain : MenuMessage.NoticeReceive, commande 4)
+@@ 443d79cd406c t
+[fenetre, 3, visible] : MenuPort.SetVisible
+@@ abc91ac6dac0 t
+[fenetre, 2] : fermee
+@@ a7ba3910a117 t
+(les messages d'arret du moteur peuvent remettre « act » : « ferme » reste jusqu'a la creation suivante)
+@@ c0687a2cdade t
+[fenetre, 1, categorie, type] : cree un menu du type donne (MenuPortItemTable.Make_*)
+@@ 7e27fe0bee19 t
+MenuPortSystem.internalUpdate (D10A54) : [port, 2] detruit l'element (`s_ports[port] = null`), les messages du port recus ensuite (meme image : les ports 12 a 31 sont lus apres le port 0)
+@@ ec91c5de7b20 t
+n'ont plus de destinataire (`if (item != null) item.NoticeReceive`) ; avant, la fin de la liste des journaux (5, 6, 4) rouvrait la fenetre fermee une image : boite « simple » violette
+@@ b43ff504f964 t
+Make_BattleHoppingNumber : [12, 0, 0] puis [monstre, hauteur, degats] (BattleMenu_setHoppingNumbers)
+@@ c01afcab4eaf t
+texte de la case annoncee
+@@ 8f5c4a21991d t
+fenetre de carte (type 25) : la liste de nombres qui suit les codes 3 (lieux decouverts) et 5 (voile) du moteur (MenuPort.Receive des fonctions de Make_CityMap), pas une commande
+@@ 8d6e7cb7f6ac t
+plaque de monstre : messages qui suivent un code > 0 (nom, puis [x, y, ...])
+@@ cab42a7e5870 t
+MenuPortItem.NoticeReceive : premiere commande -> parties activees, dessin force
+@@ 7959fdcf251f t
+fenetre dynamique : contenu neuf
+@@ 26d8e5c4a039 t
+setItemMenu : colonnes, lignes, nombre de cases du curseur du moteur
+@@ 4f0d52f3c0c6 t
+demande de saisie (a chaque image tant que le menu attend une touche)
+@@ 2679d260eed1 t
+demande de dessin : le moteur la renvoie a chaque image tant que la fenetre doit etre vue
+@@ 20209353d560 t
+arret : parties desactivees
+@@ 6ac41a465910 t
+ignorer les demandes de dessin (toujours visible)
+@@ a9a4ce1deb27 t
+setItemParamInt [id, no, bas, haut] : valeur 32 bits
+@@ b39a669c2eb6 t
+gardes pour rejouer la fenetre (etats instantanes)
+@@ 3e410510b53d t
+nombre de fois que chaque code est arrive (le titre : TapToStart.CountReset = code 0 du port 12)
+@@ 73ed27091ebf t
+ICityMap : code 3 = lieux decouverts (x + 256 y, un par nombre), code 5 = voile (16 nombres : un bit par bloc de 10 x 10 pixels non explore)
+@@ 6ce1c88124fd t
+MonsterNamePlate.ReceiveParameters(code >= 1)
+@@ bc68c2f56f3d t
+disposition des plaques (nombre de plaques)
+@@ e9010fd968d2 t
+MenuPortItem.Update : visible tant que le moteur demande le dessin a chaque image
+@@ 0c1010387eca t
+reglages / crochets que le moteur de CET apk n'a pas laisse installer (voir _manque) ; la fenetre les annonce une fois (Game._report_missing_hooks)
+@@ f64a5810cb85 t
+files de messages interface <-> moteur (allouees par l'appelant)
+@@ 47c5f2e66a05 t
+menu de depart : pas de « Sauv. cloud » (Google Play Games / serveur Square Enix absents sur PC) ; l'original retire la meme case pour la version Amazon
+@@ 9053102e407d t
+messages moteur -> interface (menus), derniere image
+@@ 5d7b320be780 t
+fenetres de menu memorisees
+@@ b0b7c1c86436 t
+decompte du bruitage de sortie (voir _exit_countdown)
+@@ 6c969340366f c
+animations d'objets de la carte (portes...) : le moteur attend qu'Unity les termine (bit0 de l'octet +0x14 de l'entree)
+@@ 904a1d2f2d1b t
+[(image d'echeance, index d'objet)]
+@@ d9d95b7c4af7 t
+(objet, numero) -> images avant la fin de l'animation commune (donnee par la fenetre, d'apres les donnees de la carte) ; None = ANIM_DURATION
+@@ 42cea1d3973a t
+fenetre de message affichee ? (MenuPort::SetVisible sur le port du message)
+@@ fa16cdf25fb5 t
+MenuMessage.SetVisible(false) efface le texte du nom (m_who)

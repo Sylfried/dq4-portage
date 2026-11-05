@@ -1,0 +1,149 @@
+## Suivi dans GitHub (depuis le 03/11/2026)
+
+Le reste à faire de ce rapport est repris dans **75 issues de `dq4-portage` (#51 à #99, #101, #105, #107 à #112, #121 à #123, #126 à #131, #134 à #141 et #145 à #146, dont 15 fermées au 03/11)**, classées en 5 jalons ; chaque issue cite les fiches de `known_gaps.md` et les lignes de ce rapport. Étiquettes : `type:feature`, `type:bug`, `type:recherche`, `test-windows`, `priorité:haute`, `priorité:basse`, `bloqué` (attend Sylfried), `à décider`, `accessibility`. Ce rapport reste le constat ; **les issues sont le suivi** (à fermer par `Closes #n` dans les PR).
+
+| Jalon | Issues | Contenu |
+|---|---|---|
+| 1. Validation Windows | #51 à #58, #90 | premier lancement (fermée), rendu OpenGL, performance, sauvegarde à l'église (fermée), comparaison au mobile (fermée), combats, historique (fermée), teinte jour / nuit et cartes `ml*`, séquences à fondu |
+| 2. Clavier complet et manette | #59 à #61, #93 | interface au clavier et à la manette (à creuser), bruitage au clavier, manette, bruitage du coffre lâché |
+| 3. Chapitre 2 et services | #62 à #65 | chapitre 2 (bloqué : sauvegardes), services, boutiques et bestiaire, casino |
+| 4. Moteur et finitions | #66 à #85, #91 à #92, #94 à #95, #97 à #99, #101 | paquets 6 et 30, effets d'écran, carte du monde, icône 18, son, approximations, modèles 3D, restes `BackColor` / `cmd_chara`, 11 bugs (2 résolus : #78, #82), bouton de vitesse, caméra des attaques, historique au clavier, défilement du texte, vitesses hors combat (#101 ; #96 « accélérateur et jingle » fermée), barre de rotation de la croix, classes d'interface, petits restes |
+| 5. Distribution et extensions | #86 à #88 | licence d'Unicorn (fermée : GPL v2), .exe, DQ5 et DQ6 |
+
+## Lecture du 03/11 (14 h 36 à 15 h 50) : ce qui est validé, ce qui reste
+
+Sylfried a lu la liste « tout ce qu'il reste à faire » et répondu point par point (décisions D-163 à D-190 dans `decisions.md` § 5d). **Phase gestion de projet : aucun correctif sur l'outil.** Ci-dessous, les 20 points « Non vérifié » avec leur résultat.
+
+| # | Point | Résultat (Sylfried, Windows) | Suite |
+|---|---|---|---|
+| 1 | Rendu OpenGL | « le reste fonctionne » ; **anticrénelage et suréchantillonnage à tester** ; 2 moniteurs, fenêtre plus grande que l'écran, zoom 4K : pas testés | #52 |
+| 2 | Sauvegarde à l'église | OK, ainsi que sauvegardes auto, hors églises, création et suppression de journal | #54 fermée |
+| 3 | Lanceur `.bat` | « aucun souci » | #51 fermée |
+| 4 | Performance x3, x4, x8 | intitulé expliqué ; pas testé | #53 |
+| 5 | Comparaison avec le mobile | « nickel sur ces points » | #55 fermée |
+| 6 | Historique en jeu | « fonctionnel après un ou plusieurs combats » ; le nouveau défilement n'est pas testé | #57 fermée, #94 |
+| 7 | Bruitage de transition | pas testé | #75 |
+| 8 | Repos des ennemis à x2 et x3 | pas testé | #56 |
+| 9 | Teinte jour / nuit | OK sur la carte et dans les villes ; nom du chapitre 1 à son début OK | #58 (reste les cartes `ml*`) |
+| 10 | Chapitres 2 et suivants | sauvegarde à venir | #62, `chapter2_test_plan.md` |
+| 11 | Services | attendent le chapitre 2 | #63 |
+| 12 | Boutiques 28 / 59 / 63 / 70 | attendent le chapitre 2 | #64 |
+| 13 | Banque au clavier | suspendu avec l'exigence du clavier complet | #59 |
+| 14 | Accès au bestiaire | attend le chapitre 2 | #64 |
+| 15 | Décors de combat corrigés | aube et coucher de soleil : Sylfried les teste ; plus aucun défaut visuel la nuit | #56 |
+| 16 | Boss, groupes, Morph, effets, game over | boss du chapitre 1 OK, groupes OK, Morph de la cinématique OK, game over OK ; **effets de sorts à tester** (défense) ; boss final plus tard | #56 |
+| 17 | Retour au titre, nouvelle partie | nouvelle partie sans relancer OK ; **retour au titre depuis un combat ou une boutique : pas testé** | #56 |
+| 18 | Paquets 16, 17, 33 des cartes `ml*` | pas précisé | #58 |
+| 19 | Poker, bingo | attendent le chapitre 2 | #65 |
+| 20 | Ratios autres que 16/9 | « OK » | clos |
+
+**Oublis de Claude** : n° 6 (clavier) suspendu (#59) ; n° 8 (bruitage 300) règle confirmée (#60) ; n° 14 (CI, scripts) CI faite en #49, scripts de recherche introuvables (caduc) ; n° 15 (documentation) à jour en #49, #50 et #100. **Bugs connus** : n° 4 (`dbout`) et n° 8 (vagues d'eau) **résolus** (#78, #82 fermées) ; n° 6 (survol) **confirmé imparfait**, souris et clavier (#80) ; n° 9 (angle de caméra) : décision D-172 (#83) ; n° 1 (bruitage de transition) pas testé (#75). Les autres bugs (n° 2, 3, 5, 7, 10, 11) n'ont pas été rencontrés : à tester ou à corriger plus tard.
+
+**Nouveaux sujets nés de la lecture** : bouton de vitesse dessiné à gauche avant sa place (#91), caméra des attaques (#92), bruitage du coffre lâché (#93), historique message par message et PgHaut / PgBas par 3 (#94), « Défilement du texte » dans Affichage (#95), accélérateur et jingle (#96, remplacée à 16 h 47 par #101), barre de rotation de la croix (#97), classes d'interface du jeu (#98), petits restes (#99).
+
+## Lecture du 03/11 (16 h 47) : réponses à mes questions
+
+Sylfried a répondu aux treize points que je lui avais soumis (décisions D-191 à D-200, `decisions.md` § 5e). **Toujours en phase gestion de projet : rien n'est codé.**
+
+| Point | Réponse de Sylfried | Suite |
+|---|---|---|
+| « Performances à x3, x4 et x8 » | « prévois que je dois vérifier ça aussi » | #53 réécrite : combat « Très rapide » puis transitions à x4 |
+| `MAP_DIFF` | « c'est bon désormais » | clos (G-039c) |
+| Feuilles d'ombre 193 et 194 ; points « sans issue » | « Oki » | clos |
+| Bandeau « Prologue » (`hyodai1`) | « Yes je vois le cadre » | clos (G-012) |
+| Coffres | « c'est bon dans le bon sens » | clos (G-058, G-205) |
+| Mode « menus simples » | garder comme solution de secours, **pas d'option**, utilisé quand nécessaire | repli automatique déjà en place ; G-108 traité |
+| Format de distribution | « On verra pour les portages » : scripts + `.bat` ou `.exe` launcher | #87 ; pas tranché |
+| Fichier `LICENSE` | « Fais le si il le faut » | pas nécessaire aujourd'hui, pas créé (`docs/licenses.md`) |
+| Accélérateur et jingle | « supprime l'option pour choisir la valeur d'accélération… x4 en vitesse de transition… » | **#101** ; #96 fermée |
+| Espace et discussion de groupe | retirée d'Espace, mise sur une autre touche (Alt / Alt Gr) | clos (G-162), lecture corrigée |
+| « Sort en trop » | « Exactement » : la rangée fantôme supprimée en #45 | à vérifier sur Windows (#99) |
+| Caméra des attaques | « juste la caméra qui bouge pendant des attaques » ; l'Ornythox n'est plus sûr, l'archer vert est peut-être meilleur | #92 réécrite : vérifier d'abord avec des ennemis du chapitre 1 |
+
+**Précision de 17 h 01 (D-201)** : la vitesse de marche et l'accélérateur à la touche Maj **restent** ; seul le réglage « Vitesse de transition » disparaît (#101). **Tranché à 17 h 03 (D-202)** : le sort de déplacement (306) n'est pas raccourci, Sylfried le teste lui-même ; « audio réel » et `reglages.json` (#99) : expliqués ; **réglés à 17 h 07 (D-203)** : « l'audio fonctionne », la conversion de `reglages.json` n'a pas besoin de test (bouton ↺). **Plus rien à lui demander sur ce lot.**
+
+**À 17 h 19 (D-204) et 17 h 22 (D-205)** : Sylfried renonce à une liste globale de tout ce qu'il doit tester : il teste **issue par issue, en rentrant ce soir, en commençant par #52** (fiche de test donnée à 17 h 20). Nouvelle issue **#105** (jalon 5, `à décider`, `priorité:basse`) : décider des modificateurs et des triches qu'il voudrait ajouter, **à traiter en tout dernier** ; sa liste reste à fournir (Claude n'en propose aucune d'office).
+
+**Retours du test de #52 (19 h 38, D-206 à D-212)** : antialiasing x2 / x4 / x8 « fonctionne » (pas de différence visible) et à renommer « Antialiasing » (fait, #113) ; suréchantillonnage x2 saccade (→ #53) ; deux moniteurs « Nickel » ; la liste des résolutions ne montre que les tailles qui tiennent sur l'écran (voulu : le test 3840 x 2160 passe par `reglages.json`). Nouvelles issues : **#107** course après une transition (corrigée dans #113, à confirmer), **#108** logo et sous-titre du titre x2, **#109** retour au titre comme l'original (dialogue Oui / Non puis transition), **#110** caméra sur la butte du village du prologue, **#111** fond dégradé du prologue, **#112** choix du périphérique de sortie audio (**retiré à 21 h 05, D-216 et D-217 : essayé sous Windows, il ne marche pas sur son matériel ; le son reste sur la sortie par défaut de Windows ; le choix du moniteur du plein écran est retiré aussi**). **À 19 h 41 (D-213)** : « tu peux directement appliquer les correctifs nécessaires » : la phase « gestion de projet » est levée pour ces corrections.
+
+## Oublis de Claude
+
+Quinze choses que j'ai laissées de côté ou pas finies. Les quatre premières sont des paquets du moteur que la visionneuse ne sait pas encore dessiner ; ce sont les plus visibles en jeu.
+
+| # | Ce qui manque | Effet pour le joueur | Réf. |
+|---|---|---|---|
+| 1 | Poses couchées (paquets 16, 17, 18) | Les personnages endormis ou allongés restent debout | PAQ-3, G-042 |
+| 2 | Animations d'événements FEAN (paquet 6) | Scènes d'histoire et bingo du casino incomplets | PAQ-5, G-041, G-052 |
+| 3 | Échelle du terrain `field_scale` (paquet 30) | Problème possible avec le ballon | PAQ-6, G-040 |
+| 4 | Effets d'écran 3, 5 et 6 | Flashs de certains sorts absents | PAQ-7, G-071 |
+| 5 | PNJ de scénario qui apparaissent ou disparaissent | Jamais rejoués, comportement inconnu | CAR-14 |
+| 6 | Boutons de l'interface inaccessibles au clavier | **Exigence du 03/11 : tous les boutons doivent être accessibles au clavier.** Cas connu : « Sauvegarde rapide » de l'écran Divers (reste à la souris) ; inventaire complet à faire | G-096, D-155 |
+| 7 | ~~`Menu_Echap_DQ4_PC.xlsx`~~ | **Plus d'actualité** (Sylfried, 03/11) : rien à régénérer | G-107, G-143, D-157 |
+| 8 | Bruitage 300 (clic) | **Règle du 03/11** : au clavier, un bruitage seulement là où le toucher en joue un (une note par caractère à la saisie du nom *si* le toucher en joue une), jamais ajouté de force. Entrée, Espace et M ne jouent pas le bruitage 300 que joue le clic sur le bouton : à aligner sous cette règle, cas par cas. **Fait le 04/11 (#228, audit SND-08 / SND-09 / UI-01) : A et action seuls jouent le bruitage au clic comme au clavier, Entrée / Espace / M le jouent, une lettre tapée aussi ; à valider sur Windows** | G-173, D-156 |
+| 9 | Événements FEMV, bateaux animés au chargement | Absents | G-053 |
+| 10 | Icône de genre 18, emplacements 10 à 12 de la carte du monde | Possibles éléments non dessinés | G-033, G-034 |
+| 11 | Son : table de volumes, fondus entre musiques, bruitages 3D | Jamais étudiés | G-047 |
+| 12 | Fond de combat estimé, roulis de la caméra de combat, priorité des fondus | Approximations connues | G-072, G-073, G-046 |
+| 13 | Autres modèles 3D (boss, autres dragons) | Lien identifiant de modèle vers objet non résolu | G-119, G-147, #16 |
+| 14 | CI minimale, scripts de recherche à ranger dans `tools/` | Pas de garde-fou automatique | G-016, G-018 |
+| 15 | Documentation périmée | **Mise à jour en #49 et #50** : `workflow.md`, README, reprise, notes, audit, document du Projet sur les dépôts. À tenir à jour à chaque PR (demande du 03/11) | G-141 à G-150 |
+
+Les cartes vides, les PNJ jamais dessinés, la teinte jour et nuit, l'échelle des sprites, le poker invisible et les pages du Statut au clavier ne figurent plus ici : ils sont traités dans la PR #44 (dernière section).
+
+## Bugs connus
+
+Onze défauts constatés ou probables. Les trois plus sérieux (n° 2 à 4) peuvent bloquer une partie ; aucun n'a été vu en jouant les sauvegardes du chapitre 1.
+
+| # | Bug | Gravité | Ce qu'on sait | Réf. |
+|---|---|---|---|---|
+| 1 | Bruitage de transition perdu (porte, sortie de village) à accélérateur élevé | Moyenne | Atténué (un bruitage tout juste lancé reste 0,4 s), cause ni reproduite ni trouvée | #44 |
+| 2 | `startTown` plante pour les cartes `za3f3` et `ev01` | Moyenne | **Clos le 04/11/2026 (#76, #216)** : `za3f3` est une carte orpheline (aucun `.stg` dans l'APK) et `ev01` ne plante que lancée par `startTown` (le titre la charge par un autre chemin) ; `demarrer_ville` refuse maintenant un nom sans `.stg` | CAR |
+| 3 | Allocateur de 256 Mo jamais libéré | Haute (latent) | Arrêt `MemoryError` possible sur longue session, aucune mesure | G-044, #11 |
+| 4 | Murs invisibles et escalier de `dbout` | Haute (latent) | Risque de blocage ; l'enquête du 31/10 n'a rien prouvé | G-055 |
+| 5 | Monstre endormi ou paralysé qui pourrait s'effacer | Moyenne | Hypothèse lue dans le code, non reproduite | G-075 |
+| 6 | Survol à la souris : mauvais bouton allumé | Basse | Jamais reproduit ; trois durcissements ajoutés ; la souris inutilisable 1 s après le clavier est corrigée (#43) | G-105 |
+| 7 | « ERROR 3080@ » dans des dialogues de PNJ du casino | Inconnue | Supposé : banque de textes d'un autre chapitre ; je ne touche pas aux fichiers du patch FR | CAS-14 |
+| 8 | Vagues d'eau qui débordent sur le sol des grottes | Basse | Non reproduit | G-054 |
+| 9 | Angle de caméra (flèches haut et bas) sauvegardé | Basse | Un appui accidentel décale le tangage durablement | G-063 |
+| 10 | Zoom de la minicarte à 400 % | Basse | Garde-fou ajouté, cause non reproduite | G-039b |
+| 11 | Blocage de 0,1 à 0,5 s au chargement d'une carte | Basse | Environ 55 textures envoyées d'un coup | G-126 |
+
+## Anciennes issues (dépôt `dq4-pc`, supprimé)
+
+Le dépôt `dq4-pc` n'existe plus (Sylfried, 03/11/2026) : ses 27 issues ouvertes ne peuvent plus être consultées ni fermées. Leur contenu et leur état réel au 02/11 sont conservés dans `docs/audit/github_issues.md` ; les restes qui comptent sont repris dans ce rapport. `dq4-portage` n'a aucune issue ; son suivi se fait par PR (« Avance #N »).
+
+| Verdict au 02/11 | Issues | Suite |
+|---|---|---|
+| Faites (7) | #2 (sauf les classes `IBase`), #5, #7 (sauf les coffres, traités en #43), #10, #22, #23, #41 | Plus rien à fermer ; les restes (`IBase`) sont dans « Oublis » |
+| Faites côté code, confirmation manquante (2) | #40 (« à reconfirmer sur pdc »), #17 (son : vérifier les haut-parleurs) | À confirmer avec le test Windows |
+| Reste réel (16) | #3, #4, #8 (manette : voir « Cap fixé »), #9 (**priorité haute** : sauvegarde réelle sous Windows), #11 (allocateur), #12 (Python 3.15), #13 (paquets 1, 6, 16, 17, 18, 27, 30, 33), #15, #16, #18, #19, #20, #21, #24, #45, #56 | Suivis dans ce rapport (oublis, bugs, non vérifié) |
+| Décidées (2) | #6 (toits : on garde, c'est le fonctionnement du mobile), #57 (piste Unity : en pause) | Décisions 1 et 3 |
+
+## Non vérifié
+
+Vingt points codés, lus dans le moteur ou testés avec des valeurs forcées, mais jamais vus fonctionner pour de vrai. Tout ce qui est marqué « vu » ailleurs dans ce rapport l'a été sous Linux (Mesa, sans fenêtre réelle sur ton PC).
+
+| # | Élément | Ce qui manque | Comment le vérifier |
+|---|---|---|---|
+| 1 | Rendu OpenGL sous Windows, vrai GPU | Antialiasing x4, suréchantillonnage, 4K, plein écran : tout vient de Mesa (G-001, G-003, G-004) | Lancer sur ton PC |
+| 2 | Sauvegarde à l'église puis rechargement sous Windows | Issue #9, priorité haute (G-120) | Sauvegarder, quitter, relancer, charger |
+| 3 | Lanceur `.bat` | Cache, Python, boîtes de dialogue d'import et d'export (G-002, G-010, G-014) | Premier lancement propre |
+| 4 | Performance à x3, x4, x8 | Budget de 30 ms par image, fondus (G-008) | Jouer à grande vitesse |
+| 5 | Comparaison avec le mobile | Tailles de texte, placements au pixel, croix, plume : aucune capture mobile (G-023) | Captures côte à côte |
+| 6 | Fenêtre d'historique en jeu | Dessin et touche H vus sous Linux seulement ; un combat réel jusqu'à l'historique en fenêtre | Gagner un combat, ouvrir H deux fois |
+| 7 | Cause du bruitage de transition perdu | Le héros restait bloqué sur la sauvegarde 4 | Une porte accessible, accélérateur haut |
+| 8 | Animation de repos des ennemis à x2 et x3 | Comptée par pas de moteur, jamais regardée | La regarder en combat |
+| 9 | Teinte réelle jour et nuit de la carte du monde | Testée avec des valeurs forcées ; nuit en combat jamais comparée à un téléphone | Carte du monde à différentes heures |
+| 10 | Chapitres 2 et suivants | Toutes les sauvegardes réelles sont au chapitre 1 : colisée, arène jusqu'au bout, générique, titres de chapitre | Une sauvegarde plus avancée |
+| 11 | Services à jouer pour de vrai | Auberge par le PNJ, sorts du menu, divination, bénédiction, purification, radeau, henge, sifflet, Rura | Sauvegarde avec lanceur de sorts, puis parcours |
+| 12 | Boutiques types 28, 59, 63, 70 | Boutique de Torneko, surechigai (G-164) | Les trouver en jeu |
+| 13 | Banque au clavier | Colonne exacte choisie par ◀ ▶ : le scénario ne couvre qu'un chiffre | Saisir 3 150 G au clavier |
+| 14 | Accès au bestiaire | Aucun bouton trouvé dans le menu du chapitre 1 ; ouvert par appel direct | Voir si un objet ou un chapitre le débloque |
+| 15 | Décors de combat corrigés | 18 nouveaux, 4 vus en vue approximative ; 7 planches de contrôle sur 15 jamais regardées | Les regarder |
+| 16 | Boss, groupes, Morph, effets de sorts, game over | G-070, G-071, G-078, G-080 (victoire et montée de niveau, eux, vus en vrai combat) | Combats variés |
+| 17 | Retour au titre depuis un combat ou une boutique, nouvelle partie sans relancer | G-079 | Le faire |
+| 18 | Paquets 16, 17, 33 des cartes `ml*` | Comptés, jamais vus ; sous-titre des chapitres (G-043) | Cartes `ml*` |
+| 19 | Poker : libellé « Abandonner » et animation du bingo | Chevauchement possible ; animation (paquet 6) non rejouée | Casino de Chandor |
+| 20 | Ratios autres que 16/9 | 16:10, 21:9, 4:3 : « pas de vide autour des cartes » non vérifié (G-020) | Redimensionner la fenêtre |
+
+La liste des types de menu sans test réel (couverture, §2) date du début de l'audit : plusieurs ont été vus depuis (Statut, boutiques, église, banque, casino, arène). Elle est à rejouer avant d'être citée.

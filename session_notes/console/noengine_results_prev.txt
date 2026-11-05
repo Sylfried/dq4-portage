@@ -1,0 +1,102 @@
+test_autosave: Ran 12 tests in 0.002s OK (skipped=4) 
+test_balloon_scale: Ran 10 tests in 0.000s OK 
+test_balloon_shadow: Ran 5 tests in 0.000s OK 
+test_battle_camera: Ran 16 tests in 0.001s OK (skipped=6) 
+test_battle_history: Ran 71 tests in 0.024s OK (skipped=17) 
+test_battle_scenery_time_of_day: Ran 12 tests in 0.001s OK (skipped=6) 
+test_battle_speed: Ran 42 tests in 0.095s OK (skipped=1) 
+test_battle_transition: Ran 17 tests in 0.008s OK (skipped=4) 
+test_capture_effects: Ran 21 tests in 0.087s OK 
+test_casino_bestiary: Ran 28 tests in 0.001s OK 
+test_critical_hit: Ran 2 tests in 0.003s OK (skipped=1) 
+test_day_clock: Ran 6 tests in 0.001s OK (skipped=2) 
+test_dialogue_name: Ran 18 tests in 0.001s OK (skipped=1) 
+test_dpad_and_click: Ran 23 tests in 0.001s OK 
+test_dpad_run: Ran 16 tests in 0.001s OK 
+test_encounters: Ran 9 tests in 0.001s OK (skipped=4) 
+test_enemy_chest: Ran 2 tests in 0.000s OK (skipped=2) 
+test_engine_camera: Ran 7 tests in 0.000s OK (skipped=6) 
+test_entries: Ran 61 tests in 0.005s OK 
+test_exp_gift_touch: Ran 13 tests in 0.001s OK 
+test_extended_sky: Ran 6 tests in 0.032s OK 
+test_fbx_anim: Ran 9 tests in 0.014s OK 
+test_field_group_order: Ran 7 tests in 0.000s OK (skipped=1) 
+test_fld_priority: Ran 4 tests in 0.038s OK 
+test_focus_loss: Ran 10 tests in 0.181s OK 
+test_full_screen_effects: Ran 7 tests in 0.001s OK 
+test_game_priority: Ran 13 tests in 0.001s OK (skipped=2) 
+test_gradient_background: Ran 10 tests in 0.087s OK (skipped=1) 
+test_ground_decals: Ran 2 tests in 0.000s OK (skipped=2) 
+test_heap_alert: FAIL: test_direct_jump_beyond_240 (__main__.Alert.test_direct_jump_beyond_240) FAIL: test_one_message_per_tier (__main__.Alert.test_one_message_per_tier) Ran 6 tests in 0.001s FAILED (failures=2) 
+test_history_access: Ran 19 tests in 0.001s OK 
+test_history_key: Ran 31 tests in 0.009s OK (skipped=1) 
+test_inactive_lines: Ran 17 tests in 10.887s OK 
+test_interface_panel: Ran 19 tests in 0.008s OK 
+test_interface_settings: Ran 21 tests in 0.109s OK 
+test_item_description: Ran 22 tests in 0.028s OK (skipped=5) 
+test_keyboard_sfx: Ran 25 tests in 0.004s OK 
+test_language: Ran 18 tests in 0.371s OK 
+test_launcher: FAIL: test_each_message_has_its_two_languages (__main__.Launcher.test_each_message_has_its_two_languages) FAIL: test_language_comes_from_windows (__main__.Launcher.test_language_comes_from_windows) Ran 7 tests in 0.002s FAILED (failures=2) 
+test_level_hp: Ran 5 tests in 0.000s OK (skipped=3) 
+test_loading: Ran 22 tests in 0.001s OK (skipped=1) 
+test_lying_pose: Ran 20 tests in 0.002s OK (skipped=2) 
+test_magic_entries: Ran 33 tests in 0.001s OK (skipped=18) 
+test_map_items: Ran 35 tests in 0.561s OK (skipped=6) 
+test_map_textures: Ran 5 tests in 0.004s OK 
+test_map_tint: Ran 18 tests in 0.002s OK (skipped=1) 
+test_maps_npcs: Ran 4 tests in 0.001s OK 
+test_menu_key: Ran 15 tests in 0.089s OK 
+test_menu_language: Ran 35 tests in 1.422s OK 
+test_menu_tab: Ran 7 tests in 0.022s OK 
+test_message_fallback: Ran 9 tests in 0.001s OK 
+test_message_font: Ran 27 tests in 0.021s OK (skipped=5) 
+test_message_history: Ran 122 tests in 0.072s OK (skipped=2) 
+test_missing_hooks: Ran 7 tests in 1.315s OK 
+test_missing_monster_texture: Ran 3 tests in 0.000s OK 
+test_nonbreaking_space: Ran 4 tests in 0.267s OK (skipped=1) 
+test_page_language: Ran 8 tests in 0.010s OK 
+test_params_without_pause: Ran 15 tests in 0.005s OK 
+test_paths: Ran 33 tests in 0.313s OK 
+test_pause_language: Ran 33 tests in 29.503s OK 
+test_pause_pages: Ran 29 tests in 0.007s OK 
+test_play_time: Ran 6 tests in 0.001s OK (skipped=4) 
+test_poker_font: Ran 4 tests in 0.000s OK 
+test_return_to_title: Ran 21 tests in 0.045s OK (skipped=4) 
+test_root_scenery: Ran 2 tests in 0.000s OK (skipped=2) 
+test_save_notifications: Ran 8 tests in 0.733s OK 
+test_save_writing: Ran 6 tests in 0.368s OK 
+test_saves_import: Ran 13 tests in 0.201s OK 
+test_saves_in_one_folder: Ran 16 tests in 0.020s OK 
+test_savestate_fixes: Ran 1 test in 0.000s OK (skipped=1) 
+test_savestates_order: FAIL: test_other_library_refused_without_writing (__main__.WithoutRealEngine.test_other_library_refused_without_writing) Ran 6 tests in 0.001s FAILED (failures=1, skipped=1) 
+test_savestates_whitelist: Ran 16 tests in 0.026s OK (skipped=2) 
+test_scenery_culling: Ran 5 tests in 0.002s OK 
+test_scenery_outlines: Ran 8 tests in 0.124s OK (skipped=1) 
+test_screens: Ran 19 tests in 0.006s OK 
+test_sepia_scenery: Ran 6 tests in 0.000s OK 
+test_sound_decoding: Ran 10 tests in 0.118s OK 
+test_sound_failures: FAIL: test_three_failures_in_a_row_cut_then_retry (__main__.Failures.test_three_failures_in_a_row_cut_then_retry) FAIL: test_resume_after_pause_refused_noted_once (__main__.SwallowedErrors.test_resume_after_pause_refused_noted_once) Ran 13 tests in 0.007s FAILED (failures=2) 
+test_sound_mixing: Ran 31 tests in 0.011s OK 
+test_sound_music_limits: Ran 11 tests in 0.006s OK 
+test_sound_text_settings: Ran 8 tests in 0.069s OK 
+test_sound_volumes: Ran 9 tests in 0.008s OK 
+test_special_sheets: Ran 7 tests in 0.006s OK 
+test_speed_button: Ran 25 tests in 0.048s OK (skipped=8) 
+test_stacked_yes_no: Ran 17 tests in 0.029s OK (skipped=1) 
+test_start_menu_plate: Ran 12 tests in 0.001s OK 
+test_text_recentering: Ran 8 tests in 0.000s OK 
+test_text_scrolling: 
+test_title_camera: Ran 4 tests in 0.005s OK 
+test_title_centering: Ran 5 tests in 0.000s OK (skipped=5) 
+test_title_logo: Ran 12 tests in 0.010s OK (skipped=6) 
+test_title_sky: Ran 34 tests in 0.114s OK 
+test_town_camera: Ran 16 tests in 0.114s OK 
+test_transition_sfx: Ran 9 tests in 0.053s OK (skipped=3) 
+test_turn_chaining: Ran 2 tests in 0.000s OK (skipped=1) 
+test_unknown_map: Ran 4 tests in 0.010s OK 
+test_upright_sprites: Ran 16 tests in 0.811s OK 
+test_window_language: Ran 46 tests in 2.897s OK 
+test_window_mode: Ran 48 tests in 0.245s OK 
+test_window_name_collisions: Ran 4 tests in 0.163s OK 
+test_without_startup_callback: Ran 2 tests in 0.001s OK 
+FINISHED

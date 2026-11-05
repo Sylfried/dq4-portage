@@ -1,0 +1,1006 @@
+## FILE tests/test_magic_entries.py
+@@ ac6888ed5bf5 d
+Field "Magie" menu (Make_NameButton, Make_MagicInfo, Make_TargetCharaList) and uses with no effect: the original engine decides.
+
+    python3 tools/test_magic_entries.py                                          (UI part: Linux without a display, pyglet in "headless" mode)
+    DQ_APK=<patched APK folder> DQ_SAVES=<saves folder> python3 tools/test_magic_entries.py      (adds the real engine scenarios)
+
+UI part (no engine): the named-button list (type 8) receives from the engine its code 6 = layout preset (`MenuPortItemTable.name_button_param`). Without it, the 5th row stayed
+visible and clickable: a touch there sent the engine a nonexistent spell (<ERR 0x07000000.0> on screen, "Cout en PM  0/ 30").
+  1. preset 0 (4 rows: spell list): only the rows whose code is not 0 are touch areas; rows 4 and 5 do not exist;
+  2. preset 1 (5 rows: Utiliser / Transferer / Abandonner menu); presets 2 to 4: y coordinate of the first row, following rows 67 below;
+  3. code 6 replayed (or arriving after the row codes) does not shift twice; an unknown preset is ignored; going back to preset 0 puts the rows back in place;
+  4. the cost line "Cout en PM:<tab>  2" (TextMesh.tabSize 8): the tab becomes 8 spaces in the magic list only (a text without a tab or without tabSize does not change).
+
+  4 bis. the cost line of a spell info panel (type 7, text 2) carries the right limit of its frame (Render._text compresses it to fit); the other texts of the panel do not.
+
+Engine part (DQ_APK and DQ_SAVES: saves are opened read-only, the engine writes to a temporary folder; party in slot 1: Ragnar with no MP and Doc, 30 MP, who knows "Premiers secours"):
+  5. Doc's list: a single row, "Premiers secours", row code 2, rows 1 to 3 hidden;
+  6. Premiers secours on wounded Ragnar: MP 30 -> 28, HP 20 -> 47; on Ragnar at full HP: NO MP spent (BaseAction::useMp only spends if the action had an effect) and, outside battle, "Mais il ne se passe rien." (official Evac' message, id 0xc3d6d) in place of the healing success message
+     (hook Engine._magic_hooks; EXPECTED CHANGE ON PURPOSE: before, the engine displayed "Les blessures de Ragnar guerissent !" without spending MP);
+  7. uses with no effect decided by the engine: Rappel on a living character, Antipoison without poison: "Mais rien ne se passe.", no MP spent; insufficient MP: "Pas assez de PM !";
+  8. Rappel on a dead character: "revient a la vie", MP spent; Antipoison on a poisoned character: "n'est plus empoisonne";
+  9. rule "a spell that costs MP and spends none": healing at full HP (Premiers secours, Soins partiels, Soins complets), group healing (Multisoin: a single message, no pending healing sound effect);
+     non-regressions: spell with an effect (MP spent, the game's message), Multisoin with a wounded character (healing messages kept), the game's own failure messages (Evac' outside a dungeon), 0-MP spells (Mappille, Sifflet).
+ 10. sound effects (SoundManager::playSe, #137): the cast sound effect (306, the same for all spells) is played in every case; the healing sound effect (501) is NOT played when the spell had no effect (Premiers secours, Soins partiels,
+     Soins complets at full HP; Multisoin with everyone at full health) and is still played when the spell is useful (twice for a heal on one target, once per target for Multisoin); a useful heal after a useless one plays its sound effect again.
+@@ fc28ed56597c d
+Minimal Make_NameButton: the root then 6 rows (parts[1 + k], button k, y coordinate 382 - 67 k) with one child text each.
+@@ ae8d7ea9f263 d
+"Cout en PM:<tab>  2": TextMesh.tabSize (8) turns the tab into 8 spaces; the game's font has no glyph for the tab (zero width) and the number stuck to the label instead of being in the right-hand column.
+@@ 0d877fa62e20 d
+Spell info panel (Make_MagicInfo, type 7): "Cout en PM 10/ 30" (FR) is longer than "MP Cost 10/ 30" and overflowed its frame: the cost line (text 2) carries the right limit of its frame (fit_x): Render._text compresses it to fit
+even with the original font; the name, the description and "Lancer" keep their layout.
+@@ 0ab6fa79e880 d
+Render._adjust_description: the French description of a spell with 3 or 4 lines (frame of 2) is re-wrapped to the frame width (dummy font: 9 units per character, frame of 361 units = 40 characters).
+@@ 660930ee9dd4 d
+The engine's 5 presets (NAME_BUTTON_Y / NAME_BUTTON_DY): number of rows, y coordinate of the first, step.
+@@ 0b75787856cf d
+Doc knows one spell: codes 0 = 2 (two lines), 1 to 3 = 0, code 6 = 0. Only row 0 is a touch area (the 5th, a ghost, led to <ERR 0x07000000.0>).
+@@ e352d5d52622 d
+Group spell or spell with no target: the spell info panel (port 8, "Lancer" button = row 2), no target choice.
+@@ b1e9d7a04391 d
+List (filled as it goes) of the `SoundManager::playSe` sound effects played by the engine from now on; sound effect 300 (confirming a key in the messages) is discarded.
+## FILE tests/test_map_items.py
+@@ 9b46b6804f0f c
+---- independent reference: Unity quaternions
+@@ 3fb66fefd92f c
+---- tiny maps
+@@ 33b898be2faa c
+chest lid: hinge along the local X axis (at the foot of the model: origin = hinge), extends toward the front of the chest (local -Z), some thickness (Y)
+@@ fbf695f42863 t
+opening key of the game's 194 chests: rotation X = -60
+@@ 5f4b0867bd94 t
+key -60: the front edge of the lid rises and moves back
+@@ 3c6fa2b3dfb2 t
+chest with heading 0: the front edge lifts (0.6 x sin 60 = 0.52)
+@@ 3d5c44d46a42 t
+the two hinge vertices do not move
+@@ 837c265516ed t
+the front of the chest (hinge axis toward the front)
+@@ e178a30fb998 t
+hinge axis -> front edge of the open lid: in the vertical plane of the front of the chest
+@@ 609c94e76829 t
+hinge axis: the lateral displacement must stay zero (opening "like a book", no roll)
+@@ 7f0e7a636f35 t
+3 game frames = 6 / 60 s out of 10
+@@ 3240466b0f73 t
+between closed and open
+@@ 742259ee3e62 t
+the drawer slides out by 0.5 toward the front of the furniture
+@@ b8a8aa3a5cb2 t
+MultiplyPoint(TRS): the object's scale also applies to the displacement (z x 3, rotated by 90 degrees)
+@@ e29c669be66b t
+pmv_func: object position + key, no rotation
+@@ d753faa6ed5c c
+---- continuous animations: one clock per animation
+@@ 14bea6d76822 t
+(object, sequence, group, start delay, delay between two loops, number of loops, _, original number of loops)
+@@ 78a5a291d1cf t
+at the exact end we stay on the last key; beyond it, back to the start by the remainder of the overshoot
+@@ 141a80ef5174 t
+delay 5: 3 frames at frame 0 (5, 3, 1 >= 1), then time advances
+@@ e3de84373a36 t
+2 loops then hold at the end
+@@ 5466b2cb3a4e t
+2, 4, (6 > 4: remainder 2), delay of 4: 2 frames at 0
+@@ 0a15ff05e952 t
+400 / 60 s = 200 frames: 1.8 degrees per frame, with no going back at all
+@@ 59de30ba5efd t
+at mid-course: exact half-turn (not a zero rotation)
+@@ 3b0cd8ed0db4 t
+the second loop exactly repeats the first
+@@ e9439b77f1e6 t
+Quaternion.Euler(lerp(x), lerp(y), lerp(z)), not the rotation of the intermediate quaternion
+@@ 17178b98023c t
+120 > 100: 2nd loop at 20 / 100 (18 degrees), then 90 forever
+@@ d174960f84ca t
+each with its own time (before: 32 for both)
+@@ ac4f0faa258c t
+the same rotation (90 degrees), with or without a sequence
+@@ 7ff739dd38f4 t
+the sequence only moves the vertices from one frame to the next
+@@ ea9d13009c9e t
+800 / 60 s = 400 frames: 0.9 degrees per frame
+@@ eddb352e4270 t
+from then on, each loops at its own duration
+@@ 44c6ff70a175 t
+SetCommonAnimation 2 = opening (TownFurnitureObject::openObject), 4 = closing
+@@ ea287f5cec5b t
+rigid rotation around the model origin (the hinge)
+@@ 420aad45298e t
+the hinge is the chest's X axis
+@@ 20c940ba6ecc t
+no movement along the hinge: the lid never rolls sideways
+@@ 5c32297b0054 t
+the free edge rises...
+@@ c42db51264e3 t
+... and moves back toward the rear of the chest (model +Z, the front is -Z)
+@@ d5f2ca6de4ac t
+non-zero headings exist in the data (ss5b1b, hcy1b1, tcf1, mdi1f1...)
+@@ c59b9df3e335 t
+closing
+@@ 16caa89b2aba t
+arrival key of animation 2: a drawer slides out toward the front (-Z) of its furniture, by 0.25 (or 1) depending on the model
+@@ 9c97caf1b216 t
+rotated by the furniture's heading (object frame)
+@@ eae8f118b18b t
+drawers with different headings (0, 90, -90, -6, -2)
+@@ 1f8edcd9a749 t
+the door turns around the vertical: no height changes
+@@ fddff37ab1f3 t
+data: 0 -> 180 -> 360 in 800 / 60 s, endless
+@@ a97a9681afbf t
+motion only (without the mesh sequence) to measure the rotation
+@@ a02177458751 t
+0.9 degrees per frame: 45 degrees at 50 frames, 90 at 100, 180 at 200
+@@ 4eff6bd720d5 t
+sequence of 84: its own clock
+@@ 0a4ceae29095 t
+dozens of objects have both animations (torches, birds, waterfalls, healing beams...)
+@@ d1002d3ce738 d
+Test of the pure logic of the maps' animated objects (no window, no engine, no APK): objects' own orientation and the direction of animations (chests, drawers, doors):
+
+1. `data.euler_mat` = FldObject.rotateXZY (0xCD47F0): q = (AngleAxis(ry, up) * AngleAxis(-rz, forward)) * AngleAxis(-rx, right): X applied first, then Z, then Y (heading last).
+   Recomputed separately with Unity's quaternion product (the disassembly's one: R = q2 * q3 then R * q1);
+2. opening chest (lid: common motion, rotation -60 on X): the lid pivots around the CHEST's hinge, whatever its heading (0, 90, -90, 180, -27 degrees: all the chests of the
+   same family open "toward the back of the chest", never sideways), and at the same speed;
+3. drawer (common motion with a position key): the displacement is in the object's frame (FldObject.c_pmv_func: MultiplyPoint(TRS(position, rotateXZY(rotation), scale)); an
+   ordinary motion (pmv_func) adds the displacement as is;
+4. door (rotation around Y only): unchanged (door heading + motion heading);
+5. continuous animations (FPMV motions and FSQD mesh sequences): EACH with its own clock (FldObject.fld_motion_update, one FLD_MOTION per animation); linear interpolation of the Euler angles
+   COMPONENT BY COMPONENT (pmv_func: rotateXZY of the interpolated rotation, never a quaternion or a shortest path): 0 -> 360 degrees really turns, loops without a jump; the healing beam
+   `kifk01a` (rotation 0 -> 180 -> 360 in 800 / 60 s, sequence of 84 / 60 s) turns a full revolution and not 38 degrees before coming back;
+6. (if the map cache exists: DQ_CACHE_CARTES, otherwise /tmp/uicache_coffres) the REAL objects: the 194 chests, the drawers and doors of all the maps.
+
+  python3 tools/test_map_items.py
+@@ 0684e0f9ae7b d
+Hamilton product a * b (b applied first), (x, y, z, w): formulas from the disassembly.
+@@ e442c39c7423 d
+FldObject.rotateXZY as read from the disassembly: q1 = AngleAxis(-rx, right), q2 = AngleAxis(ry, up), q3 = AngleAxis(-rz, forward); R = q2 * q3; result = R * q1.
+@@ c9fe6894cf53 d
+A one-object map: vertices `local_pts` (model frame) baked at the original position / rotation / scale, a common-animation table with 4 entries whose 2nd (number 2) is
+a two-key motion (frame 0: nothing; frame `end`: `lookup_keys`).
+@@ 9cfd1f31f039 d
+A map of a rotating object: FPMV motion with keys (frame, rotation) played continuously (or started by SetCommonAnimation 1 if `common`), plus, if `seq_end`, a mesh sequence
+with its own duration (two vertex frames: the object and the same one shifted by 0.5 in height).
+@@ 66dd7a436367 d
+An animation's ExampleCounter (FldObject.fld_motion_update): start delay, loops, delay between two loops, hold on the last key.
+@@ c9ab9e7c204e d
+Interpolation of a motion's rotations: Euler angles, linear, component by component (pmv_func: rotateXZY(interpolated rotation)); one game frame = 2 / 60 s.
+@@ 0818645037b9 d
+Cause of the healing beam that "turned 5 degrees then came back": the object's motion (800 / 60 s) and mesh sequence (84 / 60 s) shared ONE clock that looped at 84.
+@@ 77ca213a6b91 d
+Maps from the user's cache (carte10_*.pkl): `DQ_CACHE_CARTES`, otherwise /tmp/uicache_coffres; empty if the cache does not exist (the tests below are then skipped).
+@@ df00aaa8bf76 d
+The game's real objects: all the chests (model `tbox02` = the lid, `tbox01` = the body), drawers (`hikidashi1b`) and doors of all the maps, played end to end.
+@@ c8e7bed79c11 d
+The real maps: healing beam (`kifk01a`, maps cmf1c, dmb2, tab1a) and all the continuous animations.
+@@ 996705f63cc2 d
+The X tilt (lid) is done in the object's frame, then the heading rotates it: Ry . Rx.
+@@ 519c5056d826 d
+Whatever the heading, the finished lid = that of the heading-0 chest, rotated by the heading (around the hinge).
+@@ 25ddf724cfd0 d
+SetMapObjPos / SetMapObjRot (packets 3 and 4) then common motion: the motion's base is the object's CURRENT position and heading (c_pmv_func reads the object's fields).
+@@ 11f56f120839 d
+0 -> 270 degrees: the game passes through 135 at mid-course; a quaternion slerp would go backward to -45.
+@@ 20e1958a7dfb d
+A savestate from before the fix (a single clock: `clock`, flat `auto` entries) reloads and continues without error.
+@@ b76896ef4e56 d
+[(map, c, i)] of the objects whose model name ends with `pattern` and that have common animations.
+@@ 663e781b831a d
+For all the maps: each continuous motion and sequence (no delay) has its time = (2 x frames) wrapped to ITS duration.
+## FILE tests/test_map_textures.py
+@@ e9d6da412ad5 d
+`Data._texture`: a scenery material with no texture at all (21 location maps, 10 battle backdrops: small solid-color surfaces, dark ground, water...) gives the 4 x 4 white texture
+(key `WHITE_TEX`, vertex color x the material's _Color, like Unity with its default white texture), not `None` (the group was skipped when drawing: the surface was missing);
+a material with a texture is unchanged; an unreadable material keeps `None`.
+
+    python3 tools/test_map_textures.py
+## FILE tests/test_map_tint.py
+@@ db2cbc9ac5b7 t
+the last tint wins (tint fade: one packet per frame)
+@@ 7bad75cc4b32 t
+the engine sends the tint AFTER packet 0, in the same frame
+@@ 2d9e1ea635b3 t
+no method: accessing the data packet would raise
+@@ d1ccbedaefa3 t
+1st update (the character is placed): starting scale with no follow-up (0.062, then 1.0 one frame later), ignored; the following floats stay aligned
+@@ d3463fd95998 t
+already placed
+@@ 9b3f67b58681 d
+Test of the scenery tint (packet 33, `cmd_map_color_rate`) and of the sprite scale (packet 13, bit 0x800): decoding in `State.apply`, recognition of the "tz_" groups,
+debug switch; optional "real engine" part (--apk and --saves: the tint arrives after packet 0 at each map load).
+
+    python3 tools/test_map_tint.py [--apk "<patched APK folder>" --saves "<saves folder>"]
+No display, no GL. Saves are only opened read-only (the engine writes to a temporary folder).
+## FILE tests/test_maps_npcs.py
+@@ fbdc5336fa04 t
+loaded, not yet placed: nothing to draw
+@@ fb8bad4a1cb4 t
+1st placement, 1 frame later: the other characters' position arrives at this frame or the next, nothing is drawn yet
+@@ f3d235c9f9e2 t
+pose 1, heading 2, still no position: the character is at the origin
+@@ 81614288e530 t
+position + pose in the same packet
+@@ 554aec2ffc8f t
+pose only afterward: the position does not move
+@@ 3a2ffc06ba9e t
+(the color is not proof of position: only the pose is)
+@@ 7e69cd330335 d
+Tests for the audit's "maps, NPCs, switches" mission (no window, no engine, no APK):
+
+1. a town character that receives a pose (packet 13, bit 0x4000) without ever having received a position is at the ORIGIN (0, 0, 0): the engine only sends a position if it changes
+   (its record of the character is (0, 0, 0): reread from the engine's memory on mqtf3, mom2f1 and msm1f1, slot 8: Fix32 at 0x1026a688 + 0x1c0 x (slot - 8));
+
+  python3 tools/test_maps_npcs.py
+## FILE tests/test_menu_key.py
+@@ aff10478163a t
+(action_of(K.RETURN) is None: pyglet names 0xff0d "ENTER"; the game reads keys through `codes`, see Game._held)
+@@ c09a0ae4804d t
+(single-key list)
+@@ 1743faef6628 t
+(full file from before)
+@@ 9694087e2ae6 t
+the player's choice takes precedence
+@@ 9c5c50f4bff1 t
+(keys dropped or missing: the defaults)
+@@ 6695ad667953 t
+↺: both keys come back
+@@ 89be703775e3 t
+Tab given to "Infos": "Menu" only has Enter left
+@@ aa56c923861c t
+↺ takes Tab back (and says so: message)
+@@ 8dd9e361d505 t
+"Rétablir les touches par défaut" too
+@@ 43544048929d t
+one press = one "Menu" edge (opens the field menu, confirms, turns the message pages)
+@@ 9796c7ecc42a t
+both together: a single edge
+@@ 1537df764fa7 t
+Pause menu: the key belongs to it
+@@ 262063a95201 t
+name entry: Tab changes mode (name_entry.py)
+@@ 89e4d4a5ae3e t
+Saves screen: next button
+@@ 558d348cc92f d
+Test of the "Menu" key (field menu: Objets / Magie / Carac. / Divers): default Enter and Tab, migration of an old reglages.json (without overwriting a player's choice), Tab free elsewhere, line of the "Commandes" page
+and ↺ button (real code of settings.py, of pause.py and, without a window, of Game.on_key_press / _edges).
+
+    python3 tools/test_menu_key.py
+@@ dd383ab2752d d
+Real code of Game.on_key_press / _edges on a fake Game (like test_window_mode.py).
+@@ c2acb3f22596 d
+The only uses of Tab (K.TAB): collapsing the interface editor's panel (Pause menu), changing mode in name entry, moving to the next button of the Saves screen. These three screens
+take the key in Game.on_key_press BEFORE the game's actions (Pause menu open, name entry, Saves screen): Tab is never the "Menu" key there. A new use must be examined here.
+@@ 36321536dfea d
+After the migration the file is saved as v5: Tab later removed by the player (slot cleared) is not put back.
+@@ 86a94d32c0f2 d
+Binding Tab to "Menu" in the "Commandes" page (secondary slot): key capture takes Tab like any other key.
+@@ f0e680ed3622 d
+In the interface editor, Tab collapses the panel (it triggers nothing else); outside the editor, Tab does nothing in the Pause menu.
+## FILE tests/test_menu_language.py
+@@ b4183d6fbad3 t
+(the computer's language does not matter here: each test picks its own)
+@@ 810e7e339fa7 c
+---------------------------------------------------------------------------------------------------------------------------------- fake objects
+@@ dc7f1f25ecc8 c
+---------------------------------------------------------------------------------------------------------------------------------- Saves screen: result messages
+@@ f5fa874cd10e c
+-- what the buttons request
+@@ a56333a7a94d c
+-- export
+@@ 90fb1fdf8d5f c
+-- import
+@@ cb15d5c40fbb c
+-- screen drawing
+@@ 54ada740476b t
+(without the title or the two buttons)
+@@ 178e2dd26391 c
+---------------------------------------------------------------------------------------------------------------------------------- history
+@@ 64bf769097ad t
+(the text line: the game's bitmap font or the system's)
+@@ c01b537fc79b c
+-- the header, the tabs, the help
+@@ a24e3f940aae t
+(the game's bitmap font, or fallback to the system font)
+@@ 31cf108fa901 t
+(the message, cut into lines at spaces: the lines put end to end give it back)
+@@ cd70aeb25838 c
+-- a battle: header (outcome), lines composed around the game's names
+@@ 5845ec424bb1 t
+(the header of each box: the outcome of the battle)
+@@ 7d9bdf2bd8a1 t
+(the names of Slime, Golem, items: the game's, never translated)
+@@ d0aeb3a29a74 t
+no known enemy
+@@ fe92c62769db t
+victory with no known enemy
+@@ 6a8283c4f806 c
+-- the console
+@@ 15d8ee28c687 t
+an engine without the expected symbols
+@@ 50942841ccc4 c
+---------------------------------------------------------------------------------------------------------------------------------- name entry, license, interface editor, notifications...
+@@ f4ad46a39721 t
+(the function button labels come from the game: not translated)
+@@ 13b7776ce734 t
+whitelist: "à À" = the game's label (C_ALPHABET_ETC) of the accented-letters page button
+@@ 05b1cfdf9376 t
+"Privacy Policy": the game's text
+@@ 587d60079319 c
+the port's header text is already in English, the original list follows: none of this depends on the language
+@@ b0d4a935ed01 t
+(in edit mode, each item carries its name)
+@@ 84d77ae5f6cd t
+(all the sample texts, not only the test's)
+@@ fe416f78fbfc t
+nothing to cancel
+@@ 609a3fe0e34e t
+(the states page shows "Carte du monde" and "Combat" with Pause._label: the translation must exist)
+@@ 21b35c7b8a33 c
+---------------------------------------------------------------------------------------------------------------------------------- the catalog
+@@ 557d25fadf86 t
+(the whole catalog: a shared text has only one entry, in the file of the first batch that wrote it)
+@@ 56fbcd9f85a8 t
+(identical in English: "Dialogues", "Casino"...)
+@@ a805273b6ea9 d
+English version of the tool (D-238), "menus" batch: everything the tool writes itself outside the Settings pages, in English then in French, with fake objects (no window, no engine, no GL).
+
+  - Saves screen (start menu): title, buttons, explanations, result messages of an export / import (succeeded, canceled, ignored, failure), file dialogs (titles, filters);
+  - History window: title, tabs, "Favoris seulement" checkbox, help, empty lists, header and lines of a battle (texts the tool composes around the game's), favorite whose message is missing;
+  - name entry, license (title; the game's original text and the "Privacy Policy" do not change), names of the interface editor's items, sample dialogue texts, F1 info, notifications,
+    location of the savestates, console messages of these modules;
+  - in English: no French word remains (apart from the whitelist, short and justified); in French: exactly the previous texts;
+  - the catalog (texts_en\menus.py) has no orphan entry.
+The catalog's general rules (same placeholders, same edges, no French in the English, no duplicates, every `tr('...')` / `N_('...')` in the code has its translation) are in tests/test_language.py.
+
+    python3 tests/test_menu_language.py
+@@ 0b0a9807f9f3 d
+Each test picks its language; we switch back to French at the end (the other tests expect French).
+@@ eee20492812e d
+Fake pyglet.text.Label: stores the text and records it when it is drawn.
+@@ 996a2d05d723 d
+What the screens ask of the window: `_lbl` (makes the labels), `pause` (the pages), size, device.
+@@ ee9b8ddb7d48 d
+The `Pause` tool page without its drawings: `_label` is the real one (it translates), the rest does nothing.
+@@ e581048f0f0e d
+No GL: the modules' `gl` and the pyglet.shapes shapes are replaced with silent objects.
+@@ 1c80ab2f1547 d
+Replaces S.Dialogue (tkinter): remembers what it is asked.
+@@ 1e0b8b647059 d
+Sample dialogues and battles (neutral texts: the names and dialogues are the game's, never translated).
+@@ 9d6ec74c117e d
+The game's bitmap font: only what draw_all() asks of it.
+@@ 535895a52725 d
+{text: [file:line]} of the texts passed to tr(...) / N_(...) in these dq4_pc files.
+@@ 952076a856a2 d
+None of the `texts` contains French (apart from the `whitelist`: game texts, proper names), and there are some.
+@@ cbe6f151262b d
+The "Save as" / "Open" filters (tkinter): same patterns, translated labels.
+@@ c404ceca3a4b d
+Narrow window: the help sentences wrap onto several lines. English has a different word order: the sentence is translated
+as a whole THEN split (otherwise the French pieces have no translation and stay in French).
+@@ 6a33c0f74ee0 d
+The port puts its "Sauvegardes" button in the start menu (in place of "Sauv. cloud").
+@@ ed4d46d1111f d
+When the history key is removed, the "H : suite" line disappears (as before).
+@@ 8d82d25f12cf d
+Each of the editor's sample lines is translated, and the translated line is the one written to the canvas.
+@@ 49643488a005 d
+Canceling a load (nothing to cancel, then canceled) and importing saves: the three messages the tool writes itself.
+@@ 878889745e61 d
+Messages with placeholders ("État 3 enregistré") are formatted BEFORE reaching toast: they pass through unchanged.
+@@ f40e08033572 d
+The location written in a savestate file is a stable French text (translated by the page that displays it), whatever the language.
+@@ d2d2c9df85b9 d
+The console messages of the screens and resources (called for real with a missing or broken game): English without French, French as before.
+@@ cb563b9e8968 d
+No orphan entry: every text of the `menus` catalog is marked in the code (tr / N_) or drawn by Pause._label under a marked constant. A typo in a key no longer lets a text through in French.
+## FILE tests/test_menu_tab.py
+@@ 346a7462b2b1 t
+type 20 "Ordre de marche": before, only the magic list (Make_NameButton) was handled
+@@ 0a5384eefd33 t
+type 31: "name \n \t×N", tabSize 25
+@@ b31203bbd59a t
+a single monster: no tab, nothing changes
+@@ 08365e45b6c9 t
+Make_MonsterName: character of size 9.3925 (1 font px = cs * 0.1 unit), text anchored on the left at x = -74, plate from -71 to +71
+@@ 1ac2af4ca9cc t
+(\u00d710 and more: end near x = 79, 8 units beyond the edge, as with the same constants in Unity: assumed, see #208)
+@@ f4727be2ad43 t
+"x N" ends inside the plate (on the left: tab ignored, it ended near -63)
+@@ d27825322a10 d
+#208 (audit UI-03): `TextMesh.tabSize`: a tab `\t` in a menu text equals `tabSize` spaces, in ALL the cells that carry one (before: magic list only).
+Real cases: "Nv." of the party order (type 20, tabSize 8), "x N" of the monster group plates in battle (type 31, tabSize 25). No engine or window; with the game's font (DQ_UI_CACHE: folder of ui_garrir.json / .png), "x2" to "x9" fit in the plate.
+    python3 tests/test_menu_tab.py
+@@ d2b94ea2f60f d
+A plate and its text (cell (0, 0), tabSize given); code 0 ("monster plate"): -1 shows the plate, 1 shows the text.
+## FILE tests/test_message_fallback.py
+@@ 1744c0a019e3 t
+each line r carries the value r % 251 + 1 (never 0)
+@@ 4a07fefe69fc t
+lines 453 to 511 then 0 to 52 (before: nothing after line 511)
+@@ 6cdd803aff66 t
+(4 lines of 28, scroll -3)
+@@ 5edbd954e895 d
+#231 (audit CMB-04): `Engine.read_message` ("simple menus" fallback, without ui_layout.json) reads the message canvas as a circular texture of 512 lines (Unity's REPEAT): the engine's scroll
+grows without bound, after a dozen lines it exceeded 512 and the text became empty. Fake engine (simulated memory and canvas), without map or data.
+    python3 tests/test_message_fallback.py
+@@ 014b12672c74 d
+Fake engine where only `read_canvas` and the reading of the settings (number of lines, line height, scroll) exist.
+## FILE tests/test_message_font.py
+@@ a8b40a1daf19 t
+absent: the "@"
+@@ ab00e4efaa0e t
+neither is drawn (English)
+@@ 63bdeb254d05 t
+";" is a space for language 2
+@@ 33f3c5384db6 t
+the break falls exactly at the end of the line: the line break that follows is swallowed
+@@ d60d71d902c2 t
+break after a hyphen
+@@ 1d941c7f77c0 t
+"--" is not a break point (English)
+@@ c89f6367f329 t
+already there: nothing to reread
+@@ 013f7174f05b c
+---------------------------------------------------------------- real font and real engine (optional)
+@@ 8b377b585a0c t
+a few frames: the engine sets its text parameters when a dialogue opens
+@@ aa482d89d405 t
+space, wide space, tab (game values)
+@@ 59fc26e059bb t
+empty canvas: each test starts from zero
+@@ 3cb24a64f651 t
+the writing position is at column PAD
+@@ 0b789db2586a d
+Test of the game's message font (dq4_pc/menus/message_font.py): the one the engine uses to draw dialogues (and that the history reuses, #269).
+
+    python3 tests/test_message_font.py                                      (rules, with a synthetic font: without pyglet or engine)
+    DQ_APK=<patched APK folder> DQ_SAVES=<saves folder> python3 tests/test_message_font.py     (in addition: the real font, compared with the real engine)
+
+Without engine: glyph reading (repeated bytes / bytes as is / end), advance of the writing position (glyph width, flagged glyph placed one pixel to the left and advancing two pixels less, engine space and font
+step, tab, ";" and "$" not drawn, missing code -> the "@" glyph), pixels of a line, line wrapping (`CTextAutoReturn::AutoReturn`: break points, hyphen, line break, word longer than the line),
+extraction of the font into the cache.
+With the real engine (optional, skipped otherwise): the pixels of `SDrawCTRL::PutChar` in the engine's canvas are those of `MessageFont.pixels` for a French sentence, the patch's Russian letters (я, и) and the flagged
+glyphs; the lines of `MessageFont.wrap_text` are those of `AutoReturn` on game messages. No character is written "hard-coded": everything comes from the font file (DQ5 and DQ6: same format).
+@@ 8a2f941e3b0b d
+Glyph data (height x width bytes, flat) as 'repeat' (1xxxxxxx + byte) when a byte repeats, otherwise 'as is' (0xxxxxxx + bytes), then 0.
+@@ 43e05783601d d
+Minimal TNOF file: glyphs = {code: (width, flag, byte)}; the glyph is a ramp column 1..255 (byte = base value) so that each cell can be recognized.
+@@ 0d3f0f1a342e d
+A character added to the font (DQ5, DQ6: other letters) is displayed, without changing anything in the code.
+@@ a16833469d78 d
+Placed 1 pixel to the left, advances 2 less (kerning).
+@@ 6821317404b4 d
+The flagged glyph replaces the previous glyph's last pixel (no blending), as in the engine's canvas.
+@@ 6e75af59f3fc d
+"AAA AAA" is 7 x 6 + 6 = 48; with the 2nd space 54; the limit 60 is reached within the 3rd word: wrap after the 2nd space.
+@@ b183847dfdbd d
+Without a break point the overflowing character stays on the line; the break leaves an empty line at the end when the text stops right after it (as the engine does).
+@@ e3fe6b347bd7 d
+Every glyph of the font (all the codes the table knows), in chunks: the pixels and the advance are the engine's.
+@@ 35f4bfc88f8b d
+Lines of a text as the engine's `CTextAutoReturn::AutoReturn` breaks them (empty lines and trailing spaces ignored: like `wrap_like_the_game`).
+@@ 6a6a3a04382a d
+Game messages (about 1 in 7 of each file, per page): the lines are the engine's.
+@@ 4716536ea731 d
+"$" (width counted for the wrap, not drawn), ";" (zero width), hyphens, wide spaces, Russian letters, too-long word: texts constructed so that the break falls near these characters.
+## FILE tests/test_message_history.py
+@@ 057d6a9f4dd7 t
+the "*:" is the game's text: kept
+@@ 8ce537e791e4 t
+the non-breaking space (French typography) is kept
+@@ dbd0aea21cd1 t
+a favorite saved before the fix is reread without ";" (and is still recognized)
+@@ ea2ff20d8867 t
+the text's line breaks are kept
+@@ 60514274273e t
+never cut at the non-breaking space
+@@ 26e9a3b98758 t
+distinct sequence numbers
+@@ 9207041bbebd t
+the engine displayed the message again
+@@ 6d02a76d2e70 t
+later: another dialogue
+@@ 11577e5ac8ca t
+another displayed name: another dialogue
+@@ a3d553e5a460 t
+no gold or experience without victory
+@@ eb0f54e52679 t
+nothing is written as long as there is no favorite
+@@ 9bdf43d0342c t
+written right away
+@@ c28b8bf5d07c t
+new session: dialogues and battles are gone, favorites remain
+@@ 3e26367c7e86 t
+"Favoris seulement": the file's favorites, of the list's type (also those of a previous session)
+@@ 0d0e180ae262 t
+(independent copy)
+@@ 9b2b1af09dab t
+(invalid favorite: ignored)
+@@ 9e17064ad351 t
+the session list is emptied: the favorite remains
+@@ 6106699b88ca t
+second press on the star: removed
+@@ 8b66a1253673 t
+"unstar" the favorite itself
+@@ e94a1bd8d879 t
+the session's item loses its star too
+@@ 324e4cef2161 t
+no path: everything stays in memory, no error
+@@ d9dec862ff2a t
+never a number already taken
+@@ 726bab7e92d4 t
+the file is kept: only the invalid entries are ignored
+@@ d62391b1cb50 t
+too early: grouped
+@@ 7ef745b95ab5 t
+(nothing left to write)
+@@ f8a265e4c1f3 t
+closing forces the write
+@@ ee7ad517bd1c t
+a file instead of a folder
+@@ 71c74aeca9ae t
+page 2 has not been read yet
+@@ b674448e9a6d t
+end of page 1: cursor on
+@@ f56add13c262 t
+the player turns the page
+@@ cdd3a751cc91 t
+the window opens one frame after the text
+@@ 54fec002a9ab t
+neither in dialogues nor in battles (these come from the BattleSensor)
+@@ 3e031049d581 t
+different names: two messages, not two pages
+@@ 89434c2cbcab t
+(viewer without a message engine: nothing breaks)
+@@ eb24f95c6dd8 t
+chain of frame pointers
+@@ 9483bf4b0ee6 t
+battle message launched from a battle menu
+@@ cff80a4c6fff t
+no conflict with another action
+@@ 2a11b64ad64e t
+width of a string (units): 9 per character
+@@ 33a948bbdf2c t
+the 3rd line fits in the frame
+@@ ce3a2e3d5970 t
+(layout missing or unusable: measured values)
+@@ cf5728311228 t
+frame height: a single value
+@@ bc0cc7df17c1 t
+(the text itself keeps its lines)
+@@ 4c97c1f41197 t
+the name tab is added on top, only with a name
+@@ 1e7afe6dcadb t
+the name is only on the first page
+@@ d55e3e151f9e t
+a single box
+@@ 979183a7fc75 t
+one row per species + the gold and experience
+@@ e5682ba98af0 t
+no gold, experience or items without victory
+@@ ccde0f129586 t
+(20 species + the gold and experience)
+@@ 4659afda6740 t
+the last box has the height of its text, no more
+@@ 49a29b15735c t
+the bottom does not move
+@@ e988a3c01ba8 t
+(kept)
+@@ fa8f2e2791dd t
+(the original layout was not modified)
+@@ d346796d02d5 t
+the oldest on top
+@@ c66c4aee0512 t
+same gap everywhere
+@@ 116f4ffa509f t
+content height: margins included
+@@ 6b205673b8cd t
+5 messages of 100: starts 5, 115, 225, 335, 445; ends 105, ..., 545; height 550
+@@ 08c052bcf5fb t
+window of 250: at scroll offset 0, it shows 300 to 550 from the top of the content
+@@ c9755a286301 t
+(the first goes up to the top of the content, the last down to the bottom)
+@@ cb6b799ea461 t
+fully visible: unchanged
+@@ b371ed76d9ad t
+225 to 325: cut at the top (the window starts at 300): must go up by exactly 75
+@@ cbf0e1f85128 t
+outside the window: its top edge at the top of the window; the first: up to the top of the content (margin included)
+@@ cf9b84789d18 t
+window at the top (0 to 250): the first two are already in it
+@@ e777db48bcb5 t
+cut or outside the window at the bottom: its bottom edge reaches the bottom of the window (the last: down to the bottom of the content)
+@@ 2f474d79f70c t
+still fully visible
+@@ 898c237989e5 t
+a message taller than the window (100 > 90): its start at the top of the window
+@@ f5ce0b04d068 t
+list shorter than the window: nothing to scroll
+@@ 2b5b02fdac82 t
+item 2 (225 to 325) is cut: only partly visible
+@@ 5b222aeb92f9 t
+all the way down: the most recent visible, and active
+@@ 62f495f1214d t
+the chosen message is always fully visible
+@@ a8bcebfe4b06 t
+its top edge is exactly at the top of the window: not one pixel more
+@@ 53b7dbf8853c t
+(the view scrolled only at times)
+@@ f88b3115d6e6 t
+stop at the top
+@@ fc6055fc5c23 t
+its bottom edge is exactly at the bottom of the window
+@@ 627698fe49e9 t
+(repeat of the held key: Pause.do_update)
+@@ e54517ff5836 t
+stop at the bottom
+@@ 9a390e2cd4ca t
+the message just above the first fully visible one is cut (or just outside the window)
+@@ 41f8de11d826 t
+one page: the window minus two lines (the context stays visible)
+@@ 909e6207dd0b t
+the chosen message left the window: it becomes the last fully visible message
+@@ 07b17f7b08ad t
+stop at the top: the first message
+@@ c04f2cbeb6ba t
+wheel up: the oldest, a fine constant step
+@@ ba4fcaf342fe t
+(never beyond the list)
+@@ bea5d0588136 t
+touchpad: proportional to the movement
+@@ 72b5b42582a8 t
+thumb at the bottom (position 0)
+@@ 7d292c8b912a t
+up arrow: one line
+@@ 270011cae4bf t
+down arrow
+@@ 4f68dbd00332 t
+track above the thumb: one page
+@@ cdd70fd573ce t
+thumb grabbed: it moves with no notch
+@@ 865d17df87e0 t
+dragged all the way up: the oldest
+@@ b5ab70cbba0a t
+middle: intermediate position, proportional
+@@ 0e04a980264b t
+below the tolerance: not a drag
+@@ ebb700e2b6e0 t
+the pointer goes down by 160: the content goes down by 160 (we see older ones)
+@@ c6e891cebfe6 t
+one more pixel: one more pixel (no steps)
+@@ 7c0f7f218130 t
+the pointer goes back up beyond its starting point: stop at the bottom
+@@ 92ded9a29756 t
+one by one, without skipping a single one
+@@ 6042b0ce24a0 t
+(window shorter than a message: the last one is shown from its start)
+@@ 64de84e6f575 t
+... and the view has not moved
+@@ 9d90b2bce51b t
+a click chooses the message
+@@ 42b9063a2a03 t
+the wheel scrolls, the chosen message stays the same
+@@ f188d510a518 t
+... even if it leaves the window
+@@ 98b2deab120c t
+by keyboard: the nearest visible message replaces the message that left (the last of the window) ...
+@@ aef2af01df2b t
+... without advancing one more rank; the next press advances
+@@ 7804c543dfc5 t
+the frame alone: no translucent white rectangle over it
+@@ 7c3fff3cee80 t
+in the middle of the window
+@@ 9691b82d4476 t
+(bounded: never beyond the top of the list)
+@@ 91e02e34e196 t
+double scale: the position too (same place in the list)
+@@ b703cc00cc76 t
+no more "Favoris" tab: it is a checkbox
+@@ e89a68739c15 t
+back to the first
+@@ 612577c4c8ae t
+2nd press: the battles
+@@ 06abb539f70e t
+3rd press: closes everything
+@@ 56dcb82ca3c1 t
+"Favoris seulement" checked: the H cycle does not change (here on the battles: closes)
+@@ f8d6e72ea6da t
+every key is consumed: nothing reaches the game
+@@ e86d8460a7fb t
+no history at all (game launched without)
+@@ ecc8ab73089c t
+the active item at opening: the most recent
+@@ 5963686ac3bc t
+Enter: toggles
+@@ 0c0f37dc9cc0 t
+(an item chosen by a click or from the list: active until the next scroll)
+@@ 769607c62b64 t
+right click: back
+@@ 91e5fc17ba05 t
+two dialogues and one battle as favorites
+@@ 5cd6222f2aaa t
+(checkbox unchecked: the whole session)
+@@ 03a7f1d06f15 t
+the tab's favorites, in the order they were added
+@@ a5473a7b9bc6 t
+the filter is kept from one tab to the other
+@@ 7b373a4cbb77 t
+star removed: the item disappears from the filtered list
+@@ dc3e55d44bb7 t
+(and the session's item loses its star)
+@@ 0cb45b0bd44c t
+empty list: nothing to toggle
+@@ 9498333331f1 t
+checkbox unchecked: the whole session again
+@@ 2dcd9b323f9c t
+F: checks
+@@ 9486cf61d78a t
+F: unchecks
+@@ d07489d5fc95 t
+the Map key (M) does the same
+@@ 58614399ca85 t
+click on the checkbox: unchecks
+@@ 7f2943beabbe t
+(next to the checkbox: nothing)
+@@ b247dca9f674 t
+(the key is consumed: nothing reaches the game)
+@@ 0f513be04cd6 t
+the chosen item, if it is a favorite, stays chosen (the view recenters on it)
+@@ bc1eddd321ac t
+wheel and drag bounded to the filtered list (the chosen message does not change)
+@@ 0785ae64dc1c t
+unchecked: the full list, the active item (a favorite) stays active
+@@ 212c60b1baef t
+the chosen item is not a favorite: we land on the most recent of the filtered list
+@@ e4386356faed t
+new session: reads the file
+@@ 29fcd93c2c45 t
+star removed: the file follows
+@@ 1a282bed24cd t
+"Favoris seulement" stays checked when the window is reopened
+@@ aa602393cd2d t
+(then nothing more to do)
+@@ 30204e0997c2 t
+the chosen message stays the same
+@@ 4ba0c594619f t
+the reading does not skip
+@@ abd232a1e9cb t
+back at the bottom: update
+@@ 4756eb85bf22 t
+a dialogue does not change the battles tab
+@@ f7648287b501 t
+(same length: the history's limit)
+@@ c9288d2029a9 t
+since #187: only when the history is accessible (otherwise the page closes)
+@@ 02114d6a5b77 t
+(unchecked by default; an invalid value goes back to it)
+@@ 97a70de114c9 t
+no line in the Pause menu: the checkbox is in the window itself
+@@ 858915b5d414 t
+checked: written right away, without waiting for closing
+@@ 06ad1b9209d0 t
+(the other settings do not change)
+@@ 153491c14827 t
+file from before this key: unchecked
+@@ d59f5e7ad378 t
+unreadable: default values, without error
+@@ ba115aff4309 t
+new launch
+@@ db79dacccec4 t
+unchecked: the session is empty (the rest of the history is not kept)
+@@ 049df8a26b82 t
+... and the unchecked checkbox is kept too
+@@ dbd001d05eb0 t
+the favorites are still there
+@@ bc6ce262abea t
+(no settings at all: the checkbox works anyway)
+@@ 30fa5121c19a t
+(the "Commandes" page carries the "Défilement du texte" section)
+@@ 3b4d3a3021a1 t
+1st press: the messages, the engine is stopped
+@@ b59017009b79 t
+2nd: the battles
+@@ 8cbdc878a79e t
+3rd: everything is closed
+@@ 50b09e40b727 t
+(reopened: on the messages again)
+@@ 8c6bb1892fbf t
+Esc: back = close (single page of the stack)
+@@ 4df8d73eea00 t
+(B is "Cancel" only if it is the configured key: here B is not assigned)
+@@ 7720f7340cfe t
+back to the Pause menu, not to the game
+@@ d14d3d645a21 t
+from the menu: H, H also closes the whole menu
+@@ b182ac1ac7cb t
+right click: back, as in the other pages
+@@ ec628c240ca8 t
+test font: 10 units per character
+@@ 018b319a43fc t
+no word lost or changed
+@@ b2136ed18c9d t
+the empty list goes through the wrapping (no longer a single line)
+@@ b99c025790b9 d
+Test (no window or engine) of the history: dq4_pc/historique.py (pure data, favorites, pages of a message, engine hook with a fake emulator) and ui_history.py (tabs, H key, star, scrolling).
+
+    python3 tools/test_message_history.py
+
+Checks: text cleaning (the "*:" of unnamed lines of speech is kept), line wrapping, duplicates, size limits, battle formatting, favorites (only these are kept: file written right away,
+reread on opening, removal via the star, corrupted file / invalid entries / unknown version), pages of a message (noted when the player has read them), battle messages never filed under dialogues,
+finished battles received from the BattleSensor, TextBuffer::cat hook (displayed name or not, battle), tabs ("Dialogues", "Combats": no more "Favoris" tab), "Favoris seulement" checkbox (keyboard, mouse, kept from one tab to the other,
+favorites of previous sessions), H key as a cycle ("Dialogues" -> "Combats" -> closed), star by keyboard and mouse, scrolling; up / down message by message (scrolling the minimum necessary, #48), no graying out on the chosen message.
+Single box size (the game's dialogue box: 1, 2 or 3 lines, dialogue or battle; one more page beyond 3 lines).
+`fill(h)` puts about thirty varied items into a History (screenshots).
+@@ b604541fcc7f d
+Minimal engine for History.do_update: sensor (output, active), state, ui.msg['feed'], msg_visible, battle_sensor.
+@@ a04829956cd7 d
+The engine prepares all the pages of a message at once: the history must only note the next page once the previous one has been read (end-of-page cursor off) or the window closed.
+@@ 3a755786fd4b d
+Fake emulator for Sensor._cat: registers, C strings, memory and function names.
+@@ ff1e9354987d d
+The TextBuffer::cat hook: text, name the game displays (2nd argument), battle or field, game time.
+@@ e051f16371a9 d
+About thirty varied items (dialogues with or without a displayed name, battles): screenshots. The dialogues are in h.dialogues, the battles in h.combats.
+@@ 440b7f7b03ba d
+What draw_all() does at each frame, without font or GL: stacks the items of v (126-pixel boxes, 32-pixel tab for a dialogue with a name, drawing gaps at scale 1) and updates the scrolling geometry
+(content height, reference point, active item). To be called after each action that changes the list or the position.
+@@ e00fe4f081ee d
+Keys, with a frame drawn in between.
+@@ 0f0cc1d8ba32 d
+Size of the history boxes: the game's dialogue box (3 lines) for a dialogue, whether the text is 1, 2 or 3 lines long (beyond that: one more page); a battle grows with its text (#141).
+@@ a6da4b411c91 d
+Tabs, H key, star and scrolling (no drawing: the scrolling geometry is simulated by `place`, as draw_all() updates it at each frame).
+@@ febd2935da22 d
+#178: the game no longer stops behind the history (no pause in any menu): what it writes there while the window is open is added to the list (`follow_game`, called at each frame by Pause.do_update).
+@@ 2aece3dad1de d
+Point 2: the favorites (historique_favoris.json) AND the state of the "Favoris seulement" checkbox (setting historique_favoris_seuls in reglages.json) survive closing and a new launch. Temporary files only.
+@@ cf9bbefadb4d d
+The history in the Pause menu: root entry, opening by the key (direct page), H key cycle, back, line of the "Commandes" page.
+@@ 9a2ee2781b51 d
+#140: the empty-list message (especially "Aucun dialogue en favori : ...", long) was drawn on a single line and overflowed the frame: it is cut at spaces.
+@@ f937a252e490 d
+#139: the ";" in the patch's item names (break mark, always after a space) is not displayed in the history; the space before it remains.
+@@ 046f462a7635 d
+#141: the monsters that fled, the vanished ones and the items are kept in the favorites file; a favorite from before #141 (no fled, no vanished, no items) is reread as is.
+@@ b4293c895ba3 d
+Boxes computed as draw_all() places them (no GL): simulated system font (P._label), scale 1, list window of `topmost` pixels. -> (view, box, boxes from the oldest at the top to the most recent at the bottom,
+each (item, box, number of boxes, top, frame top, tab top, text rows)).
+@@ 4d4b7676c62e d
+Same scale as the game windows on screen: H / 800 x UI_ZOOM (window.py); reduced if the viewer's window is too narrow.
+@@ 47ec0c89c565 d
+#141: a battle is no longer cut into 3-line pages: its box has as many lines as its text (header included), at least 3, and the game's frame stretches accordingly.
+@@ 6278cc0b79fc d
+Nine-piece frame (corners of 12 units): only the vertices of the upper half move up; the original layout is not modified.
+@@ cfc13e77c4a5 d
+With the real layout: the frame of a 5-line battle is 2 lines taller (56 units), its corners keep their size, a dialogue's frame is untouched.
+@@ 9eed239d549d d
+The whole list is laid out at once, from the oldest (at the top) to the most recent (at the bottom), with no gap or overlap, WHATEVER the window height: no more pages, no more "last visible item".
+@@ e9c41b0d64a8 d
+No notch: the scroll position only moves the content, the boxes do not move relative to each other.
+@@ db918109329e d
+Message already fully visible: nothing moves. Cut at the top or bottom, or outside the window: the view scrolls only by what is missing (the message's edge reaches the window's edge). First and last: with the list margin.
+@@ bf6b9a4d689f d
+(starts, ends) of the items of v as arrange() places them.
+@@ 638f60379ec3 d
+Is message i entirely inside the list window?
+@@ 4346307b41d8 d
+Up / down: the previous / next message, one at a time (never a line or a page); the view only scrolls if that message is not fully visible, by the minimum necessary (its edge reaches the window's edge).
+@@ 611322f19577 d
+A message cut by the top of the window: a single press on Up chooses it AND scrolls by exactly what is missing; a message cut by the bottom, likewise with Down.
+@@ fe448a60fde9 d
+The game's "Page precedente / suivante" keys (L / R: A and R by default, PAGE_UP / PAGE_DOWN) do the same pages.
+@@ 2623115285de d
+The content follows the pointer, pixel by pixel (no steps).
+@@ 7bf1d5bbe724 d
+After any key of the list, the chosen message (target of the Enter key) is fully visible (if the window can contain it).
+@@ 7b2249f31c93 d
+Whatever the length of the list and the height of the window, presses on Up go through ALL the messages one by one (from the last to the first), then Down goes through them again (including a list shorter than the window: the view does not move).
+@@ e3b53c57a3be d
+List shorter than the window: nothing to scroll (the wheel does nothing), the drawing sticks it to the bottom of the window (hc < hv); Up / Down move the chosen message without moving the view.
+@@ 70933b48de92 d
+Exception to the menus' general rule: neither lightened nor grayed on hover or choice (mouse or keyboard), only the small arrow marks the chosen message. The box is drawn the same way whether chosen or not.
+@@ 26f2ad402076 d
+"Favoris seulement" checkbox: keeps, in the open tab, only its favorites; the star removes the item from the filtered list; the checkbox stays checked when the tab changes.
+@@ b7e06faa33a8 d
+The file's favorites (previous sessions) are not in the session: only the "Favoris seulement" checkbox shows them, with their star.
+@@ e10cb61a53a1 d
+A game "session": History (favorites file), Settings (reglages.json) and the history window, as window.py creates them.
+@@ 99c01071ce44 d
+Closing the viewer (Window.on_close): settings and favorites written.
+@@ 68dec72aa48a d
+Session 1: a dialogue and a battle as favorites, checkbox checked, close. Session 2 (new objects, same files): the checkbox is checked when the window opens and the favorites are in the list, with their star.
+@@ 5b4e40ec4796 d
+The favorites are written at the moment of the star: an abrupt close (without on_close) does not lose them.
+## FILE tests/test_missing_hooks.py
+@@ f25b9da906a1 t
+address of the simulated function
+@@ eda15a6c39f6 t
+add w0, w9, #imm of the three drawSymbol constants (mask 0xffc003e0 = 0x11000120)
+@@ b68446ac7ce9 t
+already widened (after loading a savestate): neither error nor message
+@@ 793723c9091c t
+nothing was touched
+@@ 9153eca548cf t
+already patched
+@@ 4d060e43cfcc t
+other version: nop instead of the comparison
+@@ 45c12b3efd79 t
+(without `toast`: since #267 no message on screen, only the log)
+@@ 5e8e0d29526d t
+found after loading a savestate
+@@ 4e6987a01aa4 t
+loading a savestate: still nothing
+@@ 7228579cc35f d
+#217 (audit ENG-08): the settings / hooks that the engine of a DIFFERENT APK does not let install are no longer silent: `Engine.missing_hooks` (console line + list without duplicates), then the window
+notes them in `window_errors.log` and displays a message (Game._report_missing_hooks). Without engine: fake engine (simulated memory). With the game's APK (DQ_APK, DQ_SAVES): the original engine misses none of them.
+    PYGLET_HEADLESS=1 python3 tests/test_missing_hooks.py
+@@ 8849a7cae4f6 d
+Engine without an emulator: memory is a dictionary of bytes; export() returns BASE; LIB_BASE = 0 (cmp of the Settings button against CMP_PARAMS).
+@@ 9ff06aa1e2e0 d
+An engine whose functions cannot be found: each installer says so instead of staying silent.
+## FILE tests/test_missing_monster_texture.py
+@@ f858b11bb255 t
+(monster 199 crashed the process)
+@@ fdbd5fe67e53 t
+transparent
+@@ e2c2e0cb9835 t
+kept in memory: a single console line
+@@ 1b93c40d589f d
+#225 (audit CMB-03): `BattleMixin._monster_texture`: a monster texture missing from the data (`data.texture` returns None: 25 monster numbers) or unreadable (exception) is replaced by a small transparent
+texture instead of stopping the game. No engine or window: the OpenGL calls are replaced.
+    PYGLET_HEADLESS=1 python3 tests/test_missing_monster_texture.py
+## FILE tests/test_nonbreaking_space.py
+@@ f2e803442860 t
+same width as the normal space
+@@ be22338f6edb t
+"l'air !" like "l'air ! ": same width with the non-breaking space
+@@ fa3e6adfd779 t
+several in a row: as many spaces
+@@ b7d611aeef21 t
+(glyph 160 keeps its advance: only the drawing of the spaces changes)
+@@ 37fc534ae10b t
+the font does have the flaw that the port corrects
+@@ 9afe9e9a8629 t
+the normal space stays at 5
+@@ 8d7f67a2bfa9 d
+Space before "!", "?", ":" in dialogue boxes (issue #73): the FR patch puts a non-breaking space (U+00A0) before these signs; the game's font (SE-GARRIR) gives its glyph 160 an advance of 11 px
+against 5 px for the normal space, hence an almost double space. The port draws U+00A0, U+202F and U+2009 like the normal space.
+
+    python3 tools/test_nonbreaking_space.py
+
+Without game data: dummy font (space 5, non-breaking 11, "!" 6). With the real extracted font (DQ_CACHE_UI=<menu cache folder>, ui_garrir.json / .png): the same checks on its real metrics.
+@@ cf77fc43db6f d
+The texture of a line with the non-breaking space has the same size as the one with the normal space (needs a GL context: hidden window).
+## FILE tests/test_page_language.py
+@@ 671785300501 t
+system -> en
+@@ de753265643a d
+"Langue" setting (D-238): `language` key of reglages.json (default `system`, unknown value replaced), line of the "Affichage" page above "Plein écran" ("Système" / "Anglais" / "Français",
+"System" / "English" / "French" in English), immediate effect of the choice, and translation by the pages (`Pause._label`). Fake "game" for the Pause menu pages test.
+
+    python3 tests/test_page_language.py
+@@ 8047e1928a4d d
+The pages' fake game, with what the "Affichage" page asks of it.
+## FILE tests/test_params_without_pause.py
+@@ 5bfea4f4fe34 t
+(D-238: N_() marks the text, translated at drawing)
+@@ 9971ac0af7b6 t
+#178: "the history menu pauses the game, there must be no pause in any menu"
+@@ fd8c2426ec78 t
+(all the menu's pages, not only those this test knows)
+@@ d1fafbafc1c8 t
+(the mechanism remains, empty)
+@@ da0ea7152a28 t
+neither sound cut nor clock reset
+@@ d2be1832715a t
+root: nothing stops
+@@ 55d6f879658e t
+(0, 0): no key, no click, no direction for the game
+@@ d7fff6088177 t
+only the early return of a frozen page (none by default) stops the engine
+@@ 3052f2e4ec48 t
+the old general stop is gone

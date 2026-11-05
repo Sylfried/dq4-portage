@@ -1,0 +1,40 @@
+Game: APK files in /tmp/console_empty
+
+The French APK files were not found.
+Put base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:
+   /tmp/console_empty
+(and, if you have one, the data1.dat... files of your phone save in /tmp/console_data/saves). Other folder: set DQ4_DATA=path\to\data
+exit 1
+--- bad option
+usage: dq4_pc [-h] [--apk APK] [--saves-lecture SAVES_READ]
+              [--saves-ecriture SAVES_WRITE] [--cache CACHE] [--slot SLOT]
+              [--sans-logos] [--logos] [--largeur WIDTH_PX]
+              [--hauteur HEIGHT_PX] [--auto-message AUTO_MESSAGE]
+              [--ui-simple] [--clics CLICKS] [--msg-origine]
+              [--ui-pos {centre,droite,gauche}] [--sans-preparation] [--hd HD]
+              [--sans-son] [--volume-musique MUSIC_VOLUME]
+              [--volume-bruitages SFX_VOLUME] [--plein-ecran {0,1,2}]
+              [--correction-bords 0-100] [--msaa MSAA] [--reglages SETTINGS]
+              [--historique HISTORY] [--script-combat BATTLE_SCRIPT]
+              [--shots-effet SHOTS_EFFECT] [--shots-combat SHOTS_BATTLE]
+              [--images-combat IMAGES_COMBAT] [--force-champ FORCE_CHAMP]
+              [--touches-test KEYS_TEST] [--options-test OPTIONS_TEST]
+              [--shots-boucle SHOTS_LOOP] [--shot SHOT] [--images FRAMES]
+              [--script SCRIPT]
+dq4_pc: error: unrecognized arguments: --nonsense
+exit 2
+--- unreadable settings
+Unreadable settings (/tmp/console_bad.json): default values (JSONDecodeError('Expecting property name enclosed in double quotes: line 1 column 2 (char 1)'))
+Game: APK files in /tmp/console_empty
+
+The French APK files were not found.
+Put base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:
+   /tmp/console_empty
+(and, if you have one, the data1.dat... files of your phone save in /tmp/console_data/saves). Other folder: set DQ4_DATA=path\to\data
+exit 1
+--- paths
+exit 0
+--- world.data without apk
+Reading the game data pack (once only, a few seconds)...
+Cache preparation interrupted: [Errno 2] No such file or directory: '/tmp/console_empty/x.apk'
+exit 0

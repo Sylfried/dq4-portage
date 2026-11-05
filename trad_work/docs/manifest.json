@@ -1,0 +1,189 @@
+{
+ "README.md": [
+  "README.md.001.in.md",
+  "README.md.002.in.md"
+ ],
+ "docs/resume.md": [
+  "docs__resume.md.001.in.md"
+ ],
+ "docs/audit/decisions.md": [
+  "docs__audit__decisions.md.001.in.md",
+  "docs__audit__decisions.md.002.in.md",
+  "docs__audit__decisions.md.003.in.md",
+  "docs__audit__decisions.md.004.in.md",
+  "docs__audit__decisions.md.005.in.md",
+  "docs__audit__decisions.md.006.in.md"
+ ],
+ "docs/history.md": [
+  "docs__history.md.001.in.md",
+  "docs__history.md.002.in.md"
+ ],
+ ".github/ISSUE_TEMPLATE/bug.md": [
+  ".github__ISSUE_TEMPLATE__bug.md.001.in.md"
+ ],
+ ".github/ISSUE_TEMPLATE/research.md": [
+  ".github__ISSUE_TEMPLATE__research.md.001.in.md"
+ ],
+ ".github/ISSUE_TEMPLATE/task.md": [
+  ".github__ISSUE_TEMPLATE__task.md.001.in.md"
+ ],
+ ".github/ISSUE_TEMPLATE/windows_test.md": [
+  ".github__ISSUE_TEMPLATE__windows_test.md.001.in.md"
+ ],
+ ".github/pull_request_template.md": [
+  ".github__pull_request_template.md.001.in.md"
+ ],
+ "docs/audit/audit_2026-11-05.md": [
+  "docs__audit__audit_2026-11-05.md.001.in.md",
+  "docs__audit__audit_2026-11-05.md.002.in.md",
+  "docs__audit__audit_2026-11-05.md.003.in.md"
+ ],
+ "docs/audit/chapter2_test_plan.md": [
+  "docs__audit__chapter2_test_plan.md.001.in.md"
+ ],
+ "docs/audit/coverage.md": [
+  "docs__audit__coverage.md.001.in.md",
+  "docs__audit__coverage.md.002.in.md",
+  "docs__audit__coverage.md.003.in.md",
+  "docs__audit__coverage.md.004.in.md"
+ ],
+ "docs/audit/github_issues.md": [
+  "docs__audit__github_issues.md.001.in.md",
+  "docs__audit__github_issues.md.002.in.md"
+ ],
+ "docs/audit/known_gaps.md": [
+  "docs__audit__known_gaps.md.001.in.md",
+  "docs__audit__known_gaps.md.002.in.md",
+  "docs__audit__known_gaps.md.003.in.md"
+ ],
+ "docs/audit/remaining_work_report.md": [
+  "docs__audit__remaining_work_report.md.001.in.md",
+  "docs__audit__remaining_work_report.md.002.in.md",
+  "docs__audit__remaining_work_report.md.003.in.md"
+ ],
+ "docs/audit/specs/battle_interface_audit.md": [
+  "docs__audit__specs__battle_interface_audit.md.001.in.md",
+  "docs__audit__specs__battle_interface_audit.md.002.in.md"
+ ],
+ "docs/audit/specs/camera_bip.md": [
+  "docs__audit__specs__camera_bip.md.001.in.md"
+ ],
+ "docs/audit/specs/engine_pre_game.md": [
+  "docs__audit__specs__engine_pre_game.md.001.in.md",
+  "docs__audit__specs__engine_pre_game.md.002.in.md"
+ ],
+ "docs/audit/specs/numpad_menus_audit.md": [
+  "docs__audit__specs__numpad_menus_audit.md.001.in.md",
+  "docs__audit__specs__numpad_menus_audit.md.002.in.md"
+ ],
+ "docs/audit/specs/prologue.md": [
+  "docs__audit__specs__prologue.md.001.in.md",
+  "docs__audit__specs__prologue.md.002.in.md"
+ ],
+ "docs/audit/specs/text_notes.md": [
+  "docs__audit__specs__text_notes.md.001.in.md"
+ ],
+ "docs/audit/specs/unity_pre_game.md": [
+  "docs__audit__specs__unity_pre_game.md.001.in.md",
+  "docs__audit__specs__unity_pre_game.md.002.in.md",
+  "docs__audit__specs__unity_pre_game.md.003.in.md"
+ ],
+ "docs/code_plan.md": [
+  "docs__code_plan.md.001.in.md"
+ ],
+ "docs/licenses.md": [
+  "docs__licenses.md.001.in.md"
+ ],
+ "docs/rename_map.md": [
+  "docs__rename_map.md.001.in.md"
+ ],
+ "docs/technical-notes-dq4-port.md": [
+  "docs__technical-notes-dq4-port.md.001.in.md",
+  "docs__technical-notes-dq4-port.md.002.in.md",
+  "docs__technical-notes-dq4-port.md.003.in.md",
+  "docs__technical-notes-dq4-port.md.004.in.md",
+  "docs__technical-notes-dq4-port.md.005.in.md",
+  "docs__technical-notes-dq4-port.md.006.in.md",
+  "docs__technical-notes-dq4-port.md.007.in.md",
+  "docs__technical-notes-dq4-port.md.008.in.md"
+ ],
+ "docs/viewer-notes-dq4-pc.md": [
+  "docs__viewer-notes-dq4-pc.md.001.in.md",
+  "docs__viewer-notes-dq4-pc.md.002.in.md",
+  "docs__viewer-notes-dq4-pc.md.003.in.md",
+  "docs__viewer-notes-dq4-pc.md.004.in.md",
+  "docs__viewer-notes-dq4-pc.md.005.in.md",
+  "docs__viewer-notes-dq4-pc.md.006.in.md",
+  "docs__viewer-notes-dq4-pc.md.007.in.md",
+  "docs__viewer-notes-dq4-pc.md.008.in.md",
+  "docs__viewer-notes-dq4-pc.md.009.in.md",
+  "docs__viewer-notes-dq4-pc.md.010.in.md",
+  "docs__viewer-notes-dq4-pc.md.011.in.md",
+  "docs__viewer-notes-dq4-pc.md.012.in.md",
+  "docs__viewer-notes-dq4-pc.md.013.in.md",
+  "docs__viewer-notes-dq4-pc.md.014.in.md",
+  "docs__viewer-notes-dq4-pc.md.015.in.md",
+  "docs__viewer-notes-dq4-pc.md.016.in.md",
+  "docs__viewer-notes-dq4-pc.md.017.in.md",
+  "docs__viewer-notes-dq4-pc.md.018.in.md",
+  "docs__viewer-notes-dq4-pc.md.019.in.md",
+  "docs__viewer-notes-dq4-pc.md.020.in.md",
+  "docs__viewer-notes-dq4-pc.md.021.in.md",
+  "docs__viewer-notes-dq4-pc.md.022.in.md",
+  "docs__viewer-notes-dq4-pc.md.023.in.md",
+  "docs__viewer-notes-dq4-pc.md.024.in.md",
+  "docs__viewer-notes-dq4-pc.md.025.in.md",
+  "docs__viewer-notes-dq4-pc.md.026.in.md"
+ ],
+ "docs/workflow.md": [
+  "docs__workflow.md.001.in.md"
+ ],
+ "tools/research/README.md": [
+  "tools__research__README.md.001.in.md"
+ ],
+ "tools/session_flow/README.md": [
+  "tools__session_flow__README.md.001.in.md"
+ ],
+ "docs/archives/agent-reports-40-44.md": [
+  "docs__archives__agent-reports-40-44.md.001.in.md",
+  "docs__archives__agent-reports-40-44.md.002.in.md",
+  "docs__archives__agent-reports-40-44.md.003.in.md",
+  "docs__archives__agent-reports-40-44.md.004.in.md",
+  "docs__archives__agent-reports-40-44.md.005.in.md",
+  "docs__archives__agent-reports-40-44.md.006.in.md",
+  "docs__archives__agent-reports-40-44.md.007.in.md",
+  "docs__archives__agent-reports-40-44.md.008.in.md",
+  "docs__archives__agent-reports-40-44.md.009.in.md",
+  "docs__archives__agent-reports-40-44.md.010.in.md",
+  "docs__archives__agent-reports-40-44.md.011.in.md",
+  "docs__archives__agent-reports-40-44.md.012.in.md",
+  "docs__archives__agent-reports-40-44.md.013.in.md",
+  "docs__archives__agent-reports-40-44.md.014.in.md",
+  "docs__archives__agent-reports-40-44.md.015.in.md"
+ ],
+ "docs/archives/agent-reports-45.md": [
+  "docs__archives__agent-reports-45.md.001.in.md",
+  "docs__archives__agent-reports-45.md.002.in.md",
+  "docs__archives__agent-reports-45.md.003.in.md",
+  "docs__archives__agent-reports-45.md.004.in.md",
+  "docs__archives__agent-reports-45.md.005.in.md"
+ ],
+ "docs/archives/briefs/common_brief.md": [
+  "docs__archives__briefs__common_brief.md.001.in.md"
+ ],
+ "docs/archives/briefs/common_brief42.md": [
+  "docs__archives__briefs__common_brief42.md.001.in.md"
+ ],
+ "docs/archives/briefs/common_brief43.md": [
+  "docs__archives__briefs__common_brief43.md.001.in.md"
+ ],
+ "docs/archives/briefs/common_brief44.md": [
+  "docs__archives__briefs__common_brief44.md.001.in.md"
+ ],
+ "docs/archives/briefs/common_brief45.md": [
+  "docs__archives__briefs__common_brief45.md.001.in.md"
+ ],
+ "docs/archives/briefs/common_brief47.md": [
+  "docs__archives__briefs__common_brief47.md.001.in.md"
+ ]
+}

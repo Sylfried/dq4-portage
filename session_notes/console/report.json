@@ -1,0 +1,151 @@
+{
+ "changed": [],
+ "unresolved": [
+  [
+   "dq4_pc/menus/message_font.py",
+   167,
+   "sink:log",
+   "Message font not extracted (%r): using the SE-GARRIR menu font instead."
+  ],
+  [
+   "dq4_pc/menus/pre_game.py",
+   65,
+   "sink:log",
+   "Reading the title images (once)..."
+  ],
+  [
+   "dq4_pc/menus/pre_game.py",
+   82,
+   "sink:log",
+   "Title images unavailable: %r"
+  ],
+  [
+   "dq4_pc/menus/ui_menu.py",
+   952,
+   "sink:print",
+   "Message font unreadable (%r): using SE-GARRIR instead."
+  ],
+  [
+   "dq4_pc/menus/ui_menu.py",
+   955,
+   "sink:print",
+   "SE-GARRIR font unreadable (%r): using the Japanese GMaruGoPro-M font instead."
+  ],
+  [
+   "dq4_pc/menus/ui_menu.py",
+   1351,
+   "sink:log",
+   "SE-GARRIR font not extracted: %r"
+  ],
+  [
+   "dq4_pc/world/data.py",
+   368,
+   "raise",
+   "textures: %s"
+  ],
+  [
+   "dq4_pc/world/data.py",
+   117,
+   "sink:log",
+   "  unreadable texture: %s"
+  ],
+  [
+   "dq4_pc/world/data.py",
+   183,
+   "sink:log",
+   "  animated palette %s: %d textures out of %d, ignored"
+  ],
+  [
+   "dq4_pc/world/map_tint.py",
+   79,
+   "sink:log",
+   "Map tint: \"tz_\" textures unreadable (%s): the whole map will be tinted"
+  ],
+  [
+   "dq4_pc/window/battle_scene.py",
+   112,
+   "sink:print",
+   "monster texture not found:"
+  ],
+  [
+   "dq4_pc/window/battle_scene.py",
+   114,
+   "sink:print",
+   "monster texture missing from the data:"
+  ],
+  [
+   "dq4_pc/window/field.py",
+   525,
+   "sink:print",
+   "World map image unreadable: %r"
+  ],
+  [
+   "dq4_pc/window/field.py",
+   502,
+   "sink:print",
+   "Map image %s unreadable: %r"
+  ],
+  [
+   "dq4_pc/window/game.py",
+   149,
+   "raise",
+   "simulated failure (DQ_SIM_ECHEC)"
+  ],
+  [
+   "dq4_pc/battle/battle_history.py",
+   202,
+   "sink:print",
+   "Battle history: unexpected engine, capture disabled"
+  ],
+  [
+   "dq4_pc/battle/battle_history.py",
+   205,
+   "sink:print",
+   "Battle history: %s not found, capture disabled"
+  ],
+  [
+   "dq4_pc/core/emu_core.py",
+   760,
+   "sink:log",
+   "  buffer %-12s: %d non-zero values"
+  ],
+  [
+   "dq4_pc/core/emu_core.py",
+   837,
+   "sink:L",
+   "UnityRenderEvent(%d) -> %s ; texture updates: %d"
+  ]
+ ],
+ "skipped": [
+  [
+   "dq4_pc/persistence/saves.py",
+   58,
+   "Aucune sauvegarde a exporter (ni journal, ni etat instantane)."
+  ],
+  [
+   "dq4_pc/persistence/saves.py",
+   106,
+   "Aucun fichier de sauvegarde reconnu (%s)."
+  ],
+  [
+   "dq4_pc/persistence/saves.py",
+   106,
+   "data1.dat a data5.dat, data9.dat ou savestates/state_NN.dqs attendus"
+  ],
+  [
+   "dq4_pc/persistence/saves.py",
+   106,
+   "; "
+  ],
+  [
+   "dq4_pc/persistence/saves.py",
+   127,
+   "Aucun fichier n'a pu etre ecrit (%s)."
+  ],
+  [
+   "dq4_pc/persistence/saves.py",
+   127,
+   "; "
+  ]
+ ]
+}

@@ -1,0 +1,875 @@
+## FILE dq4_pc/persistence/settings.py
+@@ 57d6a94cd346 d
+"Retablir cette interface": the editor's `target` interface (SCREEN_TARGET, 'msg' or the Make_* name of a game window) returns entirely to its original state, and only that one:
+position, size, display ("Afficher cette interface a l'ecran") and its other options. On-screen buttons and D-pad: all of SCREEN_KEYS (display, D-pad and button size, positions); battle speed button: all of SPEED_KEYS.
+Game window: its WINDOW_KEYS entry (absent from DEFAULT = size, position and display of the game). The editor options (EDITOR_KEYS) do not change.
+@@ 78f9b1a842db d
+"Retablir toutes les interfaces": all the interfaces (SCREEN_KEYS and WINDOW_KEYS) and the editor options (EDITOR_KEYS: grid, snapping) return to DEFAULT.
+@@ c516c262e8e1 d
+pyglet key codes of an action.
+@@ c8a27e3acbff d
+Action bound to a key (or None): a key serves only one action.
+@@ 2a9086e29a88 d
+Binds a key to (action, column 0/1); the key is removed from any other action. -> name of the action that had it, or None.
+@@ c2efbbe2dcb6 d
+Resets the keys of an action to their original values (an original key since taken by another action is removed from that action). -> names of the actions that lost it.
+## FILE dq4_pc/persistence/write_dir.py
+@@ 293069fbcfaf d
+File writing that never leaves a half-written file (game saves, save imports).
+@@ 45053d85dec4 d
+Writes `raw` to `path`: temporary file alongside, then replaced in one step (never a half-written file); on an I/O error (antivirus locking the file, full disk, read-only
+folder) the whole thing is retried `attempts` times, spaced `pause` s apart. -> None if all goes well, otherwise the exception of the last attempt; the old file then remains intact.
+## FILE dq4_pc/render/capture_effects.py
+@@ 8355eece90a2 t
+packet 34: value & 0xf -> effect (Capture.ScreenEffect, 0xCC6474)
+@@ 422e90097fe8 t
+MoveNext calls up to the one that returns false (bit 1 drops at that call)
+@@ bc1e37c5e327 t
+call (numbered from 1) where `Fade.SetFadeOutBlack(0)` turns the screen completely black at once (it stays black until the fade-in started by the engine)
+@@ 6f15b221db3b t
+travel, arrival: `Fade.SetFadeIn(30)` is started at call 3 (effect setup)
+@@ 97540d6155ca t
+frames of this fade-in
+@@ ce8b892bb20e t
+MoveNext calls already made
+@@ 0aa406e3a8ff t
+MoveNext returned false: the game lowered bit 1 of Global.Flag
+@@ 05d3d21ab5eb t
+MeshRenderer of the Capture object: while it is turned off, the game stays displayed normally
+@@ 0ccb1e1c4e08 t
+callback on_blur(effect, idx): "render drawings() (state of the previous frame) into blur texture no. idx, at half resolution"
+@@ 791174e3ff0a t
+index of the blur texture read by the background of the current frame; None until a pass has taken place (black texture)
+@@ a9eddf24dd54 t
+Capture.l_blurTexNum
+@@ d9ab175df140 t
+Capture.l_bBlur
+@@ cba4a24cf156 t
+Capture.l_bCapture (Snap)
+@@ 94d9503efbe2 t
+Caputer: the capture is taken before MoveNext of the next call (the window has already copied it)
+@@ f5d947a9e1ca t
+the background reads the texture that was just written; the first frame makes a second pass into the other texture, overwritten before being read: nothing to do
+@@ 90705be9ca86 c
+the two triangles of the full-screen background (vertices: 0 top left, 1 bottom left, 2 top right, 3 bottom right) and its uv
+@@ 664e088a5b2e d
+Screen effects of the `Capture` class of the Unity layer (packet 34, value & 0xf = 3: travel / Chimaera Wings, 5: lamp / Ranaruta, 6: Riremito; 4, battle start, is in combat/battle_effect.py).
+
+Pure module (numpy only, nothing graphical): shared constants and skeleton of the `Capture` loop. Each effect is a C# coroutine (`Capture.<Tabi>d__49`, `<DarkLamp>d__47`, `<Riremito>d__48`)
+that `Capture.Caputer` advances by ONE step at each LateUpdate (30 Hz), in this order:
+  1. if a capture is requested (`Snap`): the game camera (without the interface) is rendered into a texture, the "capture";
+  2. if the blur is active (`SetBlur(actual)`): the interface camera renders the state of the PREVIOUS frame (blurred background + effect mesh) into a HALF-resolution texture (two textures alternating):
+     this is the blurred background of the current frame, an afterimage;
+  3. one call of `MoveNext` (one step: mesh vertices and colors); when the coroutine returns false, the game lowers bit 1 of `Global.Flag` that the engine was waiting for (`IsScreenEffectEnd`).
+The vertices are in normalized screen coordinates (-1..1: the `Custom/Capture` and `Custom/CaptureBlur` shaders copy the position into `gl_Position`, without a matrix); the drawing is described by `drawings()`:
+first the background (`Blend SrcAlpha Zero`: blur texture x color, replaces the screen), then the capture (`Blend SrcAlpha OneMinusSrcAlpha`), on a solid black background, the game camera being turned off.
+The durations depend neither on chance (no `Random`) nor on a clock: everything is a function of the number of frames. The rules of each effect were read from the libil2cpp disassembly (addresses in comments),
+then compared with the real machine code run under Unicorn (Tabi and lamp: vertices, colors, fields identical to the bit).
+@@ 6da7aaee0ac7 d
+32-bit float from its bit pattern (the libil2cpp literals, read as they are).
+@@ dc4489401ed6 d
+Number of MoveNext calls of an effect (`inverse`: arrival of the travel, bit 7 of the packet value).
+@@ dde5857f0486 d
+MoveNext calls made when the effect has lived `n` engine frames (0 = the one where the packet arrived: the first call takes place in the same frame). `duration` = engine frames of the effect
+(`frames` when "Vitesse de transition" is at x1, fewer afterward: the effect is then replayed faster, like the battle cascade), `frames` = its original calls.
+@@ d59d436a5dc2 d
+Skeleton of `Capture`: the capture and the blur pass are done by the host (window), which registers in `on_blur`; the subclasses provide `_move_next` and `drawings`.
+@@ 6b0318007805 d
+Triangle indices of a grid of `columns` x `rows` cells whose vertices are laid out row by row (columns + 1 per row): (a, a+1, b) and (a+1, b+1, b), a = r * (columns + 1) + c, b = a + columns + 1
+(Tabi loop 0xCCB71C, lamp loop 0xCC895C: both have the same orientation).
+@@ e65cd0eb3a91 d
+One `Capture` LateUpdate: capture (done by the host before the first call), blur pass, one MoveNext call. Returns true as long as the effect continues.
+@@ 3a2c4571a7cb d
+List of drawings (name, positions (n, 2), uv (n, 2), rgba (n, 4)), in the game's order: 'flou' (background, replaces the screen: blur texture) then 'capture' (alpha blend: capture texture).
+Non-indexed triangles. Empty when the MeshRenderer is turned off.
+## FILE dq4_pc/render/lamp_effect.py
+@@ 5f73fb0874a5 t
+0xCC8624: cells per row
+@@ 55cf971a71ab t
+vertices per row
+@@ 2312e210f856 t
+h_divY = m_divY >> 2 (0xCC8E24) with m_divY = 56
+@@ 763b68103043 t
+0.255: working register (the 0..255 value of a vertex / 1000), not a display z (ZTest Always)
+@@ c90c5f5f25b5 t
+1.0015: horizontal stretch of the interior vertices per frame (0xCC90D8)
+@@ 4d103e7fee1a t
+-0.0152587890625: initial speed of `movement` (pool 0x4C1228)
+@@ f605b0423308 t
+0.6 and 1.2: bounds of `bias` (pools 0x4C1348, 0x4C139C)
+@@ 073b7050dd88 t
+-0.1: offset of |y| for the neighboring columns (pool 0x4C1520)
+@@ 093103196ce3 t
+0xCC9580, 0xCC958C
+@@ 0cf3b8efb71d t
+z -> 0..255 value; value -> z (0.001)
+@@ 7fdc72a0b9ee t
+0.9125: initial alpha of the grid (pool 0x4C0BE4)
+@@ 22d73f4562e0 t
++0.0875 (background), -0.01 (grid) during the first 10 updates (pools 0x4C12A4, 0x4C13C0)
+@@ d7d1f618fc2d t
+-1/30: darkening of the capture from update 30 (pool 0x4C13E0)
+@@ 75ebb6588b21 t
+0xCC8BE4, 0xCC9628, 0xCC8BD8
+@@ 7b2fb3f18cc4 t
+<>1__state
+@@ b99d0c97fc34 t
+_Color of the Custom/CaptureBlur and Custom/Capture materials
+@@ 8bc4136f8e26 c
+mesh (0xCC873C-0xCC89F0): x += 2/16, y -= 2/h_divY, u += 1/16, v -= 1/h_divY, accumulated in float32 like the game
+@@ f40c4950cbd6 t
+initial y of each row (pt[], never modified)
+@@ 71b9f0cabd11 t
+vertices (row, column, xyz)
+@@ 9a0644fa7339 t
+Color32 (c_white)
+@@ f2fc9f2a1c62 c
+------------------------------------------------------------------ one MoveNext call
+@@ 3d099c795b5e t
+0xCC8620: SetBlur(true), Snap()
+@@ 78cf17df1476 t
+0xCC864C: mesh built; the capture was taken at the start of this call
+@@ 9c804210595f t
+0xCC8B74: once the capture is taken, the effect starts: update 0
+@@ 4c02f517b1f5 t
+0xCC8BC8
+@@ a824cd683355 t
+0xCC8CD0: SetBlur(false); the host turns the screen black (Fade.SetFadeOutBlack(0))
+@@ 8e78c9f61940 t
+0xCC8BF0: Mesh.Clear, rendering turned off: MoveNext returns false
+@@ 99a10b8cb25e t
+opacities (first 10 updates): background 0.0875 -> 0.875, grid 0.9125 -> 0.8125
+@@ c618eb831fa2 t
+pass 1: the interior vertices stretch in x (its y calculation is overwritten by pass 2)
+@@ 95b30f2cf33a t
+pass 2: "eyelid": y = pt (1 - a) + a (bias pt) on columns hx - 7 to hx + 7; columns 0 and 16 keep their initial y
+@@ 32ebdc9d6b56 t
+pass 3: 0..255 value per column (faster at the center), tint and z = value / 1000
+@@ 618f2b6505c2 t
+darkening of the capture
+@@ cd0644117815 c
+------------------------------------------------------------------ drawing
+@@ 9120d1d12508 t
+vs_COLOR0 = vertex color x _Color
+@@ f0569af07508 d
+Effect "Ranaruta" (Capture.DarkLamp, packet 34 value & 0xf = 5; bit 7 = bMorning): the screen capture, mapped onto a grid of 16 x 14 cells, "pinches" vertically around its central column (a bell-shaped eyelid
+that closes then reopens), takes on a tint (night: blue; morning: yellow), leaves a blurred afterimage, then darkens to black.
+Rules of Capture.<DarkLamp>d__47.MoveNext (libil2cpp, RVA 0xCC8520), in float32 like the game, to the instruction (addresses in comments): mesh, colors and fields identical to the bit to the machine code
+run under Unicorn. 64 MoveNext calls: 2 of preparation (the game stays displayed), 60 mesh updates (counter 0 to 59), 1 of immediate black (SetBlur(false), Fade.SetFadeOutBlack(0)), 1 of cleanup
+(MoveNext returns false: bit 1 drops); the screen then stays black, until the engine's fade-in.
+Only the number of rows depends on the screen (`h_divY = m_divY >> 2`, m_divY = int(32 / aspect): 14 in 9/16 portrait, 4 in 16/9): the 14 rows of the mobile game are kept, because the curve of the "eyelid" is in
+normalized screen coordinates (4 rows would make an angular outline).
+@@ 54a253410e60 d
+morning = bMorning (bit 7 of the value): only blue decreases (yellow tint) instead of red and green (blue tint); rows = h_divY.
+@@ e375c0c20b2a d
+One mesh update (0xCC903C-0xCC9624): call 3 (counter 0) to call 62 (counter 59).
+## FILE dq4_pc/render/postfx.py
+@@ 0bd953352854 c
+Final pass: bilinear reading of the scene (an exact x2 reduction gives the average of 4 pixels), adaptive sharpening (AMD FidelityFX CAS, MIT license: the gain is
+limited where the local contrast is already strong, so no halo), brightness = gamma curve (black and white unchanged).
+@@ c026c5ba813c t
+False after a failure: direct drawing for the rest of the session
+@@ 0021651a65a9 t
+actual antialiasing (limited by the graphics card)
+@@ 2acedc079fea t
+(width, height) of the created buffers
+@@ 96b4b3a7c08e t
+(size, samples) for which they were created
+@@ 24cc88a62ac1 t
+the current frame is drawn off-screen
+@@ c28cf51ea3ab t
+alpha-to-coverage usable (multisample buffer)
+@@ 02d2f0879f8c c
+---- settings (read every frame: a change in the Esc menu applies immediately)
+@@ 82d04822c00f c
+---- buffer creation
+@@ c6db0c8b3fa6 t
+multisample scene, then copy (resolve) into the texture
+@@ 7ff9151c6aa0 t
+without multisampling: drawing directly into the texture
+@@ 8e1269121b6e c
+---- frame
+@@ fac502018a03 t
+(window minimized to the taskbar: empty drawing area, nothing to create; this is not a failure)
+@@ 8985df2580e6 t
+nothing to do: direct drawing
+@@ 0fb96210bee2 t
+(test) DQ_SANS_A2C=1: cutouts with hard alpha test, as before
+@@ c63594594634 t
+no final pass: plain copy (including the multisample resolve)
+@@ edb8af6be4e9 d
+Off-screen scene rendering then final pass: MSAA antialiasing adjustable on the fly, supersampling, sharpness, brightness.
+
+The scene (scenery, characters, vignette, background fades) is drawn into an off-screen buffer (multisample renderbuffers) then copied into the window;
+the interface (messages, menus, buttons, Esc menu) is then drawn directly into the window: it is neither smoothed nor retouched.
+No active setting (MSAA 0, scale 1, sharpness 0, normal brightness) = no off-screen buffer: the direct drawing of before.
+Any creation failure (driver without multisampling...) falls back to direct drawing and says so in the log.
+@@ f142c6e0e519 d
+(requested samples, scale, sharpness, gamma); the scale is only useful below 1 screen pixel per scene pixel.
+@@ 9aa7ea156ddc d
+Starts drawing the scene; returns (width, height) of the drawing area to use for glViewport. Clears with the background color.
+@@ 895cca78980a d
+Ends the scene: copies into the window (with the final pass if an effect is set). Restores the state expected by the interface drawing.
+## FILE dq4_pc/render/riremito_effect.py
+@@ 7d4ef64f1435 t
+0.11 degree per frame (pool 0x4C1304)
+@@ 2dc1944252cc t
+pi / 180 (pool 0x4C13A0)
+@@ c5fe384102bf t
+0.1: step of the background AND z spacing between copies (pool 0x4C136C; z has no effect: ZTest Always)
+@@ 6ac2b35a68cf t
+-0.08: step of the copies' opacity (pool 0x4C1508)
+@@ ecd16ccecea0 t
+-0.00005: displacement factor (pool 0x4C1490)
+@@ 7dd7167ac2f1 t
+-1/30 (pool 0x4C13E0)
+@@ 4c3791205bb8 t
+0.9; 0; 0; 1 (pool 0x4DBB00)
+@@ d3d1c9f8ce20 t
+0xCCA248, 0xCCA404, 0xCC9E28
+@@ d7ff6215f4dd t
+vertices of a copy: top left, bottom left, top right, bottom right
+@@ d7c6eca602c1 t
+triangles of a copy (loop 0xCC9B48)
+@@ 789d6dc5c3cd t
+vertices of the four copies (x, y, z)
+@@ 17529ef8a3f4 t
+0xCC98F4: SetBlur(true), Snap()
+@@ ee831f53b011 t
+0xCC99B0: mesh
+@@ 281228acdd62 t
+0xCC9DC4: once the capture is taken: start of display and update 1
+@@ 5b6d90623c26 t
+0xCC9E18
+@@ 9a631de260d4 t
+0xCC9E38: SetBlur(false); the host turns the screen black (Fade.SetFadeOutBlack(0))
+@@ 65690b60b6a1 t
+0xCC9EDC: cleanup, MoveNext returns false
+@@ 387dcbd01ced t
+Quaternion.Internal_FromEulerRad(0, 0, angle) = (0, 0, sin(angle / 2), cos(angle / 2))
+@@ 654fbca3983b t
+Quaternion * Vector3 (Unity formula)
+@@ b5fc4188261c d
+Dungeon exit effect (Capture.Riremito, packet 34 value & 0xf = 6): the screen capture is displayed as FOUR superimposed translucent copies that move apart diagonally while rotating very slightly,
+while the game camera is turned off; behind them, a full-screen plane shows the previous rendering (blurred half-resolution afterimage); from frame 30 the copies darken, everything fades out, then clean black
+(Fade.SetFadeOutBlack(0)). 63 MoveNext calls: 2 of preparation (the game stays displayed), 59 mesh updates (counter 1 to 59), 1 of clean black, 1 of cleanup (MoveNext returns false: bit 1 drops).
+Rules of Capture.<Riremito>d__48.MoveNext (libil2cpp, RVA 0xCC97FC), in float32 like the game (addresses in comments):
+  * at the update with counter c: the rotation (degrees) grows by 0.11 per frame; copy i (0 to 3) is the square [-1, 1]^2 rotated by that angle around Z, then shifted by (+-3 u, +-u) with u = 10 (i + 1) c x 0.00005
+    (diagonals: i = 0 right-bottom, 1 right-top, 2 left-top, 3 left-bottom);
+  * updates 1 to 9: the background goes to (b, b, b, 1) with b = 0.1 c, the opacity of the copies to 0.9 - 0.08 c (0.18 at frame 9, then constant);
+  * from c = 30: the color of the copies (r = g = b) decreases by 1/30 per frame down to 0 (reached at c = 59).
+The mesh always has 20 vertices (it does not depend on the screen) and the positions are in normalized screen coordinates: the copies cover the whole screen whatever its aspect ratio (in 16/9 the displacement,
+in fractions of the screen, is more horizontal than in portrait: reproduced as is).
+@@ 2daa5bbb4d26 d
+Update of the mesh and materials for the current counter (0xCCA204-0xCCA4C0).
+## FILE dq4_pc/render/tabi_effect.py
+@@ 212a4dc626bc t
+h_divX (0xCCAD38): cells per row
+@@ 5feb53501430 t
+divX: vertices per row
+@@ 1b73dddb6293 t
+h_divY = m_divY >> 1 (0xCCAD74) with m_divY = 56 (original portrait screen)
+@@ b3871fe5b69a t
+1e-4: fallback value of a vertex that crosses the center (pool 0x4C1258)
+@@ c9f829af24ca t
+1.4142 (not the true square root of 2): pool 0x4C1438
+@@ 99f478665f05 t
+fmov 0xCCB2BC
+@@ e3c2aede12b9 t
+fmov 0xCCB25C
+@@ 2ae4c607b2b7 t
+-0.01: decrease of bAlpha per unit of time (pool 0x4C13C0)
+@@ 3c3f7cc1f78f t
+-0.075: decrease of cAlpha (pool 0x4C1278)
+@@ 610f9381bab3 t
+-1.05: rotAcc (pool 0x4DC044)
+@@ 691e513802f2 t
++1/60: timeAcc of the departure (pool 0x4DC04C)
+@@ d16fbd19f62c t
+2/3: initial time of the arrival (pool 0x4C0CC8)
+@@ a0bfa2815a6b t
+0.23125 (departure) / 0.24375 (arrival): rise of bAlpha per frame (pool 0x4C0B68)
+@@ ba2d8d7d83f1 t
+-0.0625: cAlpha step at departure (pool 0x4DC040)
+@@ 32b1e8f7d2fc t
++0.0625: cAlpha step at arrival (pool 0x4C0FF8)
+@@ 172df0bf9166 t
+0xCCB0D4: end when the counter reaches 61
+@@ 407008746835 t
+0xCCB170: departure only
+@@ c4f842a2c16f t
+fAlpha: the alphas rise while counter < fAlpha (4 frames)
+@@ 0b21e7eb62a1 t
+0xCCBA7C: initial counter of the arrival
+@@ 73585dd41a22 t
+0.255 (no effect: ZTest Always)
+@@ c829767b0c4c t
+vertices of the grid
+@@ a341dd82cd7f t
+grid steps (0xCCAD94), accumulated in float32 like the game (0xCCAF4C)
+@@ c40f77cb2dad t
+(3 * 2 * cells, 2): constant
+@@ 8d82f582642f t
+x, y of the grid vertices (z has no effect)
+@@ 2b2c38a00722 t
+end of departure: _Color of both materials = (0, 0, 0, 0)
+@@ 8d9d6cb25feb t
+0xCCAD34: SetBlur(true), Snap()
+@@ 38e65f043907 t
+0xCCADCC: mesh (the grid is written as is by state 2)
+@@ 8699e8be7d61 t
+0xCCAF80: once the capture is taken: setup, then first frame of the swirl
+@@ b48d62d194f4 t
+0xCCB0C0
+@@ 5b8fe8392592 t
+0xCCB510
+@@ 4938a0e1c62a t
+0xCCB9A8: both materials at (0, 0, 0, 0): black screen; nothing is restored (the game camera stays turned off until the arrival)
+@@ 9bcf2cbab6d3 t
+0xCCB530: SetBlur(false), then one more frame
+@@ 8a08f1c5a2cd t
+0xCCB430: Mesh.Clear, rendering turned off, game camera re-enabled: end of the arrival
+@@ 8658219c86ed t
+0xCCBA60
+@@ 8806242a6edd t
+rise of the alphas (4 frames)
+@@ cb097a61a467 t
+decrease (departure only): cAlpha = 0 from frame 41, bAlpha 0.69 at frame 60
+@@ a82b0c259258 t
+distance to the center
+@@ d4564e90e8e5 t
+0 at the corners, 1.4142 at the center
+@@ 1b45ae4ce9c5 t
+pinch toward the center
+@@ 887a39b5a63d t
+a vertex that would change side of the center is brought back there (position x 1e-4)
+@@ adadd301d074 t
+bionic sincosf, to within 1 ulp
+@@ 30ab55b44ba0 d
+Travel effect (Capture.Tabi: Chimaera Wings, packet 34 value & 0xf = 3): the screen capture, laid on a grid of 16 columns of cells, is sucked into a swirl (zoom out + rotation
++ pinch toward the center) while two layers are superimposed: the capture (alpha "cAlpha") and a blurred copy of the previous frame (alpha "bAlpha", afterimage).
+  * departure (bit 7 of the value at 0): the swirl tightens for 61 frames (time 0 -> 1, step of 1/60), then both layers go to alpha 0: black screen, the game camera stays turned off; 64 MoveNext calls;
+  * arrival (bit 7 at 1, after the map change): the same swirl run backwards (time 2/3 -> 0, 41 frames) with a 30-frame fade-in, then the game is restored; 45 calls.
+Rules of Capture.<Tabi>d__49.MoveNext (libil2cpp, RVA 0xCCAC3C), to the instruction (addresses in comments): vertices identical to the bit to the machine code run under Unicorn.
+The original's mesh depends on the screen (`Capture.m_divY` = int(32 / aspect) read from the game camera: 56 in 9/16 portrait, hence 28 rows of cells; 18 in 16/9, hence 9): the 28 rows of the mobile game are kept here, because
+the formulas are in normalized screen coordinates (the swirl has the same shape on screen, better sampled; 9 rows would make visible facets). These coordinates make the swirl elliptical on a 16/9 screen (as it is, the other way round, on the mobile game):
+reproduced as is.
+@@ b71849453070 d
+inverse = bReverse (arrival); rows = h_divY (28: the mesh of the mobile game).
+@@ 2d6bbfebc3d4 d
+State 2 (0xCCAFE8-0xCCBAF4): rendering enabled, black background, game camera turned off; variables of the departure or the arrival.
+@@ 38be350eb5c0 d
+One frame of the swirl (0xCCB0DC-0xCCB3D8): alphas of the two layers, then vertices of the grid.
+## FILE dq4_pc/render/title_sky.py
+@@ 9dc37429530b t
+SceneCamera.ASPECT_DEF: portrait screen 450 x 800
+@@ 1038f625aa50 t
+band columns per tile (11.5 units): the stretch varies over ~ 0.6 tile, at least 9 columns per undulation
+@@ 381a201b7ad2 t
+(amplitude, wavelength in tiles, phase) of the two undulations of the horizontal stretch (sum of the amplitudes < 1: the direction of the texture never reverses)
+@@ 678d3f1b2e33 t
+phases added on the left (0) and on the right (1): two different sides
+@@ be4217d006be t
+same for the vertical slide of the texture in the middle of each row (fraction of the tile height); zero at the row edges: their join is intact
+@@ 731390bbbe9e t
+a row of the bands is cut into 4 to follow the slide (zero at the row edge, maximal in the middle)
+@@ ac7f20faf044 t
+distance (in tiles) over which the effect rises from 0 to 1 (cubic smoothing): join without a break at the edge of the zone
+@@ 8cfe1e6ed0e6 t
+(test) "a1,a2,slide,slide_length": tuning trials
+@@ f580f17455ac t
+safeguard (absurdly wide window)
+@@ 4275599cb217 t
+flat rendering (#174): width of a tile on screen, in window heights (square texture: 1)
+@@ da95365c3250 t
+mesh columns per tile (the shortest wave of the stretch: 0.61 tile, i.e. 14 columns)
+@@ 4714b888d4f5 t
+mesh lines in the height (profile of the vertical slide and tint gradient; the gradient cuts are added to them)
+@@ 7693098bb95d t
+(test) tile width in window heights
+@@ cb8074ce7422 t
+d: tiles from the left edge
+@@ 496c6d9d919e t
+the gradient cuts (edges of the original rows) become mesh lines
+@@ b9c8e1447ffe t
+depth (normalized) of the flat sky: at the back, in front of the far plane (the GL_LESS depth test lets it through), behind everything else
+@@ 5db56fbab2f4 t
+fine table (1/256 of a tile), integrated by the trapezoid rule: G exact to the precision of the table, deterministic
+@@ a8b66dcaf451 t
+(n, 4): left / right abscissa, left / right u, sorted by abscissa
+@@ a18d2c6543fc t
+2 half-tiles = 1 texture tile
+@@ 735007e2e36e t
+u per world unit
+@@ 1ad586af5e76 t
+window as narrow as the portrait: nothing to add
+@@ 8e51a6513ca8 t
+sub-rows, from the bottom edge (0) to the top edge (1)
+@@ 9ad8e69a3fd7 t
+(S + 1, 2), (S + 1, 4): linear vertex color, like the original sky
+@@ fff797b66c27 t
+u relative to the starting point (join added at each frame)
+@@ 27e42147675b t
+increasing abscissas: same traversal direction (hence front-facing) as the original quadrilaterals
+@@ ba15af9ad2ac d
+Title screen sky in wide format (pure functions: no OpenGL calls, everything can be tested without a window).
+
+The original lays out the title for a portrait screen (9:16). Its sky (object "kumo", model 000_kumo2) is a carpet of IDENTICAL cloud tiles: 4 rows (stacked in the height, offset by half a tile
+from one another) of 3 tiles of 11.5 units; the object slides by 0.0192 unit per frame then comes back (period 11.5): the portrait area sees less than one tile in width. In 16/9, 21/9 or wider,
+the same tile appeared 3 to 6 times in a row, as is ("you can see too much that the pattern is repetitive").
+
+DEFAULT RENDERING (#174, 2026-11-04 11:30): "adjust the height to automatically fit the window height, and the repetition will be along the width, and do apply the visual effects as agreed": the sky is drawn flat, at screen scale (`screen_sky`): the texture (square, 256 x 256) has the window's HEIGHT as its height, at any window size, with no additional enlargement; it repeats across the
+WIDTH (1.78 times in 16/9); the wave effect of the old band rendering (undulating horizontal stretch 0.52 to 1.48 times and vertical slide, `STRETCH` / `SLIDE`) is applied to the whole width, fixed on screen while
+the texture scrolls underneath (the clouds deform as they pass): the copies of the same tile therefore do not look alike; the tint gradient of the original rows (orange at the top and bottom, white in the middle) is taken over as it appeared
+on screen (`screen_gradient`); the scrolling keeps the original speed (one tile per 11.5 units of object slide, i.e. 599 engine frames). The previous renderings remain available: `DQ_CIEL_AGRANDI=1`
+(trial #130 below), `DQ_CIEL_BANDES=1` (bands), `DQ_CIEL_COPIES=1` (copies).
+
+TRIAL #130 (enlarged, `DQ_CIEL_AGRANDI=1`): the sky image is ENLARGED around the center of the screen (`screen_zoom`: x 3.16 in 16/9) so that the whole window shows only what the portrait area of the original game showed: a single
+tile, never repeated; no more bands. The old solution (stretched bands, below) remains available with DQ_CIEL_BANDES=1 for comparison.
+
+Previous solution (bands): the central portrait area (width = height x 9/16) remains EXACTLY the original sky; on each side, starting from its edge, bands with the same geometry as the sky rows
+(same y, z, same vertex colors) take up the texture again with a horizontal stretch that varies smoothly along the band (from 0.52 to 1.48 times the original size, average 1: same overall scale), and a vertical slide of the texture inside each row (zero at its edges: the seams between rows remain those of the original), with different phases on the left and right: the same cloud shape no longer appears twice at the same place or at the same size. The stretch equals 1 at the edge of the zone:
+continuous join, no seam. The texture coordinates follow the scrolling of the object (the join at the edge remains exact at each frame).
+@@ 97f71759ec66 d
+Flat rendering: texture abscissa (in tiles) at distance `d` (in tiles, array) from the left edge of the window. Exact integral of 1 + sum of the `STRETCH` waves: G(0) = 0, slope between 0.52 and 1.48 (never a reversal),
+overall scale 1 (the sum of the waves has zero mean). Same wave effect as the bands, but periodic and without a ramp: it applies to the whole width.
+@@ 0af63583c7c5 d
+Flat rendering: vertical slide of the texture (fraction of its height, before the sin(pi t) profile that cancels it at the top and bottom of the window) at distance `d` (tiles) from the left edge.
+@@ 25340b21bb43 d
+Tint gradient of the original sky as it appears on screen: -> (y, colors): `y` = increasing normalized screen ordinates (-1 bottom, +1 top), `colors` (n, 4) = corresponding vertex color, from the
+projection (matrix `M`) of the edges and of a few intermediate points of each original row (the color is linear in the world, not on screen). Points outside the lens (behind the camera) are ignored.
+@@ da46a674da17 d
+Flat sky, at screen scale (#174): triangles (positions, texture coordinates, colors) in normalized coordinates (x and y from -1 to 1, depth at the back), for a window of width / height ratio `aspect`. The texture has the window's height as its height (v from 0.998 at the bottom to 0.002 at the top, like the original rows) and `tile` window heights as its width (`TILE_WIDTH`); it repeats across the
+width (u in tiles, texture in REPEAT). `phi_tiles` = scrolling of the object in tiles (the content slides toward +x when it increases, like the original object). `gradient` = (y, colors) from `screen_gradient` (white if None).
+The stretch (`stretch_plate`) and the slide (`flat_sliding`) are fixed on screen: the texture scrolls underneath.
+@@ 44345cf4d6b1 d
+9:16 portrait column in the middle of the window, in pixels: (x of the left edge, width). The whole window when it is narrower than (or equal to) the portrait.
+@@ ea36fb8eb0ab d
+Half-width of the portrait area in normalized screen coordinates (-1..1) for a window of width / height ratio `aspect`.
+@@ fbe483276fcb d
+Zoom (trial #130) of the title screen sky, centered on the screen: 1 for a window as narrow as the portrait (or narrower), otherwise `aspect / ASPECT_PORTRAIT` (16/9: x 3.16; 21/9: x 4.15): the whole window
+then shows what only the portrait area of the original game showed (less than one tile of clouds in width), so the same tile is never repeated in it. `DQ_CIEL_ZOOM` (test) forces a value.
+@@ c8c6d206b3ef d
+Projection matrix `M` (4 x 4, columns of the homogeneous coordinate space) followed by an enlargement `z` of the image around the center of the screen (screen x and y multiplied by z; the depth does not change).
+@@ d733ffe3212c d
+Deformation of the texture at distance `d` (world units, array) from the edge of the portrait area, on `side` 0 (left) or 1 (right).
+-> (G, dv): G = texture abscissa traveled, in world units (G(0) = 0, G'(0) = 1, G' stays between 0.52 and 1.48: monotonic, and overall G ~ d: same scale). dv = vertical slide (fraction of texture, dv(0) = 0, dv'(0) = 0): the
+builder applies it with a sin(pi t) profile over the height of each row, because the sky rows are stacked with a half-tile offset and only join if their edges read the texture from v = 0 to 1.
+@@ 6c41a3760a26 d
+A row of sky tiles: bottom / top edge (y, z, v, color), tiles (xg, xd, ug, ud) and period.
+@@ 8ad4a2341a4e d
+Sky rows from the object's vertices (N vertices, N a multiple of 6: triangles of quadrilaterals aligned on x and y). ValueError if the structure is not the expected one.
+@@ 78e265c7e972 d
+World abscissas where the portrait area (|screen x| <= half) and the whole window (|screen x| <= 1) intersect the sky, on the VISIBLE part of the rows (|screen y| <= 1.02).
+-> (zone_bottom, zone_top, screen_bottom, screen_top): outer bounds of the zone (no point of the zone outside [zone_bottom, zone_top]) and of the window; None if nothing is visible.
+@@ 1b29d8855c89 d
+Sky bands on either side of the portrait area. `pos` / `uv` / `col`: vertices of the "kumo" object at its original position (before scrolling).
+@@ e9f6a7207773 d
+Vertex positions of a copy of a sky plane (`ext_map`): `dx` number = copy SHIFTED by dx on x (title sky); `('miroir', xe)` = copy SYMMETRIC with respect to the plane x = xe (x -> 2 xe - x: the points of the edge xe do not move,
+the image extends without a seam; sky planes of dpout and ev09, MAP-05). Vertex array (n, 3), float32; `cur` is not modified.
+@@ 0f3c409e7b95 d
+u of the original sky texture at abscissa `x` (array, excluding scrolling), exactly that of the quadrilaterals (including beyond the 3 tiles: the pattern repeats).
+@@ 076c27fc6aa5 d
+Geometry of the bands (positions, colors, stretch: everything except the u join at the edge, which follows the scrolling).
+@@ f95e9ad3c42a d
+-> (positions (N, 3), texture coordinates (N, 2), colors (N, 4)) in float32: triangles of the bands on either side of the zone; None if there is nothing to add.
+`phi` = x displacement of the object from its original position (scrolling): the u of the bands is that of the original sky at the edge of the zone.
+@@ f5f41f83b3cb d
+(n, S + 1, k): columns x sub-rows -> triangles (bottom left, top left, top right, bottom left, top right, bottom right) of each quadrilateral (same order as the original sky).
+## FILE dq4_pc/sound.py
+@@ 7ff42f07e6f3 t
+extra block at 0xc0 (u16 at 0xc0: 0, block size at 0xc2, samples u32 at 0xc4, loop start u32 at 0xc8)
+@@ e2aaa94b1af2 c
+header: prediction indices (1 byte per channel), deltas (s16), sample 1 (s16), sample 2 (s16), each grouped by channel
+@@ 327806658591 t
+stereo: the nibbles alternate left (high-order) / right
+@@ 38f1ef1e4d59 t
+integer division toward zero (Microsoft reference code)
+@@ f939eec4c955 t
+version of the sound effects kept in the disk cache (son_SE*.npz): 2 since #201 (loops of SE 329, 331, 1118); a cache of another version is rebuilt
+@@ dd404e5ccd3a t
+samples: beyond that, the header is judged inconsistent and the sound is not looped (original safeguard of the port)
+@@ d4a923f23506 t
+loop end that exceeds the end of the data by a few samples (remainder of an ADPCM block: SE 329, 331, 1118; #201): the loop goes up to the end of the data
+@@ 918b70e69307 t
+cmd_bgm: value >= 0x1000 = Sound.PlayBGM(value - 0x1000) with resume: the current music is remembered and resumed (from the beginning) when this track is finished (jingle)
+@@ d6439bf71298 t
+value >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm sends 0x4000 | duration, battleStop 0x4008); the duration is ignored by Unity (immediate stop)
+@@ 1ced4c46350b t
+seconds: a sound effect that has just been started is never released because its player does not yet report itself as "playing" (accelerated walking: the engine makes several steps, hence several tick() calls, in a row within the same displayed frame, just after the door or village exit sound effect order)
+@@ fd12136bf8b7 t
+seconds: a looping sound effect whose stop the engine would never send is cut off
+@@ 1b549d3c433c t
+consecutive playback failures (sound effect or music) before cutting the sound for a while (device removed or changed, driver: #221, audit SND-10)
+@@ fca04661ca3f t
+seconds before the new attempt, depending on the number of cutoffs already suffered (the last delay repeats)
+@@ 1d49679a8c83 t
+log lines at most per session (a lasting failure does not fill the file)
+@@ 31ede5544667 t
+engine frames per second at normal speed (one engine step = 1/30 s)
+@@ 8e6231bc874e c
+Music decoded in advance (background task, a separate thread, one at a time, when nothing else needs decoding) and kept in memory (never evicted by the cache;
+59 MB in total): decoding a long music track takes time (BGM 23, 113 s: 0.6 to 1.2 s here, more on a slow PC; the jingles: 0.01 to 0.14 s), whereas the engine
+stops a music track requested during an accelerated battle 2.7 to 3.9 s after starting it (x3): without this, the defeat music (BGM 23, requested when the whole party
+is defeated) was only decoded at that moment (it started late, and an engine stop arriving before the end of the decoding canceled it: the party died in silence).
+@@ 6f332f4f3553 c
+---- sound categories (Esc menu > "Son"). Unity only knows PlayBGM / PlaySE (class Sound): no voice, no separate "ME" channel. The categories are those that the ENGINE
+distinguishes by the way a sound is played: music (PlayBGM, looping); jingles and fanfares (PlayBGM without loop: BGM 6, 8, 10, 13, 35 to 50 of 2.9 to 23.2 s,
+or requested with resume of the previous music, 0x1000 | n = SoundManager::playRestart); sound effects (PlaySE); interface sounds (sound effects 300 to 304:
+300 = menu button played by Unity and message page played by ui_MsgLoop, 301 = EXTRA_PRESENT_EXP menu, 304 = opening of a Yes / No box;
+302 and 303: same block of the bank, never called directly by the engine, hence assumed to belong to the interface).
+@@ 99df1c87525e t
+victory fanfare (BattleEndTask: SoundManager::play(409), 2.9 s): played like a sound effect but it is a fanfare; adjusted with "Jingles et fanfares" (volume of the game's "bruitages" option kept)
+@@ f178150028b3 t
+seconds: a non-looping track shorter than this is a jingle; BGM 1 (111 s) and 34 (655 s), without loop, are real music (except when requested with resume)
+@@ 6dce4701a170 t
+the game's "volume" options ("Parametres" window): factors 0.2 to 1
+@@ bb5ffe024d84 t
+logfile(text): line added to the error log; alert(text): small on-screen message (sound cutoff and return)
+@@ 94bc984e7865 t
+consecutive playback failures; cutoffs suffered; time of the new attempt (None = no cutoff in progress); music to restart when the sound returns
+@@ a2a031765bcd t
+music preloading: a separate thread, so that it never delays a sound requested by the engine
+@@ 3e90ae3272ee t
+music to decode in advance (names), names kept in memory
+@@ d26513176edf t
+music orders held back during a jingle (value, engine frame); engine frame of the order that started the current music
+@@ cd81f9e33e97 t
+jingle: music to resume, end time of the jingle
+@@ ed41322df4d9 t
+time and position (seconds) of the playback start; requested position for the next music (loading a savestate)
+@@ ca1d25938204 t
+[_SFX]
+@@ 2e8cdb85af73 t
+own volume of the current music and its category; time of the start of the pause (Esc menu)
+@@ 8b9479b54cab t
+Esc menu open; "Son" page of the menu (sounds play while the engine is stopped)
+@@ 7b5dd97275e9 t
+the window no longer has focus (Alt + Tab, minimized): everything is paused, even while listening on the "Son" page (#235)
+@@ 6607ad69c219 t
+(snd_vol.dat: read on first use, see vol_snd)
+@@ 19abaf0b2128 t
+reading of the music tracks (Ogg Vorbis); the sound effects do not need it
+@@ 99ebd2c601a0 c
+---- playback failures (#221, audit SND-10 and SND-12)
+@@ 8e2c2f4a4af5 c
+---- own volume of each sound (snd_vol.dat)
+@@ c1674c8c5271 c
+---- reading the files
+@@ c2ff2f20bf85 t
+(cache of an old version: rebuilt)
+@@ 67ada8a22d30 t
+sound effects are small: disk cache (a long music track, on the other hand, takes more than a second: see BGM_PRELOADED)
+@@ acb79646c8fb t
+(even with the sound off at the start: preloading waits for a music track to play)
+@@ 0ce91fc660a6 c
+---- called every frame
+@@ 1a822889fb58 t
+nothing else to decode and a music track is playing: preloading advances by one music track
+@@ c55ec80fa54e t
+Sound.SystemUpdate: the jingle is finished, the previous music resumes
+@@ fee8c21d6aff t
+a finished sound effect (or one past its duration) is released
+@@ 0dd9747cc595 c
+---- engine orders
+@@ 56dd12bea752 t
+(test) log of the engine orders
+@@ d2901a0400d7 t
+jingles turned off: nothing to protect
+@@ fd50b4d440a3 t
+sound effect 0: "none" (the engine sends it with each critical hit, SE0000 does not exist in the data)
+@@ d7ae815219f1 t
+sound off (outage in progress, or no audio driver): nothing is attempted, failures do not accumulate
+@@ ff7b53c7ad4f t
+looping sound effects (14 of 634): until the engine's stop order (packet 36)
+@@ b839f0480884 t
+category turned off (or volume at zero): a short sound effect is not played; a looping sound effect is played at zero volume: it can be heard if the category is reopened
+@@ b081fca50489 t
+cmd_bgm: >= 0x4000 = Sound.StopBGM
+@@ b09c7f98b5a9 t
+stop during a jingle with resume: Unity's StopBGM does not reset its state, the previous music restarts (audit SND-05)
+@@ 1e78c0bbc65f t
+Sound.PlayBGM with resume: jingle, then return to the current music
+@@ 8dca11fedbef t
+already in progress (a non-looping track that has reached its end is no longer "in progress": requesting it again restarts it, audit SND-06)
+@@ f0e049c85099 t
+another music track was requested in the meantime
+@@ acced293e1f8 t
+sound off: to restart on return
+@@ 56b8319d3169 t
+resume at the recorded moment (loaded savestate)
+@@ 129b9b424a92 t
+(before play: the player immediately reads a few seconds ahead)
+@@ 1c92ff1cc975 t
+(file header x snd_vol.dat: the original's volume, #237)
+@@ 8c77165ed56e t
+(the music keeps running even when turned off or at zero: reopening the category makes it audible at the right place)
+@@ c806eaf03de1 t
+non-looping jingle: time of the resumption of the previous music
+@@ 2ce557c86dfc t
+to restart when the sound returns (a missed jingle no longer has a purpose)
+@@ e1988e07ecfc c
+old names (music / sound effects volume): kept for the existing interface
+@@ bff9f74bae77 d
+Game sound: original music and sound effects (assets/sound/*.akb of the data package), played by pyglet.
+
+AKB format (Square Enix container, read in libsdlib_android.so: akbMaterial*):
+  0x00 'AKB '; 0x04 u16 version; 0x06 u16 header size; 0x08 u32 file size; 0x0c u8 codec (2 = MS-ADPCM, 5 = Ogg Vorbis);
+  0x0d u8 channels; 0x0e u16 frequency; 0x10 u32 number of samples; 0x14 u32 loop start; 0x18 u32 loop end (0 = no loop);
+  0x20 float volume; data at 0xcc: complete Ogg (codec 5), or 4 bytes then MS-ADPCM blocks (codec 2, block size = u16 at 0xc2).
+The engine packets: 35 = sound effect (SE%04d), 36 = sound effect stop, 37 = music (BGM%02d; value >= 4096 = stop).
+Nothing is written outside the cache folder; no game file is modified.
+@@ 3c79bf68a644 d
+-> dict (codec, canaux, frequence, echantillons, debut, fin, volume, bloc) or None if it is not an AKB.
+@@ 4faf15ebf8ef d
+Block-based MS-ADPCM (four bits per sample) -> int16 (n, channels). The blocks are independent (their header gives the state): all the blocks are decoded at once.
+@@ 5d4b26a3ff47 d
+Ogg Vorbis -> int16 (n, channels). Read as floats then CLIPPED to full scale: Vorbis sometimes exceeds +-1.0 after decoding, and reading directly as int16 made these samples overflow
+(a peak became a peak of opposite sign: BGM 14, 3 samples around 91 s; BGM 34, 7 samples; #200).
+@@ a22f9ef3e21f d
+AKB file -> dict (pcm int16 (n, channels), frequence, debut, fin, volume) or None.
+@@ 793a63257718 d
+'jingles' for a non-looping track requested with resume of the previous music, or short; 'musique' otherwise (a looping track never returns to the previous music: it is music).
+@@ 69c59cad7828 d
+The game's "volume" option of the "Parametres" window (OptionStatus, 0 to 4, stored in the save) -> factor: Sound.SetVolumeBGM / SetVolumeSE set s_bgmVolume = s_seVolume = (idx + 1) x 0.2.
+@@ dd25393977e2 d
+Volumes (0 to 1) and switches per category. gain(category, the file's own volume) = general volume x category volume x own volume x the game's "volume" option
+(music and jingles: that of the music; sound effects and interface: that of the sound effects), 0 if the category is turned off. Pure computation: no audio player.
+@@ 4ec903e641e2 d
+A sound effect in progress: identifier, player, end time, category, file's own volume.
+@@ bfdd94e0417b d
+Playback: one music track at a time (looping), sound effects in parallel. Decoding is done in a background task.
+@@ 86634eebc47f d
+option: "musique" or "effets" = which of the game's "volume" options applies; by default that of the music for music and jingles, that of the sound effects for the rest (a sound effect stored under "jingles" passes option='effets').
+@@ 915e14245f56 d
+A line in the console and in the error log (at most NOTES_MAX per session); `alert`: the same, briefly, on screen.
+@@ 912419ca6ce5 d
+Error without immediate consequence (volume, resuming after pause): noted only once per session.
+@@ 6174160f48d4 d
+A sound effect or music track could not be started: FAILURES_MAX consecutive failures cut the sound for a while (new attempt on its own, see tick) instead of cutting it until the game is closed.
+@@ 75d4b9650b41 d
+A sound has just started: the series of failures is over (and, after a cutoff, the sound is restored).
+@@ 5459ee80f294 d
+End of the cutoff: the sound is reopened; a single further failure cuts it again immediately (longer delay). The music requested during the cutoff is restarted.
+@@ 8f2850c0e0e3 d
+During the cutoff the engine's orders are lost, except the background music: the last one requested is restarted when the sound returns (a stop cancels it; a jingle with resume is ignored).
+@@ 252ba71c0db8 d
+Factor from `assets/sound/snd_vol.dat` for a sound: music `BGM%02d` = index of the file number, sound effect `SE%04d` = index of the sound number (1171 floats; 1.0 for almost all). The original plays header x snd_vol x option (`SoundControl.Play`): 49 music tracks from 0.7 to 0.95 and sound effect 409 (fanfare) at 0.6 (audit SND-01, #237). 1.0 if the file is missing or if the index is outside the table.
+@@ 98d8ff5c9000 d
+Calls callback(data): immediately if `name_str` is already decoded, otherwise from tick() when the background task has finished.
+@@ 671a25683f40 d
+Decodes the commonly used sound effects in a background task.
+@@ 3fb178f3e26f d
+Music to decode in advance: one per game frame, only when no other decoding is waiting (the first music track of the game therefore goes first) and once a music track is playing. They stay in memory.
+@@ f53ca967d79c d
+Decoding cache: 80 sounds (excluding pinned music) and 400 MB at most; the least recently used go first.
+@@ 7192374c30b2 d
+evts: [(packet type, value)] of the frame: 35 sound effect, 36 sound effect stop, 37 music. engine_frame: number of the last engine frame (30 per second at normal speed):
+used so as not to cut a jingle when the game runs faster than normal (see _is_jingle_protected).
+@@ 46c137899673 d
+Engine music order (frame e): applied immediately, or held back as long as a jingle would warrant it (and behind those already waiting: the order of the orders is preserved).
+@@ 328926845de5 d
+True if a jingle is still playing AND the engine order of frame e would have arrived after it at normal speed. An accelerated battle chains its orders (stop, resume of the music, ...) 2 to 3 times earlier: the fanfare was cut
+(level up, BGM 47 of 3.1 s: played 1.75 s at x3). The order therefore waits for the time at which it would have arrived at normal speed (frame e - frame of the order that started the jingle, at 30 per second) or the end of the jingle, whichever comes first.
+@@ 1124eb84cef4 d
+Held-back music orders: applied in order as soon as the jingle no longer has a reason to hold them back. Jingle finished and next order = another jingle (with resume): the previous music resumes first, as it would without the delay (Sound.SystemUpdate).
+@@ b7ed8bd4d5ab d
+True if the current non-looping track has reached its end (the player stays in place, `bgm_id` too: only the end time says so).
+@@ cfd7b126e615 d
+Playback position of the current music (seconds into the track, loop included), or None if nothing is playing.
+@@ 41a583e6eac2 d
+What is needed to resume the music at the same moment (savestates): {'id', 'pos', 'reprise'} or None.
+@@ d11854afeae7 d
+Loading a savestate: the music restarts from the recorded moment (without `info`, an old savestate: from the start of `default`, the last engine command).
+@@ 71a0a37b6a06 d
+Esc menu: new volumes / switches, applied IMMEDIATELY to the sounds in progress (music, jingle and sound effects already started).
+general: 0 to 1; volumes, active_flags: {category: value}; game: {'musique': factor, 'effets': factor} (the game's "volume" options).
+@@ 76839bb16b21 d
+Compatibility: music and sound effects volume (0 to 1).
+@@ d768a72af59b d
+Must the players be paused? Yes without focus (always), or menu suspended while not listening on the "Son" page.
+@@ 6a221f416c77 d
+Esc menu open (yes) or closed: music and sound effects paused, except while listening ("Son" page of the menu: the settings are heard).
+@@ e22973dfb349 d
+Window without focus (yes) or back (no): like Sound.SystemPause of the original, music and sound effects paused; on return, they resume where they stopped (the deadlines are shifted by the duration of the pause, `_pause_audio_players`).
+@@ f0846275fb5c d
+"Son" page of the Esc menu: sounds resume (the current music, the test sound effects) so that the volumes being adjusted can be heard; on leaving the page, they are paused again.
+@@ 70623b9a77ae d
+Actual pause of the players; on resume, the deadlines (end of a jingle, of a sound effect) are shifted by the duration of the pause.
+@@ 39e50d8525ab d
+Key: sound on / off.
+@@ bf618ad052e3 d
+Music with sample-accurate loop (start, end); end == 0: played only once.
+## FILE dq4_pc/texts_en/__init__.py
+@@ 6a5040d49561 d
+English translations of the tool's texts (D-238). One file per domain, each defining `EN = {text french: text anglais}`; see `dq4_pc/language.py`.
+## FILE dq4_pc/texts_en/divers.py
+@@ 1f8439469eee c
+---- paths.py
+@@ 54a1efbd0cf7 c
+---- monde/flat_sceneries.py
+@@ affa6af8596e c
+---- monde/donnees.py
+@@ d053856663fa c
+---- monde/map_tint.py
+@@ d52afecd3ca5 c
+---- noyau/moteur.py
+@@ 47d2dc8ea085 c
+---- persistance/etats.py
+@@ 569413432811 c
+---- persistance/logfile_format.py
+---- persistance/reglages.py
+---- persistance/sauvegardes.py
+---- main.py
+@@ 83d6a9b8f139 c
+---- sound.py
+@@ bee800c09135 d
+English texts: miscellaneous (command-line help, startup, folder migration, saves, sound, engine, world; see language.py).
+## FILE dq4_pc/texts_en/menus.py
+@@ ca890aceb117 c
+---- "Sauvegardes" screen (start menu)
+@@ c99281d0d0fd c
+---- save file logic (persistance\sauvegardes.py, logfile_format.py): error messages shown by the "Sauvegardes" screen, file dialog boxes
+@@ 5ea97781ad31 c
+---- "Historique" window (dialogues and battles)
+@@ cf0222c8905e c
+texts that the tool composes around those of the game (header and lines of a battle, favorite whose message is missing)
+@@ 62545cb7c371 c
+console messages
+@@ a5a01395105a c
+---- name entry, license
+@@ 24cae96b3612 c
+---- names of the elements in the interface editor (on-screen buttons)
+@@ 69efb6f3768b c
+---- dialogue test texts (interface editor), one line per entry
+@@ e5fabc4dd4d8 c
+---- F1 info
+@@ a9dc97d4fa88 c
+---- notifications and savestates
+@@ 06b99f7d1dc4 c
+---- console messages (menu resources, fonts, title)
+@@ 79130f20f711 c
+---- texts probably also translated by the "pages Parametres" batch (menus\pause.py): same translation; deduplicate at merge (test_language: no duplicates between files)
+@@ 11cbe709e472 d
+English texts: screens and windows of the tool other than the "Parametres" pages (D-238, see language.py): "Sauvegardes" screen (+ messages of the file logic and dialog boxes), history (labels, help, texts composed around
+the game texts), name entry, license, names of the interface editor elements, dialogue test texts, notifications, F1 info and console messages of these modules.
+The game texts (dialogues, names, original menus) are never translated. English punctuation: no space before ":".
+## FILE dq4_pc/texts_en/pause.py
+@@ 67a36dcf338e c
+---- page titles, "Langue" line
+@@ 3c4a4dc09f05 c
+---- root
+@@ 392144b83ee0 c
+---- Affichage
+@@ 10cf3505ed37 c
+---- Son
+@@ 2d216430bbaa c
+---- Commandes: sections, mouse gestures, cells
+@@ 1facb5aab4ab c
+---- Commandes: actions
+@@ 71cb9f4b4494 c
+---- Commandes: value names
+@@ dacdded50bd5 c
+---- Commandes: help texts
+@@ 85dc9780911b c
+---- Commandes: key instructions (KEY_HELPTEXT) and capture
+@@ c9f1c4ebf5d9 c
+---- general line instructions (sliders, lists, switches), entry
+@@ 3bf98d7c9b37 c
+---- Modifications
+@@ 8a905729c820 c
+---- États (savestates)
+@@ 2adc4de8c11a c
+---- Quitter
+@@ d0fc5c5e19d6 c
+---- Interface (interface editor): lines, help texts, tooltips
+@@ f1375926b7c8 c
+---- Interface: groups of the "Interface à modifier" list
+@@ bdad3d20c6fe c
+---- Interface: names of the game windows (WINDOW_NAMES)
+@@ a59dfe5aece5 c
+---- information messages (bar above the frame)
+@@ b1fdc7845847 c
+---- key names (RG.key_name: the menu translates them when drawing them)
+@@ 5e5e151e83bf c
+---- console messages (settings.py, pause.py)
+@@ fbecf3ad69e5 d
+English texts: pages of the "Paramètres" (Pause) menu (see language.py).
+Key = the French text as written in the code (menus/pause.py, persistance/reglages.py). The line help texts are translated sentence by sentence: the menu splits a help text at triple spaces (`   `) and translates each sentence
+before wrapping it to the tooltip width (a help text assembled with KEY_HELPTEXT is thus translated sentence by sentence). Words identical in both languages (Interface, Modifications, Casino, Menu, Normal, Action, Tab...) have no entry.
+## FILE dq4_pc/texts_en/window.py
+@@ 35b8a7ea0e25 c
+---- fenetre/aides.py
+@@ d9a6be353e20 c
+---- fenetre/champ.py
+@@ a16043a749ec c
+---- fenetre/keyboard_mouse.py
+@@ e67ac3077092 c
+---- fenetre/instantanes.py
+@@ 7b7c7e36ea04 c
+---- fenetre/jeu.py
+@@ b3bfe50acd9a c
+---- fenetre/full_screen.py
+@@ b97006282bd3 c
+---- fenetre/battle_scene.py
+@@ c5b4a510d17f c
+---- rendu/postfx.py
+@@ 003121675519 d
+English texts: window (messages of the console and of the game window: fenetre\, rendu\; see language.py).
+## FILE dq4_pc/window/battle_scene.py
+@@ 5edeed653bf6 t
+attachment of the battle speed button (see _anchor_battle_speed and hud_mobile.Buttons.anchor)
+@@ a5c10210ebb5 t
+(tf: reference frame without the message offset dzm)
+@@ 2bbc288cdd4e t
+the window frame: the largest rectangle
+@@ f990e7e705d6 t
+plate attached under the frame, at its right edge
+@@ 8c540b492b7c t
+25 numbers have no m<id> texture (#225, audit CMB-03)
+@@ 80600c8e1796 t
+monster not drawn (transparent texture) rather than stopping the game
+@@ 72c03a2166b6 t
+MeshChara.SetBillboard: camera rotation x SceneCamera.s_yReverse (Euler(0, 180, 0))
+@@ 0cade789c012 t
+immediate mode: no packet this frame = not drawn
+@@ cc5f6a6cdccf t
+title screen: the credit texts (Yuji Horii...), before the logo; placed by the engine, without correction (1:1 with the mobile game)
+@@ 4fe1e9061156 t
+(test) without the credits: the difference from the normal capture gives their exact position
+@@ a11a830dbbf7 t
+(trial) quadrilaterals in reverse order
+@@ 1a05f555fa99 t
+full-screen quad effect (35): stretched to the width of the 16/9 screen (CMB-02)
+@@ 5237843d284b t
+title screen: logo and subtitle twice as large (intentional deviation, issue #108)
+@@ 0914f1e4d25c t
+one byte per quad = opacity of the part (shadows, fade-in appearances, blinking)
+@@ 800bb6c72180 t
+Material.color (packet 25) x vertex color
+@@ fa0d930143ac t
+FIXED capacity: recreating a list when the number of vertices changes corrupts the other monsters (glitches/blinking)
+@@ 3c13ef57f83f t
+unused vertices: degenerate triangles (at point 0), never drawn
+@@ 9f57f3eacf8e t
+render queue of the shaders Custom/DssaChara, DssaMonster0, DssaMonster1, DssaCharaTransparent
+@@ e30d6a00abed t
+ground of the periphery of the arena
+@@ 18f7ed7db074 t
+cascade shortened by "Vitesse de transition": the simulation advances by several game frames per engine frame
+@@ 2f84b01b6a3a c
+jump of the damage digits: upward offset (interface units) at each tick of 2 / 30 s (HoppingNumber.Update)
+@@ 600704f5c706 t
+engine frame, fraction included
+@@ d370b124346a t
+ticks elapsed since creation (1 tick = 1 engine frame)
+@@ e9ad9227da0e t
+finished (last digit: wait >= 38)
+@@ cd8cc227d82b t
+HoppingNumber.Setup: 16 px digit enlarged x 2 (AddIcon size 2.0), i.e. 32, advance of 16 (PartsInfo[11].m_dps) per digit, all x 0.8 (local scale): the cells overlap by half, the digits (7 px out of 16) stay tight
+@@ c8aa2f906812 t
+digit counter: 2 ticks of offset between digits, 2 per tick
+@@ d8b0dd0aebb9 t
+fade to black in progress (or black held)
+@@ 97a7da5a48b4 t
+a page waiting for a key must be visible

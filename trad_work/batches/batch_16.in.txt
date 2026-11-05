@@ -1,0 +1,122 @@
+## FILE tests/test_window_mode.py
+@@ 59e33be2eb11 t
+fenetre toujours remontree
+@@ 9e419b05d56b t
+1920 x 1080 : fenetre 1280 x 720 au centre du bureau
+@@ 5a569db2aa11 t
+position memorisee par la fenetre : gardee (pas de recentrage)
+@@ 53dca08b5d57 t
+(changement puis retour a l'etat de depart)
+@@ b1d5d7ac10bb t
+(une image complete est dessinee avant et apres l'affichage de la fenetre)
+@@ 186d2ce518a1 t
+(l'echec est unique : le retour a l'etat de depart reussit)
+@@ 13ab1a4457b8 t
+la pile : ou ca a echoue
+@@ e5eac914e6f4 t
+(une entree de plus, a la suite : le journal n'est jamais ecrase)
+@@ a161eb059483 t
+(inecrivable)
+@@ d3906bdf8056 t
+(un echec de plus a chaque essai)
+@@ a4d2f01ecba2 t
+(l'essai suivant fonctionne)
+@@ 4dc44f8e284d c
+---- #126 : un ecran branche pendant que la fenetre existe rend la poignee du moniteur de pyglet invalide
+@@ d47d797164fb t
+le moniteur gardé est celui de la liste neuve
+@@ b4ddd1342872 t
+aucune erreur notee
+@@ 814f962e7e73 t
+(e[0] : « Langue », D-238)
+@@ 9a1e11a45e10 t
+interrupteur Oui / Non, pas une liste deroulante
+@@ 88e2514044e7 t
+Entree / clic bascule (Game.set_full_screen)
+@@ 25082217b97d t
+gauche = Non, droite = Oui
+@@ fd47e5ad40d0 t
+(deja dans cet etat : rien)
+@@ a6518c22a8a0 t
+(plus de texte rouge « Sans effet en plein écran » : la ligne est seulement grisee)
+@@ ca3f595cf2f7 t
+(au clavier, par le menu : une ligne grisee ne change rien)
+@@ d80a186ff084 t
+(« Langue » en tete, D-238)
+@@ a8ce6b711dae t
+position brute, sans reglage
+@@ 040c63271d86 t
+(un ancien reglage n'y change rien)
+@@ fa8cd18105d2 t
+ancienne correction complete (debogage)
+@@ e15c144caf58 d
+Test des deux modes de la fenetre (fenetre, plein ecran) : reglage `mode_fenetre` (bornes, migration de l'ancien booleen `full_screen` et de l'ancien plein ecran exclusif, cles abandonnees), raccourcis F11 et Alt + Entree
+(vrai code de Game.on_key_press / on_key_release / _fronts sur un faux Jeu), bascule en une seule etape (vrai code de Game.set_full_screen / _set_full_screen sur une fausse fenetre : ordre des appels, retour a l'etat de depart en cas
+d'echec), ordre et grisage des lignes de la page Affichage du menu Echap (interrupteur « Plein écran », plus de « Lissage des textures » ni de « Correction des bords des sprites »). Aucune vraie fenetre n'est ouverte.
+
+    python3 tools/test_window_mode.py
+@@ 094c94029cfc d
+F11 et Alt + Entree (vrai code de Game.on_key_press / on_key_release / _fronts sur un faux Jeu, sans fenetre) : bascule, Entree avalee, discussion de groupe (Alt) au relachement d'Alt seul.
+@@ 7b43e2c47e11 d
+Un moniteur de pyglet (x, y, width, height, name, is_primary).
+@@ 1786402e7521 d
+Les appels que la bascule fait a la fenetre pyglet, dans l'ordre (`logfile`), avec l'etat qu'ils changent. `failure` : nom de l'appel qui leve une erreur (une fois). `screens` : les moniteurs (FakeScreen ; defaut : un seul,
+le bureau) ; `screen_page` : celui de la fenetre pour pyglet (`screen`, defaut le premier).
+@@ f3301d26ec95 d
+Vrai code de Game.set_full_screen / _set_full_screen sur une fausse fenetre : une seule etape (cachee, un set_fullscreen, une image a la taille definitive, montree), taille memorisee, repli en cas d'echec.
+@@ d00f9f49921e d
+Page Affichage du menu Echap : ordre voulu, ligne « Plein écran » = simple interrupteur Oui / Non, « Résolution » grisee en plein ecran, plus de « Lissage des textures » ni de « Correction des bords des sprites ».
+@@ f948d1f9001e d
+Le plein ecran exclusif, l'option « Correction des bords des sprites » et l'option « Lissage des textures » ne sont plus nulle part dans le code (il reste leurs interrupteurs de debogage : variables d'environnement).
+@@ 873d77aae488 d
+`mode_fenetre_retour` (#42), `edge_correction` et `smoothing` (options retirees), `full_screen` (booleen d'avant la #42) : un ancien fichier les contient, ils sont ignores puis disparaissent a la sauvegarde ; le reste est garde.
+@@ 10bc8ee73742 d
+Le drapeau MOD_ALT de l'evenement peut manquer (Alt deja enfoncee avant le focus, clavier particulier) : l'etat des touches Alt suffit.
+@@ 39273d4eb64a d
+Menu Echap ouvert, saisie du nom, logos d'entree : F11 et Alt + Entree basculent et ne sont transmis ni au menu, ni a la saisie, ni aux logos (qui s'ignorent d'un appui).
+@@ 41d39957f08d d
+La signature de pyglet 2.1 : (fullscreen, screen, mode, width, height).
+@@ 5e294a832727 d
+Nombre d'echecs de bascule notes dans le journal des erreurs (depuis #267 la fenetre n'affiche plus de message : console et journal seulement).
+@@ f4e30cf5436a d
+Issue #123 : la ligne « Fenêtre impossible (...) » ne dit pas ou ca a echoue : la pile d'appels complete, l'etat de la fenetre et des moniteurs vont dans window_errors.log (et la console).
+@@ b90f00bedd57 d
+Une fenetre dont le moniteur gardé par pyglet (`_screen`) est perime (meme position et memes dimensions que le moniteur 1 de la liste neuve) : un second ecran vient d'etre branche.
+@@ 44be22a59fbd d
+Le cas de Sylfried (03/11/2026, 23 h 08) : plein ecran, ecran externe branche, passage en fenetre : marche.
+@@ b45ac578dbda d
+Meme defaut dans l'autre sens : fenetre, ecran branche, plein ecran sur le moniteur de pyglet (set_fullscreen(True) sans moniteur, comme avant).
+@@ dc719b5df73c d
+Si le passage en fenetre echoue pour une autre raison, le retour au plein ecran ne reutilise pas la poignee perimee.
+@@ 8a680da205ee d
+L'ancien moniteur n'existe plus (aucun de meme position) : le moniteur gardé devient celui ou se trouve la fenetre, a defaut le principal.
+@@ dd514cae999a d
+Aucune lecture de `reg['lissage']` / `reg['edge_correction']` / `reg['mode_fenetre_retour']` dans le code.
+@@ 4a12ddd54a68 d
+Depuis #184 la correction des bords est a 0 par defaut (position brute des PNJ, comme dans le jeu) ; l'ancienne correction complete se demande par --correction-bords ou DQ_CORRECTION_BORDS ; un ancien reglage n'y change rien.
+## FILE tests/test_window_name_collisions.py
+@@ 8e5738128b02 c
+ecrits expres par le jeu (full_screen.py : taille et ecran de la fenetre pyglet, remis a jour a la main au changement de mode)
+@@ b7dcd3924471 d
+Test du plantage du 05/11/2026 (Windows, premier lancement apres le passage du code en anglais, D-239) : la methode `_cachee` de la fenetre du jeu est devenue `_hidden`, et la fenetre
+Windows de pyglet (`Win32Window`) a deja un attribut `_hidden = False` : il masquait la methode et le premier dessin d'un menu plantait (`'bool' object is not callable`).
+Linux (tests, captures) n'a pas cet attribut : rien ne l'avait vu.
+
+Ce test lit le code source de pyglet pour TOUTES les plateformes (Windows, X11, macOS, Wayland, sans tete), donc il tourne partout, et refuse qu'un nom de la fenetre du jeu
+(methode, attribut de classe, `self.x = ...` des fichiers de dq4_pc/window) soit aussi un nom de la fenetre de pyglet, sauf ceux ecrits expres (liste ci-dessous).
+Il verifie aussi qu'un clic de souris pendant le chargement du moteur (les logos) est ignore au lieu de lire `self.engine` avant qu'il existe.
+
+    python3 tests/test_window_name_collisions.py
+@@ 03e4a9394c6e d
+Noms definis par un fichier : fonctions, attributs de classe, `self.x = ...`.
+@@ 24f4d9676ea3 d
+Les `on_*` du jeu doivent etre de vrais evenements de pyglet (une faute de frappe ferait un gestionnaire qui ne sert a rien).
+@@ 22624b99693c d
+Pendant les logos, `Game._ready` est faux et `self.engine` n'existe pas encore : le clic saute le logo, sans rien lire d'autre.
+## FILE tests/test_without_startup_callback.py
+@@ ef631f868dc0 t
+(t_startup reste : il sert aux mesures de temps reel)
+@@ aed074e7ba3b d
+Test de l'issue #129 : le petit rappel « Échap : menu    F1 : infos » en bas à gauche, affiché 8 secondes au démarrage, est retiré (demande de Sylfried, 03/11/2026, 23 h 08).
+
+python3 tools/test_without_startup_callback.py

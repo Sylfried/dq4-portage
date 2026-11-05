@@ -1,0 +1,878 @@
+## FILE tests/test_speed_button.py
+@@ 0aabce3685ac d
+Battle speed button (22:29 feedback, #47): it must never "appear" in the wrong place (for one frame on the left of the screen, or under the team banner), and it must not shift when an action message
+replaces the command menu at the start of a turn (command frame at the width of the dialogues).
+
+    python3 tools/test_speed_button.py                                    (parts without the engine: settings, migration, anchor)
+    DQ_APK=<patched APK> DQ_SAVES=<saves> tools/session_flow/engine_slot.sh python3 -W ignore tools/test_speed_button.py
+        (adds the real battle: a forced encounter on the world map, button position at EVERY frame drawn from the start of the battle, in a 1280 x 720 window without a screen (PYGLET_HEADLESS=1))
+Saves are opened read-only. The "probe" (--sonde journal.jsonl) is the program the test launches: a full viewer session that records the button's rectangle at each draw.
+@@ 4aaf24488a72 d
+Launches a session (slot 4, forced encounter, everything is confirmed) and records, at each draw of the button in battle, its rectangle, the message type and the active menu.
+@@ 3e5e0a012d62 d
+Dummy window: only the message box and the command windows matter; between two boxes the anchor does not move; at the very first draw of the battle it already exists.
+@@ 6253f51b8250 d
+DQ_VITESSE_ANCRE set (or removed: None) for the duration of a block.
+@@ d76c390c5010 d
+Buttons on a dummy window (only the window size, the speed button settings and the optional anchor matter).
+@@ 228d8dd60891 d
+#188 ("for the battle acceleration button put it back on the left edge for now"): by default the battle speed button is at its grid cell, on the left edge of the screen, never attached to the
+bottom box (DQ_VITESSE_ANCRE=1 restores the attachment of #47).
+@@ 39e7e936cea7 d
+Default since #188 (no variable): at EVERY drawn frame of the battle the button is on the left edge of the screen, at its grid cell, and never moves.
+@@ b6012e95b1ff d
+On the real layout: command frame x default size = action message frame (to within half a unit).
+@@ 4ec38b3708a9 d
+Mode attached to the bottom box (DQ_VITESSE_ANCRE=1, default of #47): the button is shown only if it has room.
+@@ f0543ca00749 d
+All the drawn frames of the battle (from the black screen that follows the cascade to the last message): button at the bottom of the screen, at the left edge of the boxes (x from 380 to 460 pixels out of 1280).
+@@ fa1f6e044546 d
+The command menu then the first action message (type 2 or 3): same left edge, to within a fraction of a pixel.
+## FILE tests/test_stacked_yes_no.py
+@@ 99c6bc96e91f t
+(CI: neither pyglet nor a window)
+@@ b9cd03ad93b4 t
+same column
+@@ 40cb660ca59e t
+"Oui" has not moved
+@@ 9f91e263f24d t
+one panel (48) + one unit
+@@ 2b34ae30a974 t
+the text of "Non" followed its plate
+@@ 0024bb1cc339 t
+"Non" just under "Oui", one unit between the panels
+@@ 3fd23e13d002 t
+(-10 ; 87): two panels one on top of the other
+@@ 9a33cf8cdf5e t
+a single column, the left one
+@@ 34e56b0513d6 t
+same left and right edges
+@@ f71896153e8f t
+"Oui" (0) entirely above "Non" (1)
+@@ 709ae1079667 t
+a single plate: nothing to stack
+@@ 000b2274ccc2 t
+another window type
+@@ d88a9792181b t
+drawing: columns 2 to 13, rows 1 to 3
+@@ 3bb427c5a466 t
+below the threshold: does not count
+@@ 79743ca969b3 t
+row 1 of 4 from the top; bottom of row 3 = bottom of the cell
+@@ a8ff0acdd902 t
+with a low threshold row 0 (opacity 100, across the full width) counts: edges of the whole cell
+@@ 3baf5b12e469 t
+dialogue box: visible edges
+@@ 16e6c175e0af t
+"Oui" / "Non" stack: visible edges of its original layout
+@@ aa0b98fa9b54 t
+bottom of the (shifted) stack = top of the box + 1
+@@ c615cd40aa7a t
+(center x, bottom y, scale) of the box
+@@ b646d402e0fa t
+right edges
+@@ ebf3d4581ec5 t
+bottom edge: does not move with the size
+@@ 6e0b62407261 t
+definition + drawing + editor preview
+@@ 1cc71fc243ab t
+click areas = drawing coordinate frame
+@@ 93c5833b7e53 d
+"Oui" / "Non" stacked at the top right of the dialogue box, as on the DS (D-231; request from Sylfried of 2026-11-04 at 23:02: "you put them one on top of the other, placed on the top right corner of the dialogue box
+with the right edges aligned"), without a window or the engine:
+
+  1. `Window` of type 1 (Make_YesNo): the "Non" plate moves under "Oui" (same column, one unit between the two), with its text; its frame panel follows it; the vertical extent grows by one panel, the horizontal extent
+     is that of a single column; the touch areas are stacked ("Oui" on top); another layout (not two plates) is left untouched;
+  2. `visible_edges`: the VISIBLE edge of a frame mesh cell (the columns and rows of the sheet whose opacity exceeds the threshold), not the edge of the mesh cell;
+  3. `_yesno_on_message` / `_ui_yesno`: the stack places its VISIBLE bottom edge `YESNO_BOX_SPACING` above the visible top edge of the box, and its visible right edge on that of the box, at all player scales;
+  4. (if the interface cache exists: DQ_UI_CACHE or DQ_CACHE_UI, otherwise /tmp/uicache4) the REAL layout: (-10 ; 87) on a column from -134.5 to -0.5; keyboard and click unchanged (up = "Oui", down = "Non").
+
+    python3 tests/test_stacked_yes_no.py        (only pyglet is needed; without pyglet the tests are skipped)
+@@ 46bfccb1e232 d
+Minimal layout of Make_YesNo (same structure as the game export): frame (z 87) of two 134 x 48 panels (x -134.5..-0.5 and 0.5..134.5, one cell each), two plates (x -67.5 and 67.5, z 62.5) and their texts.
+@@ bccb1f57b15e d
+10 x 6 unit cell on a 16 x 8 pixel sheet (the cell covers columns 0 to 15, rows 0 to 3: u from 0 to 1, v from 0 to -0.5).
+@@ c124384a5371 d
+Window that only knows how to give its visible extent (x0, x1, z0, z1).
+@@ 03bb78d7897c d
+Without pyglet: the placement is wired in at the places that matter (drawing, click areas, editor preview).
+@@ 05eddfc63074 d
+Two cells side by side: the edges are those of the whole.
+@@ d25e9895f644 d
+Whatever size the player has set (v[0]), the right edge of the stack is that of the box (as long as the player does not shift it); the bottom edge too, around its foot.
+@@ 0ecff888074d d
+Without a measurement (edges = None) the stack keeps its old placement: x = box center + offset.
+## FILE tests/test_start_menu_plate.py
+@@ 74606c680fbc t
+MenuParts.BUTTON_STATE_*
+@@ cc9d80684cf0 t
+code 0 wins
+@@ 3a7d9a923f10 t
+the engine: no data5.dat, no label (4, 1)
+@@ 546f230504ba t
+idempotent: called at every frame
+@@ 63b1b7deb10e t
+visible, with its label
+@@ df5e73f93f33 t
+grayed out
+@@ e10fe8be1846 t
+inactive: no more touch area; "Continuer", for its part, stays active
+@@ 691d8cf983da t
+we never replace the label sent by the engine
+@@ 1392a680cb0e t
+data5.dat appears: the engine sends back code and label
+@@ 26c158ca64db t
+neither code nor label: grayed out (and our replacement label does not "validate" it at the next frame)
+@@ b774e1b39cd6 t
+engine label (different from ours) without code: available
+@@ 2b1c0d8012eb t
+a plate grayed out by the engine (no bank): same rule
+@@ ef28d3a7cc55 t
+"Continuer" (grayed out by the engine) and "Sauvegarde automatique" (grayed out by the viewer)
+@@ 8e69b61a3852 t
+the auto save exists: normal text
+@@ 83e367c70757 t
+the original game hides the plate
+@@ 42970763a618 d
+Test of the pure logic of the "Sauvegarde automatique" plate of the start menu (type 53), without a window or the engine:
+
+1. button states (MenuParts.BUTTON_STATE_*): normal and pressed react; invisible / grayed out / inverted do not react (IButton: the hit test is switched off);
+2. auto save availability: the engine's code 0 (1 = valid data5.dat, 0 = missing) wins; without a code, the label sent by the engine decides;
+3. `Window.auto_plate`: plate ALWAYS visible with its label; without an auto save it is grayed out (state 3) and leaves the touch areas (`buttons`: no click, no hover, no keyboard confirmation);
+   as soon as the auto save exists: normal state, engine label, touch area; the other plates ("Continuer"...) are untouched; the old behavior (hidden plate) remains available (DQ_AUTO_CACHEE).
+
+  python3 tools/test_start_menu_plate.py        (Linux without a screen: pyglet in "headless" mode)
+@@ 1717de564ebd d
+Minimal layout of the start menu: two plates ("Continuer" = button 0, "Sauvegarde automatique" = button 4), each with its label.
+## FILE tests/test_text_recentering.py
+@@ c1919a5f6b66 t
+SE-GARRIR: line spacing, ascent, capital height (font px)
+@@ 070316514c2d t
+mobile capture: px per unit, vertical center of the target button (px from the top)
+@@ 2ffac01e13d1 t
+measured ordinate (px, downward) -> units relative to the button center (upward)
+@@ 5964aa296e2d t
+"Rat volant": baseline at y = 182 px
+@@ f4ff33b2765a t
+"Scarapince": y = 165 px
+@@ d69fb6da2f61 t
+"x2" (3rd line): y = 200 px
+@@ ff0757d22bcd t
+top: the block hangs below the anchor
+@@ 84ea62b5c520 t
+middle
+@@ 80f8dda2f7bd t
+bottom: the block rises above the anchor
+@@ 0249cdb74c42 t
+targets: 6.5 units (11 px at 1.688)
+@@ 93cb67ce53f9 t
+monster plates
+@@ 4a009222ed08 t
+tabs, buttons, names
+@@ e4595a390c04 t
+"PV / PM / Nv." and lists: unchanged
+@@ 6da088a61836 t
+middle of the capital letters
+@@ 47410141db90 t
+capital letters of the 1st line ... baseline of the 3rd
+@@ 5bb490543042 t
+the block fits in the button (visible half-height 24.3 units): "x2" no longer touches the bottom
+@@ a5a52ac9e4ba d
+Test of the vertical placement of menu texts (Unity TextMesh with the SE-GARRIR font), pure logic, without a window or the engine:
+
+1. `first_line_baseline` reproduces the original game: baselines measured on the mobile capture (ecran4: target button "Rat volant" = 1 line, "Scarapince / x2" = string "Scarapince\n\n\t x2" = 3 lines;
+   82 px high button centered at y = 159.2; scale 1.688 px / unit; characterSize 9.945, lineSpacing 0.441, anchor MiddleLeft) to within 0.6 unit;
+2. `text_recentering`: offset of the ink from the center of the line box (zero for lineSpacing >= 1, bounded by DQ_TEXTE_ORIGINAL); after recentering the middle of the capital letters of a single line is within 0.6 unit of the anchor point,
+   for all the game's lineSpacing values (0.441 to 1); the 3-line block ("Scarapince / x2") is centered on the anchor to within 1 unit.
+
+  python3 tools/test_text_recentering.py        (Linux without a screen: pyglet in "headless" mode)
+## FILE tests/test_text_scrolling.py
+@@ d4ad73a77982 t
+command menu -> "Parler": the scene message opens
+@@ cfc7d9604359 t
+(the message must still not move: the loop above had already waited 150 frames)
+@@ b7d545ba6102 t
+slow writing: the time is in the letters, to within one frame
+@@ 0e93a5e1cf3e t
+BattleAutoFeed::setMessageSpeed: wait in frames according to OptionStatus.battleSpeed
+@@ 5568f5805913 d
+Objective tests (without a window) of the text speed and of the scrolling of battle messages.
+
+The original engine runs under Unicorn; we count ENGINE FRAMES (30 per second), not time:
+  - text: frames between the opening of a dialogue message (ui_MsgLoop active) and the end of writing its first page (state 3 or 5: waiting for a key);
+  - scrolling: frames during which a battle message waits before moving on to the next one by itself (ui_MsgLoop state 5 without a command menu), according to OptionStatus.battleSpeed.
+
+Usage (from the repository root):
+    python3 tools/test_text_scrolling.py --apk "<patched APK folder>" --saves "<saves folder>" [--slot 4]
+Saves are opened read-only: the engine writes to a temporary folder.
+@@ 3bb98d175531 d
+(frames between the opening of the message and the end of its first page, letters of the page).
+@@ 0797e932220a d
+Waits (in frames) of battle messages that move on by themselves, forced scrolling = code. Returns (list of waits, game option at the end).
+@@ 9cd4fe665b91 d
+Manual scrolling: a battle message stays displayed as long as no key is pressed (150 frames without a key), then moves on at the A key.
+@@ 43ff3c319633 d
+A dialogue message (outside battle) waits for the key for 400 frames even with the save's automatic scrolling: returns True if it did not move on by itself.
+## FILE tests/test_title_camera.py
+@@ 735a8a8b6207 t
+title camera read from the engine (frame 400)
+@@ 482eff07cb83 t
+points of the title scene (logo, island, dragon)
+@@ 46ebff901de2 t
+without a sprite, and with sprite 0 loaded but hidden
+@@ 40100292dbb0 c
+---- 22:29 feedback: the title must be centered, at any window size (the camera is always centered on the hero: the title, having no hero, is exempt)
+@@ 895ed6488b20 d
+Test of the title screen camera (map ev01), without a window or the engine: `Game._town_camera` is called on a fake object, as in test_town_camera.py.
+
+1. the title is without a hero (the engine nonetheless loads sprite 0, hidden): the scene is the original's, fixed horizontal field (fov x 4/3) at the portrait screen 0.5625; the formula "the hero takes a fraction of the
+   height" does not apply to it (before: zoom of 1.185, logo wider than the portrait area);
+2. the same camera, once the window is widened, keeps the central portrait area 1:1: a scene point projects at the same distance (in pixels) from the center, at the same height, in 1280 x 720 (405 x 720 area)
+   and in a 405 x 720 portrait window;
+3. (22:29 feedback: "the logo and the scenery are no longer centered") the title is CENTERED at any window size: the camera target (the middle of the scene, x = 0) stays in the middle of the image, even if the hero sprite
+   keeps a stale position. Since #264 the camera of ALL maps is the game's (no more common hero zoom, no centering, no leftover from a previous session).
+
+  python3 tests/test_title_camera.py
+@@ 236395244c24 d
+x of the wide window: (ndc x) x (width / 2) = distance from the center in pixels; y: ndc y x (height / 2). The portrait area of 1280 x 720 is the 405 x 720 portrait window.
+@@ 1f7924021ad2 d
+The game's target (the origin, in the middle of the logo) is in the middle of the image (NDC x = 0), even with a stale sprite 0 from a previous session 10 u from the target (centering on the hero does not apply to the title).
+@@ 38875c91c172 d
+Two scene points symmetric about the camera's vertical plane (x = +/- a, same depth) give opposite NDC x: nothing leans to one side, at any size.
+## FILE tests/test_title_centering.py
+@@ 24c08d9f4485 t
+red-violet lettering of the logo
+@@ d59711536f34 t
+orange underside of the castle island
+@@ 38c3fccc8f8e t
+(the island is in the bottom third; higher up, dragon wings and golden edges of the logo are also orange)
+@@ fe0f31818cb3 t
+default settings (the "Centrer la camera" option no longer exists: the camera is always centered, the title is exempt from it)
+@@ 2a4f5f393c49 d
+Test of the title screen centering on the real RENDERING (22:29 feedback: "why are the logo and the scenery no longer centered?").
+
+The viewer is launched (original engine, Mesa rendering without a screen; before the fix, the map's 16/9 bounds slid the title camera by 4.5 units when the "Centrer la camera"
+option (centering on the player) was set to "Non", an option since removed) at three formats (16:9 of 1430 x 815, 4:3, 21:9), and we measure on the capture of frame 700 (dragon above the logo, before "Touchez l'ecran"):
+  1. the centroid of the logo (red-violet lettering pixels) is in the middle of the window, to within a few pixels: horizontal offset / window height < 0.03 (before the fix: 0.29);
+  2. this offset is the same (to within 0.004) at all formats: the logo placement is the game's for the central portrait frame, whatever the window format;
+  3. no asymmetric black band: the 8 columns of each edge contain no black pixel (the sky fills the whole window);
+  4. the castle (orange island) is to the right of the logo, at the same distance (in window heights, to within 0.01) at all formats.
+
+    python3 tools/test_title_centering.py --apk "<patched APK folder>" --saves "<saves folder>" --cache "<interface cache folder, with ui_layout.json>"
+(or the DQ_APK, DQ_SAVES, DQ_UICACHE variables; without them the tests are skipped). A test takes about 40 s per format; to be run through `tools/session_flow/engine_slot.sh`.
+@@ 2cbb42f8d014 d
+(horizontal offset of the logo, logo -> island gap, black edge columns), in window heights / pixels.
+## FILE tests/test_title_logo.py
+@@ dd4bb8c1dd23 t
+depth (layer order) unchanged
+@@ 6909b48351ed t
+the input is not modified
+@@ 8439686df6e0 t
+the enlarged logo fits within 96% of the width
+@@ 663f01e3ecaf t
+never smaller than the APK's, even if the original logo already overflows
+@@ 288da8ebd48d t
+8901: logo + subtitle; 8900: animated glint
+@@ b33a5aa0821b t
+red-violet lettering of "DRAGON QUEST"
+@@ de1778b2e86a t
+central band: the "IV" alone (the castle island starts further right)
+@@ f95dd0b72493 d
+Test of the title screen logo and subtitle enlarged 1.5 times (issue #108; first 2 times, brought down to 1.5 on 2026-11-03 at 21:05; INTENDED DEVIATION from the APK: request from Sylfried of 2026-11-03).
+
+Part 1 (without the engine): the pure functions of `pre_game` (`upscale_logo`, `logo_factor`): x and y are multiplied around a fixed point, the depth does not change, the factor is reduced
+in a window that is too narrow (the logo never overflows) and never drops below 1.
+
+Part 2 (real rendering, Mesa without a screen): the viewer is launched with the original engine at 16:9, 16:10, 4:3 and 21:9, at frame 770 (logo, subtitle, "Touchez l'ecran" at the maximum of its blinking),
+and once with DQ_LOGO_ECHELLE=1 (the APK's logo, at 16:9) for comparison. We measure on the captures:
+  1. the width of the "DRAGON QUEST" lettering (red-violet pixels) is 1.5 times that of the APK (to within 3%), at all formats (in window heights);
+  2. the logo stays within the window (no lettering pixel on the 1% edge);
+  3. the bottom of the "IV" stays above the top of "Touchez l'ecran" (area computed like `Game._ui_reference`: 228 units below the center, height 41.48, scale H / 800 x UI_ZOOM) by at least 2% of the height;
+  4. the top of the logo stays within the window (more than 5% from the top edge);
+  5. the logo is horizontally centered (to within 1% of the width).
+
+    python3 tools/test_title_logo.py --apk "<patched APK folder>" --saves "<saves folder>" --cache "<interface cache folder, with ui_layout.json and ap_taptostart.png>"
+(or the DQ_APK, DQ_SAVES, DQ_UICACHE variables; without them only part 1 runs). Part 2 takes about 2 minutes; to be run through `tools/session_flow/engine_slot.sh`.
+@@ b31cc18c2347 d
+Dict: lettering width (in window heights), x0 / x1 / y0 (window fractions), bottom of the "IV" (fraction of the height, central band), width / height.
+@@ 657bfef07426 d
+Top of "Touchez l'ecran" as a fraction of the window height: center 228 units below the screen center, height 41.48, scale H / 800 x UI_ZOOM (Game._ui_reference, title with no window open).
+## FILE tests/test_title_sky.py
+@@ 083d151197dd t
+portrait window: everything is the area
+@@ 0e871426060a t
+same area in pixels and in screen coordinates (the area is 2 x half of the window width / 2)
+@@ de7dffc8fe1e t
+slope 1 and zero slide with zero slope at the edge of the area: join with no break
+@@ 9019beff1c21 t
+never a flip of the pattern, stretch from 0.52 to 1.48 at most
+@@ 6817292ef19f t
+same scale as the original on average
+@@ b1bf630b8db8 t
+no left / right symmetry
+@@ a189639e444b t
+difference of more than a tenth of a tile in several places
+@@ 293f1fb867fb t
+and almost everywhere: the pattern is shifted by at least 3% of a tile over more than half of the band
+@@ 1855a9558b4e t
+sorted from bottom to top
+@@ e0a15778ba75 t
+contiguous rows
+@@ d76265d7f210 c
+u(x) = that of the row's quadrilaterals, everywhere in the object, and it repeats beyond
+@@ d874fab29a57 t
+rows shifted by half a tile
+@@ b90b34b17f6d t
+vertex outside the alignment of the quadrilaterals
+@@ 5f95eed080d7 t
+non-periodic pattern
+@@ cb73c9f4a094 t
+band vertices: outside the area, to within the margin of the slanted rows
+@@ 3866af7aafbc t
+points of the area on the row, from bottom to top: their world abscissa is between the bands
+@@ 49f829cbbce7 c
+world abscissa that projects to xn (bisection): must be in [zb, zh]
+@@ 7e876db333e5 t
+each band (row, side) has its own vertices (neighboring rows share a y, z edge)
+@@ 676a5a973c85 t
+identical shift over the whole band (one row, one side): the texture slides as a block
+@@ cbb1b4f42c0b t
+the object's pattern advances by 3 units: u changes at a rate x 3 (modulo one tile, 0.996: the original u is folded into [0.002 ; 0.998])
+@@ 6b5cf303c5ce t
+portrait (or narrower): original sky, nothing to enlarge
+@@ f954d0efe8fb t
+the wider the window, the stronger the zoom
+@@ 7688302e8433 t
+the enlarged half-window = the original half portrait area: no horizontal repetition
+@@ 770a294ae003 t
+(never a zoom out)
+@@ ae36ca940f98 t
+unreadable value: normal computation
+@@ a0c08b96227d t
+screen x and y multiplied
+@@ 0c47f32df2de t
+depth and w intact
+@@ 79763ee706ce t
+(M is not modified)
+@@ 2ff7c9acf7c2 t
+G(0) = 0: no shift at the left edge
+@@ 43f8449cd66c t
+like the stretch of the bands: never a flip, 0.52 to 1.48
+@@ 775c495d292b t
+overall scale 1: the wave oscillates around the identity, with no drift
+@@ 915381236a00 t
+the pattern does not come back identical one tile further
+@@ 023a26dcf33e t
+deterministic
+@@ 2f160764155c t
+(the vertical wave exists)
+@@ a26d3d0095d5 t
+the sky covers the whole height
+@@ d93b465b5a6d t
+and the whole height of the texture (no extra zoom)
+@@ 36f380b6debd t
+the whole width
+@@ 262919666294 t
+~ `aspect` tiles across the width (square texture), apart from the wave
+@@ c7a429914c9b t
+the wider the window, the more the texture repeats (never stretched)
+@@ 71f895c59c0a t
+portrait: less than one tile
+@@ 1379bd0c15c7 t
+the wave is fixed on screen
+@@ e7bb157d8b1f t
+period 1 tile: (texture in REPEAT) nothing to realign
+@@ 45d45384e6d1 t
+no flipped triangle
+@@ 13f90f46d13e t
+total area = covered rectangle: no hole or overlap
+@@ 9fc866a7c8cc t
+at the back
+@@ ca34bfe28047 t
+screen ordinates strictly increasing
+@@ d8d36ae396b4 t
+orange at the bottom and top, like the original rows
+@@ ab3552f6cf16 t
+white in the middle
+@@ d27cb0060518 t
+each vertex has the gradient color at its ordinate
+@@ a377a271ae33 t
+white in the middle, orange at the top of the window
+@@ b9ac88b0fe80 t
+no gradient: white
+@@ ab9872bea034 t
+w < 0 everywhere
+@@ 3434f380598e t
+fallback: white gradient (never an error)
+@@ 7377a52b1f46 d
+Test of the pure logic of the title screen sky in wide format (`dq4_pc/title_sky.py`: without a window, without the engine, without an APK):
+
+1. portrait area (middle 9:16 column): 1280 x 720 -> 405 px wide, centered; 720 x 1280 -> whole window; normalized half-width;
+2. texture deformation: G(0) = 0, slope 1 at the edge, slope always between 0.52 and 1.48 (never a flip), overall scale preserved, deterministic, different on the left and on the right,
+   and the pattern does not come back identical one tile further (that is the whole point: "the repetitive pattern is too visible");
+3. analysis of the "kumo" object (rebuilt here identically: 4 rows of 3 tiles of 11.5, shifted by half a tile): rows, period, exact u, rejection of unexpected structures;
+4. bands: no vertex in the portrait area (the original sky stays intact there), continuous join at the edge (u and v of the original sky, at any scroll position), same vertices / colors as the rows,
+   same triangle winding direction as the original quadrilaterals, nothing to add in portrait, more bands as the window widens.
+
+5. #130 trial (enlarged sky instead of bands): `screen_zoom` (1 in portrait, 16/9: x 3.16, 21/9: x 4.15, `DQ_CIEL_ZOOM` forces a value) and `zoom_matrix` (screen x and y multiplied, depth intact): the whole
+   window then shows only the width of the original portrait area, so less than one tile;
+6. flat rendering by default (#174): the texture at the window height (v from 0.998 to 0.002 over the whole height, at any format), repeated across the width (u extends over `aspect` tiles), wave effect (`stretch_plate`,
+   `flat_sliding`) fixed on screen and never flipped, scrolling = shift of u only, color gradient of the original rows (`screen_gradient`), all triangles in the same direction, with no holes.
+
+  python3 tools/test_title_sky.py
+@@ 345f41e49771 d
+Same form as `window.matrix` (rewritten here: no pyglet).
+@@ 7e1b19e5ef76 d
+Title camera as the port computes it (values read from the engine at frame 400: position (0, 27.70, -34.18), target (0, 0, 0), fov 10, pitch 3.019; SceneCamera.Update).
+@@ 185aacb797c1 d
+Vertices (positions, uv, colors) of the title sky (object 000_kumo2): 4 rows (y, z, vertex color as in the original), 3 tiles of 11.5 per row split into two quadrilaterals of 5.75,
+u from 0.002 to 0.998 across the tile; two rows out of four are shifted by half a tile (u of 0.502 first).
+@@ 98b739a55eff d
+Signed area (in the x, y plane) of a triangle of 3 points.
+@@ 7eee90b62929 d
+Flat rendering (#174): texture at the window height, repetition across the width, wave effect.
+@@ a05b550f1c05 d
+One tile (11.5) further, the pattern is read at a different texture abscissa: without the stretch G(d + 11.5) - G(d) = 11.5 everywhere (exact repetition).
+@@ d68e39f0c60b d
+No point of the portrait area (|screen x| <= half, within the field) is covered by a band: we project the triangles and test a grid of the area.
+@@ 93d899f11a33 d
+Vertices of each band at the edge of the area: u = that of the original sky at this abscissa (shifted by the object's scrolling), v = that of the row's edge, at any scroll position.
+@@ 0fdf8f45a1dd d
+Band positions and colors do not depend on the scrolling; their u depends on it by a constant shift per band (at the edge of the area the texture slides like the object: rate x dx).
+@@ 33cb968cfc6d d
+All the band triangles turn in the same direction as those of the original sky (same visible face).
+@@ c6a085e1f7c5 d
+At each screen abscissa (outside the area) and each visible height, the sky point is covered by a band: the extent of the bands goes beyond the window edge.
+@@ 4496e978d9fb d
+The vertical slide is zero at the top / bottom edges of each row (they read the texture from v = 0 to 1 like the original: otherwise a visible seam between the rows shifted by half a tile) and acts inside.
+## FILE tests/test_town_camera.py
+@@ b474fb40f49f t
+Unity euler: heading, pitch downward; eulerAngles.x -= s_lookDownAdjust
+@@ 22eafb610fe5 t
+advances by s_distanceAdjust
+@@ ff12da92d522 t
+Unity's worldToCamera (looks toward -z)
+@@ f04489ccb9b2 t
+Matrix4x4.Perspective(fov x 4/3, 1 / aspect, near, far)
+@@ 0e176309e1b7 t
+[0] and [5] swapped: fixed horizontal field
+@@ f32e5af82de1 t
+s_yOffset
+@@ 40b7794343e8 t
+(the position the engine sends after the rotation)
+@@ 212c6a6d4615 t
+the target stays where the game puts it
+@@ ad4dc02aa7c1 t
+same distance
+@@ 9b3814238e71 t
+same height, same pitch
+@@ 489e1ae2b67f t
+heading + rotation
+@@ ff99379173d5 t
+(to the right: the heading advances toward +X)
+@@ 9e929b9ce808 c
+---- interpolation between two engine steps (Game._interpolate_camera)
+@@ 361544506a42 t
+(the case to handle: more than the jump threshold on a single coordinate)
+@@ 96ef4e5e1128 t
+same distance, same height
+@@ 120ae0f48e6f t
+camera toward -Z of the target, rotating on either side of 180 degrees
+@@ 5126e5f528cf t
+the target is halfway
+@@ 72fc4234b550 t
+the target jumped: map change, scene shot
+@@ b368aaf377fc t
+angle set all at once (game script, 90 degrees in one step): cut
+@@ b8e9cfa84b10 t
+up to ~20 degrees per step (speed x4: 11.25): a rotation, interpolated
+@@ d53036a12081 t
+(D-233: the viewer's rotation alongside the game, removed in D-234)
+@@ 09254f560b86 t
+the camera no longer accelerates, and has no more tilt
+@@ b822f2394a4e t
+the reference speed (x1) is the game's: one notch of 2.8125 degrees per step, 84.4 degrees per second
+@@ f462df4e8445 d
+Test of the towns' camera (without a window or the engine: `Game._town_camera` is called on a fake object). Since #264 it is the game's, and since D-234 the player's left / right rotation is too:
+
+1. the port's matrix = Unity's pipeline rewritten separately (SceneCamera.Update: LookAt, pitch - lookDownAdjust, advance by distanceAdjust, Perspective(fov x 4/3, 1/aspect) whose
+   [0] and [5] are swapped, s_yOffset) at the original portrait screen (0.5625);
+2. it depends ONLY on what the engine sends (position, target, field, offset, free rotation): not on the hero, nor on the frame history (no smoothing, no centering,
+   no leftover that slides), nor zoom, nor tilt, nor rotation added by the viewer (D-233 did it alongside the game: it "teleported" when a game scene took the camera);
+3. the rotation that the player gives with the GAME's camera buttons is in the camera position that the game sends: the view shows it as is (distance, pitch, place of the target on screen unchanged);
+   between two engine steps it is interpolated in an arc around the target (`Game._interpolate_camera`), an angle set all at once or a shot change is a cut;
+4. the other settings and player gestures on the camera no longer exist (zoom, distance, tilt, centering, acceleration, wheel).
+
+  python3 tests/test_town_camera.py        (Linux without a screen: pyglet in "headless" mode)
+@@ cbb0066888c5 d
+The bare minimum: if the camera re-read a removed player setting (zoom, angle, distance...) or a viewer rotation state (D-233), this fake game would raise AttributeError.
+@@ c3b590e4a201 d
+-> (matrix, coordinate frame, fake game): the town camera for state `e` (the fake engine is that of `e`).
+@@ 8a26309f57de d
+SceneCamera.Update (mode with a target) + NativeManager.cmd_camera, after the original code.
+@@ d44ce1e9ea9b d
+The hero in the center, at the other end of the map, absent: same image (the game's target, bounded by the map edges, is authoritative; the viewer no longer recenters).
+@@ aee1d9d6924e d
+No smoothing, no leftover: the image depends only on the state the engine sent at that moment (walking, stairs, scene cut, return from a scene...).
+@@ 9d5ae53b1ca7 d
+A staircase: the game's target rises by 4 units, the image follows right away (no lag like the old height smoothing).
+@@ 6d29b7e9fefd d
+Free camera of a scene (packet 11, bit 7: position + angles) and vertical offset: what the game commands, nothing more.
+@@ e7eb79d58335 d
+The game's camera turns around its target (the game's camera buttons, or a scene): the game sends the rotated position, the view shows it without adding anything: distance, pitch and place of the target on screen unchanged,
+heading = original heading + rotation (positive toward +X, like the right arrow).
+@@ 5009bd6db32f d
+Nothing other than what the engine sends changes the view: the fake game has no rotation, no scene weight, no lock (D-233 had them), and the view is the same whatever the state of the game.
+@@ de9d38137d1f d
+One rotation notch (2.8125 degrees) moves the camera by more than CAM_JUMP_TOWN on one coordinate when it is 34 units from its target (ev01, cbout: (0 ; 27.7 ; -34.18)): the old coordinate-by-coordinate interpolation saw a jump there,
+and the rotation stayed at 30 steps per second. In an arc around the target: same distance, intermediate heading.
+@@ 7fca27ea5b21 d
+A scene that raises the camera or brings it closer to its target while it rotates: the height and distance follow halfway (no stair step at 30 steps per second).
+@@ a2b69c8b2863 d
+Removed in #264 and not coming back: zoom / distance, tilt, centering on the hero, height smoothing, camera acceleration. Back in D-233: the left / right rotation and its recentering.
+@@ d51d64b16ff2 d
+The wiring that connects the camera to the rest (the real loop cannot be run here): the viewer no longer has a per-frame camera update nor a TownCamera state to read (lock, limit, scene: the game decides),
+no more rotation of the walking nor of the sprite rows (the game sends the directions already relative to its camera); the camera buttons go out with the step's keys, and the wheel click is wired to them.
+@@ 55fabf496dd7 d
+By default: Left > left arrow, Right > right arrow, camera speed x1, slide direction not inverted. Visible in "Commandes" (see test_pause_pages).
+@@ 1b86d79f6b37 d
+A reglages.json from before #264 (distance, angle, camera speed, Page Up / Page Down keys) reads without error: the camera speed and the slide direction are valid again and kept;
+the removed keys (distance, angle, up / down inversion) are not rewritten.
+## FILE tests/test_transition_sfx.py
+@@ 38f0d7aa5473 t
+"Vitesse de transition": 1.0 = as in the game; 4.0 = the menu's maximum
+@@ a2284085a0b2 t
+frames of the fade to black of startTown / startField (UnitySetFade(0x101e))
+@@ 30e4f2b38931 t
+save welcome message: A until it closes
+@@ dc285e5bb7ea t
+(a few steps on the world map, the village entrance is on the left)
+@@ 3d8e783eebf2 d
+Test of the map transition sound effect (door, village exit / entrance, stairs, world map <-> town) with the viewer's "Vitesse de transition".
+
+Cause (22:29 feedback: "there are still no map transition sound effects"): the transition sound effect 305 is not launched by Unity nor by the door (the latter plays 309 on opening) but by
+Global::NativeExec, 15 frames after startTown / startField have launched the 30-frame fade to black (countdown of the LIB + 0x258254 byte); it is played only if the old scene is still alive. The loading of the next map
+arrives at the end of the fade: in the original game, the sound effect is requested at mid-fade. With a shortened fade (x3: 10 frames, x4: 8 frames; marginal at x2: 15 frames), the old scene was destroyed before the 15 frames
+and the engine no longer requested anything. Engine._exit_countdown resets the countdown to the same proportion as the fade; the duration of the fades does not change.
+
+  1. pure calculation: fade proportion remembered by State._fade, countdown adjustment (fake core);
+  2. original engine (DQ_APK + DQ_SAVES, save 1: Ragnar at Strattbourg): the church door and the village exit to the world map, in both directions, at each "Vitesse de transition" (x1 to x4): a single sound effect 305, requested between the start of the fade and
+     the map loading, after the door's 309; fade of the set duration;
+  3. viewer (Sound, fake audio players): both sound effects stay played until their end when the map loading blocks the loop (see test_sound_mixing).
+
+    DQ_APK=... DQ_SAVES=... python3 tools/test_transition_sfx.py
+@@ 30452027c25f d
+Engine memory reduced to the countdown byte.
+@@ 1545712e88c2 d
+A step where the engine arms the countdown (15, already decremented once: 14) and where the fade of this exit arrives.
+@@ 12e06cf09e66 d
+Walks in `direction` up to the door (or the village exit) then lets the next map load. -> [(frame, kind, value)]: SE (packet 35), FONDU (duration, packet 9 toward black), CHARGE (first packet 0 or 27:
+town scenery or world map), N (fade frames after its 1st step: set duration - 1).
+@@ ec6b9201d214 d
+The village (`maout`) opens onto the world map on the right: exit (startField, TownSystem::playTownExitSE) then return (startTown, FieldSystem::playFieldExitSE), same 305 sound effects.
+@@ 9dfa363840c8 d
+Without a shortened fade, nothing changes: sound effect 305 is requested 14 frames after the fade, as before.
+## FILE tests/test_turn_chaining.py
+@@ c1ff5a6a29c2 t
+"Manuel": by hand (unchanged); "Normal", "Rapide", "Tres rapide": 12 frames
+@@ 88a2991b8fe4 t
+the hit animation keeps its game duration
+@@ f7d3ec529d99 t
+(old "Normal": 23 frames, 0.77 s)
+@@ 6cc1cc8ec669 t
+now 13 frames (0.43 s): right after the end of the animation
+@@ d7f5ba244f18 d
+Chaining of a turn's animations at automatic speed (feedback from Sylfried, 14:12): "when I hit, the damage amount must appear faster".
+
+Real engine (engine frames, 30 per second): an attack hit on the world map (slot 4, forced encounter). "Vitesse de combat" imposes OptionStatus.battleSpeed (g_Option + 5): 0 / 1 / 2 / 3 = wait of
+12 / 22 / 32 / 42 frames between two messages; "Normal" / "Rapide" / "Tres rapide" impose 0 (settings.CODE_SCROLL_AUTO), the old "Normal" imposed 2. Measurement: hit animation (model 5303) -> damage number;
+the duration of the animation itself does not change.
+
+    DQ_APK=<patched APK folder> DQ_SAVES=<saves folder> python3 tools/test_turn_chaining.py
+@@ b735f4961cf7 d
+-> (frame of the confirmed command, frame of the effect model, frame of its removal, frame of the damage number) of the first hit of a battle.
+## FILE tests/test_unknown_map.py
+@@ 2de3caf2f403 d
+#76 (audit ENG-10): `Engine.start_town` refuses a map name without an `assets/map/<name_str>.stg` file instead of letting the original engine crash (null pointer in FldStage::getCameraLimitL);
+`za3f3` (orphan map: no `.stg` in the APK) is the known case. Without the engine: fake engine and fake APK. With the game's APK (DQ_APK): the 529 maps of the APK are accepted, `za3f3` refused.
+    python3 tests/test_unknown_map.py
+## FILE tests/test_upright_sprites.py
+@@ 414294ea58f6 t
+offset (x, z) of the NPC relative to the hero, in town units: from the bottom corner to a top corner of the screen
+@@ cb9995e7b1f3 t
+(#264: no more yaw, angle or zoom: the camera is the game's)
+@@ b1e373176e5a t
+fixed_test: one 1/60 s step per call, no clock
+@@ eb60d2a42580 t
+(the rest of the centering fades out: same state as after a few frames)
+@@ 35a73549f8a8 t
+left / right edges vertical AND bottom / top edges horizontal (deviation in pixels)
+@@ 4be497aa8328 t
+constant proportion to +- 1% (0.72 x the height at the image center: 0.738 measured)
+@@ 8384228a17a3 t
+the command-line option wins
+@@ 41125d727be7 c
+default panel (t = 0) = original panel: same corners as the direct computation of the offsets along the game camera's axis
+@@ 3404feba615b t
+mound, then a 3 u staircase climb and its descent
+@@ 6d83447f8462 t
+at the image center (the camera is centered on the hero: an NPC at the hero's feet is at the center, whatever the camera)
+@@ 4f5ba6a040c4 t
+bottom of the screen, top of the screen
+@@ 6bde97a4337d t
+middle of the bottom of the panel
+@@ 5b4f11bec296 t
+the NPC at the left edge, at different screen heights (= the hero going up or down)
+@@ a683ce451316 t
+(the view is the game's camera: same coordinate frame with or without correction)
+@@ a192be5d84cc d
+Town sprites always upright on screen (#134: "when my character goes up or down, the NPC sprites lean", without a window or the engine: `Game._town_camera` and `Game._town_panel` are called on a fake object):
+
+1. the 4 corners of an NPC's panel, projected by the viewer's REAL matrix, give a rectangle with vertical left / right edges (bottom -> top deviation < 0.01 px) and a constant width / height
+   ratio, at any screen position (top, bottom, left, right, corners, center) and in all camera states: fov, s_yOffset, height
+   (mound #110: the camera rises with the ground), SetScale scale;
+2. the edge correction touches NEITHER the depth (z-buffer, overlaps) NOR the on-screen position and height: same corner depths, same panel bottom, same top, as with the original panel;
+   at the image center nothing changes (top center = original top center, same average width); elsewhere the WIDTH changes by construction (constant ratio 0.738 instead of 0.65 at the top to 0.81
+   at the bottom of the screen for the original panel);
+3. safeguard: the ORIGINAL panel (correction off) does lean by more than 8 degrees near the edges, so test 1 checks something;
+4. tilt trial (#134): with `inc` > 0 the panel is sheared toward the world vertical, feet fixed, size, depth and bottom position unchanged; its edge leans by atan(inc x tan(angle of a
+   world vertical at the foot)); inc = 1: parallel to the walls; 0 BY DEFAULT since #180 ("put the NPC display back like the mobile version ... they stretch near the edge": a shear of 0.5 deformed the
+   sprites; `Game._sprite_tilt`, variable DQ_SPRITE_INCLINAISON to try it): the edge correction alone (without shear) gives exactly vertical edges and the constant ratio (it is no longer the default since #184: DQ_CORRECTION_BORDS=100);
+5. finding (cause of the impression of #134, see `Game._town_panel`): the WORLD VERTICALS (walls, doors) lean on screen depending on their position (vanishing point below the image, camera at 47 degrees), much more in 16/9 than
+   on the original portrait, and this angle changes by several degrees when the hero goes up or down (the NPC changes height on screen) while the sprite itself stays at 0: the sprite seems to lean RELATIVE TO the neighboring walls.
+
+6. #184 ("go back to the raw NPC position, exactly as in the game ... with the new camera system they must not align if the camera is raised or lowered"): by default the panel is the game's (edge correction
+   zero) and its coordinate frame (`Game._sprite_reference`) is that of the GAME's camera: Up / Down does not change it (identical corners in the world), Left / Right turn it face-on with the game's tilt;
+
+  python3 tools/test_upright_sprites.py        (Linux without a screen: pyglet in "headless" mode)
+@@ be8a00570ed3 d
+Tilt (degrees) of an edge on screen relative to the vertical; + = the top goes toward the right.
+@@ f82aa5c93f69 d
+Ground height under the hero, per engine step: ramp of `topmost` units over `climb_step` steps, plateau, symmetrical descent (the prologue village mound, map mlout1: +0.5 u in ~8 steps).
+@@ f97c1d8bd250 d
+(M, panel corners in the WORLD, camera coordinate frame, camera position) of an NPC whose feet are at `foot`, as `Game._draw` does (see the sprite loop).
+@@ fe7a886a857b d
+Tilt of the left and right edges (degrees), width / height ratio and corners in pixels (bottom left, bottom right, top right, top left).
+@@ 9f2cf71939e7 d
+(M, view coordinate frame, sprite coordinate frame chosen by `Game._sprite_reference`, viewer camera position) for camera state `j`.
+@@ 36167b5d689c d
+Tilt (degrees, downward) of a forward axis.
+@@ 9dffeb37ff44 d
+#184: an NPC's panel keeps the tilt of the GAME's camera: raising or lowering the camera (Up / Down) does not change it, the rotation around the hero (Left / Right) follows it.
+@@ 14fadfb95255 d
+#184 ("go back to the raw NPC position, exactly as in the game"): by default the edge correction is zero, and so is the shear: the panel is the game's, with no on-screen reconstruction.
+The old full correction (#134: vertical edges, constant ratio) remains available through DQ_CORRECTION_BORDS / --correction-bords.
+@@ 14b33b1a84c2 d
+The full edge correction (DQ_CORRECTION_BORDS=100, #134 / #180) always gives a straight rectangle on screen, at any camera.
+@@ f865b7e218f9 d
+Mound camera (#110): the camera height follows the ground (CAM_Y_RELIEF) or lags (stairs); at each frame, an NPC at the left edge, the right edge and the top stays upright.
+@@ 1694042212a7 d
+z-buffer (depth of each corner along the camera axis) and on-screen height unchanged; panel bottom identical; at the image center, top identical and average width identical.
+@@ 95e033dd2ad8 d
+Without the correction (original panel) the sprite leans by more than 8 degrees near the left / right edges of the 16/9: so test 1 does measure something; at the center it stays upright to within 1 degree.
+@@ 4f5d812f0c4a d
+Cause of the impression of #134: a world vertical (wall edge, door) 9 u from the hero leans on screen by 11 to 19 degrees depending on the screen height where it is (16/9, camera at 47 degrees), versus
+4 to 6.5 degrees on the original portrait; when the hero goes up or down the angle changes by more than 5 degrees, while the sprite stays at 0. (It is the perspective of the scenery, not the panel: see test 1.)
+@@ e5a523e203db d
+#134 trial: with `inc`, the sprite's edge leans by atan(inc x tan(angle of the world vertical at the foot)) (to within 0.05 degree); inc = 1: parallel to the walls; the sprite and the wall then differ only by (1 - inc)
+times the initial gap; direction: the sprite leans to the same side as the wall; at the image center (straight world vertical) nothing changes; the left and right edges stay parallel.
+@@ 65fb2811d296 d
+Pure shear, feet fixed: panel bottom, on-screen height and width, depth of each corner (z-buffer) = those of `inc` = 0.
+@@ 556de03186a6 d
+Finding from #134: an NPC at the left edge, when the hero goes up or down, changes height on screen and the sprite / wall gap varies by several degrees; with inc = 0.5 the variation is halved (to within 5%).
+@@ f9e7b9ad664a d
+DQ_SPRITE_INCLINAISON: 0 to 100 (%); absent, empty or unreadable: 0% (default since #180); clamped.
+@@ 3163ff51870a d
+Without a camera (C unknown) or with the edge correction off (t = 0): the original panel, even with `inc`.
+@@ 9653e944a053 d
+The game's camera as is: the sprite coordinate frame is the view's AND `_game_border`'s (the game's camera: since #264 the view no longer adds zoom, rotation or tilt).
+@@ 12b296a4e7f8 d
+The original panel is almost vertical in the world (the top leans 36 degrees toward the camera); this slope (angle of the bottom -> top edge with the vertical) is the same at any hero height.
+@@ 49551015419d d
+Edge correction > 0 (#134 trial): the view's coordinate frame (the on-screen reconstruction needs it); DQ_SPRITES_SUR_VUE: the old alignment; without a camera: nothing.
+@@ ac0cc71fbc9d d
+Free camera (position and angles set by the script): the sprite coordinate frame is the view's; without a camera call, falls back to the view.
+## FILE tests/test_window_language.py
+@@ 3273a9bb89ec t
+the entries of this batch (window.py, divers.py)
+@@ 1b894b5d869a t
+the whole catalog: the same text has only one entry, in the file of the first batch that wrote it (test_language.py: no duplicates)
+@@ 1c1a8810c882 t
+("Casino", "Normal", "Menu"...: identical in English, with no entry)
+@@ 27cf0c747011 c
+whitelist: (file, start of text) of the console messages the player does not see (traces of the test options and DQ_* variables, the engine's internal log)
+@@ f85328b106ee t
+DQ_SON: engine orders
+@@ 3ca65363dac0 t
+DQ_SAVEDBG, DQ_MSGDBG, DQ_MENUDBG, DQ_FBXLOG
+@@ c17d79e97a45 t
+DQ_PROJ, DQ_CAMV
+@@ 3709e8c976c7 t
+DQ_SPR, DQ_DEBUG, --shot, --shots-combat
+@@ ff1cbeed4b72 t
+--options-test, DQ_PAS
+@@ 26f416092f79 t
+software versions in the log of a failed switch: proper names
+@@ 7e6faeb66c02 t
+module name + exception: an identifier, not a sentence
+@@ bfd2b5ad8d51 t
+command-line tool for reading FLD files
+@@ 7cf2a757c698 t
+log of the original engine (Silent), not the console
+@@ 3ee0978c0149 t
+'texte %s' % x, 'debut' + x
+@@ d989cd9c8b64 t
+the French from before, word for word
+@@ 64602a333527 t
+(argparse formats the help with %: a bare percent sign would break it)
+@@ c1b78b700e05 t
+the test options remain announced as such
+@@ bd85ee606e6e t
+missing value: the parser will complain about it
+@@ 465838471261 t
+--reglages wins over the default file ('fr')
+@@ 0f7e8976b2e6 t
+no file: the computer's language
+@@ 768e35426554 t
+without the option names, their values and the choice lists
+@@ 5b64dc755423 t
+(like Game.toast: the text is translated at display time)
+@@ aa474d84eac6 c
+---- full screen <-> window switch (fake window of test_window_mode)
+@@ 0f657678add9 t
+(module constant marked N_: translated at window creation)
+@@ ba7fcd3e3b45 t
+neither pyglet nor soundfile: "indisponible"
+@@ b117d4c35a19 d
+Tool language, "window" batch (D-238): console and game window messages, startup, command line (`--help`), folder migration, saves, sound, engine.
+Without a window or APK (fake Game, fake pyglet window): each scenario is played in French (the text from before, word for word) then in English (not a single French word left: `french()` of test_language).
+
+  1. coverage (reading the code): every text passed to tr() / N_() in scope has its English translation, no catalog key is orphaned, nothing is translated at import, the texts passed to `_wait`,
+     `_log_window`, `_note_once` are marked N_, and NO console message was left in French without tr() (whitelist of debug traces, each one justified);
+  2. command line: the `--help` help (parser and full process) in both languages, the language set BEFORE the migration and the parser (default reglages.json or the one given by --reglages), startup
+     messages (APKs not found, migration impossible);
+  3. folder migration (paths.migrate), export / import of saves, states, adventure logs: the reasons shown to the player;
+  4. window: Game messages (state and save failures, engine memory, missing settings, loading), full screen <-> window switch (console and error log), window log line,
+     monitors, size; sound; engine version alerts (`Engine._record_missing`); cache preparation (separate process, language passed along).
+
+    python3 tests/test_window_language.py
+@@ 74c1e367a67f d
+[(line, text)] of the literal texts passed to tr() / N_() (including LG.tr).
+@@ 4f0c49560435 d
+Plays what follows in language `code` ('fr' or 'en').
+@@ 2d69def461c8 d
+-> (result, printed text) of f(*a, **k).
+@@ 44a221d5e624 d
+The text without the paths (temporary folders): they are not words.
+@@ 9a11ac51f59c d
+Code reading: nothing is missing, nothing lingers.
+@@ 064346fa7c99 d
+paths.migrate: the sentences of the migration from the old layout.
+@@ 796368839299 d
+A valid adventure log of 15,360 bytes (like test_saves_import).
+@@ 7f484426a2a8 d
+The reasons shown to the player: export / import of saves, adventure logs, states.
+@@ 9f78952726a6 d
+Engine version alerts (Engine._record_missing): an APK other than the one studied.
+@@ 050944db3608 d
+Every entry of window.py and divers.py is used in the code (a text changed or removed in the code does not leave its translation behind).
+@@ 27f659044419 d
+`tr(...)` runs only inside a function (the language changes mid-game); a module constant is marked N_ and translated at display time.
+@@ ea0bd9b6a6eb d
+`_wait(text)`, `_log_window(when)` and `_note_once(lookup_key, e)` translate their argument: the literal text must be passed to N_(), otherwise the coverage test does not see it.
+@@ a23d05c24b49 d
+A `tr(...)` added in a module that does not import it crashes only when the message appears (often a rare error: switch failure, sound cut off...): here we see it, by reading the code.
+@@ 62d190888a4b d
+A `print(...)` / `log(...)` / `toast(...)` whose text is a literal (or a formatted literal) must go through tr(); otherwise it is in the DEBUG whitelist. emu_core.py (the emulator log,
+development tool) is not scanned.
+@@ 515563192c9d d
+{option: help text} of the parser built in the current language.
+@@ f90e6688c43c d
+main(argv) without a real migration or window: -> (languages seen by migrate, printed text, exit code).
+@@ 17ee5245f150 d
+The migration messages (paths.migrate) are in the language of the setting: default reglages.json, or that of --reglages; and the language does not depend on the computer's.
+@@ b02efb0cbb1f d
+The real process: `--help` opens nothing, reads the language from the --reglages file and prints the help in that language (the option names stay the real ones).
+@@ c3216a103346 d
+A folder named data1.dat takes the place: the old folder does not move, and the sentence says so (with the reason).
+@@ b7a5a8ad1c98 d
+`python -m dq4_pc.paths` (launched by launch_dq4.bat before the game) reads the language from reglages.json before migrating.
+@@ 70e728e28863 d
+An import that discards a too-short adventure log, a damaged one, one that is not a log, a too-small state and a fake .zip, but keeps a good adventure log.
+@@ 8d0783d1a048 d
+The file types of the "Save as" / "Open" dialogs (tkinter, replaced here by a fake).
+@@ 90633828b0e0 d
+The separate process (monde/donnees.py) does not know reglages.json: the game passes it the language (DQ4_LANGUE), not the computer's.
+@@ c5262cdc343a d
+Real process `python -m dq4_pc.world.data` (APK missing: "interrompue").
+@@ ce7abe8fc08a d
+`--slot N`: the direct loading state, in both languages (the two whole sentences of the catalog).
+@@ d03bc24db121 d
+An engine whose functions cannot be found: each installer says so, in French as before (`KeyError`) and in English without a word of French.
+## FILE tests/test_window_mode.py
+@@ 442a0f0cb867 t
+the old full screen = borderless window: mode 1
+@@ 2fc29e87d5e7 t
+neither one nor the other: window
+@@ 08162093d7c3 t
+absurd value
+@@ ada6f5d87578 t
+the new setting takes precedence
+@@ 75f2540c561f t
+(the last non-exclusive mode of #42 is dropped)
+@@ f3253dcdf4a9 t
+(F11 is no longer an action key)
+@@ 440926bf66d6 t
+(F11 was not a game key)
+@@ 2a5aa8ee17c2 t
+(mouse / mouse_guard: Game.on_key_press remembers the pointer position at each key)
+@@ 65c3bbc6aefc t
+(an old file that binds F11 to an action: it is not triggered)
+@@ f6bffbea5d6b t
+Alt held: nothing until it is released
+@@ a03947b0c2a0 t
+Enter swallowed: neither confirmation nor menu
+@@ a86fb054da84 t
+Alt released after Alt + Enter: no party chat
+@@ cb89c6a2ac33 t
+(Enter alone works again)
+@@ 6a57c4b4910c t
+(nor does Alt alone)
+@@ 4e0052dcdada t
+(Alt alone reaches the menu)
+@@ 698551b0e14f t
+Alt + Enter: switch, no Enter key for the menu
+@@ e00f8a166539 t
+Enter alone reaches it
+@@ b537ab51cd89 t
+(a press on another key skips the logos, not F11)
+@@ ceb97fe24382 t
+Alt Gr too
+@@ 6df2ac74b347 t
+the window loses focus: the release never arrives
+@@ 118aba552879 t
+(the Esc menu sends nothing to the game)
+@@ 54ed2c79b182 t
+party chat = G alone: at the moment of the press, as before
+@@ c28834a40230 t
+Alt is no longer used for anything
+@@ f3a72f341dff t
+the "Commandes" page is waiting for a key: F11 goes back to it (it answers "reservee")
+@@ 668ae726bcf4 t
+(swallowed all the same: no confirmation)
+@@ 34bf3449dfbe t
+stale: its Windows handle is no longer valid (after connecting a screen)
+@@ d7393840962d t
+(pyglet: BaseWindow.screen returns _screen)
+@@ 98b121a80d9b t
+(Win32Window._create: Screen.get_dpi -> GetDpiForMonitor on a handle that is no longer valid; the state has already changed, as in pyglet)
+@@ 2cb30c411f7d t
+(the simulated failures are not written to the repository)
+@@ a5300f29fee8 t
+(a 1920 x 1080 desktop: the size of the test screen does not matter)
+@@ 1afc173282f2 t
+(the window size is kept for the return)
+@@ 788d587cd06b t
+(the off-screen rendering buffers are not forcibly invalidated: redone only if the size changes)
+@@ cf05a463884d t
+only one per switch, never "window then full screen"

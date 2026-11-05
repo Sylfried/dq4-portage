@@ -1,0 +1,4 @@
+Python 3.13.18, Linux-6.18.44-fc-v236-x86_64-with-glibc2.39, unicorn 2.1.4, executable /usr/local/bin/python3
+Root: /home/claude/wt-console | cache: /tmp/console_data/cache | apk: /tmp/console_data/apk
+ERROR: Missing /tmp/console_data/cache/il2cpp/dump.cs: run tools\dump_il2cpp.bat first
+exit 1

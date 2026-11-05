@@ -1,0 +1,651 @@
+## FILE dq4_pc/menus/ui_menu.py
+@@ f2e59b5fef80 t
+outside a button plate: the text must fit within the width of its window (from its anchor point, with the same margin)
+@@ da7797715be5 t
+(anchor too close to the edge for the text to be what is too wide)
+@@ 53ed15ed1671 t
+limit set by the window (cost line of a spell sheet): the frame is not an element of the window
+@@ f229c693602c t
+text wider than the button that carries it (translation longer than the original): compressed in width to fit inside (with the original font: only the cost line of a spell sheet, "Cout en PM 10/ 30" is longer than "MP Cost 10/ 30" and stuck out of the frame)
+@@ dbbc0e62b806 t
+alignment of the line within the block
+@@ 7d6b18aca5ee t
+texture at the font's native size (1 px = 1 font px), enlarged by the bilinear filter as in Unity
+@@ 589ae7f2f834 t
+called with a monster mask -> (x min, x max) in interface units, or None; proj(mask, True) -> the list of x coordinates, one per monster (supplied by the viewer)
+@@ e40479fe2619 t
+original font SE-GARRIR (optional: without it, GMaruGoPro-M)
+@@ 38c89fb24c07 t
+message font (optional), even when the other resources are already there
+@@ 704bdbae579b d
+Menu windows of the original game: exact layout (read from the game's Unity code, see tools/ui_il2cpp), drawn with the game's sheets.
+
+The layout file (cache/ui_layout.json) describes, for each window type (Make_* of MenuPortItemTable): the objects (position, mesh,
+materials, text), the editable elements (IText / IIcon / IButton / IBar...) and their bindings (id, no) -> element, and the effect of each code
+(move / display). This module applies the engine's messages (setItemParam*, setItemCode, cursor) to these objects and draws them.
+Game coordinate system: portrait 450 x 800, X to the right, Z up, origin at the center of the screen, Y = depth (larger = in front).
+@@ 37c2f5ec65bb d
+Vertical coordinate (units, upward) of the baseline of the first line of a TextMesh: TextMesh.anchor places the anchor point zp at the top (row 0), middle (1) or bottom (2) of a block of n lines of height `step`
+(= the font's line spacing x characterSize x 0.1 x lineSpacing); the baseline is `asc` (the font's ascent x characterSize x 0.1) below the top of the line, whatever lineSpacing is.
+Verified on the mobile capture (ecran4: "Rat volant" 1 line, "Scarapince / x2" 3 lines, "Ragnar" tab), to within 0.3 unit.
+@@ db1a0bb47adc d
+Upward shift (units) to apply to the text to center the ink in its line. The game set lineSpacing (0.441 targets, 0.481 monster plates, 0.801 tabs / buttons / names...) for the Japanese font: the line box
+is shortened by (1 - ls) but the baseline stays at `ascent` from the top of the line, so with SE-GARRIR (ink centered in its natural box of 23.5 px) the text sits (1 - ls) x line spacing x u / 2 below the center of its box
+(6.5 units for "Rat volant" and the plates: text stuck to the bottom of the frame). Applied to the three vertical anchors (the ink / box gap does not depend on the anchor; only the middle case has a mobile reference, ecran4). lineSpacing >= 1 (PV / PM / Nv., set on the gauges): 0. DELIBERATE DEVIATION from the original game, which has the same flaw.
+@@ 408760adabdd d
+Does a button react to contact (mouse, touch) and to confirmation? MenuParts.IButton: the state callback file (RVA 0xD043CC) disables the hit test (`defaultIsHit`, 0xCFDB6C) for states 2 (invisible),
+3 (grayed) and 4 (inverted); normal and pressed leave it active. A grayed button is therefore neither hovered nor chosen, and the engine receives nothing.
+@@ 26589f4b1ca0 d
+TextMesh.tabSize: a tab equals `tabSize` times the width of a space (8 for "Cout en PM:	  2" of the spells and the "Nv." line of the party order, 25 for the "x2" of the group plates); the game's font has no glyph for "	":
+it counted for nothing and the following text stuck to what preceded it ("Nv." drawn over the character's sprite, "x2" stuck to the left of the plate). Cell without tabSize: unchanged.
+@@ a23d4cbec0c5 d
+Does the auto-save exist? The engine says so through code 0 of the start menu (1: data5.dat valid, 0: missing or unreadable) and sends the label of cell (4, 1) only in the first case;
+`code_auto` None (code not yet received): the label decides.
+@@ a1f608b5fdee d
+frameData (the game's TextAsset): number of meshes, then for each: number of vertices, number of indices, vertices (x, y, z, u, v), indices.
+@@ 3c4bb4cfd749 d
+(proposed fix) type 1 (battle: frame 188 high, canvas 164 = 4 lines of 34) brought down to the height of the field window (type 0: frame 126, 3 lines):
+the top two rows of the frame and the top of the canvas move down by dz, the bottom edge does not move; V of the canvas bottom = height / 512 (the top stays at V = 0).
+@@ a5be14bd7856 d
+Message window: the canvas shows exactly `num` lines of `lh` pixels (plus a 3-pixel margin, the engine's scrolling starts at -3) instead of 3.5 lines: the original layout
+lets the top of the next line show under the last line (canvas of 100.5 for lines of 28: type 0; battle: lines of 34).
+@@ 3d3929a6524d d
+Battle message types 2 and 3 (action messages): the original layout draws their text canvas at 90% (`scale` 0.9: 490 pixels of the canvas in 441 units), which makes the text
+smaller than in the field dialogues and the battle start message. The whole window (frame, canvas, end-of-page cursor) is enlarged by 1 / scale around its bottom-left corner, then re-centered:
+the text has the size of the other dialogues, with as many characters per line as in the original (bottom edge unchanged).
+@@ cbe82cdf75b8 d
+cache/ui_layout.json: {'header': {...}, 'types': {number: {...}}}; frames: window meshes (frameData)
+@@ 1b2ec2ee4a27 d
+Is a text wider than its plate compressed to fit? Always with the fallback font; with the original font (SE-GARRIR) only when the window sets a limit (`fit_x`: cost line of a spell sheet) or
+for the button labels of the BUTTON_COMPRESSION_TYPES windows (poker). Elsewhere a French text longer than its button overflows as on the mobile (player's choice, audit UI-05).
+@@ 6da2cef2944a d
+PartsInfo.SetUV: 4 vertices (TL, TR, BR, BL) of icon number `no` in the sheet.
+@@ 6a71500414f1 d
+(x0, x1, z0, z1) of the VISIBLE drawing of a frame mesh cell, in the mesh cell's local coordinate system (interface units), or None.
+A frame is a grid of tiles whose border tiles have a transparent margin in the sheet, of a size that differs from one frame to another (the dialogue frame: 6 units on the right, 4.5 at the top; the one for Yes / No: almost
+nothing): placing two frames edge to edge on the edges of their mesh cells offsets them by these margins. For each tile (mesh cell, triangles `tris`), we look in `alpha` for the columns and rows whose opacity exceeds `threshold`
+(the texture column grows with x, the row decreases as z goes up: v = -row / sheet height).
+@@ 8af5cb6fff37 d
+An open menu window (an engine port): state modified according to the engine's messages.
+@@ a2d87799dced d
+The game's message window (MenuMessage): frame (frameData) + text canvas drawn by the engine + end-of-page cursor.
+The canvas is a 512 x 512 texture that wraps; the scroll `[3, y]` shifts the vertical origin of its UVs by (y & 0x1ff) / 512.
+@@ 9960b9f17e11 d
+The game's Unity bitmap font for the English language (and the FR patch): "SE-GARRIR" (Font "Garrick", 20 px, 218 glyphs); it replaces GMaruGoPro-M, the Japanese font.
+The data (ui_garrir.json: metrics and glyph rectangles; ui_garrir.png: 256 x 256 atlas, alpha) are extracted from base.apk by prepare_resources.
+A TextMesh with character size cs displays 1 font px = cs * 0.1 interface unit; the width of a line = the sum of the glyphs' "advance" (no kerning).
+@@ 57d9ab2b6383 d
+Text lines -> textures (the game's font rendered by Pillow, white; the color is applied when drawing).
+@@ 18f0fc3112dd d
+Draws Window objects on the screen: custom GL program, sheets 0 (MenuTexture) and 1 (Button).
+@@ a3dd163c9e6b d
+Receives what the game's interface records (Interface.obs) and holds one Window per menu port.
+@@ 378dd362c569 d
+SE-GARRIR bitmap font (Unity Font) -> ui_garrir.json (metrics, glyphs: code, vert x y w h, advance, flipped, uv x y w h) and ui_garrir.png (RGBA atlas, as UnityPy renders it).
+@@ 4e4a4c9b7938 d
+Extracts from the game's APKs (once only): MenuTexture and Button sheets, font, frame meshes. -> True if everything is there.
+@@ eefafe6062da d
+ItemNumCTRL.Changer(v) (0xD08060): passive two-digit counter of a line of the item list (Sub_ItemButton: IBase 3 = tens, IBase 4 = ones, sheet 12, 32 px tiles).
+v < 2: two empty tiles (icon 1); otherwise tens = (v / 10) % 10 (icon 16 x digit, or 1 if zero), ones = icon 16 x (v % 10); 100 and above wrap modulo 100 (123 -> 23).
+The two digits are IBase 3 and 4 of the line's MenuParts (the one of element (line, 0)).
+@@ 7e87020d92c7 d
+Make_NameButton, code 6 (`<Make_NameButton>b__0`): list layout. The `c` preset (NAMES_PRESETS) gives the number of visible rows and the vertical coordinate of the first one: the following rows (up to the 6th) are disabled, so neither
+drawn nor clickable (the 5th row, empty, stayed visible and led, on touch, to a nonexistent spell: <ERR ...> on screen). The row codes (0 hidden, 1 / 2 visible) arrive afterwards and take priority.
+@@ 9dc4e2cdc2d9 d
+Code function whose argument is a BIT MASK over active / inactive elements (Make_Casino_Poker b__1: bit n = touch zone number n, cards 0 to 4 and "Donner" 5; the engine sends 63 for all of them).
+The layout exporter only tried the values 0 to 5: the `fx` array ignores the others. If the array does have this shape (for EVERY known value, the inactive elements are exactly those whose bit
+for their button number is 0, among those that value 0 disables), the same rule is applied to the received value: the element with button number n is active when bit n is 1. Otherwise no change (as before).
+@@ 7af94f7d6e3d d
+IIcon.Change(no): the four UVs of icon number `no` of the element's sheet.
+@@ e4cfaba947b2 d
+Node of the plate of member i (the one that code -1 hides), or None.
+@@ 6bfd2de016d8 d
+Ids 0 to 3 = plates: code 8 starts ShakeFrame (m_shake = 8), code -1 hides the plate. Id 5 = arrow of the member who is acting: a code >= 0 shows it (SetActive), moves it, and BattleUpCursor.ForceUpdate sets it back to icon 2.
+@@ 72c659768e11 d
+End of ShakeFrame: the plate returns to its place; red: m_shakeEndCallback = BattleBar.RedApply (the red bar catches up with the current value).
+@@ 56d8b09b9542 d
+Icon of the target arrow (sheet 10); reveal: SetActive(true) of code >= 0 (the exporter does not see it: the code only moves it, the arrow stayed hidden).
+@@ 4e8cd0ac8f0c d
+One game frame (30 Hz): plate shake (ShakeFrame.Update: one offset from the table per frame, then the red of the bar); the target arrow blinks in real time (BattleUpCursor.Update).
+@@ 0c2ce852131a d
+StatusIconChanger: v = icon | (color << 16). The first icon (sheet 13) takes `v & 3` (0 nothing, 1 cross = dead, 2 skull = poison), the second the eye (3) if bit 2 is set (spell sealed);
+the color (header palette: white, yellow = at death's door, red = dead) tints the material of this sheet. i = index of the part that carries two icons of sheet 13.
+@@ cbce9b513053 d
+The 12 marks of type 31: parts of a single icon of sheet 6 (Button), in the order of the parts.
+@@ b620b619176a d
+MonsterMarkList.Reset (code 4): all marks are hidden.
+@@ 5871ab371fcc d
+Code 3: IFrame.Change(0xDB + code) chooses the frame (219: 316 high, 220: 262, 221: 260); code 2: a single button, lower down, the other two hidden.
+@@ 1ee5b4154469 d
+Title of type 54: the text is placed for frame 219 (tab 241.5 wide, 316 high); frames 220 (without a tab) and 221 (tab 301.5, 260 high) change the height
+and width of the tab: the title follows it (at the bottom: the height lost; at the center: half of the width gained), otherwise it floats above the tab ("Reprendre" / "Auto" list).
+Choice made in the port: the original code (0xD0A604) only moves the buttons, but the text sent to code 2 is indeed the tab's title.
+@@ e3a3d78aef48 d
+Chosen button (cursor): the elements with this number switch to the "pressed" state.
+@@ 186243bfa97b d
+ReceiveParameters(code >= 1): monster name, window fitted to one or two lines (VariableWindow 142 x 18 or 36), mask of the monsters in the group.
+@@ 19e3bc9f285b d
+b__1(code = number of plates): x = center of the group's monsters (clamped to +-142), z = 105 (69 if more than two plates), rows of 58 going up.
+@@ cb6fcb3c8eba d
+Touch zones (MenuParts of a button: number, gamepad key sent to the engine on release): [(number, gamepad, x0, z0, x1, z1, depth)] in interface units; ident: the element's identifier is appended at the end of the tuple.
+@@ 7852bc64c726 d
+Vertical coordinate (interface units) of the bottom edge of the window's visible parts.
+@@ 6ab41f1dc2bb d
+(bottom, top) in interface units of the window's visible parts, or None if nothing is drawn.
+@@ 1280f7fb65c6 d
+(x0, x1, z0, z1) of the VISIBLE drawing of the window's shown parts, in interface units (see `visible_edges`: the transparent margins of the frames do not count); the mesh cell edges when the sheet is not known. None if nothing is drawn.
+@@ df0fb894b424 d
+Rectangles (x0, z0, x1, z1) of the window's drawn elements (visible, with a mesh): the frames and the plates.
+@@ 9f6f7f6ce8d7 d
+Start menu (type 53): the game sticks its buttons to the bottom edge of the portrait screen; the viewer centers them vertically (the whole group: "Sauvegarde automatique", the four choices, "Licence", "Sauvegardes", back)
+in a black frame. The offset is computed on the complete layout (visible or not) so that the group does not move when a button appears or disappears. -> offset applied (units).
+@@ 2f6777c7fdd4 d
+Button plate for which the engine has sent no label (nonexistent cell: "Sauvegarde automatique" without a readable data5.dat file): hidden, along with its texts; shown again as soon as a label arrives.
+The layout does not change (the start menu frame keeps its space); a hidden plate is neither hovered nor chosen (`buttons` ignores invisible elements).
+@@ 3beade9c9af2 d
+Gray text (TEXT_COLOR_GRAY) on the grayed button plates (state 3), white again when they no longer are. The game's gray shader only removes the color: on the gray plate of the start menu
+the difference is barely visible; the gray text shows that it is inactive (viewer's choice: the game itself only changes the text color for the buttons that asked for it).
+@@ 2cba1c9ba262 d
+Start menu: "Sauvegarde automatique" plate (see _auto_plate) then gray text of the grayed plates.
+@@ 0d3cd4c4d5da d
+Start menu (type 53): the "Sauvegarde automatique" plate ALWAYS stays visible, with its label; without an auto-save it is grayed (state 3: gray shader) and thus inactive (`is_state_active`: no hover, no click,
+no keyboard confirmation; the engine, which has no cell 4 in this case, receives nothing). The original game, on the other hand, HIDES this plate (code 0 = 0: frame 215 / 216 then SetActive(false)); the user's request
+(grayed, never gone) takes precedence. With DQ_AUTO_CACHEE: original behavior. Idempotent (called every frame).
+@@ 80b714df703b d
+Rectangle (x0, z0, x1, z1) of the whole layout (plates, buttons), enlarged by `margin`: the black frame of the start menu; `visible_ones`: only the shown elements (adventure log lists: the frame changes height).
+@@ 2052b3d4b565 d
+(x, z) of the center of what the window shows (frame, tab, plates, back button), in interface units; None if nothing. The pre-game windows (adventure log list, gender choice) are placed on the bottom-right edge
+of the portrait screen: the viewer centers them (through the drawing coordinate system, without touching the positions).
+@@ 7a6724f067e3 d
+(left, right) in interface units of all the window's parts (visible or not: the layout does not change), or None: limits within which a text must fit. Cached.
+@@ 283f73d13fdc d
+Yes / No (Make_YesNo, type 1): on mobile the two plates of the frame are side by side ("Oui" on the left, "Non" on the right, 134 x 48 units each, one unit between them); here they are stacked,
+"Oui" above "Non", as on DS (request from Sylfried of 2026-11-04: the stack is placed on the top-right corner of the dialogue box, see `Game._ui_yesno`). The stack keeps the column of the left plate
+(x from -134.5 to -0.5); the mesh cells (frame, plate, text) are moved as one block, nothing else changes: the engine's cursor already arranges Yes / No in one column (top = Yes, bottom = No), the touch zones
+and the selection follow the moved nodes. Without two numbered plates (other layout), nothing is changed.
+@@ 0543eb9f968f d
+typ = window type (0 field, 1-3 battle), y = canvas scroll, feed = end-of-page cursor, who = name of the speaker ('': none).
+MenuMessage.NoticeReceive, command 4: the name is shown only on the field window (m_nowType == 0); the frame then becomes frameData 191 (the same as 192 + a tab stuck to the top-left edge, underlined)
+and the TextMesh "m_who" receives the name. The dimensions used to place the window (extent(), bottom()) stay those of the frame without a tab: the tab sticks out upward, it does not shift anything.
+@@ 362faf67125e d
+(x0, x1, z0, z1) of the VISIBLE drawing of the dialogue frame (without the name tab), in interface units (see `visible_edges`); the mesh cell edges when the sheet is not known.
+@@ 973da16c5b4b d
+Vertical coordinate (interface units) of the frame's bottom edge.
+@@ 5ec19400d9a2 d
+(left, right) of the frame, interface units (Render._text: limits within which a text must fit).
+@@ 30cf954fe38a d
+Width of a line in font px (sum of the advances; a character missing from the font counts as a space).
+@@ 1fd5ed8381fe d
+-> (texture, width, height, base) in font px; base = distance from the top of the image to the baseline.
+@@ 0c32317049e0 d
+-> (texture, width, height, base); base = distance from the top of the image to the baseline.
+@@ 77f209a34f03 d
+The engine's text canvas (512 x 512 bytes of opacity) -> "msg" texture (white, alpha = opacity), which wraps as in Unity.
+@@ 86388aae5552 d
+-> list of (depth, order, kind, data) of a window.
+@@ cad40d105363 d
+wins: list of Window; (cx, cy) = pixel of the center of the game screen; s = pixels per unit; vp = (width, height) of the window.
+@@ be285dad69b5 d
+Mesh of the game's button plate (Button sheet, part 7, nine pieces of the "list" window Make_NameButton): vertices, UVs, indices, color.
+@@ ffd2f7753793 d
+Draws the background of a button exactly like the game's windows (e.g. "Soigner tous") in the pixel rectangle (x, y, w, h): the corners keep their proportions (those of the model: 16 corner units for its height),
+the middle stretches. chosen: pressed version of the sheet (the one of a chosen button in the game). corner: side length of the corners in pixels (the original 16 units, whatever the height: on-screen buttons).
+grayed: inactive button (the game's gray shader, and darkened to 55%: the removed color is barely visible on this gray plate).
+-> False if the game's plate is unavailable.
+@@ fd394ebf7991 d
+Plan of the map window: 4:3 texture (enlarged map, veil included). Small map (type 25, ICityMap: CreateFromTexture 450 x 337.5 placed at (2, -2) under the frame, local scale 0.99): from x = -223 to 222.5,
+from z = 398 to 63.875; large world map (type 26): rectangle of 450 x 337.5 from x = -225 to 225 (original position not read: kept).
+@@ 57a18c9fb9e4 d
+Usable width (units) of the button plate (part 7) that carries this centered text, or None: the plate whose rectangle contains the text's anchor point.
+@@ 75c232727935 d
+Description (for a frame that shows `nmax` lines and is `layout` units wide): (lines, compression factor). A text that already fits (at most `nmax` lines, none wider than the frame) is left as is, with the patch's line breaks.
+Otherwise the line breaks are replaced by spaces and the text is re-wrapped to the frame width; if it still needs more than `nmax` lines, it is compressed in width (down to COMPRESSION_MIN) to fit in `nmax` lines.
+@@ 9037905e3e90 d
+The windows of ports 2 to 11 (field menus) are created by the engine at startup, before the viewer starts listening: their creation and content are replayed.
+@@ 4ed14f5da3b9 d
+One game frame: window animations (shaking of the battle plates, blinking of the target arrow).
+## FILE dq4_pc/paths.py
+@@ f7c25eb73f1a t
+.../dq4-portage/dq4_pc
+@@ d910a21ed909 t
+.../dq4-portage
+@@ eb86e5617379 t
+in data\: the migration steps already done (D-235)
+@@ d598e3aaea06 t
+(its name from before D-239; renamed at first startup)
+@@ 740a93ba57ae t
+the game's files: data1 to data3 = adventure logs, data4 = suspend save, data5 = auto-save, data9 = most recent adventure log
+@@ 308625aa7e4c t
+(DQ4_DONNEES: its name from before D-239)
+@@ 32736e5ef3f1 t
+(DQ4_JEUX: same)
+@@ 8641069ff390 t
+variable from before the tidy-up
+@@ 1168e74bef62 t
+(old folder of the phone copy, taken over by `migrate`; DQ4_JEUX: a copy that is read only)
+@@ c50146e30125 t
+D-232: a single folder, where the game reads AND writes its adventure logs (data1.dat...), next to `savestates\\`
+@@ 338081e22454 t
+(old write folder, taken over by `migrate`)
+@@ 904b02d5f5ac c
+---- saves -------------------------------------------------------------------------------------------------------------------
+@@ b41fe3d296e6 c
+---- English names (D-239) ---------------------------------------------------------------------------------------------------------
+@@ 41ea67ee26f4 t
+folders: old name -> new
+@@ 448d44b78d30 t
+files (and their `.tmp`, `.bak`... copies: the start of the name is enough)
+@@ 74cb4a9746c7 t
+steps of resume.json from before D-239 -> new name
+@@ db362ba95988 t
+(e.g. a folder open in Explorer: the contents are tried one by one)
+@@ caeaeac5e4de t
+(not empty or locked: it stays, nothing is lost)
+@@ a160f2d9ffe9 t
+(with DQ4_DATA / DQ4_DONNEES, the folder is yours: it is not touched, only its contents are renamed)
+@@ 5c767fd40987 t
+sauvegardes, reglages, journaux, reprise.json
+@@ a90e058d980d t
+etats, etat_NN.dqs, avant_import_..., avant_rangement_...
+@@ fdc077020a15 c
+---- migration from the old layout ------------------------------------------------------------------------------------------------
+@@ 0a47653aebef t
+the migrations that happen only once (D-235)
+@@ 9fef6f38484f t
+(without the file the migration is redone at the next startup: it overwrites nothing)
+@@ 2ea9896c5bf8 t
+(the migration file may just have changed folder or name)
+@@ 683860ee5668 t
+(a problem: the renaming is redone at the next startup; nothing to rename: nothing to note)
+@@ 35a5b8076c3d c
+1. cache: same volume, so a simple rename (it weighs several hundred MB)
+@@ 7d5c6513234e c
+2. French APKs: copied (jeux\DQ4\patched_apks -> data\apk)
+@@ 628e5287baf3 c
+3. D-232: the old folders data\saves\portage and \mobile\<date> are moved up into data\saves then tidied away (BEFORE the older migrations: what the game
+   wrote in recent days takes priority over old copies)
+   (always done: it moves these two folders, so it does not repeat itself)
+@@ 7c0e24ab0d15 c
+4. saves of the earlier port: dq4_pc\sauvegardes\{data*.dat, etats\, avant_import_*\} -> data\saves (D-232: a single folder; D-239: and renamed to English along the way)
+@@ 9b3b634c53e3 c
+5. saves of the earlier phone copy: jeux\DQ4\saves\<most recent date> -> data\saves (what the game read second, file by file)
+@@ 8f0767c9e601 c
+6. settings and history favorites
+@@ d7f1c32bdff3 c
+7. window error log
+@@ 18d81262c355 t
+`python -m dq4_pc.paths`: the migration alone (launched by launch_dq4.bat before the game)
+@@ f12d35153976 t
+(D-238: the migration messages are in the tool's language)
+@@ 4d6a67130c28 d
+All the port's folders and files, in one place (tidy-up of 2026-11-04, English names of 2026-11-05: D-239).
+
+Everything that is yours (APKs, saves, caches, settings) is in ONE folder, `data\`, at the project root; it is never sent to GitHub (.gitignore):
+
+    data\
+      apk\                      the 3 French APKs (base.apk, split_config.arm64_v8a.apk, split_UnityDataAssetPack.apk)
+      saves\                  ONE SINGLE folder (D-232): the exact content of the export .zip, to copy the phone's saves in one go
+        data1.dat ... data5.dat, data9.dat   the game's adventure logs (read and written by the engine; the phone's are copied here)
+        savestates\           the savestates (state_01.dqs ...)
+        before_import_<date>\   safety copies made before each saves import
+        before_tidy_<date>\     old `portage\` and `mobile\` folders tidied away as they were by the migration (see `migrate`): safe to delete once the saved game is verified
+      cache\                    what the port computes from the APKs (maps, sprites, sounds, menus): safe to delete
+      settings\               settings.json, history_favorites.json, history_messages.json
+      logs\                   window_errors.log
+      resume.json               the migration steps of the old layout already done (D-235)
+
+Two environment variables, for tests and special installations (the old names DQ4_DONNEES and DQ4_JEUX still work):
+  DQ4_DATA  : another location for the whole `data` folder.
+  DQ4_GAMES : (old behavior) a "jeux\DQ4" folder containing `patched_apks` and `saves\<date>`; it replaces `data\apk`, and `saves\<date>` remains a READ-ONLY copy of saves (tests, special installations).
+
+English names (D-239): the folders and files that earlier versions created in French (`donnees`, `sauvegardes`, `etats\etat_NN.dqs`, `reglages`, `journaux`, `avant_import_...`, `reprise.json`...) are RENAMED in place at first startup
+(`english_names` in `resume.json`): a plain rename, without copying, overwriting or deleting anything; if a name already exists at the new location, the old file stays where it is and the rename is redone at the next startup.
+
+`migrate()` also takes over the old layout (jeux\DQ4, dq4_pc\cache, dq4_pc\sauvegardes, dq4_pc\reglages.json ...): it COPIES (or, for the cache only, moves) to the new one,
+without ever overwriting a file already present and without deleting anything. Each migration happens ONLY ONCE (D-235): `data\resume.json` records the steps done, so that what you delete in `data\`
+(a `before_import_...` folder, a log, settings) is not copied back from the old folder at the next startup. A layout already in use (adventure logs, savestates, settings or cache in `data\`) counts as migration done.
+@@ 08fe4cd7efd1 d
+The folders and files, computed from the data root (and the two environment variables).
+@@ 32fd51cb9cb2 d
+The English name of a folder or file created by the versions before D-239 (`etats` -> `savestates`, `etat_01.dqs` -> `state_01.dqs`, `avant_import_<date>` -> `before_import_<date>`...), or None if it has not changed.
+@@ c092c9006dec d
+Renames `src` to `dst` (same folder or neighboring folders, hence without copying) without overwriting or deleting anything: `dst` absent -> plain rename; two folders -> the content of `src` is moved one by one into `dst`
+(then `src` is removed if it is empty); two files -> `src` stays where it is (problem noted). Appends (src, dst) to `moves` for each rename done, (src, dst, reason) to `problems` otherwise.
+@@ 0bad60adc113 d
+Renames the entries of `folder` that still have an old name; `deep`: descends into subfolders, except the copies archived by the migration (`portage`, `mobile`, `before_tidy_...`), which are left as they are.
+@@ 632053e84584 d
+D-239: renames in place the folders and files that earlier versions created in French. -> (renames, problems); see `_move`.
+@@ 872190535f02 d
+The sentences that say what `english_names` did (empty: nothing).
+@@ 77b42f726470 d
+Copies a file if it does not yet exist at the destination; returns 1 if copied.
+@@ a76feb3374ca d
+A relative path from an old layout, with each name put into English (`etats\etat_01.dqs` -> `savestates\state_01.dqs`).
+@@ 12191d9f7bbb d
+Copies the game's files (data1.dat... data9.dat) from the `sources` folders (in priority order) into `destination`, without overwriting anything: the first folder that has the file wins. -> number of files copied.
+@@ 6b49dd015e42 d
+D-232: a single saves folder. The adventure logs of the old `saves\portage` (priority: that is what the game wrote) then those of the most recent phone copy (`saves\mobile\<date>`)
+are copied into `saves\`, without overwriting anything (what the game used to read, file by file, in that order); then, once each file is found in its place, the two old folders are moved
+as they are into `saves\before_tidy_<date>\`: nothing is deleted. A failure leaves the old folders in place (the game still reads them). With DQ4_JEUX (phone copy elsewhere, read only): no effect.
+-> sentences describing what was done.
+@@ 1547cc5dcd5a d
+The steps already done (`data\resume.json`, or `reprise.json` if its renaming has not happened yet): dict name -> date, or {} (file missing or unreadable). Step names from before D-239 are translated.
+@@ 98c5a5a10734 d
+For each step: its destination is already in use in `data\` (a version from before D-235 already did the migration, or you copied your files yourself) -> nothing to copy over.
+@@ 3d9c2cd94c73 d
+Takes over the old layout into `data\`. -> list of sentences describing what was done (empty: nothing to do).
+Copies without ever overwriting or deleting, except the cache (moved all at once if `data\cache` does not exist, otherwise left as is) and the old folders `saves\portage` and `mobile` (moved into `avant_rangement_<date>` after copying); does nothing with unrecognized DQ4_DONNEES / DQ4_JEUX.
+Each migration happens only once (D-235): what you delete afterwards in `data\` (a `before_import_...` folder, a log, settings) does not come back from the old folder.
+D-239: everything starts with the renaming to English of the folders and files of the earlier versions (`english_names`), so that the following migrations already arrive under the right names.
+@@ 56b36d5d1afc d
+Folder of the most recent phone copy (`mobile\<date>`: the old arrangement, or DQ4_JEUX\saves\<date>; the date sorts like alphabetical order), or None.
+@@ a776cdf10030 d
+Savestates folder for this write folder: `saves\savestates` with the usual location (`saves`), otherwise `<write_dir>\savestates` (tests, --saves-ecriture).
+@@ 0c6676893840 d
+Folder that receives the `before_import_<date>` copies: `saves\` with the usual location, otherwise the write folder itself.
+@@ 768b20e2f808 d
+Does the step remain to be done? If not (done before, or destination already in use) it is recorded as done, without copying anything.
+## FILE dq4_pc/persistence/logfile_format.py
+@@ 09ca26a235bb t
+empty bank: valid, no checksum
+@@ 540aab29e310 d
+Minimal reading of a game adventure log file (data1.dat to data5.dat): enough to tell whether it is usable, without loading it into the engine.
+
+Format (disassembly of Cryption::Filter 0x152de8 and Profile::isValidData; verified on a phone's saves and on those written by the engine): 15,360 bytes encrypted with an xorshift32 stream whose seed is the CRC32
+(polynomial 0x7a7b58c6, key "vb76Eg43"); in plaintext: word 0 = "rate" (0x65747261) and word 1 = 0x0bf697de for a valid bank, "DWEN" (new bank) or "DLED" (deleted bank) for an empty bank; word 2 is the sum
+of the first 0x3660 bytes (word 2 set to zero). data9.dat (512 bytes) is only a bank number: only its size is checked.
+@@ 5750d58307a3 d
+The game's filter (symmetric xor: also used to encrypt).
+@@ 16efca233d77 d
+-> None if the file is usable, otherwise the reason (text for the player). The sizes are checked by the caller; data9.dat has no checksum.
+## FILE dq4_pc/persistence/saves.py
+@@ 56644e464e3f t
+(D-239: `etats/etat_NN.dqs` from earlier .zip files is also recognized)
+@@ 9934e35ee375 t
+(the read folder is never modified: its files stay intact, no need to copy them)
+@@ bdbdb046e480 c
+---- file dialog boxes (tkinter, in a separate thread so the game window stays responsive)
+@@ 529def14e4ea d
+Export and import of the save files ("Sauvegardes" button of the start menu, in place of "Sauv. cloud").
+
+What is exported: the six game files (data1.dat to data3.dat = adventure logs, data4.dat = suspend save, data5.dat = auto-save, data9.dat = most recent adventure log) as the engine reads them
+(the write folder first, otherwise the read folder) and the port's savestates (savestates/state_NN.dqs). A .zip file contains them flat (`data1.dat`, `savestates/state_01.dqs`).
+What is imported: a .zip of this kind, or standalone dataN.dat files (for example those copied from an Android phone); the names are recognized even in subfolders of the .zip.
+Nothing is ever overwritten without a copy: before the import, the files in the write folder that are about to be replaced are copied into `data\saves\before_import_<date>\`; the read folders (your original saves) are never modified.
+The files are not interpreted here, only checked: size (adventure log: 15,360 bytes; data9: 512) and checksum of an adventure log (logfile_format: a damaged file, or one that is not a game adventure log, is rejected, with the reason, instead of giving an "empty bank" at load time); each file is written in full or not at all (temporary file then replacement).
+@@ 12d825abcb8d d
+The name of a savestate as it is written now: `etat_03.dqs` (old name) -> `state_03.dqs`.
+@@ d1f6a68e3a96 d
+The adventure log files that the engine reads: {name: path} (the write folder takes precedence over the read folder, like GameCore.h_fopen).
+@@ 0d48a4290d53 d
+The port's savestates: {name: path}.
+@@ 4168080db8e1 d
+Writes the .zip. -> (number of adventure logs, number of savestates). Raises ValueError if there is nothing to export.
+@@ fadd75111dd5 d
+Files to import: -> ({adventure log name: bytes}, {savestate name: bytes}, [problems]). Paths: .zip, folders (adventure logs / savestates inside) or standalone files.
+@@ 1d58909e9cdb d
+Copies the adventure logs / savestates found into the write folder, after copying those they replace into `before_import_<date>`. -> (number of adventure logs, number of savestates, copy folder or None, problems).
+Raises ValueError if nothing usable was found.
+@@ f236e3346389 d
+A "Save As" or "Open" box; `result` stays None while it is open, then a list of paths (empty = canceled); `unavailable` true without tkinter.
+## FILE dq4_pc/persistence/savestates.py
+@@ 4f675267479a c
+Old module names (before the tidy-up of 2026-11-04: everything was flat in dq4_pc) -> current names: the savestates saved before this date
+keep the module name `moteur` (or another) in their pickle; they are read back without changing them.
+@@ 4e028b69d34b t
+savestates saved between the tidy-up of 2026-11-04 and the switch to English of 2026-11-05
+@@ eb6536b11fc7 c
+Old class names (same date): `Etat` became `State`.
+@@ 4afae0c9bf21 c
+Whitelist of the classes allowed when reading a savestate (#241, audit ENG-05): a `.dqs` received from another person must not be able to execute code on
+load. A pickle can call any function of an importable module (os.system, eval...); only the data types that `snapshot` / `write` writes are accepted: the port's
+two classes (`State`, `Interface`), the basic containers, numpy arrays (both namespaces, `numpy.core` before numpy 2 and `numpy._core` since) and three `collections`
+containers. Survey done on real savestates (world, town, battle): nothing else.
+@@ 0831d7ec1b80 t
+(savestates from before #206 have no fingerprint: accepted)
+@@ 3be92deef894 t
+EVERYTHING is read before writing anything into the engine: a damaged file leaves the game intact (#206)
+@@ 19943c99fcee t
+open files: they are tracked only if the engine had opened some (not seen between two frames until now)
+@@ e695013a9e5b t
+savestate saved by an older version (before the damage numbers)
+@@ a035e19a99ea t
+original hero speeds (a savestate saved by an old version during a run contains them inflated), "Paramètres" button -> Pause menu (a savestate saved
+@@ 379ce8969c8b c
+before this redirection put the original instruction back), widened places window and "Sauv. cloud" removed (same: the original image is reloaded above)
+@@ 38ff318d864c d
+Savestates: everything that keeps the game alive, at a moment between two frames.
+
+The original engine runs in the emulator (emu_core): its state = memory (heap, data, modified pages of the library) + a few
+loader counters. To this is added what the viewer decoded from the packets (State: camera, sprites, fades...) and the memory of the menu windows
+(Interface). A state weighs a few hundred KB compressed; the stack is not kept (it is empty between two engine calls).
+
+File: b'DQ4ETAT1' | size + JSON of the info | size + PNG of the thumbnail | compressed pickle (zlib).
+The states contain NO game file: they only work with the APK that produced them (same version of the library).
+@@ 5c1949bc112d d
+pickle.loads that also recognizes the old module names and refuses any class outside ALLOWED_CLASSES (nothing is executed: a booby-trapped file is rejected beforehand).
+@@ e10cff140c32 d
+Fingerprint of the engine library (image after relocation): a state only makes sense with the library that produced it (#206).
+@@ 22589d615cd8 d
+Library pages (data, patches) that differ from the image after relocation: [(number, bytes)].
+@@ 7548b3db87eb d
+State of engine `m` (Engine) -> serializable dictionary. To be called between two frames. `viewer`: additional serializable object (state of the map's animated objects...) returned by apply.
+@@ 40a20b4b588e d
+Puts engine `m` back into state `d` -> `viewer` object given to snapshot. The resources tied to the window (original menu windows, textures) must be rebuilt by the caller (see Game.load_state).
+@@ 24ca26dc3778 d
+Saves state `d` to `path` (atomic write).
+@@ 6d8348f23770 d
+-> (info, PNG thumbnail) of a state file, without reading the state itself; None if the file does not exist or is not valid.
+@@ 0e193054e25c d
+-> state dictionary (to pass to apply).
+## FILE dq4_pc/persistence/settings.py
+@@ 29f7d7c533a8 c
+Default keys: action -> [primary key, secondary key] (pyglet.window.key names)
+@@ f747c27b6f5f t
+the arrow keys: on the field left / right rotate the town camera (D-233; both together recenter it), everywhere else (menus, messages, battles) all four are directions; up / down are only used in menus (the tilt was removed in #264)
+@@ 66b51d064d00 t
+cycles through the battle speed (Manuel, Normal, Rapide, Tres rapide): in battle as elsewhere; V = "vitesse" (free: not ZQSD, not the arrow keys, not F1, not the savestate digits)
+@@ 3e6fa224f002 t
+default of the "Menu" action before v5 (touches_v): Enter alone; a file that still contains it also receives Tab (see Settings.__init__)
+@@ 609df5e12caa c
+action labels ("Commandes" menu: the page groups the lines by sections, see pause.py; L / R: pages of the game's menus, fixed keys absent from the menu)
+@@ b7effbabe74e t
+(D-238: labels in French, translated at display time by the Pause menu: `tr(label_text)`)
+@@ dc0de759d554 t
+Esc opens the menu, F11 toggles window / full screen (like Alt + Enter): not reassignable
+@@ 359873dbc98b c
+(D-238: `key_name` always returns the FRENCH name (data, like the action labels); the menu translates it when drawing it, `tr(key_name(...))`, including
+"Pavé 0" to "Pavé 9" of the other numeric keypad keys)
+@@ fae67a26fe06 c
+Battle command windows (the bottom frame: Combattre / Fuir, Attaquer / Magie / Objets / Defense, targets, items and spells, info): frame of 459 interface units, whereas
+the battle action messages (types 2 and 3 of the message window) make it 510. By default these windows are enlarged to the width of the dialogue boxes (510 / 459): the
+speed button, stuck to the bottom-left corner of the bottom box, no longer shifts when an action message replaces the menu at the start of a turn (#47). Same mechanism as
+any window adjusted in the editor: [relative size, x offset, y offset].
+@@ 330d5f4e50ac t
+tool language (D-238): 'systeme' (French if Windows is in French, otherwise English), 'en' or 'fr'; the game's texts do not change
+@@ 25738ea24de4 t
+"Shader": 0 originals, 1 EPX x8, 4 pixel perfect (see hd.py); 2 (smoothed regions) and 3 (bicubic), removed because they only blurred, are read as 1
+@@ 874efe58956e t
+window: 0 windowed, 1 full screen (borderless window at the desktop resolution, the monitor's display mode does not change); F11 / Alt + Enter switch from one to the other (formerly the boolean "full_screen"; the old exclusive full screen, mode 2, became 1)
+@@ f528aeca7a81 t
+MSAA antialiasing (0, 2, 4, 8): the scene is drawn off-screen (postfx.py), the change is immediate; limited by the graphics card
+@@ 56844cec578b t
+supersampling: the scene is drawn at this scale (1 to 2) then downscaled (1 = normal; 2 = 4 times more pixels computed, flicker and jagged edges greatly reduced)
+@@ 1fdca8c2a1a8 t
+0 to 1: adaptive sharpening of the scene's edges (0 = none)
+@@ 276b4b625c4b t
+0.5 to 1.5: gamma curve of the scene (1 = like the game; higher = brighter)
+@@ b5288c004fd4 t
+F1: information lines
+@@ 480c280dbb70 t
+sound: overall volume, jingles and fanfares volume, interface sounds volume (categories: see sound.py; "bruitages" = the game's sound effects)
+@@ 51a8e49a57d9 t
+per-category switches
+@@ 95964cc034b5 t
+dialogues: letters displayed per engine frame (30 per second); 4 = like the game (see TEXT_SPEEDS)
+@@ 20d336f3fa66 t
+window: window size [width, height] (brought back to the screen if it is too large); full screen: no effect (the window takes the desktop resolution)
+@@ ec0875eb6099 t
+camera rotated with the mouse (wheel click held + movement): reverses the left / right direction (no = like the arrow keys: dragging to the right = right arrow); does not change the keyboard arrow keys
+@@ 568e5af45a3e t
+darkening of the edges of the game image (0 = none, 1 = black corners): gives volume to the scenery and 2D sprites, hides the plain background outside the map
+@@ c1e851cc4ade t
+game speed factor when the hero walks: x1, x2, x3 or x4 (SPEEDS_X)
+@@ b7ea19f706dc t
+camera rotation speed with the arrow keys and when recentering: x1 to x4 (the accelerator key does not speed it up)
+@@ 823daa13240e t
+"Multiplicateur de l'accélérateur" (1 to 2): walking multiplier (the hero runs) as long as the "Touche d'accélérateur" is held (formerly "vitesse_course"); NEVER applies to battles (see battle_speed)
+@@ b84f37de5c07 t
+"Vitesse de combat": 0 Manuel (normal speed, each message is advanced by hand), 1 Normal, 2 Rapide, 3 Tres rapide (BATTLE_SPEEDS): the engine runs 1, 2 or 3 times as many steps per second during a battle (monster and hit animations, movements, delays, message scrolling, fades); the music and sound effects keep their speed (see battle_speed.py)
+@@ fa55ba3bbe8d t
+"Historique" window: "Favoris seulement" checkbox checked? (state saved at each change, restored from one session to the next; no line in the Esc menu: it is changed in the window itself, see ui_history.py)
+@@ 3a263b31c866 t
+"PV et PM restaurés au niveau supérieur": when a character gains a level, it recovers all its HP and all its MP (the original game does not do this); disabled = like the game
+@@ 4a18d88f5462 t
+size of the damage numbers on the monsters (1 = size of the original layout, very small on a large screen)
+@@ d5c3a186a831 t
+interface editor: placement grid displayed (32 x 18 cells)
+@@ fa2255121a78 t
+touch buttons of the mobile version ("Carte", "Commandes", "Discussion") displayed on screen, outside battle
+@@ 87c8fd135a58 t
+D-pad (touch gamepad) on screen, usable with the mouse: displayed or not; relative size (in addition to the game's "Taille de la croix" option)
+@@ 7653085d4390 t
+relative size; positions placed on a grid (snapping)
+@@ 1d3cda87d068 t
+game windows: name (Make_* of MenuPortItemTable, or 'msg' for the dialogues) -> [relative size, x offset, y offset as a fraction of the screen]; absent: like the game (see pause.py, interface editor)
+@@ 86a0f48e331c t
+button or 'croix' -> [column, row] of its top-left corner on the screen grid (empty: original positions, see hud_mobile.py); the battle speed button has its own (bouton_vitesse_pos)
+@@ 60d0f5718fc4 t
+"Combat : bouton de vitesse" interface (split out of "Boutons et croix de l'ecran"): shown in battle or not; relative size; [column, row] of its top-left corner (empty: stuck under the bottom box, see hud_mobile.Buttons.anchor)
+@@ ed14aa39b6ca t
+version of the default sizes of the game windows (interface_fenetres): a file saved before (without this key) receives the new default sizes once, except for a window the player has adjusted; v2: battle command windows at the width of the dialogues
+@@ 886e9725c07b t
+interface editor, "Afficher cette interface a l'ecran" = No: names of the game windows (Make_*, or 'msg' for the dialogues) that are not drawn; for the on-screen buttons and D-pad, it is the 'boutons' setting
+@@ 17d14c5b1f74 t
+settings version: a key list older than v3 is discarded (v3: ZQSD to walk, arrow keys = camera, Space = action); v3 -> v4: "Discussion de groupe" = Alt / Alt Gr (if those keys are free), accelerator x1.5 (if running was at the original x2); v4 -> v5: "Menu" = Enter and Tab (if "Menu" still had the old default, Enter alone, and Tab is free); an action added since takes its default key
+@@ 0773f28f0cbc c
+Game windows absent from the interface editor (pause.py): game launch (start menu, name, title, license, network: handled separately), without a mesh (nothing to adjust),
+irrelevant on PC or that follow the monsters on screen. Their settings saved by an old version are discarded on load (they shifted a lone text or a launch window).
+@@ e46aef805a82 c
+Interface editor (pause.py: Affichage > Interface): classification of the settings and resets. Every DEFAULT key that touches the interface must appear in one of these
+three groups (tools/test_interface_settings.py checks it: a key added without classification makes the test fail).
+@@ 22816604cb12 t
+"Boutons et croix de l'ecran": one of the editor's interfaces (the others: 'msg' and the game windows, by their Make_* name)
+@@ ca0495151926 t
+settings of SCREEN_TARGET: display of the buttons and the D-pad, sizes, positions
+@@ a7587d44767e t
+"Combat : bouton de vitesse": its own editor interface ("Combat" group), separate from SCREEN_TARGET
+@@ 4b115f3c4f19 t
+settings of SPEED_TARGET: display, size, position
+@@ 963a5147c82d t
+settings per game window (or 'msg'): size and position, display
+@@ 9506ca47d651 t
+options of the editor itself, common to all interfaces: grid displayed, snapping
+@@ 41eeef40ba06 t
+game window with no saved setting: relative size, x offset, y offset (fractions of the screen)
+@@ 6213e2f150db c
+Keys of old settings files that no longer exist: never read (the loader only takes the DEFAULT keys), hence absent from the file at the next save.
+'full_screen' (boolean from before #42) is converted to 'mode_fenetre'; 'mode_fenetre_retour' (last non-exclusive mode, #42), 'edge_correction' (removed option:
+sprite edge correction is always applied) and 'lissage' (removed option: texture smoothing is always applied) are discarded; 'camera_centree' and 'suivi_camera_v'
+too (#47: the camera is always centered on the hero, except when the game takes it). 'ecran_plein' (choice of the full-screen monitor, #52) and 'sortie_audio'
+(choice of the audio device, #112) were removed on 2026-11-03 at Sylfried's request: full screen is done on the window's screen, and the sound stays on the
+Windows default output.
+@@ 2c868ff0bbc4 t
+possible values of 'mode_sprites' (4 keeps its number: old settings files and the --hd options remain valid)
+@@ 37912adcd43c t
+limits of the Esc menu sliders
+@@ 95997f1f63f9 t
+(Yes / No settings: any value that is not a boolean reverts to the default)
+@@ 3e0170c79c07 t
+text speed notches (letters per frame); 4 = the game, 4000 = all at once
+@@ 21a087e58c16 t
+notches of the walking, camera and transition speed (x1 = like the game)
+@@ d3b7ab5d92bd t
+notches of "Vitesse de combat": Manuel (normal speed + messages advanced by hand), Normal (= the game), Rapide, Tres rapide
+@@ 388f06bda29c t
+labels shown to the player ("Texte" page, battle screen button, key message): never "x1", "x2", "x3"
+@@ 78d16a2803a0 c
+Battle message scrolling: OptionStatus.battleSpeed (g_Option + 5, original value 2: OptionStatus::initialize); BattleAutoFeed::setMessageSpeed:
+0 / 1 / 2 / 3 = wait of 12 / 22 / 32 / 42 frames (0.4 / 0.73 / 1.07 / 1.4 s) before the next message, 4 = no automatic advance (key press).
+"Vitesse de combat" imposes 4 in Manuel and 0 (the shortest, 12 frames) otherwise (#45: with 2, the original value, 32 frames, the damage number only appeared
+0.77 s after the start of the hit animation and an attack turn lasted 5.7 s; with 0: 0.43 s and 3.0 s; the hit animation keeps its duration): the Rapide and
+Tres rapide speeds speed up the engine clock, so this wait too.
+@@ 3ec135176a3e t
+(limits: never slower than Manuel, nor faster than Très rapide)
+@@ a4b9e4d87380 t
+old "Plein écran" setting (boolean) -> 1 (borderless full screen, as before) or 0; the boolean is no longer saved (see OBSOLETE_KEYS)
+@@ 235485e3bbf6 t
+old "Multiplicateur de la course" -> accelerator speed (the old camera multiplier, accel_camera, is dropped: a single factor for both)
+@@ a3f9f719a51b t
+old run and camera acceleration keys -> a single "Touche d'accélérateur": "Courir (maintenir)", failing that the other three ("appuyer" no longer exists)
+@@ ca3144742a3b t
+the player had cleared these keys: the accelerator has no key
+@@ 1be024c10f96 t
+(only once: afterwards the three keys are saved)
+@@ 8d0ed361062a t
+(any old "Defilement automatique : non" = manual messages)
+@@ f6c36bcf2979 t
+old forced "Messages en combat : Manuel" -> "Vitesse de combat : Manuel" (the other notches no longer have an equivalent: the wait follows the battle speed; nothing forced: the saved speed stays)
+@@ 6b975f79c6fc t
+(the size of the damage numbers is no longer a setting: fixed value)
+@@ b3c9568b6faa t
+old default window sizes -> new ones, once only (afterwards the key is saved and the player's choice prevails): window with no setting or at the old default size (1, 0, 0)
+@@ 358700d814d4 t
+v3 -> v4: new default values, without touching what the player set themselves
+@@ 6751189bf977 t
+a key already taken by another action stays with that action
+@@ 9d99ff26cce7 t
+v4 -> v5: new default of "Menu" (Enter and Tab). Only the exact old default (Enter alone) changes: a player's choice is kept, and Tab stays with the action that took it
+@@ 94f77ff79ca4 t
+action added since: its original key is dropped if another action has taken it
+@@ ab5c7eab3269 t
+a reserved key (F11: toggles window / full screen) can no longer be an action key: removed from an old file
+@@ 7464e71440c2 t
+values from old versions brought back to the sliders
+@@ 6d332ca4f718 t
+old slider (0.5 to 2) -> x1 to x4
+@@ 5fefddc8dce7 t
+one of the menu's notches
+@@ 7f2833bc0e9f t
+interface editor: windows removed from the editor
+@@ 82992a51df80 t
+(the speed button's position is no longer here)
+@@ 2aaeae27b2db t
+(2 = old exclusive full screen -> 1)
+@@ e59ff969f4a3 c
+---- interface editor: resets (always from DEFAULT, never from copied values)
+@@ 533871f9930f t
+battle speed button: display, size and position (back under the bottom box)
+@@ b20b7931ae40 c
+---- keys
+@@ 6057a3331145 d
+Player settings (Esc menu): display, sound, keys. Saved in reglages.json (next to window.py, ignored by git).
+@@ 03327c5f03aa d
+Relative size, x offset, y offset of a game window with no player setting: the one from DEFAULT (battle command windows) or, otherwise, DEFAULT_WINDOW (like the game).
+@@ 8c361a90ef3e d
+Value read (old settings file, --hd option) -> existing mode: 2 (smoothed regions) and 3 (bicubic) became 1 (EPX x8, the closest: same x8 enlargement of the outlines, without the blur); everything else -> pixel perfect.
+@@ 9c55dd47f3e3 d
+Value read (reglages.json, --plein-ecran option) -> 0 (window) or 1 (full screen). A boolean is the old "full_screen" setting (true = 1); 2, the old exclusive full screen (#42), becomes 1: the full screen that remains;
+anything invalid -> window.
+@@ ca63cd2150b0 d
+Value of OptionStatus.battleSpeed to impose on the engine for this notch of "Vitesse de combat": 4 (by hand) in Manuel, 0 (wait of 12 frames between two messages: the animations chain together with no dead time) otherwise.
+@@ 3600d4697c1b d
+The game itself changes battleSpeed (loading a save, original "Parametres" window): 4 -> Manuel; any other value -> leaves Manuel (Normal), the other notches are kept.
+@@ 890f8742746a d
+Speed read (old 0.5 to 2 slider or absurd value) -> the nearest x1 to x4 notch (on a tie the faster), never less than x1.
+@@ 4c560e8949ce d
+Value read (reglages.json, typed input) -> the nearest notch of BATTLE_SPEEDS (on a tie the faster); anything that is not a number (text, boolean, None, nan) -> `default`.
+@@ c73681f99a05 d
+"Changer la vitesse en combat" key: Manuel -> Normal -> Rapide -> Très rapide -> Manuel (an invalid value is read as Normal, an out-of-range value as the nearest notch).
+@@ f9ed4687a5da d
+Readable name of a key (pyglet name) for the menu.
+@@ 202be8faeeb0 d
+pyglet name -> key code (None if unknown).
+@@ 157d6cbed2fe d
+Key code -> pyglet name.
+@@ aa061725291d d
+Old file: the battle speed button was part of "Boutons et croix de l'ecran" (display = 'boutons', size = 'boutons_taille', position = boutons_pos['combat']); it now has its own settings,
+carried over as they behaved: shown if the buttons were; its position kept if the player had placed it (otherwise it stays stuck to the bottom box) and then the size of the buttons (without a position, the plate
+followed that of "Fuir" and ignored the size). `boutons_pos` loses the key 'combat'. Modifies `d` in place.
+@@ 115401b246a4 d
+A modifiable copy of a setting's default value.

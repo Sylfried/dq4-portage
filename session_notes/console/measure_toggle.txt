@@ -1,0 +1,20 @@
+Mesure ce qui se passe a chaque bascule fenetre <-> plein ecran du jeu : nombre d'appels a pyglet (set_fullscreen, recreation de la fenetre, cacher / montrer, changements de mode du moniteur), d'evenements de
+redimensionnement, de trames dessinees (et combien ont une taille qui n'est pas la taille finale) et de reconstructions des tampons du rendu hors ecran (postfx.py). Sert a comparer deux etats du code : on lance le meme
+scenario sur chacun et on compare les lignes « BASCULE ».
+
+    python3 tools/measure_toggle.py <dossier dq4_pc a mesurer> [options de window.py...]
+
+Le jeu est lance tel quel (fenetre.main) : les compteurs sont poses de l'exterieur sur la classe Jeu, sur PostFX et sur l'ecran, sans rien changer au code mesure. Une bascule est detectee a l'entree de
+Game.set_full_screen (code d'aujourd'hui) ou de Game.regler_mode_fenetre (code de la #42) ; le compte s'arrete 12 trames apres la fin de l'appel. Une ligne par bascule :
+    BASCULE n=1 vers=1 : set_fullscreen=1 recreations=1 cache/montre=1/1 mode_moniteur=0 (restore_mode=0) redimensionnements=3 trames=14 (instables=0) tampons=1 ... || fenetre visible sans image : 0.0 ms (tampons refaits pendant ce temps : 0, deplacements : 0)
+« fenetre visible sans image » = temps entre l'affichage de la fenetre (visible(True)) et le premier flip qui la remplit : 0 si une image complete a deja ete affichee avant de la montrer (code d'aujourd'hui) ; avec le code
+de la #42, la fenetre apparait d'abord, l'image n'arrive qu'a la trame suivante (apres la reconstruction des tampons du rendu hors ecran et, au retour en fenetre, le deplacement de la fenetre). Sous Mesa / xvfb : 250 a 280 ms
+vers le plein ecran, 65 a 70 ms au retour, contre 0 ; sur un vrai GPU les durees seront bien plus courtes, la structure (fenetre visible avant sa premiere image) est la meme.
+A lancer sous xvfb (un seul a la fois sur la machine : voir /tmp/run_wt.sh). Les bascules se declenchent par les touches du harnais :
+    --touches-test "60:F11,120:F11"                       (F11 : code d'aujourd'hui = fenetre <-> plein ecran ; code de la #42 = plein ecran exclusif)
+    --options-test "60:Fenêtre=1;120:Fenêtre=0"            (code de la #42 : plein ecran sans bordure) ; "60:Plein écran=true;120:Plein écran=false" (code d'aujourd'hui)
+
+LIMITE : X11 (xvfb, sans gestionnaire de fenetres) n'est pas Windows. Les nombres d'evenements de pyglet different (sous Windows, set_fullscreen = cacher, changer le style, redimensionner, montrer, replacer, plus les messages
+WM_SIZE / WM_MOVE) ; ils montrent ce que le code du jeu demande et fait faire, pas ce que l'ecran du joueur affiche.
+
+exit 2

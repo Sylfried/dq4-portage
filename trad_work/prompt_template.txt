@@ -1,0 +1,26 @@
+Tu traduis du français vers l'anglais les commentaires et docstrings d'un projet Python (lot @@N@@). Les textes sont extraits à part ; une autre étape les remettra automatiquement dans le code : tu ne vois et ne modifies JAMAIS le code lui-même.
+
+Dossier de travail : `/tmp/claude-0/-home-claude/45fdf246-f4ad-5078-9633-8be9ccf9e9c9/scratchpad/trad/`
+- À lire d'abord : `GLOSSARY.md` (vocabulaire et conventions imposés : tous les traducteurs doivent employer les mêmes termes).
+- Entrée : `batches/batch_@@N@@.in.txt`. Sortie à écrire : `batches/batch_@@N@@.out.txt`.
+
+## Format (à respecter exactement)
+Le fichier d'entrée est une suite de blocs : une ligne `## FILE chemin/du/fichier.py` (simple repère, tu peux la recopier ou l'omettre) puis, pour chaque texte, une ligne d'en-tête `@@ <id> <type>` suivie du texte (une ou plusieurs lignes) jusqu'au prochain `@@` ou `## FILE`.
+Types : `d` = docstring (peut avoir plusieurs paragraphes, des listes, des exemples), `c` = commentaire sur ses propres lignes (plusieurs lignes possibles), `t` = commentaire en fin de ligne de code (doit rester sur UNE seule ligne).
+Dans la sortie : recopie chaque en-tête `@@ <id> <type>` à l'identique (même id, même type, même ordre) puis écris la traduction anglaise du texte. Ne saute AUCUN texte (si un texte est déjà en anglais, ou n'est que du code, des nombres ou des noms, recopie-le tel quel).
+
+## Comment traduire
+- Fidèle et concis : même sens, rien d'ajouté, rien de retiré ; anglais technique naturel, au présent, ton neutre ; mêmes détails chiffrés. Le français est parfois sans accents (ASCII) : c'est du français.
+- Garde la structure : retours à la ligne, paragraphes (lignes vides), puces `*` / `-`, numéros, retraits des lignes de continuation, tableaux, exemples de code. Pour les types `c` et `d`, tu peux changer les coupures de ligne si la phrase anglaise l'exige, mais garde les paragraphes. Pour `t` : une seule ligne.
+- NE CHANGE PAS : identifiants (`Game._loop`, noms de fonctions, variables), noms de fichiers et chemins, nombres, valeurs hexadécimales, code entre accents graves, numéros d'issues (#123) et de décisions (D-123), noms de personnages et de lieux du jeu, et les textes du jeu cités (noms de sorts, libellés de menus en français entre guillemets « ... » : ils restent en français). Les virgules décimales deviennent des points (2,8125 → 2.8125). Les guillemets « » deviennent des guillemets droits " ".
+- Si un commentaire cite un ancien nom français d'identifiant qui a été renommé (table `ancien<TAB>nouveau` dans `/home/claude/dq4-portage/docs/rename_identifiers.tsv`, tu peux la fouiller avec grep), écris le nouveau nom.
+- Orthographe américaine. N'écris pas de lignes de plus de ~170 caractères pour un type `c` (les `d` et `t` peuvent rester plus longs si le français l'était).
+- Pas de commentaire de ta part dans la sortie, pas de « translated by », pas de lignes `## FILE` obligatoires.
+
+## Méthode
+1. Lis `GLOSSARY.md`. Lis l'entrée avec l'outil Read, en plusieurs morceaux si besoin (le fichier fait ≈ 45 Ko).
+2. Écris la sortie en plusieurs parties (≈ 12 à 15 Ko chacune) avec l'outil Write dans `batches/batch_@@N@@.out.part01.txt`, `part02`, …, puis assemble avec Bash : `cat batches/batch_@@N@@.out.part*.txt > batches/batch_@@N@@.out.txt` (numéros de partie à deux chiffres pour que l'ordre alphabétique soit le bon).
+3. Lance le contrôle : `python3 -I /tmp/claude-0/-home-claude/45fdf246-f4ad-5078-9633-8be9ccf9e9c9/scratchpad/trad/check.py batches/batch_@@N@@.in.txt batches/batch_@@N@@.out.txt` (depuis le dossier de travail). Il signale : textes MANQUANTS ou EN TROP (bloquant : corrige), commentaires `t` sur plusieurs lignes (bloquant), ELEMENTS PERDUS (un nombre, un identifiant ou un code a disparu : vérifie et rétablis, sauf faux positif évident comme « 1 620 » devenu « 1,620 »), FRANCAIS ? (du français reste : traduis). Corrige le fichier de sortie (Edit ou réécriture de la partie concernée) jusqu'à zéro bloquant et zéro avertissement non justifié.
+4. Réponds en 3 lignes : nombre de textes traduits, avertissements restants et pourquoi, termes qui t'ont posé problème (que le glossaire devrait préciser).
+
+Ne touche à aucun autre fichier que `batches/batch_@@N@@.out.part*.txt` et `batches/batch_@@N@@.out.txt`.

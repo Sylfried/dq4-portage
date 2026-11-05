@@ -1,0 +1,973 @@
+## FILE tests/test_exp_gift_touch.py
+@@ 91c645a9d712 d
+The king's experience gift (chapter 1) freezes the game at the last level message (#261).
+
+The menu `MaterielMenu_EXTRA_PRESENT_EXP` (added by the mobile game) waits, once the levels are shown, for a trigger from the game's pad (`dss::g_Pad + 2`, filled by `Global::NativeExec` from the 2nd argument of `GameUpdate`):
+screen touch exactly 0x100, or buttons 0x400 to 0x2000. The A key of a message (0x10) never releases it.
+
+  1. `Engine.awaits_touch` (no engine: memory is simulated): true only if the menu is in the menu manager's array AND in its last state;
+  2. `inputs.touch_for_engine`: A sends 0x100 alone when the menu is waiting, nothing changes otherwise;
+  3. a model of `Global::NativeExec + 0x74` (machine code re-read) shows why 0x10 and 0x110 are not enough and 0x100 or 0x400 are;
+  4. wiring: `Game._entries` does call the conversion when a message is open (the test reads the code, without pyglet).
+
+    python3 tests/test_exp_gift_touch.py
+@@ a066dab08b18 d
+g_Pad + 2 from the 2nd argument of GameUpdate (Global::NativeExec + 0x38 to + 0x74): bits 10 to 13 of `decl` (shifts -5, -5, -5, -3, masks 0x20, 0x40, 0x80, 0x400), plus 0x10 when
+`decl & 0x7fff` is exactly 0x100 (the touch).
+@@ de01781e6aee d
+An engine with only `mem`: menu manager at GES, array of 8 pointers at GES + 8, experience gift menu at L + 0x24c730 (state at + 0x30).
+@@ db18d8cb12cf d
+Game._entries (fenetre/keyboard_mouse.py, needs pyglet: read as text) sends A to the engine after the conversion, only when a message is open (on the field, A = talk, already 0x100).
+## FILE tests/test_extended_sky.py
+@@ 87ff5ce313fd t
+the edge points do not move
+@@ f800fb0b12e3 t
+the left copy ends where the original begins
+@@ 8f4ed0ce7193 t
+the right copy begins where it ends
+@@ 4f48ebfc239a t
+same depth: no tilted plane
+@@ 8f43131caca5 t
+the title has its own sky (`_title_sky`)
+@@ edd7d7ede310 d
+Test of the sky copies of `dpout` and `ev09` (MAP-05: sky extended on both sides; pure logic: no window, no engine, no APK):
+
+1. `title_sky.cloned_positions`: a numeric `dx` shifts x (title screen sky copies, as before); `('miroir', xe)` is a reflection across the plane x = xe (the edge points do not move, y and z untouched, reflection
+   applied twice = identity), the original array is not modified, float32 preserved;
+2. mirrored copy of a sky plane: it touches the original along its edge (no gap, no overlap) and the extended plane (left copy + original + right copy) covers three times its width, at the same depth;
+3. `EXTENDED_SKIES`: `dpout` (plane `dpoutenk`) and `ev09` (plane `e9km1`); the title screen keeps its own treatment.
+
+  python3 tests/test_extended_sky.py
+@@ 1449427d4456 d
+Typical sky plane (two triangles; not the real geometry, only its shape: a vertical rectangle).
+## FILE tests/test_fbx_anim.py
+@@ 62c4420386a6 t
+Hermite with zero slopes: midpoint = average
+@@ 29348c435c88 t
+outside the keys: keep the first / last value
+@@ c0d2cb9593c3 t
+nlerp between two 90-degree keys: error < 1 degree
+@@ 86c587d5e8b7 t
+strictly increasing over the turn
+@@ f1b005bd83af t
+1, 2 or 4 turns later: same instant of the clip
+@@ 00e07d95d2d7 t
+1 s later: 0.3 s fade to "Take 002"
+@@ 92c3916a6964 t
+before: zero quaternion
+@@ 43344d315b6e d
+Tests of the 3D model animation (dq4_pc/fbx.py): Hermite curves, player loop, rotation blending.
+
+  python3 tools/test_fbx_anim.py
+
+1. a rotation from 0 to 360 degrees (clip with quaternion keys every 90 degrees, like the game's models: `m_EulerCurves` is empty, the rotations are quaternions) turns CONTINUOUSLY, neither by just a few
+   degrees, nor backwards;
+2. the time of a looping clip is wrapped modulo its duration (WrapMode.Loop): two turns = one turn; a clip that is not a loop stays on its last frame;
+3. the fade between two clips blends the rotations on the same side of the sphere: q and -q are the same rotation, their average must neither cancel out nor make the bone do a half-turn;
+   a blend of close rotations (the title dragon case) remains the plain weighted average, unchanged.
+@@ 9b02bbeb0088 d
+Quaternion (x, y, z, w) of a rotation of `deg` degrees around Y.
+@@ 9a51ef5a1b51 d
+4-component rotation curve: one quaternion every `dt` seconds, linear tangents (slope from one key to the next), like the resampled keys of the Unity import.
+@@ 1797606fb9aa d
+Minimal FbxModel (one bone, no mesh): only `local` is used.
+@@ e4cff9c1369c d
+Rotation around Y (degrees, between -180 and 180) of a normalized quaternion.
+@@ 9c52958a6b9d d
+TzKeys every 90 degrees: the bone's angle grows steadily from 0 to 360 (= 0), without ever going back.
+@@ 51b1f8ce7dcc d
+A = +10 degrees, B = -(-10 degrees) (same rotation as -10, but on the other side of the sphere): at mid-fade, 0 degrees; before: 180 degrees.
+@@ c3f3d8971aad d
+On the same side of the sphere: weighted average of the components, as before.
+## FILE tests/test_field_group_order.py
+@@ 48824ccb8e80 t
+front -> back
+@@ c6db54362e1c t
+Doc (slot 12 of PlayerStatus)
+@@ ddf6b8752cb6 t
+203 = Teleportation
+@@ a5ecda5b2e28 t
+leave the church (top): village of maout, outdoors
+@@ 0d69551d5376 t
+root menu: Magie
+@@ 873b13442f7d t
+Doc
+@@ c12c4dc16315 t
+the spell
+@@ 587a5543c519 t
+2nd location: on the world map
+@@ 894d6d76efa4 t
+the descent was indeed seen, and so was the stacked stop
+@@ 9d2f702e17e7 d
+World map: stacking order of the party members at landing (issue #135: "once landed, Doc ended up in front of Ragnar").
+
+    python3 tools/test_field_group_order.py                                                    (engine-less part: Linux without a screen, pyglet in "headless" mode)
+    DQ_APK=<folder of the patched APKs> DQ_SAVES=<folder of the saves> python3 tools/test_field_group_order.py      (adds the real engine scenario)
+
+Origin: FieldPartyDraw::draw (libdq4core 0x1ec5a8) sorts the party members by decreasing depth (selection sort, at equal depth the lowest slot keeps the head) then gives
+them SpriteCharacter::setDepth 10, 9, 8...: at equal depth, the hero is IN FRONT of his teammates. A landing (Zoom, "aile de chimere") stacks the party on a single point (measured on the real engine: hero
+and Doc at (2495.967; 391.967; z 200) after the descent), so the tie rule decides. Before: `sorted((z, y, slot))` put the largest slot in front (Doc).
+
+  1. without engine (`field_depth_rank`): equal position -> hero in front; height z, then "further south", always take precedence; vehicles (>= 10): the most recent in front, without changing the party;
+  2. real engine (save 1, party Ragnar + Doc): spell Teleportation (action 203) cast from the village of maout to the 2nd location (world map), descent until the stop: the party is stacked
+     (same x, y, z) and the hero is in front of Doc; during the descent, Doc (to the north, smaller z) stays behind the hero.
+## FILE tests/test_fld_priority.py
+@@ db88187a5ba0 t
+before: 4, 0, 4 (the upper half of the flags)
+@@ 154e7e4afdb4 t
+billboards (& 36): only the low 16 bits, as before
+@@ 865540160f1b t
+the old cache (wrong priority) is never read again
+@@ 3bcb0aca8bd9 d
+#203 (audit MAP-01): priority of the map objects (FMAP): 32-bit integer at +52 (render queue 3000 + priority), flags = 32-bit integer at +48.
+Run from the root: python3 tests/test_fld_priority.py
+@@ 2e7d17abd9a7 d
+A minimal FMAP chunk: 0x20-byte header (tag, size, object count) then 0x50 bytes per object; `objects` = [(flags int32, priority int32)].
+## FILE tests/test_focus_loss.py
+@@ 91986d15bf95 t
+(the music deadline is shifted by the length of the pause)
+@@ a30d32468403 t
+(listening: the settings are heard)
+@@ 14b9a764fb50 t
+(the page asks for listening again: still silent)
+@@ a4739815ff26 t
+(back: the page's listening resumes)
+@@ 454436681f79 t
+(the menu still suspends the game: no resume)
+@@ 973ea9235dac t
+(still no focus)
+@@ 5a4d2c7814b1 t
+(held mouse buttons: released)
+@@ 200df92bd3ea t
+(camera rotation requested with the mouse: abandoned)
+@@ e7e952a24e14 t
+(returns before any engine step: a fake Game has no engine)
+@@ 129a68a6f393 t
+(nothing exists yet: no call)
+@@ 3970a687cc4c t
+(keys held on return are not a new press)
+@@ ab3a9e453077 d
+#235 (audit UNI-02 and SND-07, survey of 2026-11-04: "pause on every focus loss"): when the window loses focus (Alt + Tab, click elsewhere, minimization), the game stops and the music and the sound effects
+pause (Sound.SystemPause of the original); on return, the sound resumes where it stopped and the game resumes without catching up.
+- Sound: `Sound.lose_focus` (fake players, no window or sound card), including during listening on the "Son" page of the menu and with the menu suspended.
+- Game: `Game.on_deactivate` / `on_activate` / `_loop` on a fake Game (skipped if pyglet cannot be imported: the Game tests do not run in CI).
+    python3 tests/test_focus_loss.py
+@@ a0c2a32ac66f d
+A Sound without pyglet (`pyglet` module masked) with fake players: a music track and a sound effect playing.
+@@ 614796d23b3c d
+The "Son" page of the menu plays sounds while the menu is suspended (`listening`); without focus, nothing plays anyway, and the return of focus hands control back to the page.
+## FILE tests/test_full_screen_effects.py
+@@ 5f4f08b7bd47 t
+quad of 12.9 x 12.9, 5 units in front of the camera
+@@ ed7dda56289a t
+width x 4/3
+@@ 8daeb26044fe t
+height and depth unchanged
+@@ 801a038e2edf t
+same center
+@@ f899747b461b d
+#223 (audit CMB-02): a battle effect made of a full-screen quad (effect 35, model 5035: purple tint) is stretched to the screen width when the battle is widened to 16:9; otherwise it covered only the
+4:3 center (untinted side bands). No window or engine.
+    python3 tests/test_full_screen_effects.py
+## FILE tests/test_game_priority.py
+@@ da27762ad123 t
+(outside battle: the "battle speed" branch of Game._speed_factor does not apply)
+@@ 250cc04b0d8f t
+player setting = 8 letters per frame, nothing fixed by the game: the same duration as the game's word 2
+@@ cdc6c56b262c d
+Test of the game's priority over the player's settings: "when the game itself sets a value by script, it takes precedence over the player's setting".
+
+  1. pure rules (game_priority.py): effective_value, effective_factor, letters_per_frame, fade_duration;
+  2. walking speed (`Game._speed_factor`, on a fake object): no effect during an event (player lock, including the exit fade), applied on the free field and during the arrival fade (#107);
+  3. original engine (if --apk and --saves are given): text speed set by the game (the message's speed word is modified along the way); fade started by a game script command
+     (save --slot-fondu, default 2: start of the prologue, fade_out command of 30 frames) not shortened, engine fade shortened.
+
+    python3 tools/test_game_priority.py [--apk "<folder of the patched APKs>" --saves "<folder of the saves>" [--slot 4] [--slot-fondu 2]]
+The saves are only opened read-only: the engine writes to a temporary folder.
+@@ 8ca01747fea3 d
+Like test_text_scrolling.text_frames, but the speed word of the message window is written to `game_word` (a game script that sets the speed) as soon as the message opens; None = untouched.
+Returns (frames between the opening of the message and the end of its first page, letters of the page).
+@@ 1f735d89cf9f d
+[(frame, original duration, applied duration, script fade?)] of the engine's fades to black since the loading of save `slot`.
+@@ e5aad83ccad2 d
+The script fade mark overlaps no field of packet 9's integer (duration 0x7ff, color 0x800, exit 0x1000, white 0x2000, background plane 0x4000).
+@@ 501bf826e4b0 d
+#107: the arrival fade on a map (flag 1 alone, the hero is already walking) no longer prevents accelerated walking (measured: flags 0x39 during the 30 frames, 0x3d + lock during the exit fade).
+@@ fb7a34d0364d d
+#127: on return from a battle the return fade lasts 30 frames but the player is free from frame 12 (measured on the real engine: flags 0x2d until frame 11, then 0x29, the hero walks from frame 13):
+accelerated walking and the accelerator (run) take effect as soon as the lock drops, not at the end of the fade.
+@@ a31fe3184b6c d
+The engine changes scene 1 to 3 frames after the exit to black (State.transition_guard): game clock, even if the lock is not yet set (frame 0 of the return: flags 0x1).
+@@ ba1f35ea92a6 d
+Speed word set by the game (2 = 8 letters per frame): same duration whatever the player's setting; without it, the setting applies.
+## FILE tests/test_gradient_background.py
+@@ 554778ac3f7f t
+mlout1 in the evening (zone 3): gray-pink at the top, orange at the bottom (entry 3 of param_map_backcolor, values out of 31)
+@@ de41608ebda2 t
+clear color = average, as before
+@@ 834c199eb6a6 t
+game color fade: one packet per frame
+@@ bcc637e28cbb t
+the engine sends the color AFTER packet 0, in the same frame
+@@ c32863c81f71 t
+night: a subtle gradient, but a gradient
+@@ 1956f70a4cea t
+row 0 = bottom of the image
+@@ d1db24d37309 t
+0 at the bottom, 1 at the top
+@@ 658047b8057f t
+StageStatus: world time at + 0xcc
+@@ 260e5d8d359d d
+Test of the gradient town background (#111): the engine sends, through packet 8 (`cmd_back_color`, RVA 0xD14F44), TWO colors (top and bottom of the image) and the game gives them to `BackColor.SetColor(topmost, bottom, 0)`
+(RVA 0xCC43F8): a full-screen quadrilateral whose two top vertices have the top color and the bottom ones the bottom color (shader "BackColor": `gl_Position = in_POSITION0`, `SV_Target0 = vs_COLOR0`,
+Background queue, ZTest Always, ZWrite Off, no blending). The viewer kept only their average (flat background).
+
+  1. decoding of packet 8 in `State.apply`: `top_background`, `bottom_background`, `background` (average: clear color); reset on every map load; old saved states;
+  2. `background_gradient`: true only if the two colors differ (otherwise nothing changes, to the pixel, compared to before);
+  3. rendering: a true linear vertical gradient (GL part, optional: ignored if there is no GL context);
+  4. optional real engine (DQ_APK and DQ_SAVES): at evening time (world time 1984: zone 3), `mlout1` (the prologue village) receives a gradient; during the day (time 1000) the two colors are equal.
+
+    python3 tools/test_gradient_background.py        (Linux without a screen: pyglet in "headless" mode; DQ_APK=<folder of the patched APKs> DQ_SAVES=<folder of the saves> for the real engine part)
+The saves are only opened read-only (the engine writes to a temporary folder).
+@@ 5e4d00946f14 d
+The vertex is written as is in clip space (gl_Position = in_POSITION0): no matrix; the color is the vertex color, with no other term (SV_Target0 = vs_COLOR0).
+@@ 4d5026406a86 d
+Tolerance of 9 levels: the frame buffer of the headless context (EGL) is 5-6-5 bits (steps of 8 / 4 / 8 levels); an inverted or non-linear gradient would deviate by 50 to 100 levels.
+## FILE tests/test_ground_decals.py
+@@ 3338715e4299 t
+overlay unit of the scenery layers
+@@ 24ccc6e40a8d t
+< 0: clockwise seen from above = front face in Unity (Cull Back)
+@@ 66f9d46429a6 t
+the most frequent layer: exactly 0.125 (stones, dirt, flowers on the grass)
+@@ f5ac1502f106 t
+most decals are at a multiple of 0.125 above the ground
+@@ 8e3614722c63 t
+almost no decal coplanar with the ground (the game has no depth offset)
+@@ ffa9a78b734c t
+all facing up: Unity's Cull Back hides no decal
+@@ c14ea0cd9bde t
+(group, vertices of THIS object)
+@@ 0e7e4b67dff2 t
+all the object's vertices at -0.125 (flat surfaces)
+@@ 9f8e3b329557 d
+Flat decals laid on the ground (stone paths, flowers, grass, dirt patches...): height above the ground in the game's DATA (maps extracted by `data.py`, cache `carte10_*.pkl`).
+
+Finding (investigation #45, "the stones float"): the game's scenery shaders (`Custom/fld_normal`, `fld_atest`, `fld_trans`) have NO depth `Offset`; the designers separate the layers
+through geometry: each decal layer is laid 0.125 unit (1/8) above the one below (village `maout`: grass y = -0.25, dirt and stones y = -0.125). This test guards that measurement:
+if the extraction (sign of y, matrices, cache) changed, the rule would no longer show and it would fail. It does NOT test rendering.
+
+    DQ_CACHE_CARTES=<folder of the carte10_*.pkl> python3 tools/test_ground_decals.py
+@@ 03c5ecbd7005 d
+For each CUT-OUT flat triangle (alpha < 250 somewhere in its texture) outside transparent groups ('tr'): height above the HIGHEST OPAQUE ground triangle (texture with no alpha < 250)
+beneath it (same x, z). -> (list of heights, number of decals with no ground below, number of decals facing down).
+@@ 33c55f1edef2 d
+Object `020_mast1` (village paving: stones `maisiyk1..4`, dirt `sn02` / `najimi02`, pond `r_mizu02`, 32 x 32 or 64 x 64 textures): all its flat surfaces are at y = -0.125;
+the grass `masiba` (object `018_maoutsb1`) below: y = -0.25.
+## FILE tests/test_heap_alert.py
+@@ 49429c163be7 t
+(D-238: these tests expect the French texts, whatever the computer's language)
+@@ 783eaa9fda84 t
+fenetre/jeu.py needs pyglet, numpy, unicorn... (the import alone is enough)
+@@ 04f41970ad90 t
+(loaded state: 12 MB heap)
+@@ d15767772d15 t
+94% then back to 84%: no new alert (the low threshold has already been passed)
+@@ 0cff78398bd6 d
+Engine heap alert (ENG-01, audit of 2026-11-04): the heap is never freed and is 256 MB; the window logs it in the error log at 200 MB then at 240 MB (no more on-screen message since #267).
+
+1. `Core.heap_used`: allocated bytes (heap_ptr - HEAP_BASE); thresholds of 200 and 240 MB below the heap size;
+2. `Game._watch_heap`: nothing below 200 MB; one log line at 200 MB, another at 240 MB, each ONCE, and no on-screen message (the fake game has no `toast`); a heap that drops back (loading a state) re-arms the alerts;
+   a direct jump past 240 MB gives a single line; no savestate is written (it would keep the heap full).
+
+  python3 tests/test_heap_alert.py
+## FILE tests/test_history_access.py
+@@ 7484d27ca908 t
+#194: the player does not need to be informed
+@@ 7fa0e5229bd0 t
+no message (#194)
+@@ d42e4f4532ec d
+Test (no engine or display) of access to the history (#187: "the history should be accessible only when I have control of my character, so not during a battle nor during a moment when the game
+takes control"): `Game.player_control`, `Game.history_possible`, `Game._history_key`, the "Historique" line of the "Paramètres" menu and the closing of the page when the game takes control back.
+
+    python3 tools/test_history_access.py
+
+  1. player_control: true only on the field (town, world map) with no player lock (Global.Flag 4), message, game menu, screen effect, loading or battle; a fade alone (flag 1) changes nothing here;
+  2. history_possible: in addition, never on the title screen;
+  3. H key: opens the page when possible, otherwise a brief message and no page; the key is wired to `_history_key` in on_key_press (and no longer to the direct opening);
+  4. "Paramètres" menu: the "Historique" line is active / inactive (grayed out, tooltip) depending on `history_possible`; without this method (minimal fake game) it stays active;
+  5. Pause.do_update: history page opened, then the game takes control back (battle, dialogue, scene): the page closes (back to the root, or the menu closed if it had been opened by the key) with a message; while the player has control, the list follows the game (#178).
+@@ 2ed1c5f7a3e3 d
+What `player_control` reads from the engine and the window.
+@@ d5c1722870c5 d
+Pause.do_update on the "historique" page (the other pages and `shutdown` are replaced by spies).
+## FILE tests/test_history_key.py
+@@ 3ea3acb0268f t
+(variables left untouched by the game: nothing to remember)
+@@ d19bacd5f6b8 t
+the surrounding text changed: not this message
+@@ 443ae04e0deb t
+(same variable, two values: rejected)
+@@ 0acece8c2d64 t
+(the patch's ";" is already removed from the text read)
+@@ f3dafbdfd97f t
+(the engine can also give the whole message at once)
+@@ 24a85d9612c4 t
+unknown variable: left as is
+@@ be189840a520 t
+no longer this page
+@@ c8204c841e46 t
+(the text is nowhere in the file)
+@@ 3c9da9281f31 t
+(the number does not match this text)
+@@ f1f42238ddd8 t
+(no engine: cannot verify)
+@@ b3d8883753e5 t
+(the file keeps the key: it can be found again)
+@@ 164813c6dd41 t
+the message is back: the text returns
+@@ 47f3151cea28 t
+another favorite: the file is rewritten in full
+@@ 6fb9a4096df6 t
+(nothing changes as long as it is not requested again)
+@@ 705589c12a2e t
+(the game does not stop: the favorite says the text is missing)
+@@ 8d571960c19c t
+(the saved text is authoritative: nothing is requested again)
+@@ 08fd02c65385 t
+(the low 32 bits only)
+@@ 15dff2cb450b t
+kind 1: message
+@@ ce91b84cb6ba t
+("<ERR ... >": unknown)
+@@ 4c7867ba42ac t
+(symbol absent)
+@@ 2e9469230cd9 t
+(the engine gives back the text read)
+@@ 254ece4e3263 t
+(a text modified in the patch is reflected)
+@@ acb984409770 d
+History favorites (dialogue history) stored by the message KEY (#265): the favorites file keeps the message's number in the game files ("b0802000#199"), not its text; the text is
+requested again from the engine (TextAPI::extractText), so a message modified in the patch also changes in the favorites.
+
+  1. pure functions: `message_key`, `value_list` (the game's "[NONE 1,0]" variables), `binding` (whole message or page separated by ㈡), `linked_text`;
+  2. `History` with a fake engine: the favorite is stored by key only if the files' text gives back EXACTLY what was read; otherwise it keeps its text (as before); the file then contains no text;
+     read again with another text in the files, the favorite shows the new text; message gone: a line says so with the key; old files (with "texte") and invalid entries;
+  3. `Sensor` (fake emulator): the number comes from ui_MsgAdd, only when TextBuffer::cat is called directly; `Sensor.model` queries TextAPI::extractText (kind 1);
+  4. with the real engine (if DQ_APK and DQ_SAVES are given): the numbers captured during the prologue, a favorite stored by key then read again in a second engine, a modified text that is reflected.
+
+    python3 tests/test_history_key.py
+@@ 4d06691d4066 d
+Fake sensor: `files` = {number: text of the game files}; `calls` = numbers requested.
+@@ 49ca1d6a1d58 d
+Fake emulator: registers, C strings, memory, function names, calls.
+@@ 2cf6a6837c5f d
+The start of a prologue save with the real engine (save 1: messages 2002 to 2011 of file b0002000): numbers captured, favorite stored by key, read again in a second engine.
+@@ 690b1dee098f d
+First save (1 by default, or DQ_SLOT_PROLOGUE, then the others) whose start plays at least 3 dialogues with the A key: (engine, history); None if none.
+## FILE tests/test_inactive_lines.py
+@@ 1de32be9e175 t
+(the "Interface" page draws the game preview: the fake game has none)
+@@ f48cd689ac21 t
+(optional: the game's interface cache for the font and the icons; without it, system fonts and a fallback plate)
+@@ 9f3fd673178b t
+(no more `note` parameter, no more space reserved under the value; still in red: the error message at the foot of the frame and the editor's "Masquée", which are not notes under the values)
+@@ bd1cda5b3d2f t
+window: nothing is skipped
+@@ febdbdcd9d0a t
+full screen: "Résolution" is skipped
+@@ 39dcbf86f3dd t
+("Langue" is the first line of the page, D-238)
+@@ 17c848d24606 t
+(the list wraps around, restarting from the end)
+@@ f784431b7b44 t
+(wheel up = next line)
+@@ d9626879e27e t
+window: the resolution can be set
+@@ a9cd31cdf35a t
+Enter on the switch: full screen
+@@ 1f477c7b5490 t
+... "Résolution" is grayed out right away
+@@ 0cce2f1581c4 t
+... and turns back on when returning to window mode
+@@ 0eaf330633b3 t
+F11 while "Résolution" is selected: the cursor moves to the next active line
+@@ 52bf274d20e5 t
+(back in window mode: the line turns back on, the cursor stays where it is)
+@@ e73e9a18ab98 t
+(label, value, arrow, ↺ button: anywhere in the cell)
+@@ 17918524fea7 t
+(it keeps its help: it says why)
+@@ d1e74f83267c t
+(but no more "Entrée ou clic : ouvrir la liste" hint)
+@@ 06dccf49035b t
+an active line, on the other hand, responds
+@@ 839423745723 t
+(grayed out: no pure white; active: white text)
+@@ ea9fe03ac74e t
+navigation: never onto the inactive line (if another line is active)
+@@ c4f9cb865c65 t
+(all line types have been exercised)
+@@ 0616fbd93a7d t
+(single-line page: the cursor has nowhere to go)
+@@ 8dd7ac92d6be t
+(line outside the view of a scrolling list: nothing to click)
+@@ 5ca468ebd4d5 t
+"Oui" is inactive: the cursor stays on "Non"
+@@ 3fb61e15f848 t
+click on inactive "Oui": the application does not close
+@@ 9dcfc9aa6435 t
+click on "Non" (active): the menu closes
+@@ 765e44e574f1 t
+(active: the click sets the cursor)
+@@ 7e9daf7e7b9b t
+(became inactive while being held: released)
+@@ 8e278195557b t
+list opened on "Shader"
+@@ 7c46852232ef d
+Test of the inactive lines of the Pause menu ("Affichage" page: "Résolution" in full screen; "États" page: empty slots) and of the "Modifications" label.
+
+    python3 tools/test_inactive_lines.py
+
+A line that cannot be modified in the current state (`off`) is grayed out entirely (label, value, arrow, ↺ button, cell), never selected (the golden cursor and the keyboard skip it), never hovered (no
+highlight), never clicked or confirmed; no more red note text under the values. The test covers all line types of all pages: it marks each line, one by one, as inactive (PauseMarked)
+and checks that no action reaches it (keyboard, click, hover, wheel, drag, typing, drop-down list). The menu is driven with a fake "game"; drawing happens in a hidden pyglet window (headless EGL):
+hover is checked on the pixels (the inactive line does not change when the pointer hovers over it, an active line does).
+@@ c13b124b9166 d
+What the Pause menu asks of the window; `full` can change at any time (the lines are recomputed every frame).
+@@ c24d4eb69bdd d
+Pause menu in which some lines (labels in `inactive`, on all pages) are marked inactive: lets each line type be exercised.
+@@ 7c5d8b4fac8b d
+Everything an action on a line could change.
+@@ 73d78a275d1b d
+Hidden pyglet window (a single one for the whole test); None if the graphics context is missing here.
+@@ d6a9936a68e4 d
+Draws the menu then returns the image (RGBA array, origin at bottom left).
+@@ 934c9d8949a2 d
+Area (x0, y0, x1, y1) of line idx in the last frame: (area, active?).
+@@ 8c2b05bd19a3 d
+"Résolution" is inactive in full screen (the full screen monitor choice no longer exists: full screen is done on the window's screen).
+@@ c8c873323188 d
+Every line of every page, marked inactive in turn: no action reaches it, the cursor avoids it, it has no click area.
+@@ 2537e16fd6ae d
+A line that becomes inactive while being held (slider dragged, value typed, list open) is released without changing anything.
+@@ 58bb73b8149c d
+A line grayed out because another value makes it ineffective becomes active again as soon as that value changes (and vice versa).
+@@ 1706c16433a7 d
+The inactive line is identical with or without the pointer over it; an active line changes (test control).
+@@ 336b7af968fd d
+The plate of an inactive line is darker than that of an active line, and its text is gray (not white).
+@@ 385094d0dbe3 d
+All lines inactive: no error and no action; the selection does not move, the cursor is not drawn.
+@@ a564067bd059 d
+Marking the other lines does not interfere with the one that remains (test control).
+## FILE tests/test_interface_panel.py
+@@ 3abe65c528d1 t
+pyglet.window.mouse.LEFT / RIGHT
+@@ c0e73a75d1a9 t
+unfolded panel: x0, y0, x1, y1 (1280 x 720 window)
+@@ c112257e42c4 t
+title bar (fold_zone)
+@@ 8d9f17f3e464 t
+(window.on_mouse_drag: x, y, dx, dy, buttons, modifiers; only x and y are used)
+@@ c0324e980f44 t
+top right corner = pointer - press offset
+@@ bc71b6ce015a t
+a drag is not a click (no double click afterwards)
+@@ 262a9c7284f5 t
+lift after 0.35 s without moving
+@@ ab1e87460962 t
+(the folding waits for the end of the double click delay: #145)
+@@ 57cc206d48a7 t
+(late enough: not a double click)
+@@ c692e0931e01 t
+first click: nothing moves yet (waiting for a possible second click)
+@@ ef2de104f5e3 t
+second click within DOUBLE_CLICK_DELAY
+@@ 65ff92a0d32d t
+the panel goes back to its original place, without having changed state
+@@ 97d8127316f9 t
+and the first click's folding does not happen afterwards
+@@ c0c7484fd94b t
+folded, but not right away
+@@ b86b35fae02d t
+a single state change
+@@ 315762f8a097 t
+not before the end of the delay (counted from the press)
+@@ fa9810040c2f t
+and without waiting any longer: no delay added after the release
+@@ dfd84b4463ce t
+0.45 s after the start of the first press
+@@ ef67be493c2f t
+double click: back to the origin, no folding
+@@ 131ca1459b65 t
+0.57 s after the start of the first: the first click is already registered
+@@ dbd88585f9ce t
+(folds after 0.5 s, without waiting for one more delay)
+@@ b2ada69458a8 t
+the second is a single click: it unfolds
+@@ f524370e773f t
+too far: not a double click, the first click folds right away
+@@ cad34a024ca8 t
+and the second (single) one unfolded after its own delay
+@@ b4d12118cdec t
+inside the rectangle: double click
+@@ c0153670d201 t
+pointer still in place: still waiting
+@@ f175e9d3b247 t
+it moved away: no double click possible anymore, the single click acts immediately
+@@ c75f5a155138 t
+only once
+@@ 4a24ca57480c t
+(click on a panel line, far from the bar)
+@@ 3fb93c424dd7 t
+(a single folding)
+@@ 9b717b00ff06 t
+new press just afterwards: a drag, not a double click
+@@ 5fc39fc7f2ac t
+a panel line, not the bar: no panel drag
+@@ 58c6b84e6a87 t
+right click: Cancel, no drag
+@@ 14e9da37bf85 t
+window larger than 1280 x 720
+@@ 039fb7ac93e3 d
+Test of the floating "Interface" panel (Esc menu > "Affichage" > "Interface"): drag by the title bar, fold / unfold, double click.
+
+    python3 tools/test_interface_panel.py
+
+Replays the sequence of events of a real mouse, as pyglet sends them to the window (on_mouse_press -> Pause.click, on_mouse_drag -> Pause.drag_to with dx / dy, on_mouse_release -> Pause.release;
+the clock is simulated, the frame loop calls Pause.do_update):
+  - press then drag right away (without waiting for the long press): the panel follows the pointer and does not fold;
+  - press without moving (or with a jitter of a few pixels): fold / unfold;
+  - press held without moving (lift) then drag: it follows too;
+  - double click: back to the original position; double press followed by a drag: it moves;
+  - double click detection aligned with Windows (#145): delay counted from the START of the first press, rectangle SM_CXDOUBLECLK x SM_CYDOUBLECLK centered on it, and a single click folds as soon as the double click has
+    become impossible (delay elapsed, pointer left the rectangle, another press) instead of waiting needlessly.
+@@ 784f94d3f3d6 d
+Simulated mouse: clock and pyglet events sent to the Pause menu of a fake game.
+@@ a90e68b5dfad d
+Time passes (loop frames: Pause.do_update on every frame).
+@@ 466b98b226a6 d
+Press and immediate movement (less than LONG_PRESS_DELAY): the panel follows the pointer, without folding.
+@@ 9e4f0f7325f3 d
+A few pixels of jitter during a click (less than PRESS_TOLERANCE): it is a click, not a drag.
+@@ ad28e16d6623 d
+#145: a single click folds only once the double click delay has elapsed, and only once; the delay runs from the START of the press (like Windows), not from its release.
+@@ c8e19d47dd4c d
+#145 (Windows): second press 0.45 s from the START of the first (so 0.40 s after its release) = double click; at 0.55 s from the start = two single clicks, even if 0.5 s does not separate the release from the second.
+@@ 45ec4ef28f42 d
+#145 (Windows): the second press must fall inside the SM_CXDOUBLECLK x SM_CYDOUBLECLK rectangle centered on the first; otherwise it is one more single click.
+@@ c4c0a79e5e59 d
+#145: pointer left the rectangle after the release (hover) = the single click is registered, the panel folds right away, without waiting for the end of the delay.
+@@ 4fb0119843c9 d
+#145: another press (outside the rectangle) immediately confirms the single click that was waiting, instead of leaving it pending.
+@@ a1d5afe979a0 d
+#145: if the press already lasted longer than the double click delay (short system delay), the single click is registered as soon as it is released.
+@@ 01b141c15151 d
+#145: a double click on a folded or unfolded panel neither folds nor unfolds it, at any moment.
+@@ 2d1f25ee2b34 d
+A click immediately followed by a drag: the click folds first (as before), then the panel follows the pointer.
+@@ f26e7f849fbe d
+A drag right after a click moves the panel (it does not go back to the origin).
+## FILE tests/test_interface_settings.py
+@@ ccdf80f888b5 c
+keys of DEFAULT that do NOT touch the interface editor (display, sound, text, keys, camera, speeds...);
+"infos" = F1 information lines, "taille_degats" = fixed value (no longer a setting)
+@@ 9b2e1f1a969e t
+direction of the camera moved with the mouse (#45, D-233); version of the default window sizes (#47)
+@@ 103d644636eb t
+history's "Favoris seulement" checkbox (#47): a window state, not an editor interface
+@@ e567faecf6b9 c
+values different from DEFAULT for each interface setting
+@@ 427d9c5944e9 t
+buttons and D-pad: everything comes back (display, sizes, positions)
+@@ d46016bf2075 t
+battle speed button, windows and editor options: intact
+@@ 62c13a436114 t
+display, size and position: everything comes back (the position: stuck under the bottom box)
+@@ 9963a0463763 t
+buttons and D-pad, windows and editor options: intact
+@@ 28ad6f37e939 t
+original size, position and display
+@@ 92226c224320 t
+the other windows keep their setting
+@@ 6ac7d820acf5 t
+... and their hiding
+@@ 6b646b0c6cf5 t
+Oui / Non is a separate interface
+@@ be1761ecebc1 t
+nothing to reset: nothing changes, no error
+@@ 962e75dc713f t
+interfaces and editor options (grid, snapping): everything is back
+@@ e1bb7308e84d t
+the other settings do not change
+@@ a5de0528cf6f t
+DEFAULT is never modified by a reset (#47: only the battle command windows have a default size)
+@@ 7678aac2c31c t
+everything displayed: nothing marked (the battle speed button is no longer here: it has its own interface)
+@@ 53604bbbd6b7 t
+"Afficher la croix" = Non: only the D-pad is marked (feminine), not the buttons
+@@ 6e59be246ab0 t
+whole interface hidden: buttons (masculine) and D-pad (feminine)
+@@ 8a2dc5b00c48 t
+(the editor panel and the selection do not depend on the display)
+@@ 51ff40b9abca t
+battle speed button: its own display, independent of the buttons
+@@ 307b043ee100 t
+hidden window: marked (feminine); only that one
+@@ 769873d61a3c t
+the panel's position is a global editor option
+@@ 24794de59d8f t
+(the file's other settings are kept)
+@@ 322b6d670988 t
+(never placed: its plate followed "Fuir" and ignored the buttons' size)
+@@ 9c8f6cc0dfa9 t
+the other buttons keep theirs
+@@ 935f5386f91b d
+Test of the resets of the interface editor (Esc menu > "Affichage" > "Interface"): "Retablir cette interface" and "Retablir toutes les interfaces".
+
+    python3 tools/test_interface_settings.py
+
+Checks: (1) that every setting key is classified (interface or not): a key added to DEFAULT without classification makes the test fail;
+(2) "Retablir cette interface" resets only the chosen interface (on-screen buttons and D-pad, or a game window / the dialogues);
+(3) "Retablir toutes les interfaces" resets all the interfaces and the editor options to DEFAULT, without touching the other settings (sound, display, keys...);
+(4) the same actions, called by the "Interface" page (Pause), also change the editor's session state (panel position).
+@@ 444267a5c236 d
+Test settings: all the interface keys and a few others at non-default values.
+@@ 468ce2a524f3 d
+"Centrer la camera sur le joueur" no longer exists (#47): the camera is always centered on the hero, except when the game takes it over. A reglages.json that still contains `camera_centree` or `suivi_camera_v`
+loads without error, these keys are ignored and are not rewritten on save.
+@@ fa9cc44b94f1 d
+An old reglages.json (the battle speed button was part of "Boutons et croix de l'ecran") keeps the button's state: display, position, size; once only.
+@@ 31b35638f564 d
+Editor preview: each hidden element (the whole interface, or the D-pad alone) is marked, the others are not; the D-pad remains selectable (its rectangle is always given).
+@@ 682d2c39b34c d
+The "Retablir" entries of the "Interface" page call these resets (fake game: `reg` and the window list); the panel's position (session) is reset to the origin by "toutes".
+@@ 5cdafa1bcecf d
+The file saved by the new version contains the three keys: the player's choice is authoritative, even if "Boutons" changes afterward.
+## FILE tests/test_item_description.py
+@@ 50836588c33a t
+interface units per font pixel (characterSize 9.945 of the descriptions)
+@@ c3595b01cf2a t
+type 38: text anchored at x = -214
+@@ 617c298bf67c t
+type 10: text anchored at x = -211
+@@ ba2804694aa9 t
+(type, port, string number): the port is in the key (#219: the casino window has other texts at the same number)
+@@ 9e35245b622b t
+the "Attaque" cell starts at x = 63: the description stops before its frame
+@@ 0d8806dd7af5 t
+the engine's text is not modified (it is the rendering that re-wraps)
+@@ 0a3bf1034138 t
+same lines, same line breaks, final empty line included
+@@ cc0ed29b2fb8 t
+1st line of 39 characters = 312 units > 270
+@@ 6c30c84d8d39 t
+"Objets" menu: 400 units > 359
+@@ a1ee24277ffb t
+36 + 31 characters: three lines at 270 units, two when compressing
+@@ 80a677c878ab t
+(does not crash: the text overflows, as before)
+@@ 7a3cb6a2c99a t
+320 units: a single word, 1 line, compressed to fit
+@@ bd571a59e2f2 t
+30 characters = 240 units: fits (the @cN codes do not count)
+@@ c384f14578fd t
+the second call (same text, same frame) no longer measures anything
+@@ cec8442a2a22 t
+no word lost, added or moved
+@@ bc94b333cd07 t
+(the finding: most descriptions overflowed the left cell)
+@@ 1ab89d4a42e1 t
+strongest compression: x 0.75
+@@ a6e95a77a5e0 t
+none needs to be compressed: re-wrapping is enough
+@@ 45c62648cbc0 t
+bottom bar (z -324 or -323.5) or left cell in battle (z -197), text on the left
+@@ 6e9aa5939a9a d
+Description of an item that does not fit in its frame (13:30 feedback, #190): in battle, "Peut aussi etre utilisee comme objet au / combat." overflowed the left cell of the item sheet (type 38)
+and covered the "Attaque E 74" cell; in the "Objets" menu (type 10) a single-line description of 50 characters went under the bag button. The patch's French text has lines of 38 characters, the
+game's layout was made for 2 lines of ~28: Render._text now re-wraps the description to the width of its frame (UM.DESCRIPTIONS) and, if 2 lines are not enough, compresses it (down to COMPRESSION_MIN).
+
+    python3 tools/test_item_description.py
+    DQ_APK=<patched APKs> [DQ_UI_CACHE=<interface cache>] python3 tools/test_item_description.py        (adds the 360 real descriptions of the patch with the real font)
+@@ 8ca1e1ad65ca d
+Dummy font: 8 pixels per character (U = 0.9945: about 8 units per character), battle cell = 270 units (33 characters), frame of the "Objets" menu = 359 units (44 characters).
+@@ 57e775cd82eb d
+The patch's 360 descriptions (assets/msg/en/b0831000.mpt and b0835000.mpt: two twin tables of 180 items) with the real font SE-GARRIR: none goes out of the frame, neither in battle (type 38) nor in the "Objets" menu (type 10).
+@@ 89e6d3cebd16 d
+The keys of UM.DESCRIPTIONS do designate, in the real layout, the description bar at the bottom of each window (and nothing else).
+@@ 55b7204dceb3 d
+#219 (audit UI-04): the bottom bar of the casino (46), purchase (60, 61), sale (63) and sale item sheet (70) windows is re-wrapped like that of the item sheets.
+@@ 11328ad06e4b d
+Type 46: the lists (ports 0 to 3) also have a text at number 3; only the bottom bar (port 4) is re-wrapped.
+@@ 31e50837c051 d
+#219: bottom bar of windows 46, 60, 61, 70 (text anchored at x = -213.5, size 9.945): 24 descriptions out of 360 went out of the frame (worst: +72 units), none does afterwards.
+@@ 9cb5d01fb462 d
+Type 63: text of size 8.2875 (0.83 times the others): no line too wide, but 3 descriptions of more than 2 lines (compressed to fit in 2).
+## FILE tests/test_keyboard_sfx.py
+@@ a38c1fe7e01c t
+no pyglet (CI) or window not importable: only the rule is tested
+@@ 3d2c0fcd0cb1 t
+(in battle: only the speed button, specific to the port)
+@@ abc03d56cc76 t
+(the game's camera has nothing to do with sound effects: test_entries.py and test_engine_camera.py)
+@@ bc4e58e63d38 c
+---- finger / mouse: button under the pointer
+@@ c71ce092edd4 t
+(the button is indeed pressed, only the sound is missing)
+@@ 6ec2d2d2ff3b c
+---- keyboard: menu with a local cursor (one-column list of A buttons)
+@@ 5e037e478f3a t
+(the cancel message is sent anyway)
+@@ 2c58e3d33a91 t
+the arrows are in another window
+@@ 15f985d06eb4 c
+---- keyboard: numeric input (▲ ▼ columns, A to confirm)
+@@ c774de5d0f51 t
+column change: silent
+@@ a4baba1bdaf0 t
+▲ ▼: message to the engine
+@@ 047651f96caf c
+---- keyboard: field keys
+@@ 6599387d9b3a t
+forbidden: nothing happens, no sound
+@@ 563691995d11 t
+(A / click on the field: talk, no button)
+@@ 6be0de3a2e8f t
+mouse press on the Discussion button: the sound was already played on press
+@@ 72186fa94e26 d
+Test (#227, audit SND-08 / SND-09 / UI-01, rule of #60 / D-156): sound effect 300 of the menu buttons follows the original game's rule, with a finger as with the keyboard.
+
+    python3 tests/test_keyboard_sfx.py
+
+Original (MenuPortItem.Update, disassembly): on press, `Sound.PlaySE(300)` only if the button's gamepad key is A (0x10) or action (0x800). B (0x20), back (0x400), arrows (1, 2, 4, 8) and zone 0x80 are silent;
+the field buttons (Carte, Commandes, Discussion: TouchPad.internalUpdate) play the sound effect. The keyboard plays the sound effect "in the same situations as with a finger" (D-156).
+
+1. The rule (`button_sfx`): a table of gamepad keys.
+2. `Buttons.allowed`: the field buttons allowed by the engine = those that `visible_ones` shows (without the display setting).
+3. Real `Game` methods on a fake game: click on a button (A / action: sound; B, arrows, back, map mode: silent), menu with the keyboard (A: sound; B, page arrows, ▲ ▼, column: silent),
+   Commandes / Discussion / Carte keys on the field (sound if the engine allows the button), map open (all silent), letters typed in name entry (one per letter).
+(Parts 2 and 3 require pyglet: skipped without it, as in CI.)
+@@ b7aef81fee95 d
+Fake game: a log of the requested sound effects and of the messages sent to the menus.
+@@ a939883435c4 d
+`Buttons.allowed` follows `Buttons.visible_ones` (the "boutons" setting aside).
+@@ 68a99f1e1197 d
+A fake menu: list of (number, gamepad, x0, z0, x1, z1) in interface units, rendered as `wnd` (buttons) and pixel zones.
+@@ 7f1f897bea21 d
+Real `Game` methods (_menu_input, _step_entry, on_mouse_press, _entries, _hud_sfx) on a fake game.
+@@ 87fc87ef0a79 d
+A letter typed on the keyboard plays the button's sound effect, like a click on the letter.
+## FILE tests/test_language.py
+@@ ecdf3f808b33 t
+France, Belgium, Canada, Switzerland, Luxembourg, Monaco
+@@ 179c74f6089c t
+US / GB English, German, Japanese, Spanish, Italian, Portuguese, Russian, Chinese
+@@ b6aab9b5553d t
+("fra", "frisian": not French)
+@@ c03a10a41624 t
+absent
+@@ 07f138e855b9 t
+key absent
+@@ c978faff418b t
+unreadable
+@@ 88fa9eaff48e d
+Tool language (language.py, D-238), without window or engine: detection of the computer's language (French whatever the variant, otherwise English), setting, `tr` / `N_`,
+reading the setting in reglages.json, and rules of the English catalog (texts_en\): same placeholders (%d, %s...), same spaces at the edges, no French in the English, no duplicates,
+each literal text passed to `tr(...)` / `N_(...)` in the code has its translation.
+
+    python3 tests/test_language.py
+@@ 0281133439f1 d
+The text contains an accented letter or a French function word.
+@@ 6df571a559c1 d
+Rules of the English catalog (all the files of texts_en\).
+## FILE tests/test_launcher.py
+@@ fa61222c48f2 t
+the line that launches the game
+@@ 724e3b299015 t
+each earlier pause follows a failure message (Python not found, installation...) or an "exit /b 1"
+@@ 0c10e9193352 t
+paths and proper names excluded
+@@ 02c6ac2576c7 t
+the Windows console does not display accents without a setting: no non-ASCII byte
+@@ 694cb45b5e36 d
+launch_dq4.bat: the console closes with the game window (D-236); messages in French or English depending on Windows' language (D-238). The file is read as text (without Windows): after the line that launches the game, `pause` is only allowed
+in the block "if the exit code is not 0" (the game stopped on an error: the message is left readable), and the launcher returns the game's exit code. CRLF line endings are kept. The messages are labels
+(`:m_xxx_fr` / `:m_xxx_en`) at the bottom of the file, called by `call :m_xxx_%DQLANG%`: each call must have both versions, the English one with no French word, and the file must stay ASCII.
+
+    python3 tests/test_launcher.py
+@@ 5974e4e546ab d
+The launcher's own lines: up to "exit /b %CODE%" (after that, there are only the message labels).
+@@ 7f86aa42cadd d
+{label name: lines} for the `:m_...` labels.
+## FILE tests/test_level_hp.py
+@@ 96272fcfbe53 t
+in HaveStatus (the same order as the engine's getHp / getHpMax / getMp / getMpMax)
+@@ d49a8915d9a0 t
+PlayerStatus: size; HaveStatus at +0x58 (HaveStatusInfo +0x10, then +0x48)
+@@ e42d2b6b1cfd t
+a value that is not a boolean falls back to "disabled"
+@@ 126d9beff6c1 t
+default: like the game
+@@ 8dde1fa66181 t
+encounter: a monster of group 3 (monster number, count) at Encount + 0x34 / 0x44
+@@ 352c2cf1171d t
+1 point from the next level, 2 HP
+@@ 21d430d5bdae t
+the others have no MP left: nobody can heal (a companion's healing spell would skew the measurement)
+@@ cce6a3c9805b d
+Option "PV et PM restaures au niveau superieur" (`level_heal` setting, Engine.level_heal): the original engine runs under Unicorn.
+
+    DQ_APK=<folder of the patched APKs> DQ_SAVES=<folder of the saves> python3 -m unittest tools.test_level_hp
+
+Without these two variables, the engine tests are skipped (only the constants are checked). The saves are only opened read-only: the engine writes to a temporary folder.
+What is measured:
+  - direct call of status::HaveStatus::levelup(bool) on party members (HP 3, MP 1 before): option disabled, HP and MP stay; option enabled, they go to the maximum of the NEW level;
+  - a real battle won (forced monster, one member 1 point from the next level): the game's level up goes through this function with the argument false (called by HaveStatusInfo::levelup), and the member
+    leaves the battle with all its HP when the option is enabled, with no change when it is disabled.
+@@ 45f92a6432e1 d
+`tbz w20, #0, #+0x10`: bit 0 of register w20, jump of 16 bytes.
+## FILE tests/test_loading.py
+@@ b501bec466d7 t
+bit 12 of packet 9: fade to the color (exit); otherwise entry
+@@ 0ea08ede1100 t
+(the frame that lifts the hold already does the 1st step of the fade)
+@@ 0fddda01f4c8 d
+Test of the drawing hold during a map change (scenery setup micro-frames) and of the absorption of loading stalls.
+
+The engine sends the new map's scenery (packet 0) one frame BEFORE its camera (packet 10) and the positions of its characters (packet 13); the fade-in starts at the loading frame.
+Without a hold, a frame of the previous scene (camera) / without characters was visible under the few percent of opacity left. `State.loading` holds back the drawing (black + fades only) and suspends the fade-in
+until the scene is in place, without changing the fade's duration.
+
+  1. pure rules (`State.apply`, `update_loading`, `tick_fade` on fabricated packets);
+  2. absorption of stalls (`Game._absorb_blocking`, fake object);
+  3. Windows: window manager transitions (`transitions_dwm`, simulated system);
+  4. original engine (if --apk and --saves are given): teleports to town maps: the hold lasts at most LOADING_MAX frames, the 1st frame shown is complete (camera sent, characters
+     placed) and the fade-in keeps its full duration.
+
+    python3 tools/test_loading.py [--apk "<folder of the patched APKs>" --saves "<folder of the saves>" [--slot 4]]
+The saves are only opened read-only: the engine writes to a temporary folder.
+@@ 9ff2003849d1 d
+One engine step as seen from the state (Engine.step): frame, packets, end of the hold, fades.
+@@ a5ddec56075b d
+Packets of a map load: scenery, fade-in, one character created (its position arrives in the next frame).
+@@ 3bebfb9505f3 d
+State after a completed fade to black (screen covered), on any map.
+@@ df174e194c6c d
+The frame that lifts the hold of a load is not interpolated from the hold state (previous camera): Game._interpolate on a fake object.
+@@ 095eef3acc9b d
+Windows: window opening animation turned off during launch (window.transitions_dwm). Here without Windows: the system is simulated.
+## FILE tests/test_lying_pose.py
+@@ 129c95732246 t
+lie down with no precise angle: 0 -> 180 degrees
+@@ e2ef459265dc t
+(no packet for slot 8)
+@@ 9b7523d5e9e6 t
+DisplayCharacter::setSleepFlag(0)
+@@ 7193611487c3 t
+DisplayCharacter::draw: 0x400 | angle << 12 (without bits 8 / 9: the sleep continues)
+@@ 88dbb0e831ff t
+Chara..cctor: y = 0 as long as there is no packet 17
+@@ 89cea676444c t
+new map: the Chara static remains
+@@ 06029f8a9f93 t
+unknown slot: no effect, no crash
+@@ acd2f6415f4c t
+unknown slot
+@@ a8dc24bd1a36 c
+direction 0 = head up, 0x4000 = left, 0x8000 = down, 0xc000 = right
+@@ 9a2a29e64473 c
+the flat body keeps its sheet size on screen: width 0.48 x 2.25 = 1.08, height 1.44, whatever the camera tilt
+@@ 4fb968476359 t
+depth of the body's center
+@@ 73c14ae7b0c2 t
+bottom left -> bottom right
+@@ 2a690fa29bdc t
+bottom left -> top left
+@@ 65e60dd5d985 t
+rectangle, no shear
+@@ 5bb987d1f4c4 t
+the top of the sheet is at the top of the screen
+@@ 9d76bcecb9c9 t
+"feet -> head" vector on screen
+@@ 2f58c7fdae50 c
+bottom left -> bottom right then bottom left -> top left: same rotation direction as the standing sheet (positive cross product on screen)
+@@ 2a9834bd0ed7 c
+the camera turns 90 degrees: the body (world) turns the other way on screen: head right (0xc000) becomes head up when the camera turns 90 degrees
+@@ 7028372760b9 t
+remains an exact quarter turn (not an arbitrary angle)
+@@ 25ba8bbabf9e c
+z-buffer: the depth of the 4 corners is that of the flat rectangle (at 0.1 + ground height), not that of a standing panel
+@@ 786e6f011193 t
+soldier in blue armor
+@@ 0c3466502ea9 t
+lying down (bits 8 and 10): slots 0 (hero) and 1 (companion)
+@@ e0731080176a t
+getting up (bit 9, no direction): slots 0 and 1
+@@ 820170fa0076 d
+Tests of the lying poses (packets 16 / 17 / 18, #45): packet decoding (State.apply, no engine) and geometry (lying_pose.py, no window); with the real engine (if DQ_APK and DQ_SAVES
+are given): the map taf1 (green-tiled castle, soldier in blue armor in slot 8) does send packet 16 0x0c000508 and packet 17 [1040, 1863].
+
+    python3 tools/test_lying_pose.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_lying_pose.py      (adds the real engine test)
+@@ 45d37fd9e5cd d
+Town camera: (right, up, forward) and position; pitch looks downward, yaw turns toward +X.
+@@ 99e1aa66bc3d d
+Screen coordinates (focal length 1) of a world point and depth.
+@@ 00fa72f77908 d
+The hero and his companions (slots 0, 1...) lie down through the same packet 16 as the NPCs: TownPartyDraw::setSleep(true) (called by the script command cmd_set_player_sleep) sends
+0x500 | angle << 12 for each, then 0x200 to get up. The hook on setPosition gives the TownPartyDraw object (Unicorn: flush the already translated blocks).
+## FILE tests/test_magic_entries.py
+@@ 0ff8184cde93 t
+cost line of row 0
+@@ f26d3e8c8fe7 t
+same anchoring, no tabSize
+@@ ac4fa389fefb t
+4 rows at most: neither the 5th nor the 6th
+@@ 3fc58ecf21ec t
+replay of a window: the row codes first
+@@ 135509724694 t
+"Utiliser / Transferer / Abandonner" menu: preset 1, three rows
+@@ 0f107cfd592d t
+the text follows its plate
+@@ 4a6ba920eac1 t
+back to preset 0: everything is put back in place
+@@ 06fa44db7762 t
+the number field keeps its width: the column stays aligned
+@@ 690d4f0d74af t
+text 301 has no tabSize: nothing is replaced
+@@ d19cc0e67894 t
+the text itself is not modified
+@@ 668717166e58 t
+no word lost or added
+@@ 34d5a2b0bbee t
+3 lines of 29 characters: re-wrapped at 40 they would still make 3 lines: the text is compressed to fit in 2
+@@ f8a7ee6ba49e t
+HP, max HP, MP, max MP
+@@ 2ecbfcbe9702 t
+PlayerStatus slots in originalPlayer_ (group of slot 1)
+@@ 978a11b5ed06 t
+action identifiers of the field spells
+@@ d5af9d550744 t
+(Multisoin: 10 MP, no target; Evac': 1 MP; Passage sur: 2 MP; Mappille and Sifflet: 0 MP)
+@@ b2798ff19aad t
+the opening dialogue must be closed and the player free
+@@ b2a2d7c0287d t
+HaveStatusInfo = HaveStatus - 0x48
+@@ e118c36706c4 t
+root menu: "Magie"
+@@ c8e00f93ea80 t
+character list: Doc
+@@ 87b79561dc0e t
+the spell of row 0
+@@ 089beeafcd73 t
+the target
+@@ b6ace5c9b6b8 t
+SoundManager::playSe: cast sound effect (all spells); heal sound effect
+@@ e70ba6a67bef t
+row 0 on two lines, 1 to 3 hidden, preset 0
+@@ 8c38e5ee8f2b t
+the official Evac' message (id 0xc3d6d), not "Les blessures de Ragnar guérissent !"
+@@ e46c7b9b34d7 t
+Evac' in Strattbourg: the game has its own message ("Mais il ne se passe rien.")

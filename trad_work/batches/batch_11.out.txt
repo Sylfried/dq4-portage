@@ -1,0 +1,926 @@
+## FILE tests/test_battle_history.py
+@@ 0b554b296537 t
+the loaded savestate could have the same State object: the frame gap gives it away
+@@ 2103bfe53147 t
+(the first one did not finish: never reported)
+@@ 5bede7d62cb8 t
+back to the title screen, save loaded...: a fake battle is not kept
+@@ c9b276a0113e t
+the sensor keeps being used
+@@ 06be300fa3bb t
+(the hooks swallow the error: the emulator never stops)
+@@ 889d524eb0b8 c
+---------------------------------------------------------------------------------------------------------------------------------- real engine (optional)
+@@ 995805455f24 t
+encounter composition: at most 4 groups, (monster number, count) at Encount + 0x34 / 0x44
+@@ f3a78afcb62a c
+-- tools
+@@ 0140abb1c52e t
+(a monster can flee: "Le gluant s'enfuit !" -- counted as such, like the game's message)
+@@ ac035285329c c
+-- scenarios
+@@ 2b8a85434d47 t
+2 rats volants: 3 experience and 7 gold each, doubled
+@@ cc80b1e3701e t
+the engine awards nothing for an escape
+@@ fe77ab68d20a t
+(the game takes half the gold from a wiped-out party)
+@@ 61ec349b48bc c
+-- #141: fled / vanished monsters, items gained
+@@ d0a3c80f7abd t
+(the game writes the monster's loot when it dies: we set ours right after, before the victory)
+@@ 5daacbc2223b d
+Test of the battle results capture (dq4_pc/battle_history.py): defeated enemies, gold, experience.
+
+Three levels:
+- pure computation (Tracking, plate names, build_battle): no engine;
+- glue (BattleSensor) on a FAKE engine (simulated memory and emulator: the hooks are triggered by hand): start / deaths / victory / end, breaks, abandonments, errors;
+- OPTIONAL REAL engine: DQ_APK=<patched APKs folder> DQ_SAVES=<saves folder> (save 1: Ragnar and Doc in a town). Battles are forced in a throwaway engine (the encounter composition
+  is written to Encount when BattleRoot::setupMonster is about to read it; Global::startBattle starts the battle); each dict is compared with the game TEXT ("reçoit N points d'expérience",
+  "N pièces d'or") and with the party counters in memory (gold before / after, each member's experience before / after).
+
+    python3 tools/test_battle_history.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_battle_history.py        (about a minute)
+@@ a30e3c98ac2b d
+Start, two monsters, plates, two deaths, victory, end; -> the returned dicts.
+@@ 944c6c180fe1 d
+Long names are split over two lines by the game (the ";" and "$" in the texts): the full name is returned, the monster count (line starting with a tab) removed.
+@@ 82fb3f9410cf d
+#141: each monster has ONE fate (defeated, fled or vanished); anything with no fate is still there at the end.
+@@ 40a19a73cb2b d
+Hook in the middle of an engine function: regs = {'x20': value, 'x0': value}.
+@@ 1f429ec51812 d
+placement: what giveItem returned (member index, or -1: in the bag).
+@@ 77b96ecdbc5b d
+Like Interface.apply: new dicts at each refresh.
+@@ 9d08def2307c d
+A different instruction at the hook location (other engine): no hook is placed at random; the rest of the capture works.
+@@ d75bebc64c55 d
+3 Gluants and 1 Golem: the 1st Gluant dies, another flees, the last one vanishes, the Golem dies; then victory (gold 13, experience 6), the items, the end.
+@@ f60de99816e2 d
+#141: who died, fled or vanished (by species), the gold and experience, the items (the name is requested from the engine, the ";" is removed; whether they go to a member or into the bag).
+@@ 5c4642be0566 d
+Surprise attack (no plate): the name comes from the engine by monster number, capitalized; with no answer from the engine: "Monstre".
+@@ 3a5c231d736e d
+The party flees: the monster that had fled is recorded, those that remain have no fate.
+@@ b1c8ade89d47 d
+BattleSensor.for_(eng): the single integration line; the hooks are installed only once.
+@@ 7ee8af6e0c25 d
+execMonsterDeath(i): i counts the OCCUPIED slots (getMonsterStatus), not the slots.
+@@ 56194c759bc5 d
+Experience of each party member (HaveStatus +8 of HaveStatusInfo + 0x48; -1 = no experience, e.g. a guest).
+@@ 7a0bf6da8c75 d
+Plays the battle the way test_battle_speed does (A on the menu, message advance); `actions`: one per top-level menu, 'combattre' or 'fuir' (button 3 of the type 30 menu).
+@@ e6be234b7ed5 d
+The dict, the game text and the memory say the same thing.
+@@ 44cee715aef9 d
+The party has several members: "Chaque membre de l'équipe reçoit N points d'expérience" (N = the per-member value, the same for everyone) and "L'équipe reçoit M pièces d'or" (M = the total).
+@@ 519fccc7c233 d
+The game doubles the gold and experience (BaseAction::doubleFlag_) when awarding them: the dict gives the message's number, not the monsters'.
+@@ eafde8e9e004 d
+"Mais l'ennemi bloque le passage !": BattleExecEscape::setup runs on each attempt; only the last one ends the battle.
+@@ 27b0dbce3f27 d
+Savestate taken in a town, loaded in the middle of a battle: nothing false, no crash, and the next battle is correctly reported.
+@@ 93d4dac2e493 d
+Savestate taken in the middle of a battle: the battle played to the end is reported; the reloaded savestate then finished is not (the start of that battle was not seen).
+@@ a9208fe22086 d
+A sensor installed after the engine has already run the battle code (blocks translated by the emulator) also works.
+@@ 40d91a624ff9 d
+Starts a battle against `ids` (one of each) and plays until the sensor has read the plates (opening of the target selection); -> ({number: name}, appearance messages).
+@@ a0dc41a091dd d
+The name in the dict is the one the game writes in its appearance message (without the split marks ";" and "$"), even when the plate splits it over two lines.
+@@ 5d32ef802879 d
+Four distinct species, in an order that is neither the numeric nor the alphabetical one: each monster number gets ITS name (verified by the appearance message).
+@@ 8dac4045a3d2 d
+Removes a monster the way the game does: "dead" state (setDeath) and escape flag (bit 4 of HaveStatusInfo + 0x424) or vanish flag (bit 5); checkDeathMonster then counts it at the next frame.
+@@ 6e2ed122fd6b d
+One fled monster and one vanished monster (forced in the game's memory) are recorded by species; the others are defeated by the party; the outcome is a victory.
+@@ 5e1d20a5f1c8 d
+An item given by the game at the end of a battle ("Le londuleux laisse tomber un coffre au trésor ! ... Il contient un arc de chasseur !"; the loot is written into the monster group as the game does when the monster dies, BattleExecItem gives it): its name is the one in the game's message.
+## FILE tests/test_battle_scenery_time_of_day.py
+@@ 5c3a511eba23 t
+GOT: StageStatus (g_StageStatus)
+@@ ca37ae3d6270 t
+(world time, expected zone, scenery letter)
+@@ 3f6525e3a8d5 t
+btlcc1 only has _d and _e in the data
+@@ 036d4542da30 t
+dark world: the engine asks for btl_se_dk, absent from the data (only pl, po, wd and tc1 have it)
+@@ 57c78b2429a3 t
+btl_mt_e: the orange red of the sunset
+@@ e1350d6e3909 t
+alpha 0 in the 140 sceneries, BackColor shader without blending
+@@ 73fca1beabbb t
+and the cache is read back as is
+@@ 47a70fda5b04 t
+average vertex color: the tint of the moment is baked into the asset
+@@ c7dbae20c236 d
+Battle scenery according to the world time (feedback from Sylfried, 14:08: "the twilight or the sunrise in the battle scenery").
+
+Real engine (Unicorn): `StageStatus + 0xcc` = world time (0 to 3391, it advances while walking), `+ 0xc8` = time zone that `WorldLocation::setCurrentTimeZone` derives from it:
+    0 to 127: zone 1; 128 to 1983: zone 2 (day); 1984 to 2239: zone 3 (evening); 2240 to 3263: zone 4 (night); 3264 to 3391: zone 1.
+`StageStatus::getBtlMapName` (0x1a4580) replaces the last letter of the scenery with the `zone` byte of the byte table "d n d e n": zones 1 and 4 -> `_n`, zone 2 -> `_d`, zone 3 -> `_e`.
+So there is NO dawn scenery: the start and end of the night (zone 1) reuse the night scenery. The evening one (`_e`) exists, is requested by the engine, and every world map scenery has one.
+In battle the engine sends neither a tint (packet 33) nor a background color (packet 8): the color of the day, evening and night is in the assets (vertex colors + `_d`, `_e`, `_n` textures).
+The battle BACKGROUND is the `bg_color` of the FETC block of the loaded scenery (`cmd_fld_load` -> `BackColor.SetColor`, read in libil2cpp): orange / red in the evening, dark blue at night (map_tint.fetc_background, Backgrounds).
+
+    DQ_APK=<patched APKs folder> DQ_SAVES=<saves folder> python3 tools/test_battle_scenery_time_of_day.py        (DQ_CACHE=<map cache>: also checks the assets)
+@@ c017965a7f7a d
+The 140 battle sceneries of the data pack (reading the pack: several seconds, ~1 GB: to be run via engine_slot.sh).
+@@ 52dfed956ca2 d
+Minimal .map file: a FETC block (40 bytes) whose first 4 useful bytes are r, g, b, a.
+@@ f994c562a57a d
+-> (zone read, scenery name, tints and backgrounds received at the start of the battle) for an encounter on the world map at this world time (slot 4).
+## FILE tests/test_battle_speed.py
+@@ d24a646ff160 t
+(no pyglet / engine here: the tests that need them are skipped)
+@@ fc7221628281 t
+absent: Normal
+@@ 9fbe387dcdbf t
+Normal -> Rapide -> Très rapide -> Manuel -> Normal
+@@ 1cf848b1174c t
+invalid value: read as Normal
+@@ 6697e17e29a0 t
+no conflict with the existing keys
+@@ dd510c9c7d04 t
+another action already took V: the new action has no key (and the other action's key is kept)
+@@ ef0a710d8671 t
+a game setting, not an interface one; the button has its own interface (RG.SPEED_TARGET: bouton_vitesse, _taille, _pos)
+@@ e1bfdb802365 t
+Manuel and Normal: the game clock
+@@ d92f519d6e4b t
+invalid value: Normal
+@@ a2a6469397c0 t
+Manuel chosen in the game
+@@ 9fd12fdea7a9 t
+other value: leaves Manuel (Normal)
+@@ e154e8301eef t
+outside Manuel: the notch is kept
+@@ 39beb1e8d114 t
+old "Manuel": becomes the Manuel speed
+@@ 01325f4bb453 t
+other notches: no equivalent anymore, the saved battle speed remains
+@@ 08e16a1e941f t
+not forced: the game's save decided, not the player
+@@ 471eafee08cd t
+any old "Defilement automatique : non" forced
+@@ eee42b268aa2 t
+(nothing was forced: the game's save decided)
+@@ 690e1d44cf62 t
+the old keys disappear from the file
+@@ fd3a6cba627a t
+(display time is not part of the step budget)
+@@ e34bd03367ab t
+30, 60, 90 steps per real second (60 Hz)
+@@ e4db47b3c070 t
+cheap step (12 ms): full rate, nothing is cut
+@@ 0f5e600a2484 t
+heavy step (35 ms): only one step per frame, so 60 steps per second (x2 instead of x3)
+@@ 9650ca87487f t
+x2 needs one step per frame at 60 Hz: holds even with a heavy step
+@@ 034aa8605df8 t
+never below x2 per displayed frame
+@@ e58dc2d539a2 t
+(at x1 the budget does not apply: as before)
+@@ b2d1a8cec01b t
+0.15 s of engine work to do (4 steps): only one is done
+@@ 791e31811760 t
+the 2nd step opens a menu
+@@ 636f3daac1f2 t
+next frame: played again
+@@ 4ead84a9e288 t
+music and stops: intact
+@@ c6c3557876bf t
+a stop releases the sound effect
+@@ 05159bac1f64 t
+three engine steps in the same displayed frame
+@@ 3e09592318b5 t
+file duration (0.5 s) + release margin: the same at all speeds
+@@ fcbc4c0a5e60 t
+the sound module does not know the accelerated clock
+@@ 286551fdecf5 t
+(the real State: battle_transition() decides the clock of the cascade and the fades)
+@@ cad35b2da11c t
+neither stacked nor applied
+@@ 1c2aa1ed6bc6 t
+the battle speed has no effect on the field
+@@ 06b29e5f4ef2 t
+walking x2
+@@ 8d370ba96264 t
+walking x2 x accelerator x1.5: as before
+@@ 46ff953082d5 t
+(stop: normal speed)
+@@ 09889cd01c2a t
+effect that shatters the screen
+@@ f99fc7042c0d t
+black screen before the battle scene
+@@ 9c44063cc237 t
+command menu, target menu...
+@@ fac54b6408a3 t
+message waiting for a key (▼ cursor)
+@@ 7d88c931d8fc t
+message that scrolls on its own
+@@ 1d284c1b03c0 t
+Manuel: the game clock
+@@ 3c792472e6da t
+1st step: reads the keys; the next 2 (same displayed frame): silent
+@@ 36b1bb66ac12 t
+1 / 30 s later: a step that reads the keys
+@@ cbea2a34e830 t
+the engine does not hold the player: all steps are ordinary
+@@ 7ae4d0c8c1ef t
+(on-screen button or not: never a message)
+@@ daefb49617d9 t
+target cursor (2) and blinking of the world map locations (1)
+@@ 4a1547c3ef71 t
+"Afficher cette interface" = Non (that of the speed button: "Combat : bouton de vitesse")
+@@ e26cbfc7962c t
+Pause menu open
+@@ 16bdd65f7a31 t
+fade to black building up (end of battle)
+@@ a6d51dafc7e0 t
+black screen
+@@ 5b62e5313543 t
+(background plane too)
+@@ 4c4f6bba6ed4 t
+fade-in: the button appears
+@@ 7ec7c604fb44 t
+released elsewhere: no click
+@@ 72320a29728b t
+not visible: not reachable
+@@ eeba8d794674 t
+passes nothing to the engine
+@@ f08410466ce3 t
+(own position: no longer in 'boutons_pos')
+@@ 1c27357684f1 t
+"Rétablir cette interface" puts it back in place
+@@ a852df33c84c t
+engine steps compared (1100 = 37 s of battle, about thirty seconds of test)
+@@ 4aff413211f1 t
+(+ damage numbers, which the viewer takes then empties at each step)
+@@ 4a2de760a2b4 t
+(the replay reads the keys at each step: waiting = normal speed, as before the silent steps)
+@@ e1d3c1c36acf t
+same packets (excluding meshes), same messages, same state, step for step
+@@ 3b1f3560d403 d
+Test of the battle speed (Manuel / Normal / Rapide / Tres rapide): setting, cycle, engine clock, independence from the accelerator, music and sound effects not accelerated, battle screen button.
+Without a window or an engine (fake objects); the "real engine" part is optional: DQ_APK=<APKs folder> DQ_SAVES=<saves folder> runs it (replay of a battle at 1, 2 and 3 steps per frame).
+
+    python3 tools/test_battle_speed.py       (Linux without a display: pyglet in "headless" mode)
+@@ 4d48bee1768d d
+The "Vitesse de combat" also sets OptionStatus.battleSpeed: 4 (manual) in Manuel, 0 (12 frames, the shortest) otherwise (#45).
+@@ a45356ecba99 d
+Everything the viewer animates during a battle must follow the engine steps (engine.frames + alpha), not the real clock: otherwise, at x2 / x3, they get out of sync with the actions.
+@@ 08492af7b4e8 d
+Real engine: same battle (same inputs per engine step) replayed at 1, 2 and 3 steps per displayed frame with the viewer's loop (VC.advance_time): same packets, same messages, same end; only the time changes.
+@@ e4481d752b76 d
+Replays `seconds` of displayed frames at `fps` with a dummy engine of `cost` seconds per step -> (number of steps, maximum step time in a frame, number of cut frames).
+@@ 855dabe5941d d
+Engine steps more expensive than the PC can handle: the computation time of a frame stays bounded (budget + one step), the game slows down instead of freezing the display.
+@@ 1123be0aac36 d
+When a step opens a menu (do_step returns False) no further steps are chained in the same frame, and the rest of the clock is forgotten.
+@@ e94421bc5873 d
+The loop moved into VC.advance_time does exactly what Game._loop did (including accelerated walking).
+@@ 03b675a724bf d
+A frame displayed at x3 sends several steps: the sound effect is started only once, with the duration of its file (no notion of speed in the sound module); the music keeps its real clock.
+@@ d41a105854f1 d
+#47: the battle entry cascade runs on the game clock (x1 whatever the battle speed, walking speed or accelerator; its duration follows "Vitesse de transition": see tools/test_battle_transition.py);
+as soon as it is finished, the black screen waiting for the scene (then the arrival fade and the "X apparait" message) runs at the battle speed.
+@@ 737afd92b552 d
+Monsters follow the battle speed even during menus: the clock stays that of the setting; only the key reading is at normal rate (silent steps: next test).
+@@ c9bece274f41 d
+Engine waiting for the player: only one step out of f reads the keys (one per 1 / 30 real seconds), the others are silent; otherwise all steps are ordinary.
+@@ fe4c806cadf8 d
+Key or button: the setting changes, is saved, the message scrolling follows (Manuel: manual); no message on screen (removed since #267: the fake game has no `toast`).
+@@ 61e0d7a691d2 d
+ui_menu: the target arrow blinks in real time (BattleUpCursor, 0.7 s): it is a wait for player input, which is not accelerated (the speed has no effect when a menu has the input).
+@@ 747a47750a49 d
+To the left of the portrait column (450 x 800, centered) of the game windows, at the usual formats; without covering the other buttons shown in the editor.
+## FILE tests/test_battle_transition.py
+@@ 62c9792b257a t
+packet 9: exit to black in 30 frames (4126, seen at the end of each battle)
+@@ 04fec2698085 t
+packet 9: entry in 30 frames
+@@ 46477664b125 t
+loading of the battle scene (bit 8) then fade-in, same engine frame
+@@ 6e33ff9c20ac t
+(the drawing hold after a load delays the START of the fade, not its duration: test_loading)
+@@ fa8ae817c220 t
+the engine changes scene 1 to 3 frames later
+@@ 09a770ac2a4f t
+background plane fade (still in the battle part): same rule
+@@ 5d9b91512106 t
+(Engine.step: the part leaves the battle)
+@@ e81e13f55bac t
+the transition is over: walking takes its settings back
+@@ a61282ec678c t
+(last draw: the cascade is nearly finished)
+@@ 9af845ad21fd t
+(state saved before the 'duree' key: 57 frames)
+@@ d4f8b1cf4594 t
+an ordinary map change stays shortened
+@@ fbc5f0181dfe t
+(fade plane without the 'combat' key)
+@@ f712d98e6500 t
+outside a transition: the battle speed applies
+@@ 2d0d78c65e1e t
+(player waits too: the monsters keep their pace)
+@@ bbd977c22a60 t
+the cascade just started during this step: stop
+@@ 507b7cbea403 t
+(already in transition: continue normally)
+@@ d7f64596e9ce t
+same during an accelerated battle (exit fade)
+@@ 2e18e2fd0299 t
+one entry per engine step (state AFTER the step): frame, part, cascade, black screen, foreground plane (n, exit?), transition?, factors per setting
+@@ cca1f9dc32d1 t
+(walking: the forced encounter triggers while walking)
+@@ 369dd4141801 t
+(after the step that starts it: d - 1 frames remaining)
+@@ 2d19c87230a2 t
+the ending fade to black: still accelerated
+@@ 847cf549c50b t
+(the first frame after the cascade is already the black screen or the battle)
+@@ 08f4365509ae t
+the return to the map: game clock while the player is locked or between two fades; the walking setting as soon as the lock drops (#127)
+@@ 3f9061394eb6 d
+Battle transitions (feedback from 22:29, #47; before: #45, feedback from 14:08).
+
+Sylfried: "The battle acceleration must be taken into account as soon as the cascade transition animation ends and as soon as the message saying that an enemy appears shows up, and finally I want it to last
+until the end, so during the fade to black"; "The transition effects at the start and end of a battle must in any case be affected by the transition acceleration in the settings, like any transition effect".
+
+The transition = start screen effect (the "cascade": 57 game frames), black screen waiting for the scene, battle fade-in, battle exit fades, fade back to the map. Verified rules:
+  - DURATION (engine frames): the cascade and each fade last what the game requests divided by "Vitesse de transition" (x1 to x4), like a map change fade (game_priority.fade_duration);
+  - CLOCK (real time): the cascade runs on the game clock (30 frames per second) whatever "Vitesse de combat", walking speed and accelerator are; from the end of the cascade (black screen, fade-in,
+    "X apparait" message) up to and including the battle-end fade, "Vitesse de combat" (x1, x1, x2, x3) applies; the return to the map runs on the game clock while the player is locked (flag 4); as soon as the player is free (frame 12 of the return, the hero walks from the 13th), accelerated walking and the accelerator take effect (#127, like #107 for a map change).
+
+    python3 tools/test_battle_transition.py        (Linux without a display: pyglet in "headless" mode)
+    DQ_APK=<patched APKs folder> DQ_SAVES=<saves folder> tools/session_flow/engine_slot.sh python3 -W ignore tools/test_battle_transition.py     (adds the replay of a real engine battle)
+The saves are only opened read-only: the engine writes to a temporary folder.
+@@ 9f371a179787 d
+Replays real encounters (world map, forced encounter, attack until victory) with "Vitesse de transition" x1, x2 and x4: durations in engine frames; real time simulated with the real function
+Game._speed_factor for all combinations of settings (battle speed x walking x accelerator x held key).
+@@ 223e9d5f6a8f d
+Engine._start_battle_effect / _battle_effect (without an engine: the effect flag is simulated): 57 frames at x1, 57 / factor afterward; the viewer's simulation reaches its 57 frames at the last draw.
+@@ f5091e0befa8 d
+A fade started well after the battle load (or an ordinary map) remains subject to "Vitesse de transition".
+@@ ee726c99fc16 d
+Return fade: game clock while the player is locked (flag 4, frames 1 to 11) and between two fades; as soon as the lock drops, walking and the accelerator take effect (#127).
+@@ 4e722beb41bb d
+Accelerated walking (up to 8 steps per frame): when one of the steps raises the battle start effect, the remaining steps of the frame must not shorten the cascade: the catch-up stops (True = continue).
+@@ 73d8a0ab00e7 d
+Runs of consecutive frames that satisfy `cond`: [(index of the first step, number of steps)].
+@@ 1d1679b3622b d
+Ending fade to black (in the battle part): the engine requests it in 30 frames; State replays it in 30 / factor.
+@@ cd24bfe376bf d
+Real time = sum of 1 / (30 x factor): the cascade lasts (57 / transition speed) / 30 s whatever the settings; the battle-end fade, on the other hand, follows the battle speed; the return to the map stays on the game clock while the player is locked, then follows walking (#127).
+## FILE tests/test_capture_effects.py
+@@ 65d188fd8a15 t
+(bit 7: no effect outside of travel)
+@@ 10678e7a3c3f t
+rendering turns on at the 3rd call (the capture was taken at the start of the 2nd)
+@@ 132494122511 t
+the departure turns nothing off: the screen stays black (both materials at alpha 0)
+@@ b0d0ff64bd9d t
+the arrival restores the game: last call = rendering off
+@@ 58128176396d t
+x1: one call per engine frame (the first at the packet's frame)
+@@ c319a10120fd t
+cAlpha drops to 0 before the end, bAlpha does not
+@@ 90582c507e95 t
+at call 3: the grid is regular, the whole screen
+@@ 6ecd18f556c1 t
+center column: drops to 0 at counter 19
+@@ b33644294b6e t
+edge columns: very slowly, 0 at counter 57
+@@ 9b4bd5394791 t
+night: red and green go down, blue (and alpha) stay at 255
+@@ c206fe9a7a39 t
+"eyelid": bias from 1 to 0.588 (counter 27), then up to 1.09
+@@ e9da70340faa t
+morning: only blue goes down (yellow tint); cbias starts at 0: nothing is subtracted at the 1st update
+@@ 71d678a35659 t
+end: center at 0, edge columns never at 0 (7)
+@@ 1e99194b4896 t
+center of each copy: (+-3 u, +-u), u = 0.0005 (i + 1) c
+@@ cae1f9a37ef2 t
+0.11 degrees per frame
+@@ c0c30a9ca5b3 t
+background (b, b, b, 1); copies: blackened, opacity 0.18
+@@ 56cfbbd4842c t
+c = 1: u = 0.0005, copy 0 toward the right and down
+@@ 765f9deb5097 t
+the blackening starts at counter 30
+@@ f3a1af1d2493 t
+calls 2 and 3: rendering is not yet on in the state of the previous frame
+@@ 2ce47e2b3690 t
+background: the whole screen
+@@ 897eb2a81ce9 t
+four copies
+@@ 89d48d6a9098 t
+4: battle start (another effect, Engine._start_battle_effect)
+@@ f305990cff61 t
+only one effect at a time
+@@ 486f2b30aedb t
+(this is not a battle transition)
+@@ 3d81de81c2ea t
+original call = n + 1 (the first at the packet's frame)
+@@ 0c12029d9b3d t
+opaque, black, immediate; it stays that way
+@@ eb839dce2790 t
+end of the departure: the screen stays black
+@@ b7e526b5b8f8 t
+(the black is not a fade plane: the interface stays drawn)
+@@ 3b240e188506 t
+Fade.SetFadeIn(30) at call 3: from the current opacity to 0 (30 frames, one already elapsed by the end of this frame)
+@@ 1edf6f5f379c t
+last call (state 4): the scene reappears; the flag drops at the next frame
+@@ 67ab0102ae46 t
+no arrival ever: the game is reopened after 60 s
+@@ b659385c85b4 t
+return to the title screen: no more black
+@@ 7ce1c41e2208 t
+class attributes
+@@ b02cd9874e3f d
+Screen effects of the `Capture` class (packet 34, values 3: travel / ailes de Chimere, 5: lamp / Ranaruta, 6: Riremito; audit UNI-06):
+
+1. pure modules (rendu/tabi_effect.py, lamp_effect.py, riremito_effect.py): number of MoveNext calls (64, 45 at arrival, 64, 63), moment when rendering turns on and off, control values read from the
+   specification (Tabi vertices, lamp bytes, Riremito displacements), blur passes (one per frame, two textures alternating, the first reads "nothing") and drawing buffers;
+2. engine (Engine._start_screen_effect / _screen_effect, without an engine: the flag is simulated): bit 7 of the value (arrival, morning), duration that follows "Vitesse de transition", immediate black of the lamp and of Riremito
+   (State.sharp_black_fade), fade-in and end of the black screen at the arrival of a trip, safeguards, only one effect at a time, a state saved before the fix.
+
+  python3 tests/test_capture_effects.py
+@@ 94a20bc1e0d6 d
+Runs the effect to its end (or until call `toward`); returns the list of (call, render_active).
+@@ c73e9d21bb3a d
+Specification array (16:9 screen: 9 rows, 170 vertices): top-left corner (vertex 0) and bottom-right (last) at the cited calls.
+@@ 1f0aa9cde931 d
+Rise over 4 frames (bAlpha: 0.23125 per step at departure, cAlpha: 0.70625 then -0.0625 per step), then decay from counter 30 (departure only); arrival: 0.24375 / +0.0625.
+@@ a3869e9d1875 d
+28 rows (m_divY = 56 of the original portrait screen): 17 x 29 vertices, 2 x 16 x 28 triangles; the uv cover the capture.
+@@ 5f7911b62257 d
+Columns 0 and 16: y unchanged; top row (y = 1): the center column takes the value of `bias`, its neighbor 0.1 + 0.9 bias; `bias` oscillates between 0.588 and 1.09.
+@@ 68a506c14eb3 d
+The pass takes place before each call as long as SetBlur is true (from the 2nd); two textures alternating; the first pass reads "nothing"; rendering goes back to the state of the PREVIOUS frame.
+@@ 3080794c2a92 d
+Background first (blurred texture x color, replaces the screen), then the capture; positions in normalized screen coordinates; one color per vertex.
+## FILE tests/test_casino_bestiary.py
+@@ 8e6972f58304 c
+slot machine (type 47): one ▲ (gamepad 0x2) / ▼ (0x1) column with number 1, "Lancer" (0x10) with number 0; back 0x20 with number -1
+@@ cbe8459b0ffd c
+tokens (type 44): five columns (1, 10, 100, 1000, 10000) from left to right: 10000, 1000, 100, 10, 1 (increasing positions), confirm number 0, back -1
+@@ 309b793b5090 d
+Test of the casino and the bestiary (engine parts 0xf and 0x10), without a window or an engine (fake objects):
+
+1. engine constants: PART_CASINO, PART_BESTIARY, MINIGAME_PARTS;
+2. free camera of the casino (`camera_free`): position + rotation from packet 10, without packet 11; not elsewhere;
+3. walking speed: never accelerated in the casino and the bestiary (the held arrows are used for menus there);
+4. Esc: back button of the open window (gamepad 0x20) in the casino and the bestiary, otherwise Esc menu;
+5. numeric keyboard entry menus (slot machine bet, poker, tokens, arena): columns, ▲ / ▼, confirm, back;
+6. window code with a bit mask (poker: touch areas of the cards and "Donner", value 63 outside the exported array);
+7. arena battle: "Quitter" window without confirm, A turns the message page.
+
+  python3 tools/test_casino_bestiary.py        (Linux without a display: pyglet in "headless" mode)
+@@ 41cc244b6a32 d
+Game menu window (ui_menu.Window) reduced to what the tested functions read: typ, buttons() = (number, gamepad, x0, z0, x1, z1, depth).
+@@ 7f46065df41b d
+Arena battle: the only open window is "Quitter" (type 71, one gamepad button 0x400). A turns the message page (the window has no confirm button) and
+the window is not a wait for the player (the battle speed applies to the arena battle).
+@@ 429a718874b3 d
+Poker (type 48): the window's code 2 receives a MASK (63 = all active); the exported `fx` array only knows 0 to 5.
+@@ 1678c66dbc06 d
+The camera tests pass a fake state without `part`: town camera, no error.
+@@ fca18b44c360 d
+A list (gifts, bestiary) has no ▲ / ▼ column: ordinary cursor. The page arrows (number -1) do not count.
+@@ 45743a9ecf59 d
+A window with several confirm buttons (a choice to make) keeps the ordinary cursor.
+@@ a56299807a7d d
+Reels spinning, cards being dealt: the window no longer has an active back button.
+@@ ac2866b7d9bb d
+An array that does not have the form "bit n = button n": nothing is invented (original behavior).
+## FILE tests/test_critical_hit.py
+@@ 44cbfce47691 t
+automatic messages
+@@ 77310485b992 t
+no screen effect (cmd_screen_effect): flash, shake...
+@@ ad9d00af8390 d
+Critical hit ("kaishin", feedback from Sylfried, 14:08: "is the critical hit effect on the enemies missing?"): what the engine asks of the viewer.
+
+Real engine (Unicorn), slot 4, one weak monster (Encount + 0x34 / 0x44). The critical is forced on the hero by setting `BaseAction::kaishinFlag_` (LIB + 0x25c6ed) on exit from
+`BaseAction::checkActorKaishin` (0x1a81dc) when the actor is on our side (`[acteur + 8]` = 0; 1 = monsters, which roll for it: `rand(0x20) == 0`). Findings:
+  - a SECOND effect model (5344, slot 3) is loaded at the same instant as the hit effect (5303, slot 2), 17 frames; the viewer draws it like any battle model;
+  - sound effect 407 (`SE0407.akb`, present in the data) is requested, plus a 0 (no file: no effect);
+  - the damage number is 2.5 to 3 times larger (8 -> 26, 11 -> 27 measured) and the text "Coup critique !" is added;
+  - NO packet 34 (`cmd_screen_effect`), no message shake, no flash: screen effects 3, 5 and 6 have nothing to do with criticals.
+
+    DQ_APK=<patched APKs folder> DQ_SAVES=<saves folder> python3 tools/test_critical_hit.py
+@@ bed548c1b340 d
+-> dict(models, sounds, types, damage) seen up to the hero's first damage number on the monster.
+## FILE tests/test_day_clock.py
+@@ 10139ebfe3ab t
+(default: transparent)
+@@ f93acd45d140 t
+to within one call
+@@ e7cb1627eb75 t
+from the starting cell to the corridor (y = 354)
+@@ 92f206da213b t
+encounter triggered (without a battle): the counter restarts, the hero can walk
+@@ 2db548cd0f37 t
+x1: exactly 2 per step; otherwise (1 + a) / (2 a) of that, to within a few units
+@@ d6af5b726583 t
+time always advances by 2: the zones and the palette stay those of the game
+@@ 7e44da7462d6 t
+same positions frame by frame: only the world time is slowed
+@@ a0ae93d882ea d
+Arrival of night at accelerated walking (#163): (1 + a) / 2 times faster per real second, not a times (like the random encounters, #45).
+
+    python3 tools/test_day_clock.py
+    DQ_APK=... DQ_SAVES=... python3 tools/test_day_clock.py      (adds the real engine tests: the hook on FieldPlayerDoku::checkDokuDamage)
+
+On the world map, the world time (`status::g_Stage + 0xcc`, cycle of 0xd40) advances by 2 per engine frame in which the hero changed position (`FieldStage::ChangeTime(0)`). At speed `a`, the engine runs
+`a` times more frames per real second: each step must therefore count (1 + a) / (2 a) times what it used to.
+@@ 5534bbb6b8d7 d
+The skipped calls are spread out (3 out of 4 at x2: never two skips in a row): time does not advance in jerks.
+@@ ffff10c01d8f d
+Steps per second (a) x time per step (2 x factor) = 2 x (1 + a) / 2: x2 -> 1.5 times, x1.5 -> 1.25 times, x4 -> 2.5 times.
+@@ ab86bee7da06 d
+Engine on the world map (save 4), the hero in the corridor with no entrance or exit from tools/simulate_encounters.py, without a battle (Encount::brew returns false); -> (engine, world time reader).
+@@ ec18dce4601e d
+Walks back and forth in the corridor (the direction reverses when the hero is blocked) at speed `v`: -> (steps, world time advance, hero positions after each frame).
+## FILE tests/test_dialogue_name.py
+@@ 5f1d61ec6862 t
+the next packet is a command again
+@@ 6c3ebd48e71c t
+frame + canvas + text (the end-of-page cursor is hidden)
+@@ 965b1fa3ae98 t
+tab: 246 wide, 32 high
+@@ de2dbc1dc222 t
+same frame width
+@@ 39a04cb82e8d t
+the tab sticks out 32 above the frame
+@@ d0bce4b6c14e d
+Speaker name in the game's dialogue box (MenuMessage, command 4 of port 1), without a window or an engine:
+
+1. protocol: `[4, 0]` = no name; `[4, 1]` announces the name, which the NEXT PACKET of the port carries (one integer per character); the name is cleared when the window hides (SetVisible(false));
+   the other commands (type, cursor, scrolling) keep working, and neither they nor the other ports are taken for the name;
+2. `MessageWindow.select_language(typ, y, feed, who)`: the name is shown only on the field window (type 0); the frame becomes frameData 191 (tab) and a "who" text appears (m_who: top-center anchor,
+   size 10, local position (-104.5; 4; dy - 104)); without a name, or in battle (types 1 to 3), the rendering stays EXACTLY as before (frame 192, no "who" node);
+3. the dimensions that position the window (extent, bottom) do not change with the tab (the Oui/Non and the scale keep their place);
+4. (if the interface cache exists: DQ_CACHE_UI, otherwise /tmp/uicache4) the REAL frames: 191 = 192 + a 246 x 32 tab that sticks out upward.
+
+  python3 tests/test_dialogue_name.py        (Linux without a display: pyglet in "headless" mode)
+@@ 5349ee761cca d
+Minimal frame: a 452 x 126 rectangle (x -223..229, z -251..-125); with tab: + a rectangle x -223..23, z -125..z_top.
+@@ 5989a73067cf d
+The name packet starts with a character (here 1 = "cursor", 2 = "type"...): it must only be read as text.
+@@ 126aa462ad0e d
+Render._items must find the text (a mesh without vertices + a text) and draw nothing else for this node.
+## FILE tests/test_dpad_and_click.py
+@@ 0eeefc6fa031 t
+window.py needs pyglet, numpy, unicorn... (the import alone is enough, no window is created)
+@@ 380e023698f1 t
+it is not a bubble
+@@ 84c3c0aa802c t
+(any slot >= 16)
+@@ bacebd5db6dd t
+(15 is still a bubble, 16 is the blinking)
+@@ 0b5dceb4f9b8 t
+press then release without dragging = tap
+@@ 02a14598c8bf t
+direction: right
+@@ c8eee299c646 t
+up
+@@ 6c159dd35ea2 t
+(the center circle alone sends no direction)
+@@ 6381d2843139 t
+(slot 0 included)
+@@ abaa01e39685 t
+menu, message, battle...
+@@ 21d75edba798 t
+(the drawing itself requires a GL context: verified for real, see the PR notes)
+@@ 6e4881ce8cb8 t
+Esc menu: its own click
+@@ ad2ae8c92aa5 t
+game menu: its buttons
+@@ bc798c42bd79 t
+(unchanged: tapping the message)
+@@ 6f533a8b6f71 t
+the action comes on release
+@@ 2dae80c30b9f t
+(a message that appeared in the meantime: no phantom action)
+@@ 6114c3ed3211 d
+Test (#131): a left click on the free field = action key; center circle of the D-pad = action key that animates when an action is possible (as on mobile).
+
+    python3 tools/test_dpad_and_click.py
+
+1. Engine: packet 19 with a slot >= 16 is not ignored, it is the D-pad blinking (`pad_blink`); the real bubbles (slots 0 to 15) stay unchanged.
+2. D-pad (`hud_mobile.Buttons`): a TAP on the center circle (press then release without leaving it) is recognized; a drag (even a brief one, even if it returns to the center) and a press outside the circle are not; the directions do not change.
+3. Animation: `Buttons.action_possible` = the game makes the D-pad blink OR, on the free field, an icon bubble is displayed.
+4. Window (real methods of `window.Game` on a fake game): left click anywhere on the free field = A key (`click_a`); right click = B; not in a menu, not in a message, not in battle; tap on the center circle = A.
+@@ 28df46f2c1bb d
+`Buttons.action_possible`: the D-pad animates when an action can be performed.
+@@ 44de77a453d3 d
+The real methods of `Game` (click on the field, release of the D-pad) on a fake game.
+## FILE tests/test_dpad_run.py
+@@ ac82b0e18f5f t
+(double #169, minus 25%: #172)
+@@ 7a794d14635b d
+Test: the on-screen D-pad is TWICE the size of the mobile one, and the hero runs when it is held at the edge of its ring (2026-11-04).
+
+    python3 tools/test_dpad_run.py
+
+1. Size: `hud_mobile.DPAD_DIAMETER` = 1.5 x 161.28 (double #169 minus 25%, #172); on-screen diameter = H / 800 x DPAD_DIAMETER x game option x "Taille de la croix" setting (67% = the mobile size).
+2. Running: `Buttons.dpad_run()` is true at the edge of the ring (TRAVEL_THRESHOLD of the radius or more, in a direction), false closer to the center, in the dead zone, D-pad released or not held; the direction sent to the game does not change.
+3. Speed (real `Game._speed_factor`, fake game and real D-pad): normal walking (x walking speed) as long as the pointer is inside the ring, x accelerator multiplier at the edge; the accelerator key
+   always makes the hero run, and the two together do not stack.
+## FILE tests/test_encounters.py
+@@ 6ab51c6eeb75 t
+each step counts for less ...
+@@ 2d1ac776caab t
+... without ever dropping below 1 / 2
+@@ e47c9126d237 t
+... and speed always increases the per-second frequency
+@@ 753037314386 t
+to within one unit
+@@ 944bba1e53b0 t
+never more than the game
+@@ cb89640e7ab8 t
+the game: 2 x [+0x10] per call
+@@ 169f1f0c37c0 t
+slower than x1: never touched
+@@ ea94a51acb92 t
+(1 + a) / (2 a) of the game's loss, to within one unit
+@@ bc650c578ee6 t
+steps per second x loss per step: (1 + a) / 2
+@@ 23ea5479f625 t
+8326 / 846: the original game
+@@ a0fbe9df3e83 t
+8326 / (846 x 0.625) = 15.7 calls -> 16
+@@ eb24635d38d7 d
+Tests of random encounters at accelerated walking (#45): (1 + a) / 2 encounters per real second, not a.
+
+    python3 tests/test_encounters.py
+    DQ_APK=... DQ_SAVES=... python3 tests/test_encounters.py      (adds the real engine tests: the hook on CountDown::exec)
+
+The statistical simulation (real walking on the world map and in a dungeon, number of encounters per step at x1 / x2 / x4) is in tools/simulate_encounters.py.
+@@ 959249d79e08 d
+n calls of CountDown::exec of the real engine at walking speed `speed`: total loss of the counter.
+@@ 052565f4fc0a d
+The counter drops below zero after (counter / loss) calls at x1, after (counter / loss) x 2a / (1 + a) calls at x4: same draw, just fewer steps counted.
+@@ 68f516bca1be d
+After the trigger the engine keeps calling exec: the hook must never raise the counter.
+## FILE tests/test_enemy_chest.py
+@@ 6a8154ef5281 t
+bâton de cyprès; londuleux (the battle's monster)
+@@ cf5d365e6e76 t
+sound effect played by ui_MsgLoop at the start of each message when the player has just regained control
+@@ 807385f5b187 t
+forced encounter: a londuleux
+@@ 06a08f2a23ec t
+end-of-battle draw: a chest containing FORCED_ITEM (or none)
+@@ ceedce39a5f0 c
+window: from the start of the 1st message (the beep precedes the text by one frame) to that of the last (+ 3 frames)
+@@ fe065284f231 d
+Test of the treasure chest dropped by an enemy at the end of a battle ("Le londuleux laisse tomber un coffre au tresor !", "Ragnar l'ouvre.", "Il contient ...", "Ragnar met ... dans le sac.").
+
+Question asked (feedback from 22:29): does the original game play a chest-opening sound effect during these messages? Answer established by reading the engine and running it:
+  - what follows is the task BattleExecItem (4 subtasks BattleExecVictory30 to 32, messages 801876 and following): they only set a message (TextAPI::setMACRO0, BattleMessage::setMessage,
+    BattleAutoFeed::setMessageSend) and give the item (PartyStatus::giveItem); none goes through SoundManager / Sound::sePlayDirect;
+  - Unity only calls Sound.PlaySE directly in InputName.Update, MenuPortItem.Update and TouchPad.internalUpdate (buttons: sound effect 300);
+  - in the real engine, with a forced loot, the only sound packets of the whole sequence are sound effect 300 ("beep") at the start of each of the 4 messages, played by ui_MsgLoop.
+This test keeps this observation: if one day the engine asked for another sound during these messages, `State.sounds` would contain it and the viewer (Sound.events) would play it; the test would fail so that we know.
+
+The loot is forced in a throwaway engine: MonsterParty::getDropItem / getDropItemMonster (fields +0x3eac and +0x3eb0 of MonsterParty, written by checkDropItem at the end-of-battle draw) return an item
+and a monster that are forced (the same method by which test_battle_history forces the composition of a group).
+
+    DQ_APK=<patched APKs folder> DQ_SAVES=<saves folder> python3 tools/test_enemy_chest.py        (about a minute)
+Without DQ_APK and DQ_SAVES, the real engine test is skipped.
+@@ d84e83f168ef d
+Forced battle played to its end (A everywhere). -> (texts [(frame, text)], sounds [(frame, type, value)]); sounds = State.sounds, what the viewer passes to Sound.events.
+## FILE tests/test_engine_camera.py
+@@ b90aef9e9d67 t
+(the game turns on the step after the button's)
+@@ 9b8071374d0f t
+right: the heading advances toward +X
+@@ c555d9c366ba t
+button released: the camera stops
+@@ 92fcab752163 t
+exactly n notches (the button's notch is one of them)
+@@ 318b7253d7dd t
+(without a prior step: also)
+@@ abaa87b8fe11 t
+ONE single step is enough: the game does the rest
+@@ f6411d339fde t
+the player is held during the return, then released
+@@ f2d6055047af t
+return without jerks, by the shortest path, stopping at north
+@@ a3f75b6bb920 t
+toward the back of the screen
+@@ f6597bb7b52c d
+The town camera with the REAL engine (D-234): the player's rotation is the game's, not a viewer rotation alongside it.
+
+On a town's field, bits 4 and 5 of the held keys sent to GameUpdate are not A and B but the game's camera buttons (window::NormalControl::checkCamera: 1 = turn left, 2 = right, 3 = back to north);
+TownPlayerManager::setCameraRot turns the camera by one notch (0x200 out of 65536 per turn: 2.8125 degrees) per engine step, bounded by the location's limits, holds the player during the return to north, and the game itself rotates
+the walking directions and the sprite rows according to its camera. This is verified on the original game (map `mak1f1`, save 1, free player; with a message open the same bits are A and B, hence the camera buttons are sent on the free field only, see test_entries.py):
+
+  1. a held camera button turns the camera by 2.8125 degrees per step (right: the heading advances toward +X), the other one the opposite way; the game keeps the button pending after the step (`Engine.camera_wait`);
+  2. `Engine.camera_turn(direction, n)`: exactly n more notches (setting "Vitesse de camera", wheel click drag), even after a step that took the button;
+  3. both buttons together, a single step: the game brings the camera back to north (heading 0) and holds the player in the meantime (Global.Flag 4), then releases the player;
+  4. with the camera rotated, walking up goes in the direction of the camera (the game rotates the directions: the viewer has nothing to do) and the hero's sprite keeps the same row;
+
+Without DQ_APK and DQ_SAVES (patched APKs folder and saves folder), the real engine tests are skipped.
+
+    DQ_APK=... DQ_SAVES=... python3 tests/test_engine_camera.py
+@@ 4fb96529b456 d
+Closes the arrival message (A key) and leaves the player free: no message, player not locked.
+@@ ecda015ff335 d
+Camera rotated a quarter turn: "up" makes the hero walk toward the back of the screen (in the direction of the camera), and the sprite always shows the same row: the game takes care of this.
+## FILE tests/test_entries.py
+@@ 9b536e786465 t
+no hidden window: the test runs without a display server
+@@ abc31f5b824e t
+event without movement (sent by Windows when the drawing changes under a resting pointer)
+@@ 0c743fe29e13 t
+sensor jitter
+@@ 6ad17760dd5f t
+real movement
+@@ 339da911c9d6 t
+59 events of 1 pixel
+@@ d7bf94f6a808 t
+(the original flaw: the mouse remained unusable until the gesture was fast)
+@@ f5268d69617d t
+4 events of 1 pixel: a few milliseconds, not a second
+@@ 5e87d5115b7f t
+mouse in control: every event counts, even without movement
+@@ f8e824dad09b t
+no more tolerance: hover follows every event
+@@ 5a2fcd442abf t
+a new key: the keyboard takes control again
+@@ 2be126ad6a2a t
+below the threshold
+@@ 1ee1c39f7492 t
+threshold crossed: the gesture becomes a drag, the camera does not move yet (no jump of the first 20 pixels)
+@@ de5e69874aa8 t
+then: the horizontal distance to the previous event (the vertical does not count)
+@@ e9183e605786 t
+after a drag the release recenters nothing
+@@ c895c1a13fb6 t
+(the camera was rotated: it is no longer a click)
+@@ 1f5415fa4e39 t
+right = right arrow
+@@ 1b62b4070738 t
+half the height = the same rotation
+@@ 72c035c392c0 t
+= dragging the other way
+@@ 862d52173d73 t
+without game windows: the whole screen, always on the right
+@@ c96af57b162f t
+does not cover the centered column
+@@ b2d982c60551 t
+pause.py needs pyglet (without a display: the import alone is enough)
+@@ 3940e5f630bb t
+six lines of 36 px, the first at the top
+@@ 3ca86e022865 t
+a key (no effect): back to the keyboard
+@@ ddb79d680e81 t
+the pointer moves down one pixel per event, from y = 300 (line 2, between 276 and 320: line 3 is between 236 and 276)
+@@ 2fd21b907750 t
+at the 4th pixel: no waiting
+@@ 2bb3ea8ca00b t
+the selection follows the pointer
+@@ 6a18ecd87a5f t
+left click right after the key
+@@ 605f6a5c9e38 t
+rotation pending since the previous step (not consumed by camera_turn): the game turns by one notch
+@@ 1d14577c5c88 t
+both camera buttons together, only once: the game animates the return to north (and holds the player)
+@@ 595cd5fa17fd t
+100 px to the right, ndy upward (pyglet y goes up)
+@@ ed4ea1806afe t
+without inversion: right = to the right, like the right arrow
+@@ f48ec4808827 t
+the vertical movement changes nothing
+@@ 240f629a8b04 t
+(the last notch is consumed at the next step)
+@@ 9e7d68a07952 t
+back at the starting point: still a drag
+@@ 3a8ef238bcc3 t
+a mere jitter remains a click
+@@ 658524c644f2 t
+releasing a drag does not request a return to north
+@@ b68e81f64de5 t
+the camera turns right, via the game's camera button
+@@ da9eb42a3036 t
+purely vertical: nothing rotates
+@@ b14202c7cb92 t
+a large drag: several notches in the same step
+@@ 2db514a92271 t
+less than half a notch: nothing
+@@ 4826f205df3e t
+(the arrows are not dropped: the game can pick it up again at the end of the scene)
+@@ bdc281478b19 t
+a simple click, but the field is no longer free
+@@ cdc71e36e4f8 t
+(the D-pad and the on-screen buttons are held with the mouse: they only block the wheel click, not the keyboard arrows)
+@@ f490a77640dd t
+no rotation on the world map (like the arrows)
+@@ e7ba3e5d84e0 t
+one notch per step, by the game: 84.4 degrees per second
+@@ 5631c51eb617 t
+(the arrow remaining after the double press)
+@@ bd40c42a5bd6 t
+everything released: the rotation requested by the mouse resumes
+@@ 3c9415932e98 t
+(they are only used in menus: no more tilt)
+@@ b0b7dad90a1a t
+the game's two camera buttons at the first step only: the game does the rest (animation, player held)
+@@ 7b0f607c7ec5 t
+the remaining arrow (release is never simultaneous) does not rotate
+@@ 37bb30014ed1 t
+(the other pressed again while the first stayed held: no new return to north)
+@@ df3ec2c53cb8 t
+everything released, then a single arrow: the camera rotates again
+@@ 0bb927ee6883 t
+one arrow held, the other is added: double press, return to north
+@@ c635f9470719 d
+Test of the mouse / keyboard inputs: pure logic (inputs.py) and wiring into the window (fenetre.Game), without opening a window.
+
+    python3 tests/test_entries.py
+
+1. The mouse after the keyboard ("switching from the keyboard to the mouse makes the mouse unusable for 1 s"): hover takes control again at the first real movement (CUMULATIVE distance since the last key, small
+   noise tolerance), a click always acts, immediately. The old test (distance from one event to the next) is replayed to show that a mouse that sends movements of 1 to 2 pixels never took control again.
+2. The wheel click (D-233, D-234): click = the camera returns to north (via the game), drag left / right = requested rotation (no jump at the start, vertical movement rotates nothing), a click followed by a movement
+   is not a click; drag direction invertible (setting `camera_inverser_gd`), keyboard arrows not. The zoom, the tilt and their gestures (wheel, Ctrl) were removed in #264 and do not come back.
+3. The F1 info block: at the top right by default.
+4. Wiring in Game (D-234): the camera is the GAME's. Left / right arrows = the game's camera buttons (bits 4 and 5 of the held keys), both together = return to north (only once), camera speed = more notches
+   per step, the accelerator changes nothing there; the viewer rotates NEITHER the camera NOR the hero's directions alongside the game (the game takes care of it, as on mobile, including in its scenes); the wheel click only acts on the free field
+   of a town, does nothing else, and the wheel no longer does anything on the field. The test with the real engine (rotation, camera-relative walking, return to north) is tests/test_engine_camera.py.
+@@ 5db7d79b926f d
+Esc menu: a key gives the selection back to the keyboard; the mouse takes control again at the first real movement (not after a jitter), a click immediately.
+@@ 9bafc26c4a63 d
+The game as seen by the viewer: accepts (or refuses) this step's camera button, keeps it pending (TownPlayerManager + 0x698) and turns by ONE notch at the next step, unless `camera_turn` already did n right away.
+@@ f0dddee813d7 d
+A minimal `Game`: the real methods of fenetre.Game (bound to this object) work on a dummy engine that accepts or refuses the camera buttons.
+@@ 4b17edb5206d d
+Slow movement: 1 pixel per event. The old test (distance from one event to the next < 3 px) never regained control; the cumulative distance regains it after a few events (without delay).
+@@ 885901a2dd6c d
+The distance is measured from the point of the last key press, not summed from one event to the next: going back and forth by 2 px a thousand times does not make a movement.
+@@ 925c8559dff6 d
+A large drag does not make the camera keep rotating long after the release: the requested rotation is capped (and does not wrap around: the game rotates by notches, there is no longer a heading to bring back between -180 and 180).
+@@ 63934d4f31b0 d
+An engine step with these camera buttons.
+@@ 7cca84d1ba4c d
+n engine steps: the camera buttons the viewer sends (`Game._entries`, field), then the step tracking (`Game.tick`).
+@@ 509d4f5c4017 d
+Left / right arrows held for 30 steps: same camera buttons and same number of notches whatever the inversion setting.
+@@ 5dfccfe609ea d
+The requested rotation is made by game notches (ENGINE.CAM_STEP each, at most CAM_DRAG_STEP per step), then stops: the remainder of less than half a notch is not rotated, it is added to the next drag.
+@@ eedf705a9fb3 d
+Player lock, scene, location that forbids turning, limit reached: the game does not take the button (nothing pending). The viewer adds no lock of its own (it sends the button, the game decides) but drops the rotation requested by the mouse.
+@@ 267ab7e32111 d
+A message that opens while the middle button is pressed: the release requests nothing, and the drag rotates nothing.
+@@ 1d90ae746213 d
+Rotation requested or return to north requested, then a message opens before the step: they are forgotten (`Game._entries`: off the field), they are not sent when the message closes.
+@@ 796f045a79b3 d
+Wheel click (return to north) while a mouse rotation was still to be done: the game brings the camera back to north, the remaining rotation is not done afterward.
+@@ d9304e281ba1 d
+The middle button pressed during a message, the message closes, then it is released: this is not a click on the field (the gesture never started).
+@@ c409d09adb44 d
+On a town's field, (Global + 0xe0) >> 4 & 3: 1 = left, 2 = right, 3 = return to north (NormalControl::checkCamera). These are the values of A and B in menus: the viewer removes A and B from the field (the engine wants BTN_TALK there).
+@@ 79aecff37f27 d
+x2 = two notches per step, x4 = four; the first notch is the button's (no call), the others are added right away.
+@@ 21ce98abc20f d
+The game holds the camera (return to north in progress: the pending type is the north one, not that of the button sent): the viewer adds no notch to it, neither for the arrows nor for the drag.
+@@ 2fb94bbdae6e d
+Both arrows held during a message, then the message closes: no return to north (this is not a double press on the field).
+@@ 966f2aca15c5 d
+The walking directions are those of the screen, rotated by the game according to its camera (as on mobile): no more rotation done by the viewer.
+@@ a85032fc4e8e d
+Wiring (the code is re-read, the window is not opened): `_entries` adds the camera buttons after removing A and B, in the field branch; elsewhere it forgets the requests; `tick` follows the step with _camera_after_step.
+## FILE tests/test_exp_gift_touch.py
+@@ 28251c72307e t
+(port keys; screen touch, see fenetre/constantes.BTN_TALK)
+@@ 7e22836641ba t
+(the other cells: other menus)
+@@ c06adaa23a3d t
+experience counting, levels, ...: A turns the message pages as usual
+@@ e75807dd5c2a t
+the state stays at 2 after closing: without the array, every following message of the game would receive the touch instead of A
+@@ 6abea00bb6d6 t
+never an exception in the key loop
+@@ 2a79fa73005d t
+MenuManager::execute and gMaterielMenu_EXTRA_PRESENT_EXP (re-read in the library)
+@@ c6421108cd81 t
+A and B removed from the held keys, the direction remains
+@@ 56fb9382baa8 t
+exactly 0x100: 0x110 would not pass
+@@ c3540b564bd0 t
+a direction, B alone: only A (or click, Enter, Space which become A) counts as a touch
+@@ 19b73b222955 t
+A key: g_Pad + 2 stays zero, the menu waits forever (the lock-up)
+@@ b270843739c0 t
+not 0x110 either: the touch must be alone
+@@ 1f154270c8f4 t
+the screen touch: it passes
+@@ 3358b78cbd88 t
+after the field branch (without a message): it keeps priority

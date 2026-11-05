@@ -1,0 +1,796 @@
+file	line	before	after
+dq4_pc/battle/battle_history.py	202	Historique des combats : moteur inattendu, capture desactivee	Battle history: unexpected engine, capture disabled
+dq4_pc/battle/battle_history.py	205	Historique des combats : %s introuvable, capture desactivee	Battle history: %s not found, capture disabled
+dq4_pc/battle/battle_history.py	210	Historique des combats : %s inattendu (+%#x), « %s » non suivi	Battle history: unexpected %s (+%#x), "%s" not tracked
+dq4_pc/battle/battle_history.py	216	Historique des combats : crochets non installes (%r)	Battle history: hooks not installed (%r)
+dq4_pc/battle/battle_history.py	296	Historique des combats : erreur (%r)	Battle history: error (%r)
+dq4_pc/core/emu_core.py	54	ce fichier n'est pas un ELF 64 bits	this file is not a 64-bit ELF
+dq4_pc/core/emu_core.py	57	ce n'est pas du code ARM 64 bits	this is not 64-bit ARM code
+dq4_pc/core/emu_core.py	70	pas de section dynamique	no dynamic section
+dq4_pc/core/emu_core.py	126	relocations RELR non gerees	RELR relocations not supported
+dq4_pc/core/emu_core.py	377	tas epuise	heap exhausted
+dq4_pc/core/emu_core.py	418	  [import non gere] %s appele depuis %s	  [unhandled import] %s called from %s
+dq4_pc/core/emu_core.py	471	!!! erreur dans un import emule pendant %s :\n%s	!!! error in an emulated import during %s:\n%s
+dq4_pc/core/emu_core.py	475	!!! %s interrompu (duree max %ss ?) PC=%s	!!! %s interrupted (max duration %ss?) PC=%s
+dq4_pc/core/emu_core.py	483	!!! ERREUR D EMULATION dans %s : %s	!!! EMULATION ERROR in %s: %s
+dq4_pc/core/emu_core.py	486	    octets a PC : %s	    bytes at PC: %s
+dq4_pc/core/emu_core.py	490	lecture	read
+dq4_pc/core/emu_core.py	490	ecriture	write
+dq4_pc/core/emu_core.py	491	    acces invalide : %s a l adresse %#x (%d octets)	    invalid access: %s at address %#x (%d bytes)
+dq4_pc/core/emu_core.py	493	    x0-x8 : 	    x0-x8: 
+dq4_pc/core/emu_core.py	495	    pile d appels (chaine FP) :	    call stack (FP chain):
+dq4_pc/core/emu_core.py	511	constructeur %s	constructor %s
+dq4_pc/core/emu_core.py	515	constructeurs executes : %d / %d	constructors run: %d / %d
+dq4_pc/core/emu_core.py	719	  [log jeu] %s: %s	  [game log] %s: %s
+dq4_pc/core/emu_core.py	760	  tampon %-12s : %d valeurs non nulles	  buffer %-12s: %d non-zero values
+dq4_pc/core/emu_core.py	762	      premieres : 	      first: 
+dq4_pc/core/emu_core.py	768	--- 1. Chargement : %d symboles, %d fonctions exportees, %d constructeurs	--- 1. Loading: %d symbols, %d exported functions, %d constructors
+dq4_pc/core/emu_core.py	771	    relocations : %d RELATIVE, %d ABS64, %d GLOB_DAT, %d JUMP_SLOT ; inconnues : %s	    relocations: %d RELATIVE, %d ABS64, %d GLOB_DAT, %d JUMP_SLOT ; unknown: %s
+dq4_pc/core/emu_core.py	772	aucune	none
+dq4_pc/core/emu_core.py	773	    imports externes (%d) : %s	    external imports (%d): %s
+dq4_pc/core/emu_core.py	775	    imports SANS emulation : %s	    imports WITHOUT emulation: %s
+dq4_pc/core/emu_core.py	775	aucun	none
+dq4_pc/core/emu_core.py	776	--- 2. Constructeurs C++	--- 2. C++ constructors
+dq4_pc/core/emu_core.py	779	--- 3. Appels du jeu	--- 3. Game calls
+dq4_pc/core/emu_core.py	787	DevInit(assets, save, langue=%d)	DevInit(assets, save, language=%d)
+dq4_pc/core/emu_core.py	799	MenuPortInit(32, tampon_unity, 129, tampon_natif, 1089)	MenuPortInit(32, unity_buffer, 129, native_buffer, 1089)
+dq4_pc/core/emu_core.py	815	GameUpdate (image %d)	GameUpdate (frame %d)
+dq4_pc/core/emu_core.py	817	   arret a l image %d	   stopped at frame %d
+dq4_pc/core/emu_core.py	821	GameUpdate(0,0) image %d -> %s  (%.3f s)	GameUpdate(0,0) frame %d -> %s  (%.3f s)
+dq4_pc/core/emu_core.py	822	--- 4. Etat des tampons de sortie	--- 4. State of the output buffers
+dq4_pc/core/emu_core.py	826	  tampon str : %r	  str buffer: %r
+dq4_pc/core/emu_core.py	827	--- 4b. Sondes : le moteur dessine-t-il lui-meme ?	--- 4b. Probes: does the engine draw by itself?
+dq4_pc/core/emu_core.py	837	UnityRenderEvent(%d) -> %s ; mises a jour de texture : %d	UnityRenderEvent(%d) -> %s ; texture updates: %d
+dq4_pc/core/emu_core.py	846	--- 5. Bilan	--- 5. Summary
+dq4_pc/core/emu_core.py	847	imports appeles : 	imports called: 
+dq4_pc/core/emu_core.py	849	imports NON GERES (a ajouter) : 	UNHANDLED imports (to be added): 
+dq4_pc/core/emu_core.py	853	fichiers ouverts : %d trouves, %d introuvables	files opened: %d found, %d not found
+dq4_pc/core/emu_core.py	859	appels OpenGL : %s	OpenGL calls: %s
+dq4_pc/core/emu_core.py	861	   glTexSubImage2D cible=%#x niveau=%d x=%d y=%d %dx%d format=%#x type=%#x	   glTexSubImage2D target=%#x level=%d x=%d y=%d %dx%d format=%#x type=%#x
+dq4_pc/core/emu_core.py	879	Test de faisabilite - portage PC de DQ4 - %s	Feasibility test - DQ4 PC port - %s
+dq4_pc/core/emu_core.py	885	Bibliotheque : %s	Library: %s
+dq4_pc/core/emu_core.py	889	APK introuvables : lance ce test depuis DQ Patch\portage_pc\test_faisabilite, ou donne --apks <dossier contenant split_config.arm64_v8a.apk>	APK files not found: run this test from DQ Patch\portage_pc\test_faisabilite, or give --apks <folder containing split_config.arm64_v8a.apk>
+dq4_pc/core/emu_core.py	894	Bibliotheque : %s (%d octets)	Library: %s (%d bytes)
+dq4_pc/core/emu_core.py	901	ATTENTION : split_UnityDataAssetPack.apk introuvable, les fichiers de donnees ne seront pas lus	WARNING: split_UnityDataAssetPack.apk not found, the data files will not be read
+dq4_pc/core/emu_core.py	910	[dry] %d symboles, relocations : %s	[dry] %d symbols, relocations: %s
+dq4_pc/core/emu_core.py	911	[dry] imports : 	[dry] imports: 
+dq4_pc/core/emu_core.py	912	[dry] constructeurs : %d	[dry] constructors: %d
+dq4_pc/core/emu_core.py	917	Le module 'unicorn' n'est pas installe (pip install unicorn).	The 'unicorn' module is not installed (pip install unicorn).
+dq4_pc/core/emu_core.py	924	!!! exception Python :\n	!!! Python exception:\n
+dq4_pc/core/emu_core.py	927	VERDICT : 	VERDICT: 
+dq4_pc/core/emu_core.py	927	REUSSI - le moteur du jeu s execute sur PC, sans Unity (voie A viable)	SUCCESS - the game engine runs on PC, without Unity (route A is viable)
+dq4_pc/core/emu_core.py	928	ECHEC - voir le message d erreur plus haut	FAILURE - see the error message above
+dq4_pc/core/emu_core.py	930	Rapport complet : %s	Full report: %s
+dq4_pc/core/engine.py	285	FBX image %d paquet 32 : v=%#x ints=%s flottants=%s	FBX frame %d packet 32: v=%#x ints=%s floats=%s
+dq4_pc/core/engine.py	414	MSG image %s port %d %s	MSG frame %s port %d %s
+dq4_pc/core/engine.py	516	constructeurs C++ en echec	C++ constructors failed
+dq4_pc/core/engine.py	560	historique des dialogues : crochet non installe, l'historique restera vide	dialogue history: hook not installed, the history will stay empty
+dq4_pc/core/engine.py	561	historique des combats : crochets non installes, l'historique des combats restera vide	battle history: hooks not installed, the battle history will stay empty
+dq4_pc/core/engine.py	591	vitesse du texte : ui_MsgLoop inattendu, reglage sans effet	text speed: unexpected ui_MsgLoop, setting has no effect
+dq4_pc/core/engine.py	592	vitesse du texte non installee : %s	text speed not installed: %s
+dq4_pc/core/engine.py	599	defilement des combats : crochet non installe : %s	battle text scrolling: hook not installed: %s
+dq4_pc/core/engine.py	608	PV/PM au niveau superieur : HaveStatus::levelup inattendu, option sans effet	HP/MP on level up: unexpected HaveStatus::levelup, option has no effect
+dq4_pc/core/engine.py	614	PV/PM au niveau superieur : crochet non installe : %s	HP/MP on level up: hook not installed: %s
+dq4_pc/core/engine.py	624	rencontres : CountDown::exec inattendu, vitesse de marche sans effet sur la frequence des rencontres	encounters: unexpected CountDown::exec, walking speed has no effect on the encounter rate
+dq4_pc/core/engine.py	635	rencontres : crochet non installe : %s	encounters: hook not installed: %s
+dq4_pc/core/engine.py	647	horloge jour / nuit : checkDokuDamage inattendu, la vitesse de marche change la vitesse d'arrivee de la nuit	day / night clock: unexpected checkDokuDamage, walking speed changes how fast night arrives
+dq4_pc/core/engine.py	656	horloge jour / nuit : crochet non installe : %s	day / night clock: hook not installed: %s
+dq4_pc/core/engine.py	671	temps de jeu : NativeExec inattendu, la vitesse du jeu change la vitesse du temps de jeu	play time: unexpected NativeExec, game speed changes how fast play time runs
+dq4_pc/core/engine.py	680	temps de jeu : crochet non installe : %s	play time: hook not installed: %s
+dq4_pc/core/engine.py	699	sorts sans effet : menu Magie inattendu, le message de succes est garde	ineffective spells: unexpected Magic menu, the success message is kept
+dq4_pc/core/engine.py	725	sorts sans effet : bruitage de soin inattendu, il est garde	ineffective spells: unexpected healing sound, it is kept
+dq4_pc/core/engine.py	728	sorts sans effet : crochet non installe : %s	ineffective spells: hook not installed: %s
+dq4_pc/core/engine.py	737	fondus de script : fonctions du moteur introuvables, reglage applique a tous les fondus	script fades: engine functions not found, setting applied to all fades
+dq4_pc/core/engine.py	744	fondus de script : UnitySetFade inattendu, reglage applique a tous les fondus	script fades: unexpected UnitySetFade, setting applied to all fades
+dq4_pc/core/engine.py	756	fondus de script : crochet non installe : %s	script fades: hook not installed: %s
+dq4_pc/core/engine.py	809	fenetre des lieux non elargie : FieldData::drawSymbol inattendu, les lieux de la carte du monde n'apparaissent que dans la fenetre d'origine	places window not widened: unexpected FieldData::drawSymbol, world map places only appear in the original window
+dq4_pc/core/engine.py	814	fenetre des lieux non elargie : %s	places window not widened: %s
+dq4_pc/core/engine.py	825	bouton Paramètres : comparaison du menu Divers inattendue, le bouton ouvre les reglages d'origine du jeu et non le menu Pause	Settings button: unexpected comparison in the Misc menu, the button opens the game's original settings instead of the Pause menu
+dq4_pc/core/engine.py	836	bouton Paramètres non detourne : %s	Settings button not redirected: %s
+dq4_pc/core/engine.py	911	carte inconnue : pas de fichier assets/map/%s.stg dans les donnees du jeu	unknown map: no file assets/map/%s.stg in the game data
+dq4_pc/core/engine.py	1054	le moteur s est arrete :\n	the engine stopped:\n
+dq4_pc/core/engine.py	1110	MSGDBG image %d options du jeu : volume musique %d, volume bruitages %d, vitesse des messages de combat %d (impose : %s)	MSGDBG frame %d game options: music volume %d, sound effects volume %d, battle message speed %d (forced: %s)
+dq4_pc/core/engine.py	1113	MSGDBG image %d actif %d etat %d lettres %d/%d vitesse %d combat=%d	MSGDBG frame %d active %d state %d letters %d/%d speed %d battle=%d
+dq4_pc/core/engine.py	1185	ENVOI image %d port %d %s	SEND frame %d port %d %s
+dq4_pc/core/history.py	287	format inconnu	unknown format
+dq4_pc/core/history.py	299	Favoris de l'historique illisibles (%s) : mis de cote, on repart de zero (%r)	History favorites unreadable (%s): set aside, starting again from scratch (%r)
+dq4_pc/core/history.py	315	Favoris de l'historique non enregistres : %s	History favorites not saved: %s
+dq4_pc/core/history.py	371	Historique : texte des favoris non redemande (%r)	History: favorites text not requested again (%r)
+dq4_pc/core/history.py	418	Historique : erreur (%r)	History: error (%r)
+dq4_pc/core/history.py	472	Historique : crochets non installes (%r)	History: hooks not installed (%r)
+dq4_pc/core/history.py	478	Historique : numeros de message non captes (%r)	History: message numbers not captured (%r)
+dq4_pc/core/load_tracking.py	25	SUIVI +%.3fs %s	TRACE +%.3fs %s
+dq4_pc/main.py	33	dossier des 3 APK (version francaise) ; par defaut data\apk	folder of the 3 APK files (French version); default data\apk
+dq4_pc/main.py	34	dossier de lecture supplementaire contenant data1.dat... (tests ; par defaut : aucun, le jeu lit et ecrit dans data\saves)	extra read-only folder containing data1.dat... (tests; default: none, the game reads and writes in data\saves)
+dq4_pc/main.py	35	dossier des sauvegardes (data1.dat... lus et ecrits par le jeu) ; par defaut data\saves (les etats instantanes sont dans data\saves\savestates)	saves folder (data1.dat... read and written by the game); default data\saves (savestates are in data\saves\savestates)
+dq4_pc/main.py	36	dossier des fichiers calcules a partir des APK ; par defaut data\cache	folder of the files computed from the APKs; default data\cache
+dq4_pc/main.py	37	numero de sauvegarde a charger directement (1-5) en sautant l'ecran-titre ; 0 (defaut) = le jeu demarre par ses logos, son titre et son menu de depart	save number to load directly (1-5), skipping the title screen; 0 (default) = the game starts with its logos, its title and its start menu
+dq4_pc/main.py	38	saute les logos d'entree (SQUARE ENIX, ArtePiazza)	skips the intro logos (SQUARE ENIX, ArtePiazza)
+dq4_pc/main.py	39	(test) joue les logos meme pour une capture	(test) plays the logos even for a screenshot
+dq4_pc/main.py	40	largeur de la fenetre (par defaut : celle du menu Echap, sinon 1280)	window width (default: the one from the Esc menu, otherwise 1280)
+dq4_pc/main.py	41	ferme automatiquement le message affiche apres le chargement	automatically closes the message shown after loading
+dq4_pc/main.py	42	menus simples (zones de texte) au lieu des fenetres d'origine	simple menus (text boxes) instead of the original windows
+dq4_pc/main.py	43	(test) clics de souris simules : "image:x:y,image:x:y:d,..." (d = 1 clic droit, 2 survol sans clic)	(test) simulated mouse clicks: "frame:x:y,frame:x:y:d,..." (d = 1 right click, 2 hover without click)
+dq4_pc/main.py	44	garde la fenetre de message du terrain a sa place d'origine (portrait) au lieu de la descendre en bas de l'ecran	keeps the field message window at its original (portrait) position instead of moving it to the bottom of the screen
+dq4_pc/main.py	45	position de la colonne d'interface d'origine (portrait 450 x 800) dans la fenetre 16/9	position of the original interface column (portrait 450 x 800) in the 16/9 window
+dq4_pc/main.py	46	(test) ne prepare pas le cache des cartes, sprites et monstres en arriere-plan	(test) does not prepare the map, sprite and monster cache in the background
+dq4_pc/main.py	47	sprites : 0 originaux (pixels nets), 1 EPX, 4 pixel perfect (2 et 3, retires, valent 1) ; par defaut celui du menu Echap	sprites: 0 original (sharp pixels), 1 EPX, 4 pixel perfect (2 and 3, removed, count as 1); default: the one from the Esc menu
+dq4_pc/main.py	48	coupe le son pour cette session (le menu Echap permet de le remettre)	turns the sound off for this session (the Esc menu can turn it back on)
+dq4_pc/main.py	49	volume des musiques (0 a 1) ; par defaut celui du menu Echap	music volume (0 to 1); default: the one from the Esc menu
+dq4_pc/main.py	50	volume des bruitages (0 a 1) ; par defaut celui du menu Echap	sound effects volume (0 to 1); default: the one from the Esc menu
+dq4_pc/main.py	51	0 = lance le jeu en fenetre, 1 = en plein ecran (fenetre sans bordure a la resolution du bureau) ; 2 (ancien plein ecran exclusif, supprime) vaut 1 ; la fenetre est creee directement dans ce mode ; par defaut le reglage du menu Echap (les captures de test restent en fenetre)	0 = starts the game in a window, 1 = full screen (borderless window at the desktop resolution); 2 (former exclusive full screen, removed) counts as 1; the window is created directly in this mode; default: the Esc menu setting (test screenshots stay windowed)
+dq4_pc/main.py	52	(debogage) correction de l'inclinaison des sprites des villes pres des bords gauche / droit de l'ecran, en pourcentage : 0 = aucune (le panneau d'origine, penche vers l'exterieur), 100 = complete ; par defaut toujours complete, ce n'est plus un reglage du joueur (variable d'environnement DQ_CORRECTION_BORDS pour la meme chose)	(debug) correction of the tilt of town sprites near the left / right edges of the screen, as a percentage: 0 = none (the original billboard, leaning outwards), 100 = full; default always full, it is no longer a player setting (environment variable DQ_CORRECTION_BORDS for the same thing)
+dq4_pc/main.py	53	anticrenelage materiel (0 = aucun, 4 = x4) ; par defaut celui du menu Echap	hardware antialiasing (0 = none, 4 = x4); default: the one from the Esc menu
+dq4_pc/main.py	54	fichier des reglages du joueur (menu Echap : affichage, son, touches)	player settings file (Esc menu: display, sound, keys)
+dq4_pc/main.py	55	fichier des favoris de l'historique (dans data\settings, jamais dans le dossier des sauvegardes) ; le reste de l'historique n'est pas conserve	history favorites file (in data\settings, never in the saves folder); the rest of the history is not kept
+dq4_pc/main.py	56	(test) touches pendant un combat : "n:masque,..." (n = images depuis le debut du combat)	(test) keys during a battle: "n:mask,..." (n = frames since the start of the battle)
+dq4_pc/main.py	57	(test) captures a ces images de l'effet de debut de combat : "1,10,30,..."	(test) screenshots at these frames of the battle start effect: "1,10,30,..."
+dq4_pc/main.py	58	(test) captures intermediaires a ces images de combat : "30,60,..."	(test) intermediate screenshots at these battle frames: "30,60,..."
+dq4_pc/main.py	59	(test) prend la capture N images apres le debut d'un combat	(test) takes the screenshot N frames after the start of a battle
+dq4_pc/main.py	60	(test) force le passage a la carte du monde a cette image	(test) forces the switch to the world map at this frame
+dq4_pc/main.py	61	(test) touches pressees : "image_de_boucle:NOM,..." (noms pyglet : ESCAPE, DOWN, RETURN...)	(test) pressed keys: "loop_frame:NAME,..." (pyglet names: ESCAPE, DOWN, RETURN...)
+dq4_pc/main.py	62	(test) options de la page Affichage appliquees en cours de route : "image:Libelle=valeur;image:Libelle=valeur" (valeur JSON)	(test) Display page options applied along the way: "frame:Label=value;frame:Label=value" (JSON value)
+dq4_pc/main.py	63	(test) captures <shot>_b<n>.png a ces images de boucle (menu Echap compris) ; la derniere quitte	(test) screenshots <shot>_b<n>.png at these loop frames (Esc menu included); the last one quits
+dq4_pc/main.py	64	(test) enregistre une capture puis quitte	(test) saves a screenshot then quits
+dq4_pc/main.py	66	(test) ex. "20:2,30:0" : image:masque de touches	(test) e.g. "20:2,30:0": frame:key mask
+dq4_pc/main.py	74	Migration des fichiers impossible (%r) : le jeu continue avec les dossiers actuels.	File migration failed (%r): the game continues with the current folders.
+dq4_pc/main.py	91	Jeu : APK dans %s	Game: APK files in %s
+dq4_pc/main.py	93	\nLes APK francais sont introuvables.\nMets base.apk, split_config.arm64_v8a.apk et split_UnityDataAssetPack.apk dans :\n   %s\n(et, si tu en as une, les fichiers data1.dat... de ta sauvegarde du telephone dans %s). Autre dossier : set DQ4_DATA=chemin\vers\data	\nThe French APK files were not found.\nPut base.apk, split_config.arm64_v8a.apk and split_UnityDataAssetPack.apk in:\n   %s\n(and, if you have one, the data1.dat... files of your phone save in %s). Other folder: set DQ4_DATA=path\to\data
+dq4_pc/menus/message_font.py	36	police de messages illisible (signature)	message font unreadable (signature)
+dq4_pc/menus/message_font.py	163	signature inattendue	unexpected signature
+dq4_pc/menus/message_font.py	167	Police des messages non extraite (%r) : police de menu SE-GARRIR a la place.	Message font not extracted (%r): using the SE-GARRIR menu font instead.
+dq4_pc/menus/pause.py	126	police du jeu non chargee :	game font not loaded:
+dq4_pc/menus/pre_game.py	65	Lecture des images du titre (une seule fois)...	Reading the title images (once)...
+dq4_pc/menus/pre_game.py	82	Images du titre indisponibles : %r	Title images unavailable: %r
+dq4_pc/menus/ui_menu.py	952	Police des messages illisible (%r) : SE-GARRIR a la place.	Message font unreadable (%r): using SE-GARRIR instead.
+dq4_pc/menus/ui_menu.py	955	Police SE-GARRIR illisible (%r) : police japonaise GMaruGoPro-M a la place.	SE-GARRIR font unreadable (%r): using the Japanese GMaruGoPro-M font instead.
+dq4_pc/menus/ui_menu.py	1333	Police des messages non extraite : %r	Message font not extracted: %r
+dq4_pc/menus/ui_menu.py	1338	Lecture des ressources de menu du jeu (une seule fois)...	Reading the game menu resources (once)...
+dq4_pc/menus/ui_menu.py	1351	Police SE-GARRIR non extraite : %r	SE-GARRIR font not extracted: %r
+dq4_pc/menus/ui_menu.py	1361	Ressources de menu indisponibles : %r	Menu resources unavailable: %r
+dq4_pc/paths.py	172	dossiers renommes en anglais : %s	folders renamed to English: %s
+dq4_pc/paths.py	173	%d fichier(s) renomme(s) en anglais (reglages, historique, journaux, etats instantanes...)	%d file(s) renamed to English (settings, history, logs, savestates...)
+dq4_pc/paths.py	175	NON renomme : %s -> %s existe deja, l'ancien reste en place (rien n'est ecrase)	NOT renamed: %s -> %s already exists, the old one stays in place (nothing is overwritten)
+dq4_pc/paths.py	176	NON renomme : %s (%s). Ferme les fenetres ou programmes qui utilisent ce dossier, puis relance : le renommage se refait tout seul	NOT renamed: %s (%s). Close the windows or programs that use this folder, then restart: the renaming is retried automatically
+dq4_pc/paths.py	228	%d fichier(s) de sauvegardes copie(s) dans data\saves (portage\ puis mobile\)	%d save file(s) copied into data\saves (portage\ then mobile\)
+dq4_pc/paths.py	230	fichiers non retrouves dans sauvegardes : %s	files not found in the saves: %s
+dq4_pc/paths.py	235	anciens dossiers ranges : %s -> %s	old folders moved: %s -> %s
+dq4_pc/paths.py	237	anciens dossiers de sauvegardes NON ranges (%s) : ils restent en place	old save folders NOT moved (%s): they stay in place
+dq4_pc/paths.py	304	cache deplace : dq4_pc\cache -> data\cache	cache moved: dq4_pc\cache -> data\cache
+dq4_pc/paths.py	306	cache NON deplace (%s) : il sera recalcule	cache NOT moved (%s): it will be recomputed
+dq4_pc/paths.py	310	%d fichier(s) APK copie(s) : jeux\DQ4\patched_apks -> data\apk	%d APK file(s) copied: jeux\DQ4\patched_apks -> data\apk
+dq4_pc/paths.py	324	%d fichier(s) de sauvegardes du portage copie(s) : dq4_pc\sauvegardes -> data\saves	%d save file(s) of the PC port copied: dq4_pc\sauvegardes -> data\saves
+dq4_pc/paths.py	330	%d fichier(s) de sauvegardes du telephone copie(s) : jeux\DQ4\saves -> data\saves	%d phone save file(s) copied: jeux\DQ4\saves -> data\saves
+dq4_pc/paths.py	338	%d fichier(s) de reglages copie(s) : dq4_pc -> data\settings	%d settings file(s) copied: dq4_pc -> data\settings
+dq4_pc/paths.py	343	journal des erreurs copie : data\logs	error log copied: data\logs
+dq4_pc/paths.py	346	Migration : %s	Migration: %s
+dq4_pc/persistence/savestates.py	50	fichier d'état refusé : il demande « %s.%s », ce qu'un état du portage ne contient pas (fichier venu d'ailleurs ou abîmé ; il n'a pas été exécuté)	state file refused: it asks for "%s.%s", which a state of the port never contains (file from elsewhere or damaged; it was not executed)
+dq4_pc/persistence/savestates.py	96	etat d'une autre version (%s)	state from another version (%s)
+dq4_pc/persistence/savestates.py	98	etat enregistre avec une autre version de la bibliotheque du moteur (APK different) : il ne peut pas etre charge	state saved with another version of the engine library (different APK): it cannot be loaded
+dq4_pc/persistence/savestates.py	107	etat : fichier ouvert non restaure (%s)	savestate: open file not restored (%s)
+dq4_pc/persistence/savestates.py	146	ce n'est pas un etat du portage	this is not a state file of this port
+dq4_pc/persistence/settings.py	252	Reglages illisibles (%s) : valeurs par defaut (%r)	Unreadable settings (%s): default values (%r)
+dq4_pc/persistence/settings.py	306	Reglages non enregistres :	Settings not saved:
+dq4_pc/render/postfx.py	104	tampon incomplet (%#x, %#x)	incomplete framebuffer (%#x, %#x)
+dq4_pc/render/postfx.py	110	tampon incomplet (%#x)	incomplete framebuffer (%#x)
+dq4_pc/render/postfx.py	133	Rendu hors écran : %d x %d (x%.2g), anticrénelage x%d	Offscreen rendering: %d x %d (x%.2g), antialiasing x%d
+dq4_pc/render/postfx.py	133	Rendu hors écran : %d x %d (x%.2g), anticrénelage non	Offscreen rendering: %d x %d (x%.2g), antialiasing off
+dq4_pc/render/postfx.py	133	 (demandé x%d)	 (requested x%d)
+dq4_pc/render/postfx.py	137	Rendu hors écran impossible (%r) : dessin direct, sans anticrénelage	Offscreen rendering failed (%r): direct drawing, no antialiasing
+dq4_pc/render/title_sky.py	183	ciel : %d sommets	sky: %d vertices
+dq4_pc/render/title_sky.py	188	ciel : quadrilatere degenere	sky: degenerate quad
+dq4_pc/render/title_sky.py	190	ciel : quadrilatere non aligne	sky: quad not aligned
+dq4_pc/render/title_sky.py	197	ciel : rangee non contigue	sky: row not contiguous
+dq4_pc/render/title_sky.py	199	ciel : rangee non periodique	sky: row not periodic
+dq4_pc/sound.py	177	Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.	Music unavailable: "soundfile" module missing (pip install soundfile). Sound effects stay active.
+dq4_pc/sound.py	184	Son indisponible (%r)	Sound unavailable (%r)
+dq4_pc/sound.py	189	Son : %s	Sound: %s
+dq4_pc/sound.py	201	%s impossible (%r), note une seule fois	%s failed (%r), logged only once
+dq4_pc/sound.py	205	%s impossible (%r), echec %d	%s failed (%r), failure %d
+dq4_pc/sound.py	209	son interrompu, nouvel essai dans %d s	sound interrupted, retrying in %d s
+dq4_pc/sound.py	213	son retabli	sound restored
+dq4_pc/sound.py	273	Son : %s illisible (%r)	Sound: %s unreadable (%r)
+dq4_pc/sound.py	330	Son : image %s ordres %s	Sound: frame %s orders %s
+dq4_pc/sound.py	362	Son : image %s bruitage %d	Sound: frame %s sound effect %d
+dq4_pc/sound.py	383	bruitage %d	sound effect %d
+dq4_pc/sound.py	430	musique %d	music track %d
+dq4_pc/sound.py	486	volume de la musique	music volume
+dq4_pc/sound.py	489	volume des bruitages	sound effects volume
+dq4_pc/sound.py	532	reprise apres la pause	resume after pause
+dq4_pc/window/battle_scene.py	112	texture de monstre introuvable :	monster texture not found:
+dq4_pc/window/battle_scene.py	114	texture de monstre absente des donnees :	monster texture missing from the data:
+dq4_pc/window/battle_scene.py	131	lissage HD impossible (monstre %d) : %s	HD smoothing failed (monster %d): %s
+dq4_pc/window/battle_scene.py	202	fond de combat non calcule :	battle background not computed:
+dq4_pc/window/battle_scene.py	249	Chiffres des degats indisponibles : %r	Damage numbers unavailable: %r
+dq4_pc/window/camera.py	258	CAMV n=%d carte=%s partie=%#x cam=%s jeu=%s flag=%#x msg=%d hero=%s cib=%s pos=%s libre=%s	CAMV n=%d map=%s part=%#x cam=%s game=%s flag=%#x msg=%d hero=%s target=%s pos=%s free=%s
+dq4_pc/window/camera.py	261	icones	icons
+dq4_pc/window/field.py	96	lissage HD impossible (%s, h%d) : %s	HD smoothing failed (%s, h%d): %s
+dq4_pc/window/field.py	234	decor %s absent des donnees : %s a la place	scenery %s missing from the data: %s used instead
+dq4_pc/window/field.py	237	carte non chargee :	map not loaded:
+dq4_pc/window/field.py	240	decors_plats :	flat_sceneries:
+dq4_pc/window/field.py	268	carte %s : %d groupes	map %s: %d groups
+dq4_pc/window/field.py	269	carte chargee	map loaded
+dq4_pc/window/field.py	295	lissage HD du decor impossible (%s) : %s	HD smoothing of the scenery failed (%s): %s
+dq4_pc/window/field.py	374	Modele 3D %d non affiche : %s	3D model %d not displayed: %s
+dq4_pc/window/field.py	383	Modele 3D %d non affiche : %s	3D model %d not displayed: %s
+dq4_pc/window/field.py	502	Plan %s illisible : %r	Map image %s unreadable: %r
+dq4_pc/window/field.py	525	Plan du monde illisible : %r	World map image unreadable: %r
+dq4_pc/window/full_screen.py	15	Plein écran impossible (%r) : plein écran conservé	Full screen failed (%r): full screen kept
+dq4_pc/window/full_screen.py	15	Plein écran impossible (%r) : fenêtre conservé	Full screen failed (%r): windowed mode kept
+dq4_pc/window/full_screen.py	16	Fenêtre impossible (%r) : plein écran conservé	Windowed mode failed (%r): full screen kept
+dq4_pc/window/full_screen.py	16	Fenêtre impossible (%r) : fenêtre conservé	Windowed mode failed (%r): windowed mode kept
+dq4_pc/window/full_screen.py	27	Écran principal illisible (%r)	Main screen unreadable (%r)
+dq4_pc/window/full_screen.py	35	Plein écran impossible au lancement (%r) : fenêtre	Full screen failed at launch (%r): windowed mode
+dq4_pc/window/full_screen.py	38	fenetre creee (cachee)	window created (hidden)
+dq4_pc/window/full_screen.py	41	evenement 	event 
+dq4_pc/window/full_screen.py	44	image noire presentee (fenetre cachee)	black frame presented (window hidden)
+dq4_pc/window/full_screen.py	49	fenetre montree	window shown
+dq4_pc/window/full_screen.py	93	Fenêtre : zone de dessin %d x %d corrigée (le système donne %d x %d)	Window: drawing area %d x %d corrected (the system reports %d x %d)
+dq4_pc/window/full_screen.py	97	vérification de la taille impossible :	size check failed:
+dq4_pc/window/full_screen.py	120	plein écran	full screen
+dq4_pc/window/full_screen.py	120	fenêtre	window
+dq4_pc/window/full_screen.py	133	fenêtre : plein écran = %s, %d x %d, taille mémorisée %s, place d'avant %s, bureau %s	window: full screen = %s, %d x %d, remembered size %s, previous position %s, desktop %s
+dq4_pc/window/full_screen.py	134	fenêtre illisible (%r)	window unreadable (%r)
+dq4_pc/window/full_screen.py	135	écran de la fenêtre pour pyglet : %d x %d en (%d, %d)	window screen according to pyglet: %d x %d at (%d, %d)
+dq4_pc/window/full_screen.py	136	écran de la fenêtre illisible (%r)	window screen unreadable (%r)
+dq4_pc/window/full_screen.py	137	moniteurs : %s	monitors: %s
+dq4_pc/window/full_screen.py	137	%d x %d en (%d, %d) (principal)	%d x %d at (%d, %d) (primary)
+dq4_pc/window/full_screen.py	137	%d x %d en (%d, %d)	%d x %d at (%d, %d)
+dq4_pc/window/full_screen.py	138	moniteurs illisibles (%r)	monitors unreadable (%r)
+dq4_pc/window/full_screen.py	140	--- %s : passage en plein écran impossible ---\n%s%s\n	--- %s: switch to full screen failed ---\n%s%s\n
+dq4_pc/window/full_screen.py	140	--- %s : passage en fenêtre impossible ---\n%s%s\n	--- %s: switch to windowed mode failed ---\n%s%s\n
+dq4_pc/window/full_screen.py	144	Erreur de la bascule non notée (%r)	Switch error not logged (%r)
+dq4_pc/window/full_screen.py	175	Retour à l'état de départ impossible (%r)	Return to the starting state failed (%r)
+dq4_pc/window/full_screen.py	176	Retour à l'état de départ impossible aussi : %r	Return to the starting state failed too: %r
+dq4_pc/window/full_screen.py	181	Fenêtre non remontrée (%r)	Window not shown again (%r)
+dq4_pc/window/full_screen.py	200	Fenêtre non centrée (%r)	Window not centered (%r)
+dq4_pc/window/full_screen.py	211	Image de la bascule impossible (%r) : noir	Switch frame failed (%r): black
+dq4_pc/window/full_screen.py	225	Moniteurs illisibles (%r)	Monitors unreadable (%r)
+dq4_pc/window/full_screen.py	244	Moniteur de la fenêtre remis à jour : %d x %d en (%d, %d) (avant : %d x %d en (%d, %d))	Window monitor refreshed: %d x %d at (%d, %d) (before: %d x %d at (%d, %d))
+dq4_pc/window/full_screen.py	247	Moniteur de la fenêtre non remis à jour (%r)	Window monitor not refreshed (%r)
+dq4_pc/window/full_screen.py	264	Moniteur du plein écran illisible (%r)	Full screen monitor unreadable (%r)
+dq4_pc/window/full_screen.py	289	Bascule du plein écran impossible : %r	Full screen switch failed: %r
+dq4_pc/window/full_screen.py	296	fenêtre	window
+dq4_pc/window/full_screen.py	296	PLEIN ÉCRAN	FULL SCREEN
+dq4_pc/window/full_screen.py	296	 [INCOHÉRENT : fullscreen=%s]	 [INCONSISTENT: fullscreen=%s]
+dq4_pc/window/full_screen.py	297	 (écran %d)	 (screen %d)
+dq4_pc/window/full_screen.py	298	Fenêtre (%s) : %s, %d x %d, zone de dessin %d x %d, écran %d x %d%s	Window (%s): %s, %d x %d, drawing area %d x %d, screen %d x %d%s
+dq4_pc/window/full_screen.py	299	Fenêtre (%s) : état illisible (%r)	Window (%s): state unreadable (%r)
+dq4_pc/window/game.py	59	Erreur non notee dans le journal (%r) : %s	Error not written to the log (%r): %s
+dq4_pc/window/game.py	64	demarrage	startup
+dq4_pc/window/game.py	78	création	creation
+dq4_pc/window/game.py	79	Chargement du moteur...	Loading the engine...
+dq4_pc/window/game.py	103	Chargement de la sauvegarde...	Loading the save...
+dq4_pc/window/game.py	110	--- %s : son : %s ---\n	--- %s: sound: %s ---\n
+dq4_pc/window/game.py	122	sauvegarde %d chargee : oui	save %d loaded: yes
+dq4_pc/window/game.py	122	sauvegarde %d chargee : NON (fichier data%d.dat introuvable ou invalide dans %s)	save %d loaded: NO (file data%d.dat not found or invalid in %s)
+dq4_pc/window/game.py	125	Chargement de la carte...	Loading the map...
+dq4_pc/window/game.py	141	constructeur termine	constructor finished
+dq4_pc/window/game.py	149	échec simulé (DQ_SIM_ECHEC)	simulated failure (DQ_SIM_ECHEC)
+dq4_pc/window/game.py	155	Menus : mise en page d'origine absente (%s) -> menus simples. Lancez tools\generate_ui.bat pour la creer.	Menus: original layout missing (%s) -> simple menus. Run tools\generate_ui.bat to create it.
+dq4_pc/window/game.py	164	Menus : mise en page d'origine chargee (%d types, fenetre de message).	Menus: original layout loaded (%d types, message window).
+dq4_pc/window/game.py	164	Menus : mise en page d'origine chargee (%d types).	Menus: original layout loaded (%d types).
+dq4_pc/window/game.py	166	Menus : mise en page d'origine inutilisable (%r) -> menus simples.	Menus: original layout unusable (%r) -> simple menus.
+dq4_pc/window/game.py	181	boucle des logos	logo loop
+dq4_pc/window/game.py	193	1re image affichée (logos)	1st frame shown (logos)
+dq4_pc/window/game.py	195	logos et moteur termines	logos and engine finished
+dq4_pc/window/game.py	206	attente (image noire)	wait (black frame)
+dq4_pc/window/game.py	216	Preparation du cache : processus a part impossible (%r), dans le jeu.	Cache preparation: separate process failed (%r), running inside the game.
+dq4_pc/window/game.py	250	Son : pause a la perte du focus impossible (%r)	Sound: pausing on focus loss failed (%r)
+dq4_pc/window/game.py	258	Son : reprise au retour du focus impossible (%r)	Sound: resuming on focus return failed (%r)
+dq4_pc/window/game.py	385	PAS moteur=%d images boucle=%d t=%.1f	STEP engine=%d loop frames=%d t=%.1f
+dq4_pc/window/game.py	404	OPTION %s = %s (image %d)	OPTION %s = %s (frame %d)
+dq4_pc/window/game.py	474	1re image du jeu	1st game frame
+dq4_pc/window/game.py	504	dessin	draw
+dq4_pc/window/game.py	510	--- %s : %s impossible : %r ---\n	--- %s: %s failed: %r ---\n
+dq4_pc/window/game.py	517	--- %s : sauvegarde impossible : %s ---\n	--- %s: save failed: %s ---\n
+dq4_pc/window/game.py	528	--- %s : memoire du moteur a %d %% (%d Mo sur %d Mo) ---\n	--- %s: engine memory at %d %% (%d MB of %d MB) ---\n
+dq4_pc/window/game.py	535	--- %s : reglage du moteur non applique : %s ---\n	--- %s: engine setting not applied: %s ---\n
+dq4_pc/window/game.py	547	icones	icons
+dq4_pc/window/game.py	559	n=%d p=%#x decl=%#x msg=%s actif=%s	n=%d p=%#x decl=%#x msg=%s active=%s
+dq4_pc/window/game.py	575	FLAG n=%d %#x partie=%s msg=%s menu=%s cam=%s>%s	FLAG n=%d %#x part=%s msg=%s menu=%s cam=%s>%s
+dq4_pc/window/game.py	582	ETAT n=%d partie=%#x carte=%s champ=%s p=%#x	STATE n=%d part=%#x map=%s field=%s p=%#x
+dq4_pc/window/game.py	593	combat	battle
+dq4_pc/window/game.py	593	engine image	engine frame
+dq4_pc/window/game.py	593	type msg	msg type
+dq4_pc/window/game.py	597	capture :	screenshot:
+dq4_pc/window/game.py	605	(added)	Saving savestate %d
+dq4_pc/window/helpers.py	25	Fenêtre %d x %d trop grande pour l'écran : %d x %d	Window %d x %d too large for the screen: %d x %d
+dq4_pc/window/helpers.py	89	Transitions de fenêtre (DWM) inchangées : %r	Window transitions (DWM) unchanged: %r
+dq4_pc/window/keyboard_mouse.py	49	(added)	Loading savestate %d
+dq4_pc/window/keyboard_mouse.py	218	FRONT discussion n=%d	FRONT party chat n=%d
+dq4_pc/window/menu_display.py	74	CANEVAS image %s lignes %s msg %s moteur (lignes, hauteur, defil) %s	CANVAS frame %s lines %s msg %s engine (lines, height, scroll) %s
+dq4_pc/window/menu_display.py	241	MENU curseur local image %d port %d decl %d -> %s ; boutons %s	MENU local cursor frame %d port %d decl %d -> %s ; buttons %s
+dq4_pc/window/menu_display.py	470	UI image %d actif=%s : %s	UI frame %d active=%s : %s
+dq4_pc/window/snapshots.py	51	etat avant chargement non garde :	state before loading not kept:
+dq4_pc/window/snapshots.py	93	miniature impossible :	thumbnail failed:
+dq4_pc/window/snapshots.py	105	miniature impossible :	thumbnail failed:
+dq4_pc/window/title_screen.py	52	Ciel du titre : %s (copies decalees a la place)	Title sky: %s (using offset copies instead)
+dq4_pc/window/title_screen.py	96	Ciel du titre (a plat) desactive : %s	Title sky (flat) disabled: %s
+dq4_pc/window/title_screen.py	119	Ciel du titre (bandes) desactive : %s	Title sky (strips) disabled: %s
+dq4_pc/window/title_screen.py	181	Ouverture de la page de la politique de confidentialite impossible : %r	Could not open the privacy policy page: %r
+dq4_pc/world/data.py	61	Lecture du paquet de donnees du jeu (une seule fois, quelques secondes)...	Reading the game data pack (once only, a few seconds)...
+dq4_pc/world/data.py	117	  texture illisible: %s	  unreadable texture: %s
+dq4_pc/world/data.py	183	  palette animee %s : %d textures sur %d, ignoree	  animated palette %s: %d textures out of %d, ignored
+dq4_pc/world/data.py	189	Extraction de la carte %s ...	Extracting map %s ...
+dq4_pc/world/data.py	192	carte introuvable dans les donnees : 	map not found in the data: 
+dq4_pc/world/data.py	345	modele fbx introuvable dans les donnees : c%04d	fbx model not found in the data: c%04d
+dq4_pc/world/data.py	354	maillage non skinne non gere (%s)	unsupported unskinned mesh (%s)
+dq4_pc/world/data.py	360	%d maillages skinnes (un seul est gere)	%d skinned meshes (only one is supported)
+dq4_pc/world/data.py	366	shader non gere : %s	unsupported shader: %s
+dq4_pc/world/data.py	368	textures : %s	textures: %s
+dq4_pc/world/data.py	377	os (%d) et poses de liaison (%d) differents	bones (%d) and bind poses (%d) differ
+dq4_pc/world/data.py	381	animation comprimee non geree (%s)	unsupported compressed animation (%s)
+dq4_pc/world/data.py	429	Anciennes cartes du cache non supprimees : %s	Old maps in the cache not deleted: %s
+dq4_pc/world/data.py	452	Preparation du cache en arriere-plan (une seule fois, environ une minute et demie ; le jeu reste jouable)...	Preparing the cache in the background (once only, about a minute and a half; the game stays playable)...
+dq4_pc/world/data.py	464	Preparation : %s %s ignore (%s)	Preparation: %s %s skipped (%s)
+dq4_pc/world/data.py	470	Preparation du cache terminee : %d elements en %.0f s.	Cache preparation finished: %d items in %.0f s.
+dq4_pc/world/data.py	474	Preparation du cache interrompue : %s	Cache preparation interrupted: %s
+dq4_pc/world/flat_sceneries.py	75	décor : %d triangles plats superposés relevés (%d groupes)	scenery: %d overlapping flat triangles raised (%d groups)
+dq4_pc/world/map_tint.py	79	Teinte des cartes : textures « tz_ » illisibles (%s) : toute la carte sera teintee	Map tint: "tz_" textures unreadable (%s): the whole map will be tinted
+dq4_pc/world/map_tint.py	153	Fonds des decors de combat illisibles (%s) : fond estime	Battle scenery backgrounds unreadable (%s): background estimated
+launch_dq4.bat	5	rem --- 0. langue des messages de ce lanceur : francais si Windows est en francais, anglais sinon (le jeu lui-meme suit son reglage Affichage, Langue)	call :m_titre
+launch_dq4.bat	6	rem     chaque message existe en deux versions (etiquettes :m_xxx_fr et :m_xxx_en, en bas du fichier) ; on les appelle avec "call :m_xxx_%DQLANG%"	call :m_intro
+launch_dq4.bat		set "LOC="	(removed)
+launch_dq4.bat		for /f "tokens=3" %%L in ('reg query "HKCU\Control Panel\Desktop" /v PreferredUILanguages 2^>nul') do if not defined LOC set "LOC=%%L"	(removed)
+launch_dq4.bat		if not defined LOC for /f "tokens=3" %%L in ('reg query "HKCU\Control Panel\International" /v LocaleName 2^>nul') do set "LOC=%%L"	(removed)
+launch_dq4.bat		set "DQLANG=en"	(removed)
+launch_dq4.bat		if defined LOC if /i "%LOC:~0,2%"=="fr" set "DQLANG=fr"	(removed)
+launch_dq4.bat			(removed)
+launch_dq4.bat		call :m_titre_%DQLANG%	(removed)
+launch_dq4.bat		call :m_intro_%DQLANG%	(removed)
+launch_dq4.bat	19	  call :m_python_absent_%DQLANG%	  call :m_python_absent
+launch_dq4.bat	28	    call :m_venv_autre_pc_%DQLANG%	    call :m_venv_autre_pc
+launch_dq4.bat	35	  call :m_venv_ancien_%DQLANG%	  call :m_venv_ancien
+launch_dq4.bat	45	  call :m_venv_creation_%DQLANG%	  call :m_venv_creation
+launch_dq4.bat	47	  if errorlevel 1 ( call :m_venv_echec_%DQLANG% & pause & exit /b 1 )	  if errorlevel 1 ( call :m_venv_echec & pause & exit /b 1 )
+launch_dq4.bat	50	  call :m_install_%DQLANG%	  call :m_install
+launch_dq4.bat	53	    call :m_install_echec_%DQLANG%	    call :m_install_echec
+launch_dq4.bat	63	  if errorlevel 1 ( call :m_son_echec_%DQLANG% ) else ( echo ok> ".venv\sound_ok.txt" )	  if errorlevel 1 ( call :m_son_echec ) else ( echo ok> ".venv\sound_ok.txt" )
+launch_dq4.bat	77	    call :m_ui_lecture_%DQLANG%	    call :m_ui_lecture
+launch_dq4.bat	80	      call :m_ui_echec_%DQLANG%	      call :m_ui_echec
+launch_dq4.bat	84	    call :m_ui_simple_%DQLANG%	    call :m_ui_simple
+launch_dq4.bat	92	  call :m_jeu_erreur_%DQLANG% %CODE%	  call :m_jeu_erreur %CODE%
+launch_dq4.bat	101	:m_titre_fr	:m_titre
+launch_dq4.bat		title Dragon Quest IV - portage PC (essai 16/9)	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_titre_en	(removed)
+launch_dq4.bat	105	:m_intro_fr	:m_intro
+launch_dq4.bat		echo.	(removed)
+launch_dq4.bat		echo  Dragon Quest IV - portage PC (essai)	(removed)
+launch_dq4.bat		echo  ------------------------------------	(removed)
+launch_dq4.bat		echo  Lit tes APK francais dans "data\apk" et tes sauvegardes dans "data\saves" ^(data1.dat... copies du telephone^)	(removed)
+launch_dq4.bat		echo  ^(autre emplacement des donnees : set DQ4_DATA=chemin\vers\data^)	(removed)
+launch_dq4.bat		echo  ^(le jeu y lit et y ecrit ses sauvegardes ; les etats instantanes sont dans "data\saves\savestates"^)	(removed)
+launch_dq4.bat		echo.	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_intro_en	(removed)
+launch_dq4.bat	111	echo  ^(the game reads and writes its saves there; save states are in "data\saves\savestates"^)	echo  ^(the game reads and writes its saves there; savestates are in "data\saves\savestates"^)
+launch_dq4.bat	115	:m_python_absent_fr	:m_python_absent
+launch_dq4.bat		echo  Python est introuvable. Installe Python 3.12 depuis https://www.python.org/downloads/	(removed)
+launch_dq4.bat		echo  ^(coche "Add python.exe to PATH"^), puis relance ce fichier.	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_python_absent_en	(removed)
+launch_dq4.bat	120	:m_venv_autre_pc_fr	:m_venv_autre_pc
+launch_dq4.bat		echo  L'environnement Python ^(.venv^) vient d'un autre PC : il est refait ^(une seule fois^)...	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_venv_autre_pc_en	(removed)
+launch_dq4.bat	124	:m_venv_ancien_fr	:m_venv_ancien
+launch_dq4.bat		echo  Reprise de l'ancien environnement Python ^(dq4_pc\.venv^)...	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_venv_ancien_en	(removed)
+launch_dq4.bat	128	:m_venv_creation_fr	:m_venv_creation
+launch_dq4.bat		echo  Creation de l'environnement Python ^(une seule fois^)...	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_venv_creation_en	(removed)
+launch_dq4.bat	132	:m_venv_echec_fr	:m_venv_echec
+launch_dq4.bat		echo  Echec de la creation de l'environnement.	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_venv_echec_en	(removed)
+launch_dq4.bat	136	:m_install_fr	:m_install
+launch_dq4.bat		echo  Installation des modules ^(une seule fois, 1 a 3 minutes^)...	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_install_en	(removed)
+launch_dq4.bat	140	:m_install_echec_fr	:m_install_echec
+launch_dq4.bat		echo.	(removed)
+launch_dq4.bat		echo  L'installation a echoue. Si ton Python est tres recent, installe Python 3.12 :	(removed)
+launch_dq4.bat		echo     winget install Python.Python.3.12	(removed)
+launch_dq4.bat		echo  puis supprime le dossier ".venv" ici et relance ce fichier.	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_install_echec_en	(removed)
+launch_dq4.bat	147	:m_son_echec_fr	:m_son_echec
+launch_dq4.bat		echo  Module "soundfile" non installe : les musiques seront absentes ^(les bruitages fonctionnent^).	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_son_echec_en	(removed)
+launch_dq4.bat	151	:m_ui_lecture_fr	:m_ui_lecture
+launch_dq4.bat		echo  Lecture de la mise en page d'origine des fenetres ^(une seule fois, quelques minutes^)...	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_ui_lecture_en	(removed)
+launch_dq4.bat	155	:m_ui_echec_fr	:m_ui_echec
+launch_dq4.bat		echo.	(removed)
+launch_dq4.bat		echo  La lecture a echoue : details dans data\cache\ui_generation.log ^(menus simples pour cette fois^).	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_ui_echec_en	(removed)
+launch_dq4.bat	160	:m_ui_simple_fr	:m_ui_simple
+launch_dq4.bat		echo  Menus simples ^(pour les fenetres d'origine : lance d'abord tools\dump_il2cpp.bat^).	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_ui_simple_en	(removed)
+launch_dq4.bat	164	:m_jeu_erreur_fr	:m_jeu_erreur
+launch_dq4.bat		echo.	(removed)
+launch_dq4.bat		echo  Le jeu s'est arrete sur une erreur ^(code %1^) : lis les lignes ci-dessus ^(details dans data\logs^).	(removed)
+launch_dq4.bat		exit /b	(removed)
+launch_dq4.bat		:m_jeu_erreur_en	(removed)
+tools/dump_il2cpp.bat	4	title Extraction du code C# du jeu (recherche)	title Extracting the game's C# code (research)
+tools/dump_il2cpp.bat	6	echo  Extraction de la structure du code C# de DQ4 (classes, champs, methodes)	echo  Extracting the structure of the DQ4 C# code (classes, fields, methods)
+tools/dump_il2cpp.bat	8	echo  Lit tes APK dans ..\data\apk (jamais modifies).	echo  Reads your APK files in ..\data\apk (never modified).
+tools/dump_il2cpp.bat	9	echo  Resultat : ..\data\cache\il2cpp\dump.cs  (reste sur ton PC, pas envoye sur GitHub).	echo  Result: ..\data\cache\il2cpp\dump.cs  (stays on your PC, not sent to GitHub).
+tools/dump_il2cpp.bat	10	echo  Necessite internet la premiere fois (Il2CppDumper, et .NET s'il manque).	echo  Needs internet the first time (Il2CppDumper, and .NET if missing).
+tools/dump_il2cpp.bat	13	  echo  Lance d'abord launch_dq4.bat ^(a la racine du projet^) une fois pour creer l'environnement Python.	  echo  First run launch_dq4.bat ^(at the project root^) once to create the Python environment.
+tools/dump_il2cpp.bat	23	  echo  .NET est absent : installation automatique, une seule fois.	  echo  .NET is missing: automatic installation, one time only.
+tools/dump_il2cpp.bat	24	  echo  Accepte la fenetre Windows qui peut s'afficher ^(autorisation^).	  echo  Accept the Windows prompt that may appear ^(authorization^).
+tools/dump_il2cpp.bat	29	    echo  L'installation automatique a echoue. Installe-le a la main :	    echo  The automatic installation failed. Install it by hand:
+tools/dump_il2cpp.bat	31	    echo  puis relance ce fichier.	    echo  then run this file again.
+tools/dump_il2cpp.bat	36	  echo  .NET installe.	  echo  .NET installed.
+tools/dump_il2cpp.py	21	APK introuvable (%s) dans %s	APK not found (%s) in %s
+tools/dump_il2cpp.py	28	  extrait :	  extracted:
+tools/dump_il2cpp.py	38	Telechargement de Il2CppDumper (une seule fois)...	Downloading Il2CppDumper (one time only)...
+tools/dump_il2cpp.py	48	Aucune archive Il2CppDumper trouvee dans la derniere version : 	No Il2CppDumper archive found in the latest release: 
+tools/dump_il2cpp.py	49	  version :	  version:
+tools/dump_il2cpp.py	56	Il2CppDumper.exe absent de l'archive (%s)	Il2CppDumper.exe missing from the archive (%s)
+tools/dump_il2cpp.py	61	APK lus dans :	APK files read from:
+tools/dump_il2cpp.py	65	Extraction du code (1 a 3 minutes)...	Extracting the code (1 to 3 minutes)...
+tools/dump_il2cpp.py	78	Impossible de lancer Il2CppDumper : %s	Cannot start Il2CppDumper: %s
+tools/dump_il2cpp.py	83	Dis a Claude : "le dump est pret" (il lit le fichier sur ton PC).	Tell Claude: "the dump is ready" (it reads the file on your PC).
+tools/dump_il2cpp.py	85	\nEchec : dump.cs n'a pas ete cree. Journal : 	\nFailed: dump.cs was not created. Log: 
+tools/dump_il2cpp.py	86	Cause probable : .NET manque. Installe-le puis relance ce fichier :	Probable cause: .NET is missing. Install it, then run this file again:
+tools/generate_ui.bat	4	title Mise en page d'origine des fenetres de menu	title Original layout of the menu windows
+tools/generate_ui.bat	6	echo  Lecture de la mise en page EXACTE des fenetres de menu du jeu	echo  Reading the EXACT layout of the game's menu windows
+tools/generate_ui.bat	8	echo  Execute le code d'origine (Make_*) du jeu sous emulation et ecrit	echo  Runs the game's original code (Make_*) under emulation and writes
+tools/generate_ui.bat	9	echo  ..\data\cache\ui_layout.json  (reste sur ton PC, pas envoye sur GitHub).	echo  ..\data\cache\ui_layout.json  (stays on your PC, not sent to GitHub).
+tools/generate_ui.bat	10	echo  Prerequis : tools\dump_il2cpp.bat deja lance. Quelques minutes, une seule fois.	echo  Prerequisite: tools\dump_il2cpp.bat already run. A few minutes, one time only.
+tools/generate_ui.bat	13	  echo  Lance d'abord launch_dq4.bat ^(a la racine du projet^) une fois pour creer l'environnement Python.	  echo  First run launch_dq4.bat ^(at the project root^) once to create the Python environment.
+tools/measure_toggle.py	65	BASCULE n=%(n)d vers=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/montre=%(cache_montre)s mode_moniteur=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d redimensionnements=%(redimensionnements)d trames=%(trames)d (instables=%(instables)d) tampons=%(tampons)d flips=%(flips)d duree=%(duree_ms)sms || fenetre visible sans image : %(montree_sans_image_ms)s ms (tampons refaits pendant ce temps : %(tampons_fenetre_visible)s, deplacements : %(deplacements_fenetre_visible)s)	TOGGLE n=%(n)d to=%(vers)s : set_fullscreen=%(set_fullscreen)d recreations=%(recreations)d cache/show=%(cache_montre)s monitor_mode=%(mode_moniteur)d (restore_mode=%(restore_mode)d) set_size=%(set_size)d set_location=%(set_location)d resizes=%(redimensionnements)d frames=%(trames)d (unstable=%(instables)d) buffers=%(tampons)d flips=%(flips)d duration=%(duree_ms)sms || window visible without a frame: %(montree_sans_image_ms)s ms (buffers redone meanwhile: %(tampons_fenetre_visible)s, moves: %(deplacements_fenetre_visible)s)
+tools/measure_toggle.py	66	   sequence :	   sequence:
+tools/measure_toggle.py	66	BASCULE_JSON	TOGGLE_JSON
+tools/measure_toggle.py	132	mesure_bascule : ecran illisible (%r)	toggle_measure: screen unreadable (%r)
+tools/measure_toggle.py	134	mesure_bascule : %s	toggle_measure: %s
+tools/measure_toggle.py	136	mesure_bascule : %d bascule(s) mesuree(s)	toggle_measure: %d toggle(s) measured
+tools/research/audit/analysis.py	4	cartes	maps
+tools/research/audit/analysis.py	4	echecs	failures
+tools/research/audit/analysis.py	4	temps total	total time
+tools/research/audit/analysis.py	5	ECHECS :	FAILURES:
+tools/research/audit/analysis.py	14	PAQUETS (type : total, nb cartes) :	PACKETS (type: total, map count):
+tools/research/audit/analysis.py	16	ABSENTS de la liste 0..37 :	MISSING from the list 0..37:
+tools/research/audit/analysis.py	17	AU-DELA de 37 :	BEYOND 37:
+tools/research/audit/analysis.py	19	\n=== VALEURS DES TYPES RARES ===	\n=== VALUES OF THE RARE TYPES ===
+tools/research/audit/analysis.py	26	valeurs distinctes	distinct values
+tools/research/audit/analysis.py	28	(%d cartes)	(%d maps)
+tools/research/audit/analysis.py	29	\n=== f13 (bits de drapeaux du paquet 13) ===	\n=== f13 (flag bits of packet 13) ===
+tools/research/audit/analysis.py	34	echelles	scales
+tools/research/audit/audit_callers.py	29	== appelants de %#x (%s)	== callers of %#x (%s)
+tools/research/audit/audit_callers.py	30	   %#x %s dans %s (%#x)	   %#x %s in %s (%#x)
+tools/research/audit/audit_eng.py	84	introuvable : 	not found: 
+tools/research/audit/audit_level1.py	8	objets level1 :	level1 objects:
+tools/research/audit/audit_reproduce.sh	42	echo "termine : $O"	echo "done: $O"
+tools/research/audit/audit_values.py	8	== Croix (TouchPad) ==	== D-pad (TouchPad) ==
+tools/research/audit/audit_values.py	15	  %-8s diametre d'origine %.2f (rayon %.2f) ; portage %.2f ; ecart %+.1f %%	  %-8s original diameter %.2f (radius %.2f) ; port %.2f ; gap %+.1f %%
+tools/research/audit/audit_values.py	17	  rayon anneau (sc = 1) = %.2f	  ring radius (sc = 1) = %.2f
+tools/research/audit/audit_values.py	18	  zone morte s_MoveThreshold = 10 -> %.4f du rayon (portage 0,15)	  dead zone s_MoveThreshold = 10 -> %.4f of the radius (port 0.15)
+tools/research/audit/audit_values.py	19	  course max de la boule s_moveNakaLimit = 36,5 -> %.4f du rayon (portage 0,5)	  max travel of the ball s_moveNakaLimit = 36.5 -> %.4f of the radius (port 0.5)
+tools/research/audit/audit_values.py	20	  seuil de depart MoveBeginLimit = 16 -> %.4f du rayon ; AnyThreshold = 8 -> %.4f ; MoveRingLimit = 56 -> %.4f du rayon	  start threshold MoveBeginLimit = 16 -> %.4f of the radius ; AnyThreshold = 8 -> %.4f ; MoveRingLimit = 56 -> %.4f of the radius
+tools/research/audit/audit_values.py	21	  collider de detection : rayon 95 x sc -> %.4f du rayon de l'anneau	  detection collider: radius 95 x sc -> %.4f of the ring radius
+tools/research/audit/audit_values.py	22	  pastilles : centre a 104 (local, quad +-128) -> %.5f du diametre (portage 85/256 = %.5f)	  dots: center at 104 (local, quad +-128) -> %.5f of the diameter (port 85/256 = %.5f)
+tools/research/audit/audit_values.py	23	  sector(angle) = ((int((deg + 180) / 22.5) + 1) >> 1) & 7 ; c_padDirTable = (4, 6, 2, 10, 8, 9, 1, 5) (gauche, gauche+bas, bas, bas+droite, droite, droite+haut, haut, haut+gauche)	  sector(angle) = ((int((deg + 180) / 22.5) + 1) >> 1) & 7 ; c_padDirTable = (4, 6, 2, 10, 8, 9, 1, 5) (left, left+down, down, down+right, right, right+up, up, up+left)
+tools/research/audit/audit_values.py	25	\n== Position de la croix (SetPadPos 0xD22E60) ==	\n== D-pad position (SetPadPos 0xD22E60) ==
+tools/research/audit/audit_values.py	32	  pos %d (%s) %-8s centre x = %+7.2f depuis le milieu, z = %6.2f depuis le bas	  pos %d (%s) %-8s center x = %+7.2f from the middle, z = %6.2f from the bottom
+tools/research/audit/audit_values.py	33	  defaut du moteur : g_pad_pos = 1, g_pad_size = 1 (MaterielMenu_LOAD::makeDiary 0x194a50) -> croix au milieu en bas, x = 0	  engine default: g_pad_pos = 1, g_pad_size = 1 (MaterielMenu_LOAD::makeDiary 0x194a50) -> D-pad at the bottom middle, x = 0
+tools/research/audit/audit_values.py	35	\n== Boutons du HUD (TouchPad.CreateMenuButton 0xD2377C) : plaque = (w + 32) x (h + 32), icone = 48 x iconSize ==	\n== HUD buttons (TouchPad.CreateMenuButton 0xD2377C): plate = (w + 32) x (h + 32), icon = 48 x iconSize ==
+tools/research/audit/audit_values.py	38	  %-8s touche %#06x icone %2d : zone %5.1f x %5.1f, plaque %5.1f x %5.1f, icone %5.1f	  %-8s key %#06x icon %2d : area %5.1f x %5.1f, plate %5.1f x %5.1f, icon %5.1f
+tools/research/audit/audit_values.py	39	  (portage : plaque carree H/18 x 1,6 = %.1f px a H = 800)	  (port: square plate H/18 x 1.6 = %.1f px at H = 800)
+tools/research/audit/audit_values.py	40	  x du centre : +-44 (Map, Command), +-39,5 (Talk), +-35 (PadPos) depuis le bord ; Map : z = -12 depuis le haut ; Command 278, Talk 188, PadPos 104,5 depuis le bas	  center x: +-44 (Map, Command), +-39.5 (Talk), +-35 (PadPos) from the edge ; Map: z = -12 from the top ; Command 278, Talk 188, PadPos 104.5 from the bottom
+tools/research/audit/audit_values.py	42	\n== Fenetre de carte (type 25, MenuPortItemTable.Make_CityMap 0xCF0684 / ICityMap 0xD081D8) ==	\n== Map window (type 25, MenuPortItemTable.Make_CityMap 0xCF0684 / ICityMap 0xD081D8) ==
+tools/research/audit/audit_values.py	47	  plan : coin haut-gauche (%.1f, %.1f), taille %.2f x %.3f, x de %.1f a %.1f, z de %.3f a %.1f ; portage : x de -225 a 225, z de 62,5 a 400	  plane: top-left corner (%.1f, %.1f), size %.2f x %.3f, x from %.1f to %.1f, z from %.3f to %.1f ; port: x from -225 to 225, z from 62.5 to 400
+tools/research/audit/audit_values.py	48	  cadre (CreateWindow0 430 x 319,5 + bordure 12) : x de -227 a 227, z de 402 a 58,5	  frame (CreateWindow0 430 x 319.5 + border 12): x from -227 to 227, z from 402 to 58.5
+tools/research/audit/audit_values.py	49	  marqueur (code 1/2) : x = %.3f + %.6f x px, z = %.1f - %.6f x py (coin bas-gauche de l'icone 24 x 24)	  marker (code 1/2): x = %.3f + %.6f x px, z = %.1f - %.6f x py (bottom-left corner of the 24 x 24 icon)
+tools/research/audit/audit_values.py	53	     px=%3d py=%3d : origine (%.2f, %.2f), portage (%.2f, %.2f), ecart (%+.2f, %+.2f)	     px=%3d py=%3d : original (%.2f, %.2f), port (%.2f, %.2f), gap (%+.2f, %+.2f)
+tools/research/audit/audit_values.py	54	  lieux decouverts (code 3, BlinkMapSymbol) : carre 4 x 4 de coin haut-gauche (-227 + lo x K, 402 - hi x K) -> centre (-225 + lo x K, 400 - hi x K) : le portage est exact ; alpha : triangle 1 -> 0 -> 1 en 4 s (m_blinkRate 0,5), couleur (1, 0, 0, 1)	  discovered places (code 3, BlinkMapSymbol): 4 x 4 square with top-left corner (-227 + lo x K, 402 - hi x K) -> center (-225 + lo x K, 400 - hi x K): the port is exact ; alpha: triangle 1 -> 0 -> 1 over 4 s (m_blinkRate 0.5), color (1, 0, 0, 1)
+tools/research/audit/audit_values.py	55	  code 4 (lieu special) : icone n. 3 de la feuille 5 (MenuTexture y = 288, cases de 16 px : croix rouge), quad 21,6 = 18 x 1,2, profondeur 13, position (-227 + lo x K, 402 - hi x K), ancrage coin bas-gauche (suppose : bInBounds = true comme la plume) : absent du portage	  code 4 (special place): icon no. 3 of sheet 5 (MenuTexture y = 288, 16 px cells: red cross), quad 21.6 = 18 x 1.2, depth 13, position (-227 + lo x K, 402 - hi x K), bottom-left corner anchor (assumed: bInBounds = true like the feather): missing from the port
+tools/research/audit/audit_values.py	56	  voile (code 5) : quad 450 x 337,5 echelle 0,99, profondeur 12,5, texture 256 x 192 RGBA remplie par blocs de 10 x 10 depuis (48, 16) (bit = 1 : bloc copie de dsdq4wmap01m), filtre Point	  veil (code 5): quad 450 x 337.5 scale 0.99, depth 12.5, texture 256 x 192 RGBA filled in 10 x 10 blocks from (48, 16) (bit = 1: block copied from dsdq4wmap01m), Point filter
+tools/research/audit/audit_values.py	58	\n== Bouton de la carte (types 22 / 23, Make_MapButton 0xCF0414) ==	\n== Map button (types 22 / 23, Make_MapButton 0xCF0414) ==
+tools/research/audit/audit_values.py	59	  CreateMenuPortItem (0xCE4294) appelle le delegue avec type - IndexOf(makeFuncList, delegue) : type 22 -> 0 (fenetre 54 x 112 : retour + mode), type 23 -> 1 (fenetre 54 x 47 : retour)	  CreateMenuPortItem (0xCE4294) calls the delegate with type - IndexOf(makeFuncList, delegate): type 22 -> 0 (window 54 x 112: back + mode), type 23 -> 1 (window 54 x 47: back)
+tools/research/audit/audit_values.py	60	  fenetre : ancre coin bas-droit (8), position (2, 0, -2 + NotchFix.AdjustmentValue) ; retour : plaque 64 x 55,5, centre (187,5, -366), icone 11 x 1,3, touche 0x400 ; mode : plaque 64 x 55,5, centre (187,5, -300), icone 2 x 1,2, touche 2	  window: bottom-right corner anchor (8), position (2, 0, -2 + NotchFix.AdjustmentValue) ; back: plate 64 x 55.5, center (187.5, -366), icon 11 x 1.3, key 0x400 ; mode: plate 64 x 55.5, center (187.5, -300), icon 2 x 1.2, key 2
+tools/research/audit/audit_values.py	61	  icone du bouton mode (feuille 3) : 2 en ville (TownImageMap::checkData), 20 carte du monde grande (FieldImageMap::open), 19 carte du monde petite (FieldImageMap::execute)	  mode button icon (sheet 3): 2 in town (TownImageMap::checkData), 20 large world map (FieldImageMap::open), 19 small world map (FieldImageMap::execute)
+tools/research/audit/audit_values.py	63	\n== Chiffres de quantite (ItemNumCTRL.Changer 0xD08060) ==	\n== Quantity digits (ItemNumCTRL.Changer 0xD08060) ==
+tools/research/audit/audit_values.py	71	  valeur %3d -> icone dizaines %3d %s, unites %3d %s	  value %3d -> icon tens %3d %s, units %3d %s
+tools/research/audit/audit_values.py	72	  (Changer(v) : v < 2 -> deux cases vides (icone 1 = (224, 192)) ; sinon dizaines = (v / 10) % 10 -> icone 16 x d, ou 1 (vide) si 0 ; unites = 16 x (v % 10) ; chiffre d = colonne x = 192, y = 192 + 32 d)	  (Changer(v): v < 2 -> two empty cells (icon 1 = (224, 192)) ; otherwise tens = (v / 10) % 10 -> icon 16 x d, or 1 (empty) if 0 ; units = 16 x (v % 10) ; digit d = column x = 192, y = 192 + 32 d)
+tools/research/audit/audit_values.py	73	  Sub_ItemButton (0xCEE1D4) : chiffres de la feuille 12, ancre coin bas-gauche (indent 6) de la ligne, dizaines en (0, 6), unites en (10, 6), taille 0,6 -> quad de 28,8 unites (dps 48 x 0,6)	  Sub_ItemButton (0xCEE1D4): digits of sheet 12, bottom-left corner anchor (indent 6) of the line, tens at (0, 6), units at (10, 6), size 0.6 -> quad of 28.8 units (dps 48 x 0.6)
+tools/research/audit/callgraph.py	27	graphe :	graph:
+tools/research/audit/callgraph.py	27	appeles	called
+tools/research/audit/gl_casino.py	14	BESTIAIRE lance a l image	BESTIARY started at frame
+tools/research/audit/gl_casino.py	19	CASINO lance a l image	CASINO started at frame
+tools/research/audit/hl.py	24	%d images en %.1fs ; carte=%s partie=%#x sprites=%d	%d frames in %.1fs ; map=%s part=%#x sprites=%d
+tools/research/audit/probe_book.py	14	partie	part
+tools/research/audit/probe_book.py	14	carte	map
+tools/research/audit/probe_book.py	14	paquets	packets
+tools/research/audit/probe_book.py	15	menu_actif	active_menu
+tools/research/audit/probe_book.py	16	maillages	meshes
+tools/research/audit/probe_book.py	16	modeles	models
+tools/research/audit/probe_book2.py	14	partie	part
+tools/research/audit/probe_book2.py	14	pq	pk
+tools/research/audit/probe_book2.py	14	modeles	models
+tools/research/audit/probe_book2.py	14	maillages	meshes
+tools/research/audit/probe_casino.py	11	objet SLOT	SLOT object
+tools/research/audit/probe_casino.py	11	partie avant	part before
+tools/research/audit/probe_casino.py	25	image	frame
+tools/research/audit/probe_casino.py	25	partie/carte/ports/msg	part/map/ports/msg
+tools/research/audit/probe_casino.py	27	EXCEPTION a l image	EXCEPTION at frame
+tools/research/audit/probe_casino.py	28	paquets	packets
+tools/research/audit/probe_casino.py	29	premier a	first at
+tools/research/audit/probe_grid.py	11	jeu	game
+tools/research/audit/probe_grid.py	11	carte	map
+tools/research/audit/probe_grid.py	11	partie	part
+tools/research/audit/probe_grid.py	11	menu_actif	active_menu
+tools/research/audit/probe_poker.py	14	pq	pk
+tools/research/audit/probe_poker.py	14	cases	cells
+tools/research/audit/probe_poker.py	30	 apres	 after
+tools/research/audit/probe_poker2.py	14	(added)	input
+tools/research/audit/probe_poker2.py		entree	(removed)
+tools/research/audit/probe_poker2.py		mise	(removed)
+tools/research/audit/probe_poker2.py	14	(added)	bet
+tools/research/audit/probe_poker3.py	15	sortie du casino a l image	casino exit at frame
+tools/research/audit/probe_poker3.py	15	partie	part
+tools/research/audit/probe_poker3.py	15	carte	map
+tools/research/audit/probe_poker3.py	26	etats distincts	distinct states
+tools/research/audit/probe_poker3.py	26	pieces	coins
+tools/research/audit/probe_poker3.py	26	paquets	packets
+tools/research/audit/probe_slot.py	18	images	frames
+tools/research/audit/probe_slot.py	18	paquets	packets
+tools/research/audit/probe_slot.py	18	cases	cells
+tools/research/audit/probe_slot.py		boutons: menu_actif	(removed)
+tools/research/audit/probe_slot.py	21	(added)	buttons: active menu
+tools/research/audit/probe_slot.py	21	(added)	input
+tools/research/audit/probe_slot.py		entree	(removed)
+tools/research/audit/probe_slot.py		mise +	(removed)
+tools/research/audit/probe_slot.py	22	(added)	bet +
+tools/research/audit/probe_slot.py	26	apres A%d	after A%d
+tools/research/audit/probe_slot2.py	18	pq	pk
+tools/research/audit/probe_slot2.py	18	cases	cells
+tools/research/audit/probe_slot2.py	24	apres#%d	after#%d
+tools/research/audit/probe_slot3.py	10	pieces avant	coins before
+tools/research/audit/probe_slot3.py	21	pq	pk
+tools/research/audit/probe_slot3.py	21	carte	map
+tools/research/audit/probe_slot3.py	21	partie	part
+tools/research/audit/probe_slot3.py	21	(added)	input
+tools/research/audit/probe_slot3.py		entree	(removed)
+tools/research/audit/probe_slot3.py		cases	(removed)
+tools/research/audit/probe_slot3.py	21	(added)	cells
+tools/research/audit/probe_slot3.py	27	 apres	 after
+tools/research/audit/probe_slot4.py	20	pq	pk
+tools/research/audit/probe_slot4.py	20	cases	cells
+tools/research/audit/probe_slot4.py	27	 apres	 after
+tools/research/audit/probe_slot4.py	29	TOTAL paquets	TOTAL packets
+tools/research/audit/scan_menutypes.py	13	cibles	targets
+tools/research/audit/scan_menutypes.py	28	NON RESOLUS	UNRESOLVED
+tools/research/audit/scan_packets.py	19	cibles	targets
+tools/research/audit/scan_packets.py	25	instructions decodees	decoded instructions
+tools/research/audit/scan_packets.py	25	sur	out of
+tools/research/audit/scan_packets.py	45	%s | type=%s | %d appels | %s	%s | type=%s | %d calls | %s
+tools/research/audit/sweep.py	72	ECHEC	FAILED
+tools/research/audit/sweep.py	75	%d cartes en %.1f s (%d moteurs recrees)	%d maps in %.1f s (%d engines recreated)
+tools/research/audit/sweep_head.py	37	ECHEC	FAILED
+tools/research/audit/sweep_head.py	39	%d cartes en %.1fs	%d maps in %.1fs
+tools/research/audit/test_ev.py	12	ERREUR	ERROR
+tools/research/battle/analysis_log.py	5	T=([\d.]+) img=(\d+) effet=(\d) attente=(\d) fondu=(\d) fond=(\d) partie=(0x\w+) fa=([\d.]+) fn=(\d+)	T=([\d.]+) img=(\d+) effect=(\d) waiting=(\d) fade=(\d) background=(\d) part=(0x\w+) fa=([\d.]+) fn=(\d+)
+tools/research/battle/analysis_log.py	39	   %-14s images moteur %s -> %s = %s images ; temps reel %s s ; %s images/s	   %-14s engine frames %s -> %s = %s frames ; real time %s s ; %s frames/s
+tools/research/battle/drive.py	70	MENU ouvre type %s %s	MENU opens type %s %s
+tools/research/battle/drive.py	71	MENU ferme	MENU closed
+tools/research/battle/drive.py	74	NOMBRE %s	NUMBER %s
+tools/research/battle/drive.py	78	EFFET modele %d (emplacement %d)	EFFECT model %d (slot %d)
+tools/research/battle/drive.py	79	FONDU %d	FADE %d
+tools/research/battle/drive.py	80	ECRAN effet %d	SCREEN effect %d
+tools/research/battle/drive.py	81	MSG ecriture	MSG writing
+tools/research/battle/drive.py	82	MSG attente	MSG waiting
+tools/research/battle/drive.py	84	FIN partie	END part
+tools/research/battle/exp_outline.py	74	   %-10s rugosite %.3f rad/texel   surface %+.2f%%   IoU %.4f	   %-10s roughness %.3f rad/texel   surface %+.2f%%   IoU %.4f
+tools/research/battle/gl_cb.py	49	T=%.3f img=%d effet=%d attente=%d fondu=%d fond=%d partie=%#x fa=%.2f fn=%d vitesse=%s	T=%.3f img=%d effect=%d waiting=%d fade=%d background=%d part=%#x fa=%.2f fn=%d speed=%s
+tools/research/battle/gl_sceneries.py	36	chargement %.2fs	load %.2fs
+tools/research/battle/gl_sceneries.py	36	msaa reel	actual msaa
+tools/research/camera/t_ndc.py	26	option centree	centered option
+tools/research/camera/t_ndc.py	26	images	frames
+tools/research/camera/t_ndc.py	26	NDC y du heros : min %.5f max %.5f	NDC y of the hero: min %.5f max %.5f
+tools/research/camera/t_ndc.py	29	  pas	  step
+tools/research/camera/t_ndc.py	29	Y heros %.3f	hero Y %.3f
+tools/research/camera/t_st.py	24	changements de Y :	Y changes:
+tools/research/engine/build_commits.py	74	ERREUR stage	ERROR stage
+tools/research/engine/dasm_core.py	50	symbole introuvable	symbol not found
+tools/research/engine/disasm_engine.py	117	introuvable	not found
+tools/research/engine/disasm_method.py	13	introuvable	not found
+tools/research/engine/dq4_save.py	27	data9 : mot0 = banque la plus recente = %d	data9: word0 = most recent slot = %d
+tools/research/engine/dq4_save.py	28	vide (DWEN)	empty (DWEN)
+tools/research/engine/dq4_save.py	29	supprimee (DLED)	deleted (DLED)
+tools/research/engine/frames.py	6	nb cadres	UI frames
+tools/research/engine/probe_title.py	96	  == fenetres %s (image %d, partie %s)	  == windows %s (frame %d, part %s)
+tools/research/engine/probe_title.py	98	   port %2d type %-4s vis=%d act=%d cur=%s grille=%s	   port %2d type %-4s vis=%d act=%d cur=%s grid=%s
+tools/research/engine/probe_title.py	128	titre, avant appui	title, before the press
+tools/research/engine/probe_title.py	128	  partie	  part
+tools/research/engine/probe_title.py	136	menu titre	title menu
+tools/research/engine/probe_title.py	149	pas de fenetre de type %d (fenetres : %s)	no window of type %d (windows: %s)
+tools/research/engine/probe_title.py	169	   %s k=%-3d img %-4d LOAD=%-2d NOM=%-5d partie=%s carte=%s %s	   %s k=%-3d frame %-4d LOAD=%-2d NAME=%-5d part=%s map=%s %s
+tools/research/engine/probe_title.py	183	   ecrit : %-10s %s	   written: %-10s %s
+tools/research/engine/probe_title.py	191	== titre : demarrage sans appui (sauvegardes : %s)	== title: start without a press (saves: %s)
+tools/research/engine/probe_title.py	191	aucune	none
+tools/research/engine/probe_title.py	193	phase 1 (logos) avant appui	phase 1 (logos) before the press
+tools/research/engine/probe_title.py	194	   appui A -> fondu (cmd_fade_out 30 images, a ~3 images de l'appui), SetItemCode(0,0) a la fin, fondu entrant 30 images	   press A -> fade (cmd_fade_out 30 frames, ~3 frames after the press), SetItemCode(0,0) at the end, fade in 30 frames
+tools/research/engine/probe_title.py	195	phase 2 apres le 1er appui	phase 2 after the 1st press
+tools/research/engine/probe_title.py	197	menu titre	title menu
+tools/research/engine/probe_title.py	197	 partie	 part
+tools/research/engine/probe_title.py	198	   fichiers presents :	   files present:
+tools/research/engine/probe_title.py	202	== %s (case racine %d), banque %d	== %s (root cell %d), slot %d
+tools/research/engine/probe_title.py	206	liste (%s)	list (%s)
+tools/research/engine/probe_title.py	209	   selection de la banque -> 	   slot selection -> 
+tools/research/engine/probe_title.py	210	   carte chargee :	   map loaded:
+tools/research/engine/probe_title.py	214	== nouveau journal : banque %d, nom %r, sexe %s	== new diary: slot %d, name %r, gender %s
+tools/research/engine/probe_title.py	219	confirmation ecrasement	overwrite confirmation
+tools/research/engine/probe_title.py	220	saisie du nom (type 55)	name entry (type 55)
+tools/research/engine/probe_title.py	220	   NOM	   NAME
+tools/research/engine/probe_title.py	222	   apres le nom : NOM	   after the name: NAME
+tools/research/engine/probe_title.py	223	choix du sexe	gender choice
+tools/research/engine/probe_title.py	223	   sexe valide ; suite :	   gender confirmed; next:
+tools/research/engine/probe_title.py	225	   carte	   map
+tools/research/engine/probe_title.py	225	 partie	 part
+tools/research/engine/probe_title.py	226	prologue (titre de chapitre)	prologue (chapter title)
+tools/research/engine/probe_title.py	227	   (le script de mlb1a attend ensuite une touche : cmd_key_wait_type_b, puis message + Oui/Non)	   (the mlb1a script then waits for a key: cmd_key_wait_type_b, then message + Yes/No)
+tools/research/engine/probe_title.py	231	== supprimer : banque %d, reponse %s	== delete: slot %d, answer %s
+tools/research/engine/probe_title.py	231	Oui	Yes
+tools/research/engine/probe_title.py	231	Non	No
+tools/research/engine/probe_title.py	235	confirmation (message sur le canevas du port 1 + Oui/Non)	confirmation (message on the canvas of port 1 + Yes/No)
+tools/research/engine/probe_title.py	242	== licence	== license
+tools/research/engine/probe_title.py	248	== quitter / portail (messages vers Unity sur le port 0)	== quit / portal (messages to Unity on port 0)
+tools/research/engine/probe_title.py	249	B sur le menu racine	B on the root menu
+tools/research/engine/probe_title.py	249	bouton portail	portal button
+tools/research/engine/read_logfile.py	14	TEXTE(ligne=%d,col=%d) suit	TEXT(line=%d,col=%d) follows
+tools/research/engine/regen_ui.py	11	entete	header
+tools/research/engine/render_all.py	37	types rendus ->	types rendered ->
+tools/research/engine/render_battle.py	30	texte d action trouve	action text found
+tools/research/engine/render_battle.py	30	image	frame
+tools/research/engine/render_battle.py	38	ports visibles	visible ports
+tools/research/engine/render_battle.py	43	ecrit	written
+tools/research/engine/render_state.py	17	ecrit	written
+tools/research/engine/render_type.py	33	ecrit	written
+tools/research/engine/scan_calls.py	7	cibles	targets
+tools/research/engine/scan_il2.py	9	cibles	targets
+tools/research/engine/scan_il2.py	23	dans	in
+tools/research/engine/scan_missing_parts.py	5	ERREUR	ERROR
+tools/research/engine/scan_missing_parts.py	8	parts exportes	exported parts
+tools/research/engine/scan_missing_parts.py	8	references manquantes	missing references
+tools/research/engine/scan_missing_parts.py	8	codes func	func codes
+tools/research/loading/analysis_tracking.py	3	SUIVI	TRACE
+tools/research/loading/analysis_tracking.py	7	SUIVI \+([\d.]+)s (.*)	TRACE \+([\d.]+)s (.*)
+tools/research/loading/analysis_tracking.py	9	dessin	draw
+tools/research/loading/analysis_tracking.py	10	genre=(.*?) partie=	kind=(.*?) part=
+tools/research/loading/analysis_tracking.py	11	fondu	fade
+tools/research/loading/analysis_tracking.py	11	carte	game_map
+tools/research/loading/analysis_tracking.py	11	personnages	characters
+tools/research/loading/analysis_tracking.py	11	retenu	retained
+tools/research/loading/analysis_tracking.py	12	carte chargee	map loaded
+tools/research/loading/analysis_tracking.py	16	saut moteur +%d	engine jump +%d
+tools/research/loading/analysis_tracking.py	17	  n=%-3d img=%-4d %-30s fondu=%.2f pers=%-5s cam=%-22s %6.0f ms %s	  n=%-3d frame=%-4d %-30s fade=%.2f chars=%-5s cam=%-22s %6.0f ms %s
+tools/research/loading/measure.py	38	   +%d fa=%.2f ba=%.2f vis=%.2f retenu=%d pret=%d cam=%s	   +%d fa=%.2f ba=%.2f vis=%.2f held=%d ready=%d cam=%s
+tools/research/loading/measure.py	46	%-10s img %5d %s -> %-8s : %d image(s) visible(s) avec scene pas en place %s | images retenues %d | 1re image visible +%s	%-10s frame %5d %s -> %-8s : %d visible frame(s) with scene not in place %s | frames held %d | 1st visible frame +%s
+tools/research/loading/measure.py	59	marche%d	walk%d
+tools/research/loading/measure.py	117	EXC pas	EXC step
+tools/research/loading/measure.py	121	%s : %d chargements ; images retenues (histogramme) %s ; images visibles avec scene pas en place : %d au total, sur %d chargements %s	%s : %d loads ; frames held (histogram) %s ; visible frames with scene not in place: %d in total, over %d loads %s
+tools/research/scenery/background.py	10	fond	background
+tools/research/scenery/background.py	10	teinte	tint
+tools/research/scenery/cmp_var.py	10	pas pret	not ready
+tools/research/scenery/cmp_var.py	14	%s: diff>8 %d px (%.3f%%) moy %.3f	%s: diff>8 %d px (%.3f%%) avg %.3f
+tools/research/scenery/dbg_h.py	8	avant	before
+tools/research/scenery/dbg_h.py	13	fondu	fade
+tools/research/scenery/plan.py	15	cible	target
+tools/research/scenery/walk_end.py	21	heros	hero
+tools/research/scenery/walk_end.py	21	cible	target
+tools/research/scenery/walk_south.py	21	heros	hero
+tools/research/scenery/walk_south.py	21	cible	target
+tools/research/scenery/wrap_multi.py	46	DC_POSER : %d decalques ramenes au sol	DC_POSER: %d decals brought back to the ground
+tools/research/sound/battle_scenario.py	13	membre	member
+tools/research/sound/battle_scenario.py	13	xp requise	xp required
+tools/research/sound/h45.py	25	absent	missing
+tools/research/sound/h45.py	87	A (bouton %s) sur port %s %s	A (button %s) on port %s %s
+tools/research/sound/h45.py	94	son	sound
+tools/research/sound/h45.py	95	appel	call
+tools/research/sound/h45.py	97	texte	text
+tools/research/sound/h45.py	99	pv	hp
+tools/research/sound/h45.py	100	fin	end
+tools/research/sound/h45.py	100	partie %#x	part %#x
+tools/research/sound/inv_sfx.py	7	SE%04d ABSENT	SE%04d MISSING
+tools/research/sound/inv_sfx.py	9	SE%04d %6.2fs boucle=%s vol=%.2f ech=%d canaux=%d	SE%04d %6.2fs loop=%s vol=%.2f samples=%d channels=%d
+tools/research/sound/menu_sounds.py	13	MENU_SOUND %2d : etat=%d BGM=%d  depart(image)=%d  fin(image)=%d  compteur=%d  arret=%d	MENU_SOUND %2d : state=%d BGM=%d  start(frame)=%d  end(frame)=%d  counter=%d  stop=%d
+tools/research/sound/real_pyglet.py	16	musiques en memoire	music tracks in memory
+tools/research/sound/real_pyglet.py	16	attente	waiting
+tools/research/sound/real_pyglet.py	16	travaux	jobs
+tools/research/sound/real_pyglet.py	18	joue	playing
+tools/research/sound/real_pyglet.py	20	ordre d'arret retenu	stop order held
+tools/research/sound/real_pyglet.py	20	jingle toujours la	jingle still there
+tools/research/sound/real_pyglet.py	23	ordre libere apres %.2f s (fin du jingle : 3,1 s apres son depart)	order released after %.2f s (the jingle ends 3.1 s after it starts)
+tools/research/sound/replay.py	43	JOUE musique/jingle BGM%02d (%s, %.1f s%s, vol %.2f)	PLAY music/jingle BGM%02d (%s, %.1f s%s, vol %.2f)
+tools/research/sound/replay.py	43	, boucle	, loop
+tools/research/sound/replay.py	46	JOUE SE%04d (%s, %.2f s, vol %.2f)	PLAY SE%04d (%s, %.2f s, vol %.2f)
+tools/research/sound/replay.py	47	SE%04d NON JOUE (categorie coupee ?)	SE%04d NOT PLAYED (category muted?)
+tools/research/sound/replay.py	49	ARRET musique BGM%s	STOP music BGM%s
+tools/research/sound/replay.py	58	  t=%7.2f  ordres moteur %s	  t=%7.2f  engine orders %s
+tools/research/sound/rms.py	10	(added)	loop
+tools/research/sound/rms.py		boucle	(removed)
+tools/research/sound/rms.py		debut/fin	(removed)
+tools/research/sound/rms.py	10	(added)	start/end
+tools/research/sound/run_b1.py	9	membres	members
+tools/research/sound/run_b1.py	18	fin	end
+tools/research/sound/run_b1.py	18	duree %.1f	duration %.1f
+tools/research/sound/run_b1.py	18	pv	hp
+tools/research/sound/run_replay.py	23	  (avant le combat : %d musiques en memoire, %d travaux)	  (before the battle: %d music tracks in memory, %d jobs)
+tools/research/sound/run_replay.py	34	fin combat image	battle end frame
+tools/research/sound/run_replay.py	37	  (fin de la suite : %d ordres encore retenus)	  (end of the sequence: %d orders still held)
+tools/research/sound/services.py	13	membres	members
+tools/research/sound/services.py	34	%5d TOUCHE %s sur port %s type %s cases %s cur %s	%5d KEY %s on port %s type %s cells %s cur %s
+tools/research/sound/services.py	39	actifs	active
+tools/research/sound/services.py	41	%5d  SON %s	%5d  SOUND %s
+tools/research/sound/services.py	42	%5d  appel %s(%d) <- %s	%5d  call %s(%d) <- %s
+tools/research/sound/services.py	44	%5d  texte %r	%5d  text %r
+tools/research/sound/services.py	47	%5d  partie %#x -> %#x	%5d  part %#x -> %#x
+tools/research/sound/sound_ab.py	155	Musiques indisponibles : module "soundfile" absent (pip install soundfile). Les bruitages restent actifs.	Music unavailable: module "soundfile" missing (pip install soundfile). Sound effects stay active.
+tools/research/sound/sound_ab.py	162	Son indisponible (%r)	Sound unavailable (%r)
+tools/research/sound/sound_ab.py	194	Son : %s illisible (%r)	Sound: %s unreadable (%r)
+tools/research/sound/sound_ab.py	247	Son : image %s ordres %s	Sound: frame %s orders %s
+tools/research/sound/sound_ab.py	279	Son : image %s bruitage %d	Sound: frame %s sound effect %d
+tools/research/sound/sound_ab.py	297	Son : lecture impossible (%r)	Sound: playback failed (%r)
+tools/research/sound/sound_ab.py	332	Son : musique impossible (%r)	Sound: music failed (%r)
+tools/research/sound/survey.py	7	partie	part
+tools/research/sound/survey.py	7	carte	map
+tools/research/sound/survey.py	7	membres	members
+tools/research/sound/survey2.py	11	presence	present
+tools/research/sound/survey2.py	11	niv	lvl
+tools/research/sound/survey2.py	11	pv	hp
+tools/research/sound/wipe.py	11	chapitre	chapter
+tools/research/sound/wipe.py	11	carte	map
+tools/research/sound/wipe.py	11	membres	members
+tools/research/sprites/measure_cycle.py	19	DIAG n=%d partie=%#x carte=%s msg=%s pos=%s	DIAG n=%d part=%#x map=%s msg=%s pos=%s
+tools/research/text/analysis.py	35	   base_rat sous le centre : %.1f px = %.2f u	   base_rat below the center: %.1f px = %.2f u
+tools/research/text/analysis.py	36	   base_onglet au-dessus du trait : %d px	   base_onglet above the line: %d px
+tools/research/text/analysis.py	37	   bases scar/x2 sous le centre (u) :	   scar/x2 bases below the center (u):
+tools/research/text/render_multi.py	41	ecrit	written
+tools/research/text/render_multi.py	66	erreur	error
+tools/research/text/render_multi.py	67	ecrit g	written g
+tools/session_flow/run_tests.sh	10	echo FIN	echo END
+tools/simulate_encounters.py	52	le heros a quitte la carte (image %d)	the hero left the map (frame %d)
+tools/simulate_encounters.py	74	DQ_APK et DQ_SAVES (ou --apk / --saves) requis	DQ_APK and DQ_SAVES (or --apk / --saves) are required
+tools/simulate_encounters.py	78	x%g : %d rencontres en %d pas (%d images)	x%g : %d encounters in %d steps (%d frames)
+tools/simulate_encounters.py	80	\n%s, graine %d, %d pas par vitesse. Reference : %s	\n%s, seed %d, %d steps per speed. Reference: %s
+tools/simulate_encounters.py	81	vitesse	speed
+tools/simulate_encounters.py	81	rencontres	encounters
+tools/simulate_encounters.py	81	par pas	per step
+tools/simulate_encounters.py	81	par pas x a	per step x a
+tools/simulate_encounters.py	81	attendu	expected
+tools/simulate_encounters.py	81	perte/appel	loss/call
+tools/simulate_encounters.py	81	attendu	expected
+tools/simulate_encounters.py	87	       (incertitude statistique : +/- %.0f %%)	       (statistical uncertainty: +/- %.0f %%)
+tools/ui_il2cpp/disasm.py	10	libil2cpp.so introuvable dans 	libil2cpp.so not found in 
+tools/ui_il2cpp/disasm.py	10	 (lance tools\dump_il2cpp.bat)	 (run tools\dump_il2cpp.bat)
+tools/ui_il2cpp/generate_ui.py	44	absent (%r)	missing (%r)
+tools/ui_il2cpp/generate_ui.py	46	Racine : %s | cache : %s | apk : %s	Root: %s | cache: %s | apk: %s
+tools/ui_il2cpp/generate_ui.py	49	Manque %s : lance d'abord tools\dump_il2cpp.bat	Missing %s: run tools\dump_il2cpp.bat first
+tools/ui_il2cpp/generate_ui.py	53	Module Python manquant : %s -> installation (une seule fois)...	Python module missing: %s -> installing (one time only)...
+tools/ui_il2cpp/generate_ui.py	57	Module Python manquant : %s (pip install %s dans .venv)	Python module missing: %s (pip install %s in .venv)
+tools/ui_il2cpp/generate_ui.py	62	Impossible d'extraire frameData des APK (%s)	Cannot extract frameData from the APK files (%s)
+tools/ui_il2cpp/generate_ui.py	68	en-tete : code %s, %.0f s	header: code %s, %.0f s
+tools/ui_il2cpp/generate_ui.py	71	Echec de la lecture de l'en-tete (details : %s)	Failed to read the header (details: %s)
+tools/ui_il2cpp/generate_ui.py	73	Mise en page des %d types de fenetres (quelques minutes, une seule fois)...	Laying out the %d window types (a few minutes, one time only)...
+tools/ui_il2cpp/generate_ui.py	87	Type %d : sous-processus en echec : %s	Type %d: subprocess failed: %s
+tools/ui_il2cpp/generate_ui.py	88	Aucun type n'a pu etre lu (details : %s)	No type could be read (details: %s)
+tools/ui_il2cpp/generate_ui.py	94	Fenetre de message : echec (code %s) : %s	Message window: failed (code %s): %s
+tools/ui_il2cpp/generate_ui.py	96	OK : %s (%d types, %.0f s)	OK: %s (%d types, %.0f s)
+tools/ui_il2cpp/generate_ui.py	97	Types non exploitables (sans importance s'ils ne sont pas utilises) :	Unusable types (harmless if they are not used):
+tools/ui_il2cpp/generate_ui.py	103	ERREUR :	ERROR:
+tools/ui_il2cpp/generate_ui.py	106	ERREUR :\n	ERROR:\n
+tools/ui_il2cpp/layout.py	193	types, erreurs:	types, errors:
+tools/ui_il2cpp/menusys.py	53	GetLangages : statiques introuvables	GetLangages: statics not found
+tools/ui_il2cpp/scene.py	37	objets	objects
+tools/ui_il2cpp/scene.py	40	par	parent

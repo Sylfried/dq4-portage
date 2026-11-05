@@ -1,0 +1,709 @@
+## FILE dq4_pc/window/menu_display.py
+@@ 679a8126136c d
+Neighboring button in the pressed direction (z: number -> center in interface units, Z pointing up); at the edge it wraps around to the other end of the row/column.
+@@ d0af31e41d53 d
+Text label (cached); `fonts`: families tried before the system fonts (the game font for the Esc menu).
+@@ 0953f5b8ed46 d
+(side, width) of the F1 info block: at the top RIGHT of the screen by default; width = the free margin next to the interface column (centered 450 x 800 portrait), so as not to hide the game windows (see inputs.info_zone).
+@@ bb3d742bdbf6 d
+Highlighted button of the active menu: the engine's cursor (messages 4) or, without an engine cursor, the local arrow-key cursor.
+@@ a0b7566350a6 d
+Game interface column (centered 450 x 800 portrait, window height): (center x, center y, pixels per unit).
+@@ f54eb18116f2 d
+Names (Make_* from MenuPortItemTable, without the prefix) of the game windows that have a layout: {name: [type numbers]} (interface editor).
+@@ e105d462d9c4 d
+Game window hidden by the player (interface editor: "Afficher cette interface a l'ecran" = Non)?
+@@ 54cb836fa4b4 d
+Yes / No stack (D-231) placed on the top right corner of the dialogue box: -> (vertical offset in units that places the VISIBLE bottom edge of the stack YESNO_BOX_SPACING above the visible top edge of the box,
+(visible right edge of the box, visible right edge of the stack)). The frames have different transparent margins (6 units on the right for the box): we align what is seen, not the mesh cells. None if a measurement is missing.
+@@ b5be3cae3817 d
+Yes / No (type 1) adjusted by the player: it follows the message window as usual (base = (cx, cy, s) of the latter, D = vertical offset in units that attaches it to it, e0 = its bottom edge in units),
+then its size v[0] is changed around its bottom edge and its right edge, and it is shifted by v[1], v[2] (fractions of the screen).
+edges = (right edge of the message window, right edge of the Yes / No) in units: the Yes / No stack has its right edge on that of the dialogue box (D-231). -> (cx, cy, s) for drawing.
+@@ bbe7c6607201 d
+Reference frame (cx, cy, s) of a window modified by the player (interface editor): size v[0] around the edge of its group (bottom, top or middle of the screen), then shift v[1], v[2] as a fraction of the screen.
+@@ f93cfd349be4 d
+Interface editor preview window (kept): 'msg' = dialogues (sample text), otherwise the Make_* name; None if it has no layout.
+@@ ca5ebffabf58 d
+Interface editor: preview of window `lookup_key` ('msg' = dialogues, otherwise the Make_* name) at its size and position (original layout, without game state) -> (x0, y0, x1, y1) in pixels, or None.
+@@ e3dff3af1736 d
+Yes / No preview: as in the game, the stack (Yes above No) is placed on the top right corner of the message window (shown in place, with its settings), right edges aligned; its yellow frame is that of the element being adjusted.
+@@ 155749505cae d
+Window enlargement: intervals [(bottom, top)] in interface units -> (k, mode of each group).
+Close windows (less than 60 units apart) form a group; a bottom (resp. top, resp. middle) group is enlarged around the bottom
+(top, center) edge of the screen, to stay attached to that edge. k = UI_ZOOM, reduced (down to 1) while a group goes off the screen or overlaps another.
+@@ 04072dd6ed76 d
+Field message window: the original places it above the bottom menu area (portrait); in 16/9 it is lowered to the bottom of the screen,
+unless another window occupies the bottom (it would stay underneath).
+@@ 41aee43b002f d
+Touch zones of a port's window: [(number, gamepad, x0, y0, x1, y1, depth, element identifier)] in pixels.
+@@ 8efca3e74fef d
+Information lines (F1), at the top right by default. Also drawn during black screens and the battle start effect: without this they flicker at every scene change.
+## FILE dq4_pc/window/options.py
+@@ 7876b2e54a07 c
+---- sound by category (Esc menu > "Son"): see sound.py (CATEGORIES, Mixer)
+@@ 41de805f53cd c
+---- dialogue text speed and scrolling of battle messages (Esc menu > "Commandes" > "Defilement du texte")
+@@ b80bee8347d3 d
+Player settings applied to the running game (sound, text, scrolling, speed).
+@@ 498191b7a92a d
+Volumes and switches of the settings -> sound.mix, immediately for the sounds already playing. At startup, the music and sound effect volumes are those from the command line (Sound already has them).
+@@ 9cd4c3b2f6dd d
+Setting a volume on the "Son" page: a test sound effect of the category (at most one per quarter second); the music, for its part, is heard throughout the page (Sound.listen).
+@@ 8259652ef3de d
+"Modifications" page of the Esc menu (formerly "Jeu"): options that change a game rule (HP and MP restored on level-up).
+@@ 0717298eff04 d
+"Vitesse de combat" -> OptionStatus.battleSpeed imposed on the engine: 4 (manual messages) in "Manuel", 0 (the game's shortest wait, 12 frames) otherwise (RG.scroll_code); "Rapide" and "Tres rapide" speed up the clock, and therefore the wait too.
+@@ dd224e96cb4b d
+The game itself changes the message speed (original Settings window): 4 -> "Manuel", any other value -> leaves "Manuel" (RG.speed_after_game_code).
+## FILE dq4_pc/window/screens.py
+@@ 692388b679e9 t
+(position in pyglet's list: finds the Screen object again even if an unreadable screen was ignored)
+@@ 6ca181147970 d
+Full screen monitors: the pure logic (no window or OpenGL), so it can be tested with fake screens (tools/test_screens.py).
+Full screen always happens on the monitor where the window is (no player choice: removed on 2026-11-03 at the player's request; the `ecran_plein` setting from #52 no longer exists):
+- listing: the monitors detected by pyglet (`display.get_screens()`) -> descriptions (index, position, dimensions, name, primary);
+- screen_of: the monitor that contains the center of a rectangle (the window);
+- target: the full screen monitor (the window's, otherwise the primary).
+@@ 62958f938d1f d
+Monitor name when pyglet provides it (Windows: the monitor's friendly name, X11: the output name); '' otherwise (never an error).
+@@ 87addfd0844e d
+List of pyglet's screens (in the order of `get_screens()`) -> [dict(indice, x, y, largeur, hauteur, nom, principal)]; exactly one primary (the one the system reports, failing that the one at (0, 0), failing that the first).
+An unreadable screen is ignored; unreadable `screens` -> [].
+@@ ab34695aa88c d
+Index of the screen that contains the center of the window's rectangle (x, y, width, height), failing that the one it overlaps the most; None if it touches none (or unreadable rectangle).
+@@ e97c5a61eb7d d
+Index of the primary screen (0 if the list is empty: never an error).
+@@ bdb240674347 d
+Index (in `entries`) of the full screen monitor: the one where the window is (`window`: its index, None if unknown), failing that the primary. Empty list -> None.
+## FILE dq4_pc/window/shaders.py
+@@ 316b524f889c t
+Capture.SetBlur(true) during the effect: the capture is softened (mipmap bias)
+@@ ce783ba2418c c
+Town background (#111): the game's `BackColor` = a full-screen quadrilateral (vertices (1, 1), (-1, 1), (-1, -1), (1, -1) written AS IS in clip space:
+"BackColor" shader, `gl_Position = in_POSITION0`, `SV_Target0 = vs_COLOR0`, Background queue, ZTest Always, ZWrite Off, no blending) whose two top vertices have
+the packet 8 "top" color and the two bottom ones the "bottom" color (BackColor.SetColor(top, bottom, 0), RVA 0xCC43F8): a linear vertical gradient over the full
+height of the frame, behind everything else.
+@@ 5b7595f9ebf6 d
+Drawing programs (GLSL) of the window.
+## FILE dq4_pc/window/snapshots.py
+@@ 67731422e323 c
+---- savestates
+@@ ab4b6766bfea t
+(maps ev04 / ev05: see Global::setMinigame)
+@@ a30dfe0006f6 t
+the music restarts from the recorded moment
+@@ 758f43e8519d d
+Savestates (save / load at any moment).
+@@ 7562f9b1037a d
+(info, PNG thumbnail) of savestate n, or None.
+@@ 1ddf2fc21694 d
+Location noted in the savestate file: a stable FRENCH text (N_ marker), never translated here; the Pause menu's savestate page translates it when displaying it (Pause._label).
+@@ ccf7084ca290 d
+Savestate of the engine + the viewer (including the map's animated objects).
+@@ d9a61c74dd67 d
+Records the game state in slot n.
+@@ cd527b393428 d
+Reloads slot n; the state from before the loading is kept in memory (cancel_loading).
+@@ fc7968526397 d
+Goes back to the state just before the last loading (a second call redoes the loading).
+@@ 79105989b16e d
+Puts the engine back into state `d`, then everything the window derived from it (menu windows, map, animated objects, music).
+@@ 1222dc8d6c80 d
+Copies the game image (without the menu) into a texture, on the graphics card only: the menu opens without waiting for a readback; the PNG is only made when a state is recorded.
+@@ 71d6a416a838 d
+Texture from _clone_thumbnail -> reduced PNG (savestate thumbnail).
+## FILE dq4_pc/window/title_screen.py
+@@ 35bb8f23d193 t
+width of the APK logo, as a fraction of the window width (NDC: -1 to 1)
+@@ 69e0e63cec1d t
+(the sky is alone in its texture group)
+@@ 80e712ae6fe1 t
+trial #130: sky enlarged around the screen center, without bands
+@@ 6411ccc1d4c0 t
+#174 (default): flat sky, texture height = window height, repeated across the width, wave effect
+@@ 81194ede83d1 t
+vertices rewritten AFTER the first draw of the frame: without rebind + commit() they are not sent (see _paint_sky)
+@@ f4d57190e197 t
+normalized screen coordinates: no projection
+@@ c7ac0b729308 t
+vertices created or rewritten AFTER the first draw of the frame (the opaque scenery has just been drawn): without rebind + commit() they are not sent: on the title's first frame the bands were missing (black sides), then they were one frame behind
+@@ 6cb84d30f2df t
+state of the adventure logs when the engine built the start menu (its grayed-out / absent buttons depend on it)
+@@ 8b2a7152e88f t
+(N_: marks the text, which toast() translates)
+@@ 66647965a4cb t
+#174 (default): {'key': title sky group, 'ciel': WideSky, 'vl', 'nv', 'degrade', 'cle'} when the sky is drawn flat at screen scale (title_sky.screen_sky)
+@@ 13739b0ee320 t
+trial #130 (DQ_CIEL_AGRANDI=1): {'key': title sky group} when the sky is enlarged (title_sky.screen_zoom) instead of being extended by bands
+@@ c00208b2821a t
+(the screen stays black as long as the window is open: no automatic reopening after 6 s)
+@@ 75d3d0afcac8 t
+(back: gamepad 0x20, silent as in MenuPortItem.Update)
+@@ 00890b206544 t
+scroll bar: the cursor slides with the pointer
+@@ 21c58e668173 d
+Pre-game screens: title (sky, logo), license, name entry, saves.
+@@ 175f0b53896c d
+Title screen: logo (model 8901: "DRAGON QUEST", "IV", subtitle) and animated glint (8900) enlarged by AP.LOGO_SCALE around a common point (pre_game.upscale_logo), without depth offset.
+INTENTIONAL DEVIATION from the APK (Sylfried, 2026-11-03, #108). The factor is reduced if the enlarged logo would exceed the window width (very narrow window); DQ_LOGO_ECHELLE=1: the original logo.
+@@ 0e6c765e3477 d
+Title screen: the sky (identical scrolling cloud tiles) is designed for the portrait screen; in 16/9 its edges would enter the field of view and the same tile would repeat 3 to 6 times.
+Solution: the portrait area keeps the original sky; on each side, bands of the same geometry whose texture is stretched by a variable amount (title_sky.py: continuous join at the edge of the area, scrolling followed).
+Fallback (unexpected structure, or DQ_CIEL_COPIES: old behavior, for comparison): two copies of the sky offset by its width, which extend the pattern as is.
+@@ bf7326937714 d
+Sky plane of the EXTENDED_SKIES maps (dpout, ev09; MAP-05): designed for the portrait screen, it stops before the window edges in 16/9 (black corners). On either side, a SYMMETRIC copy of the plane (left and right edges
+act as a mirror, same texture coordinates: the image continues seamlessly, like the title sky copies); the central portrait area keeps exactly the original sky. Added to `ext_map` (drawn and updated like the title copies).
+@@ 5a4f85db1377 d
+Flat title screen sky (#174), in place of the original sky group: the texture has the window's height and repeats across the width, with the wave effect (title_sky.screen_sky; scrolling of the tracked object,
+tint gradient of the original rows). -> True if it was drawn; any error: False (the caller draws the original sky) and the flat rendering is turned off.
+@@ ae2f7984a173 d
+Title screen sky bands (after the opaque scenery, same plane as the original sky: depth offset to pass in front of its part outside the portrait area). Any error: the original sky alone is kept.
+@@ d261777f7f05 d
+True if this port is the start menu (type 53, Make_StartMenuSecond).
+@@ 5c42801087d8 d
+Adventure logs have just been imported (the engine's catalog was already re-read by the "Sauvegardes" screen).
+@@ 3182bc2b7052 d
+Black frame (like the port's other menus) behind the whole start menu (or the centered pre-game window).
+@@ bccdf60b6602 d
+Port 12 = window of type 73 (Make_TitleTouch): the engine gives it no cell, "Touchez l'ecran" and the copyright are drawn by Unity (TapToStart); code 0 is CountReset.
+@@ 98cd7db2a30c d
+Window of type 80 (Make_License) on port 15: the license text is drawn by Unity (LicenseNobu).
+@@ bf4efc54580a d
+Window of type 55 (StartNameEntry): the name entry keyboard is handled by Unity; it is visible as long as the engine has sent [12, 1, 1] (message [12, 0, 8] gives the number of characters).
+@@ 76885248e8b7 d
+OK: [2, number of bytes] then the UTF-8 bytes of the name (two per number, little-endian), both before the engine's next frame.
+@@ 13cedfef90ef d
+Back: like the B key on window 55, [1, -1, 32] (the engine returns to the adventure log list).
+## FILE dq4_pc/world/data.py
+@@ 32ee7299a5a3 t
+key of the 4 x 4 white texture for untextured materials (see Data._texture)
+@@ df680a1115af t
+UnityPy shares a single file reader: only one extraction at a time (background preparation and game)
+@@ c72c1153f508 c
+---- UnityPy (loaded on demand, only if the cache is not enough)
+@@ 7317caec2f0f c
+untextured material (no texture in its TexEnvs: 21 location maps, 10 battle sceneries): Unity samples the default white texture, so the surface is drawn in
+vertex color x _Color (dark ground, water...). Previously, the surface was missing from the viewer (texture-less group ignored when drawing).
+@@ 0266267f842c c
+---- a map
+@@ b417309bf9cd t
+produced in the meantime by the background preparation
+@@ 284eb8ecee55 t
+scenery made of a single mesh carried by the ROOT (18 battle sceneries: btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_*): map object 0 is the root itself
+@@ c293654f87eb t
+ChunkFile.readPosition (CCEB58) reads x, y, z then NEGATES y (fneg): a map object's position is (x, -y, z); without this, the trees and the ruin of the reliefs
+@@ d72160513fe4 t
+sink in (file y = -relief height); this is also the reason for the "+1" of the chests (file -0.5 -> world +0.5)
+@@ 1b8fb269c9ee t
+FldObject.set_palette_data: textures of the object whose name contains the palette's
+@@ 0664fdb154cf t
+sequence frames (FldObject.seq_build_mesh: Transform.GetChild(key value)), same number of vertices as the model
+@@ 869cf2206f6d c
+FldObject.save_org_color (init_fld, RVA 0xCD811C): _OrgColor = (1, 1, 1, alpha of _Color); FldObject.update_material_color (every frame, 0xCD79F4):
+Material.color = _OrgColor x FldObject.m_color (packet 33 tint, white by default). The RGB color of _Color recorded in the asset is therefore NEVER used in game
+(it made the cedars, undergrowth and trees of the night battle scenery black: _Color = 0, 0, 0); only its alpha counts. Shader fld_*.vert: vertex color x
+_Color.
+@@ 625020b601f0 t
+transparent material: separate group, drawn after the opaque scenery in queue 3000 + priority (FldObject.set_priority)
+@@ c6a7a916324f t
+sequence played continuously (water, lamps...)
+@@ ca68194ea271 t
+variants of the common animations (open door, broken jar or barrel, open chest...)
+@@ 869db122ea83 t
+atomic write: never a half-written file
+@@ befe19a232c2 c
+---- large world plan ("Carte" window of the world map: MenuPortItemTable.Make_WorldLargeMap / LoadLargeWorldMap)
+@@ ab6c782e6cce c
+---- world map veil ("Carte" window, ICityMap: code 5)
+@@ be891ee4b242 c
+---- animated 3D model (FbxObject: Resources "fbx/c<number>", engine packets 31 and 32)
+@@ 231f8ee8893b c
+materials: same texture and shader "Custom/ImdChara" (vertex color x _Color, alpha blending, ZWrite on, Cull Back)
+@@ 7db9af7d40d0 t
+(3D model without texture: refused as before, the white texture is only used for map scenery)
+@@ 24dd9856cd2e t
+a single bone per vertex: weight 1 ("rigid" mesh, the dragon's case)
+@@ 704a705f44ee c
+---- a character's sprite sheet
+@@ 83a184e3ca59 c
+---- background cache preparation
+@@ f32a7b1d15c4 t
+the title screen dragon (FbxObject c1018); other 3D models, if any, are read on demand
+@@ 0c71ce97c5d6 t
+old list (without the map window plans, or without the effect textures): rebuilt
+@@ 08cb3930b8d9 t
+everything already ready
+@@ 2edc450edce7 t
+relaxed pace
+@@ d9771211e804 c
+Cache preparation in a separate process (launched by the viewer, low priority): in a game thread, the extractions (pure Python) took the
+interpreter lock away from it and made the screen stutter. End of the process: when standard input closes (the viewer has stopped).
+@@ 42bc527fd0f9 t
+(D-238: the tool's language, given by the game that launches this process; on its own, the computer's language)
+@@ 9128bf3a501a d
+Reading the game's graphics data (datapack.unity3d, in the user's data APK).
+Nothing is supplied with this program: everything is read from the player's files then cached on their disk.
+@@ 3ca4e19bf4c8 d
+Rotation of a map object (degrees) like FldObject.rotateXZY (0xCD47F0, read from the disassembly): q = (AngleAxis(ry, up) * AngleAxis(-rz, forward)) * AngleAxis(-rx, right) -- the axes are the static
+Vector3.up / forward / right (offsets 0x18 / 0x48 / 0x3C), the X and Z angles are inverted, and the quaternion product applies X first (in the object's frame), then Z, then the Y heading
+last (in the world frame): matrix Ry . Rz . Rx. (This is not Unity's Quaternion.Euler, Z-X-Y, nor is it the X, Y, Z order wrongly noted in #21.) Used by init_fld (initial rotation),
+SetCommonAnimation, pmv_func and c_pmv_func (movements): a chest's lid, key X = -60, lifts around ITS hinge whatever the chest's heading (a chest with heading 90, -90 or 180 used to open sideways
+or forward when the heading was applied before the tilt).
+@@ 45ab1b31f89c d
+Neighboring sceneries of a battle scenery missing from the data. The engine picks the final letter according to the world time (`StageStatus::getBtlMapName`: _d day, _e evening, _n night AND dawn: zone 1 -- 3264 to 127 --
+reuses `_n`, there is no dawn scenery); `param_map_battle.dat` lists each location's sceneries, but `btlcc1` only has _d and _e: without `_n` nothing would be displayed. Dark world with no time-of-day zone:
+the engine's table requests `_dk` (btl_pl_dk, btl_se_dk, btl_sd_dk, btl_mt_dk, btl_po_dk, btl_wd_dk), but the data pack only has pl, po, wd (and tc1) in `_dk`: se, sd, mt take the night
+(assumption: the table requests them, no resource carries them). In order: the variant closest in brightness, the others, then the name without a letter. A name that does not end in
+_d, _e, _n or _dk: none.
+@@ 18c15b06d7c2 d
+Frees the data pack's memory (more than 800 MB); it will be read again on demand if an element is still missing.
+@@ 2b1e8b2f25f9 d
+-> (key, scale, offset, the material's _Color, kind); fills tex_out[key] = RGBA array (top first) and name_out[key] = texture name.
+kind = shader chosen by FldObject.set_shader (CD5414): 'trans' (Custom/fld_trans: SrcAlpha / OneMinusSrcAlpha blending, ZWrite off) if the texture name does not contain '.tim'
+or if _Color.a != 1; otherwise 'atest' (fld_atest) if the texture is RGBA32 (format 4), 'normal' (fld_normal) otherwise.
+@@ 88b366a67532 d
+Frame meshes of a model (children sNN_*, FldObject.seq_build_mesh): list of MeshFilter, in order; frame 0 is the model's own mesh.
+@@ a679fd63365d d
+-> dict: 'groupes' {texture_key: (positions Nx3, uv Nx2, colors Nx4)}, 'textures' {key: RGBA}, 'objets' (FMAP), 'plages' {object: [(key, start, count)]},
+'noms' {object: model name}, 'var' {(object, model): {'plages', 'images'}}: model variants of the common animations (FCAN), baked at the object's original position
+and placed after the map's objects in the groups; 'tabs' (FCAN), 'mots' (FPMV), 'seqent' / 'seqs' (FSEQ / FSQD),
+'imgobj' {object: frames per sub-mesh} (mesh sequences played continuously), 'pam' (FPAM: palette animations) and 'pamdef' {group key: {'nom', 'pam', 'evenement', 'images': [RGBA]}}: surfaces whose texture changes from frame to frame (water, swamp, damaging floors...), separate groups
+@@ 96e5ba5b1d30 d
+Frames of a sub-mesh: {'pos': (frames, n, 3), 'uv': (frames, n, 2) or None, 'col': (frames, n, 4) or None}; UVs and colors only if they change from one frame to the next (flowing water, flickering lamp).
+@@ 216bb2658f2b d
+Key of the texture group of an animated palette (one per name, animation and event); its frames are the textures 'pam/<name>.NNN' (FldObject.init_fld). None if they are missing.
+@@ bb8990e66c51 d
+{name: Texture2D object} (call with the lock held).
+@@ 7a31ebbe7a11 d
+Unity texture by its name (e.g. `field`: world map tiles), RGBA top to bottom; cached.
+@@ 5a93d3201e53 d
+{'base': 1024 x 1024 RGB image (top first), 'pieces': [(bit, x, y, image h x w x 3)]}: the background `dsdq4lmap0_1024` and the pieces `P<bit>_<x>_<y>_<width_px>` (MAP_DIFF: placed on the background when
+the bit of the flag sent by the engine is set; x and y counted from the top left corner). These are TextAssets with raw data (3 bytes per pixel). Cached in world_plan.npz.
+@@ d7cb9aa51acb d
+192 x 256 x 4 (RGBA) image of the TextAsset `dsdq4wmap01m`: grayed silhouette of the lands that the map window places over the 10 x 10 pixel blocks (from x = 48, y = 16) not yet explored. Cached.
+@@ 66402824613f d
+Model "fbx/c%04d": bone hierarchy, skinned mesh (one bone per vertex, or up to 4 with weights), texture, animation clips (position / rotation / scale curves of each bone) -> dict
+(see fbx.FbxModel); cached on disk. The extraction exception (unsupported shader or component) is propagated: the caller then ignores the model.
+@@ f34d7e4a5bf2 d
+[(kind, name, file)]: everything the game may need to extract from the data pack.
+@@ 9924514e53ed d
+Deletes the maps of an old cache version (carte2_ to carte10_: carte10_: transparent surfaces sorted by half of the flags and not by their priority, #203; without the palette and sequence animations, sunken chests, lid upside down or open sideways: object rotations in the wrong order; carte9_: untextured surfaces and scenery carried by the root missing), which have become useless.
+@@ 632846720ddd d
+Extracts in the background, at a relaxed pace, all the maps, sprite sheets and monster textures not yet in the cache: the game never has to read
+the big data pack in the middle of a game again (the first unknown map, a well for example, froze the screen during the read). When everything is ready, the memory is
+freed, and subsequent launches no longer touch the pack. `stop`: Event to interrupt.
+@@ 1058bc13ac36 d
+Geometry of a model at the object's original position -> ([(key, start, count)], frames or None); added to the groups.
+## FILE dq4_pc/world/fbx.py
+@@ 935d7c439e6b t
+the engine counts in frames of 1/30 s; Unity's animation advances in seconds (the duration of the dragon's "Take 001", 21.98 s, equals the 659 frames the engine waits before "Take 002")
+@@ 61ae542b3e8c t
+FbxObject.m_blend_time: duration of the cross-fade (Animation.CrossFade) when the previous animation is a loop
+@@ 70e4f6d356b4 t
+WrapMode.Loop
+@@ 950eae43d65e c
+---- pose
+@@ ee636627e9f0 t
+a {(bone, kind): value} table per clip
+@@ f3ea328045c4 t
+q and -q are the same rotation: we blend on the same side of the sphere (shortest path), otherwise the average cancels out or makes a half turn
+@@ 6fd817db9d17 t
+skinning matrix of each bone: bone in the world x bind pose
+@@ b73086cbc743 t
+{name: {'dur', 'wrap'}}
+@@ a3d399b99f7f t
+[name, start frame (float)]
+@@ 94b38fcf4091 t
+queued clips (PlayQueued)
+@@ ebee3b04fa56 t
+(previous clip [name, start], cross-fade start frame)
+@@ 51e1db537f2d t
+wrapMode of the last clip started (FbxObject.m_mode)
+@@ ffc8e7c9315e d
+Animated 3D models of Unity (FbxObject: NativeManager.cmd_fbx_load = packet 31, cmd_fbx = packet 32).
+The engine loads a model "fbx/c<number>" (Resources prefab: skinned mesh + "legacy"-style Animation component), places it (world position / rotation / scale), colors it
+(Material.color of all its materials), starts its animations ("Take 001"...) and shows or hides it. Here: the data extracted once from the data pack (`Data.fbx_model`),
+the evaluation of the animation curves (AnimationCurve Hermite interpolation), bone posing, skinning (each vertex follows its bone) and a player that reproduces Animation.Play / PlayQueued / CrossFade.
+Everything is in Unity world coordinates (left-handed), like the rest of the viewer.
+@@ c5f2f6ee8559 d
+Rotation matrices (n, 3, 3) of quaternions (n, 4) x y z w (Unity's formula).
+@@ fb3e323f95c0 d
+Quaternion.Euler (degrees): rotation about z, then x, then y (left-handed), like `window.rot_unity`.
+@@ 877a0506936e d
+Transform.position / rotation (Quaternion.Euler) / localScale of an object without a parent -> 4x4 object -> world matrix.
+@@ c6161c443007 d
+AnimationCurve (keys: time, value, in-slope, out-slope): cubic Hermite interpolation; an infinite slope = step.
+@@ 52863d68c647 d
+A model (data from `Data.fbx_model`): bone hierarchy, skinned mesh, texture, animations.
+@@ e8d28b8abd7b d
+Animation of an object (UnityEngine.Animation, what FbxObject.PlayAnimation does) driven by the engine's frames:
+* no animation started: model in its rest pose;
+* Play (forced, or nothing is playing): the clip restarts from the beginning; otherwise, if the current animation is a loop (m_mode = Loop): CrossFade (0.3 s cross-fade); otherwise PlayQueued (the clip waits for the end of the current one);
+* clip time: Once / Default / ClampForever = stuck on the last frame, Loop = modulo the duration.
+@@ 9f4c693a2038 d
+Local pose of each transform: rest, replaced by the animation curves. `poses` = [(clip name, time in seconds, weight)] (weights sum to 1: cross-fade).
+@@ b08320235ce4 d
+World positions (n, 3) of the skinned mesh's vertices; M_obj = world matrix of the model's root (position, rotation, scale given by the engine).
+@@ 3bf51007eec6 d
+Moves on to the queued clips when the current one is finished (the next one starts exactly at the end of the previous one).
+@@ fd06651fc013 d
+[(clip, time in seconds, weight)] at the engine's (floating-point) frame.
+## FILE dq4_pc/world/flat_sceneries.py
+@@ cf3cfca1a288 t
+height added per stacked triangle (town units)
+@@ 50d1b20c1959 t
+two flat triangles whose height differs by less than this are considered coplanar
+@@ d2d2d87d6baa t
+a triangle is flat if its three vertices have the same height to within this
+@@ 9036564a5102 t
+(drawing order, key, triangles T (n, 3, 3), flat indices, heights, cut-out?)
+@@ dbc0e8592cca t
+(drawing order, key, triangle index, height, xz triangle, cut-out?): only the triangles at a height where a cut-out triangle is
+@@ 394552b2a1a3 t
+rounded height -> triangles (the neighboring buckets are also examined: a bucket boundary can separate two close heights)
+@@ e76e50c22e93 t
+height, x min / max, z min / max of each triangle
+@@ db966c4f54bb t
+triangle -> triangles drawn before it, at the same height, that it overlaps (at least one of the two is cut-out: two solid, opaque triangles do not visibly flicker)
+@@ e47064e39436 t
+in drawing order: a triangle's level follows that of the triangles below it
+@@ 926c8a7eb657 d
+Flat sceneries stacked at the same height (flower beds on another border, path on lawn...): fix for z-fighting flicker.
+
+Two horizontal triangles at the same height have the same depth to within rounding: the depth test gives one or the other pixel by pixel, and the result changes with every
+camera movement (the flowers "flicker"). When a map is loaded, every flat triangle that overlaps another one already drawn at its height is raised very slightly (3 thousandths of a town unit, i.e. less than a tenth of a pixel)
+for each triangle stacked below it; the last one drawn always wins. The texture groups are copied: the map cache stays intact.
+@@ ebde4c378531 d
+Do the two triangles (3 x 2, xz plane) have an intersection of nonzero area? Separating axis on each edge.
+@@ fc8e11c4250c d
+Raises the overlapping flat triangles of `c['groupes']` (replaced by a new dictionary of groups; the map cache is not touched). -> number of triangles raised.
+## FILE dq4_pc/world/fld.py
+@@ dd92d2da8148 t
+FldObject.Load: int32 flags at +48 (billboards: 0x4, 0x20; 0x40000 = common), int32 PRIORITY at +52 (render queue 3000 + priority, FldObject.set_priority; #203: before, `prio` was the high half of the flags)
+@@ 5248249b73ef t
+FLD_MAP_OBJ: seq_obj_id (FSEQ entry: mesh sequence played continuously), pmv_id (FPMV movement played continuously), -1 = none; canim_id (number of the common animation table of FCAN, -1 = none)
+@@ b0d67ca9d9ef t
+key positions: readPosition negates y as for objects
+@@ 1c9b9de1dd97 d
+FLD: sequence of 'TAG4' chunks + size(4, total size of the chunk); FHDR has its own size.
+@@ 2f6612f4898b d
+FCAN: common animation tables. -> list of tables; a table = list of entries (model, seq_obj_id, pmv_id) whose index + 1 is the animation number
+(FldObject.SetCommonAnimation: model to display, mesh sequence (FSEQ), movement (FPMV)).
+@@ 91a7984d03e8 d
+FPMV: object movements (position, rotation, scale as keys, frame = 1/60 s). -> list of {'fin', 'repeat', 'keys': [(frame, pos, rot, scl)]}
+@@ cd61b2c2f334 d
+FSQD: mesh sequences (key = frame at 1/60 s, value = frame mesh number); FSEQ: sequence objects (FldObject.FLD_SEQ_OBJ, 20 bytes).
+-> (list of FSEQ entries [(obj, seq, group, start delay, delay between two loops, number of loops, _, original number of loops)], list of sequences {'fin', 'repeat', 'keys': [(frame, value)]}).
+Number of loops: -1 = endless, N = N loops then stop on the last key, 0 = never started by itself (only by a common animation); delays in 1/60 s.
+@@ c790e5d0a747 d
+FPLP: animated palettes of objects (FldObject.FLD_PLP_DATA). -> list of {'nom', 'pam', 'event', 'obj'}: the map object `obj` (FMAP) sees its textures whose name contains `name_str`
+replaced, frame after frame, by those of the palette animation `pam` (FPAM); `event` >= 1: only during the event animation with that number (otherwise frame 0).
+24-byte record: name (16, 0-terminated), animation number (1), event number (1), object (2), 4 unused bytes.
+@@ 4561f5908277 d
+FPAM: palette animations (FldObject.FLD_PAM_DATA). -> list of {'frame', 'cle', 'durees'}: start frame and key, duration of each key (1/60 s; the textures of each key are 'pam/<name>.NNN').
+Header (4 x int16: frame, key, number of keys, flag) then, per key: duration (int16) + palette (16 colors of 2 bytes, 256 if flag & 1).
+## FILE dq4_pc/world/hd.py
+@@ ef633e97facf t
+to be incremented when an algorithm changes (invalidates the caches)
+@@ dc87f789c3c0 c
+Sheets that are not cut into 24 x 32 character cells over 3 columns. Chara.SetTexture (libdq4core, libunity 0xCCC6F8): identifier 193, the world map boat (two
+sprites: the ship, rows 0 to 4, and its wake, rows 5 to 9), takes the "mesh12" mesh: 0.8 x 0.8 square (versus 0.48 x 0.64 for a character), 40 x 40 cells, 12
+columns; 194 is an alias of 193.
+identifier -> (cell width, cell height, columns, rows, panel width ratio, panel height ratio)
+@@ 1996245254e7 c
+---- other algorithms -----------------------------------------------------------------------------------------------
+@@ bd0362f23a3f c
+(displayed name, cache identifier, function); index 0 = original sprites (sharp pixels, no enlargement), 1 = EPX x8; mode 4 (pixel perfect) is handled by window.py
+("regions lissees" and "bicubique" were removed: they blurred the outlines instead of sharpening them; upscale_bicubic is now only used as an EPX fallback for
+sheets that are already softened)
+@@ 058b14146630 c
+---- map window plans (256 x 256 displayed in 4:3) ------------------------------------------------------
+@@ a2e5c85efa81 t
+threshold slightly below 0.5: the outline covers the plan's green fringe under the silhouette
+@@ 05a6c368fbc8 d
+HD smoothing of sprite sheets: EPX x8 enlargement, computed
+at load time and cached (no game file modified).
+
+Each cell (24x32) is enlarged separately then placed back into a new atlas with a margin (gutter) that repeats
+the cell's edges: bilinear filtering and mipmaps therefore cannot make the neighboring cell bleed over.
+Transparent pixels take the color of the neighboring opaque edge to avoid dark fringes when filtering.
+@@ 9b25de09dc2c d
+Splitting of sheet `h<ident>`: dict(ident, larg, haut, cols, nl, pw, ph, standard). ident: the alias is already resolved (193 for 194); nl: rows (4 for a character, 8 if the 5th row is not empty);
+pw, ph: ratio of the drawn panel to that of a character (1 except for the boat).
+@@ fbee5e322014 d
+(u0, u1, v0, v1) of the cell (column, row) of a sprite sheet atlas `f` (original or HD, gutters excluded); v1 = top of the cell (Unity: v = 0 at the bottom of the texture).
+@@ ef2eec03e149 d
+Pixel comparison key: 32-bit RGBA, any almost transparent pixel = 0.
+@@ 2898cdaa0703 d
+Gives transparent pixels the color of an opaque neighbor (alpha unchanged), `step` times.
+@@ 6d76001c9135 d
+EPX (Scale2x): each pixel becomes 4; the corners take the neighbor's color when two adjacent neighbors are identical.
+@@ f091577fe6fa d
+Sprite sheet -> (sheet, cleaned). The hero sheets (h100 to h127) have a halo of alpha 1 to 105 in a stray color (magenta) around the body (alpha 204 to 255): the original
+game does not show it (rejection of transparent pixels); without this cleaning it appears as a purple fringe and the body, with alpha 0.8 to 1, lets the scenery show through. Alpha < threshold -> 0,
+otherwise 255. Sheets with binary alpha (NPCs, monsters) are rendered as is.
+@@ be738948ffe0 d
+Iterated EPX/Scale2x (x8); bicubic fallback if the alpha is already softened (sheets filtered in the original).
+@@ 9c5e698b75c8 d
+Sprite sheet -> (HD atlas, cell_w, cell_h); `factor` = 1 for the original sheets (gutter only); the cell (col, line) starts at
+(col*(cell_w+2*gutter)+gutter, line*(cell_h+2*gutter)+gutter) in the atlas (origin at the top left).
+@@ 21185c6e57bb d
+Bilinear interpolation matrix (n_in*f, n_in) (aligned pixel centers), followed by a Gaussian blur (sigma in output pixels).
+@@ e1172a995180 d
+Bicubic interpolation x f (premultiplied alpha, alpha contrast to keep a sharp silhouette).
+@@ 6ab6b630e55a d
+Map plan (RGBA 256 x 256, displayed in 4:3) enlarged with Lanczos then slightly sharpened: much sharper than plain linear filtering by the graphics card (premultiplied alpha).
+`epx` (world plan, whose lands are pixel art on a painted background): two EPX passes first round the outlines of the lands.
+@@ 734197a9e1a2 d
+Places on the enlarged plan (1024 x 768) the veil of the world map's unexplored blocks. `mask`: grayed silhouette of the lands (192 x 256 RGBA, alpha 255 on land, 3 on sea),
+`lookup_key`: 16 integers, set bit = unexplored block of `block` x `block` pixels (16 x 16 blocks from (x0, y0) in the 256 x 192 plan). The game places square blocks; here the silhouette (rounded outline)
+and the block boundary are smoothed after enlargement, which avoids the staircase effect without changing what is hidden.
+## FILE dq4_pc/world/map_objects.py
+@@ 38daaf4814ca t
+FldObject.Update: s_seq_frame_rate_step = 2 per frame
+@@ 912cb41456d1 t
+displayed positions (modified in place)
+@@ 93a57bffba03 t
+object -> [model, ...] of the variants
+@@ 46c5343c05bf t
+variants hidden as long as no animation asks for them
+@@ 838539cac2b3 t
+object -> frames (positions, UV, colors) of its mesh sequence, per sub-mesh
+@@ 291f621db49f t
+displayed UV and colors: copies created on demand (groups where either one changes)
+@@ 74aa879b7f89 t
+scenery panels: object -> flags
+@@ feb051c2ea6a t
+current orientation (around Y / full camera); false as long as the vertices do not follow it
+@@ ca8896a208bb t
+caches: original position/rotation/scale, movement keys as arrays, rotation matrices
+@@ 434bff3888d5 t
+original number of loops 0: never started by itself
+@@ 4e652319b8c7 t
+Quaternion.Euler(0, yaw, 0)
+@@ d4a73d6bd7bb t
+then tilted around the panel's horizontal axis (its foot stays in place)
+@@ d23b606f5c78 t
+full camera rotation (the object's x, y, z axes = right, up, forward)
+@@ d9ad8f584671 c
+---- engine commands
+@@ 8d26eb4c5dd1 c
+---- frames
+@@ f4ffd48c3273 t
+continuous animations: start delay, loops, delay between two loops (FldObject.fld_motion_update), one clock per animation
+@@ 9fe7134d5774 t
+common animation: each movement and each sequence counts its own time (FldObject.fld_motion_update: repetition, repeat = -1: endless, otherwise held on the last key)
+@@ a9a3e20e0d28 t
+(identity is checked: a freed number could be reused)
+@@ f0ed68588f78 t
+(state from an old version: a single clock)
+@@ 16400d7a7430 t
+common movement (FldObject.c_pmv_func): the displacement is read in the object's frame, MultiplyPoint(TRS(position, rotateXZY(rotation), scale)) of the object before the movement (a drawer that slides out of ITS piece of furniture, whatever its heading)
+@@ 83cd99843fc3 t
+ordinary movement (FldObject.pmv_func): the displacement is added as is
+@@ 9a1f67b628cb t
+the model stays at its original place
+@@ 5eea77da04ed t
+panel: the orientation comes from the camera (the rest of the movement is added to it)
+@@ f1b4fe1c986b t
+original world -> current world: (v - pos0) -> T, then + pos  (= R . diag(scl) . inv(R0 . diag(scl0)))
+@@ 9d393f585503 t
+UV and colors that change from one frame of the sequence to the next
+@@ a12e025e9c46 d
+Animated objects of the town maps: doors that open, jars and barrels that break, chests that open, objects hidden or moved by the engine.
+
+Reproduces on the Python side what the game's Unity layer (FldObject) does from the engine's packets:
+  * packet 5 (cmd_fld_common_anim): object | number << 16 -> SetCommonAnimation: the object's common animation table (FCAN, object.canim)
+    gives, for each number, the model to display (door, intact or broken jar...), a mesh sequence (FSEQ/FSQD: the model deforms
+    from one frame to the next, e.g. the jar that bursts) and a movement (FPMV: position, rotation and scale added to those of the object, e.g. door leaf);
+    number 0 = original model, motionless;
+  * packet 7 (cmd_fld_on_off): object | flag << 16 -> GameObject.SetActive(flag == 0);
+  * packet 2 (cmd_fld_alpha): object | level (0..31) << 16; level 0 = invisible;
+  * packets 3 and 4 (cmd_fld_pos, cmd_fld_rot): new position / rotation of the object.
+Times are in sixtieths of a second in the data; FldObject.Update advances by 2 per game frame (30 frames/s).
+
+Animations played continuously, without an engine command (FldObject.update_seq / update_pmv / update_plp):
+  * mesh sequence (FMAP: seq_obj_id -> FSEQ entry): flowing water, flickering lamps... The mesh is interpolated from one frame to the next
+    (vertices, UVs and colors: FldObject.seq_build_mesh); the entry gives the start delay, the delay between two loops and the number of loops (-1: endless);
+  * movement (FMAP: pmv_id -> FPMV): objects that turn, swing...
+  * animated palettes (FPLP / FPAM): the texture of a surface (sparkling water, swamp, damaging floor) changes from frame to frame (class MapPalettes).
+
+Scenery panels (FldObject, flags FLD_OBJ_FLAG_BILLBOARD_Y = 4 and FLD_OBJ_FLAG_BILLBOARD_XYZ = 32: trees, candles, torches, barrels, chairs...): a quadrilateral whose origin is the foot;
+it pivots around the vertical axis (4) or takes the camera's full rotation (32) to stay facing front. The vertices are baked at the original orientation; `orient` recomputes them
+when the camera turns (camera rotation keys, towns and dungeons).
+@@ 26b48d855d83 d
+Sorted TzKeys [(frame, ...)] -> (index before, index after, fraction) at frame t (held on the last key).
+@@ b0fb5aaedb1e d
+Counter of an animation (one FldObject.FLD_MOTION: cur_frame, start_delay, repeat_delay, repeat_num, end_frame): each movement (FPMV) and each mesh sequence (FSQD) has ITS own clock,
+with its own duration and number of loops (fld_motion_update 0xCD69DC, called once per motion). Two animations of the same object (e.g. the healing ray: 84-frame sequence, rotation of 800) share nothing.
+@@ a66b92530702 d
+One game frame for one clock (FldObject.fld_motion_update): start delay, then the time advances by STEP; past the end: one loop fewer (rep = -1: endless), return to the start
+(remainder of the overshoot) after the delay between two loops, or stop on the last key when the loops are exhausted.
+@@ a3bd01abee6a d
+State recorded by an old version: a single clock (the sequence's, otherwise the movement's) for the object's two animations. The two clocks resume the recorded time
+(the movement's with its own modulo).
+@@ 258a65a2015b d
+Animated palettes of the map (FldObject.update_plp): each animation (FPAM) chains its keys; a key's duration is in 1/60 s, counted in steps of 2 per game frame.
+The surfaces concerned ('pam' texture groups, see Data.game_map) take the texture of the current key. Event-linked animation (number >= 1): frame 0 as long as the event is not in progress.
+@@ 53ddde719e4c d
+Reloading of the same map: all objects return to their original state.
+@@ 2be321083e5f d
+Starting animations: mesh sequences and movements of the objects that have one continuously (FMAP seq_obj_id / pmv_id). Each has its own clock (see `_clock`).
+@@ 8b5df1b1d23b d
+Puts the objects back into a recorded state (savestates); `auto` absent (old format): continuous animations resumed from the start.
+@@ b70885ab5f52 d
+Turns the scenery panels toward the camera. `yaw`: camera heading (radians, 0 = toward +Z, positive toward +X); `base`: camera (right, up, forward); `pitch`: tilt added to the camera
+(degrees, 0 = game view): panels that only rotate around Y (barrels, jars...) tilt by the same amount, to stay facing the camera when it is raised or lowered. -> True if vertices have changed.
+@@ c04bf95e763b d
+Game frames during which the engine must wait for the animation to finish, or None if the object does not have this animation.
+@@ a0bf088c8511 d
+One game frame: advances the movements and sequences in progress. -> set of groups modified since the last call.
+@@ 2dcca6d584ab d
+Positions, rotations and scales of a movement's keys, as (n, 3) arrays.
+@@ 327303308f14 d
+(vertices, UVs, colors) of a sub-mesh: original (UV and colors None), or interpolated by the mesh sequence in progress (FldObject.seq_build_mesh: between the frames
+of the two keys around the current frame; a key's value is the model's child number).
+@@ 32b50b17fa58 d
+One game frame.
+@@ 60d9f0f697cc d
+Number of the current frame (texture) of group `key`.
+## FILE dq4_pc/world/map_tint.py
+@@ 174625fc8543 t
+FldObject.update_material_color: Texture.name.IndexOf("tz_") != -1 -> no tint
+@@ 61461727c862 t
+animated palette: textures "<name>.NNN" (FldObject.set_palette_data)
+@@ c87906def63f t
+reading the name only (recent UnityPy)
+@@ 8e085af94e61 t
+otherwise full read of the object
+@@ 8abce70e4166 t
+the 800 MB are released if we were the ones who read the pack
+@@ 7296af5998d4 c
+------------------------------------------------------------------------------------------------------------------------------------------------------
+Background color of the battle sceneries (FETC block of the scenery's .map file)
+
+Unity side (read in libil2cpp): `FldObject.init_fld` reads the FETC block (FLD_MAP_ETC); its first field `bg_color` is read by `ChunkFile.readColor` (RVA
+0xCCEC20: 4 bytes r, g, b, a divided by 255); `NativeManager.cmd_fld_load` (RVA 0xD11D64), last, calls `BackColor.SetColor(bg_color, 0)` (RVA 0xCC4364: same
+color at top and bottom, immediately). The engine sends NO background color in battle (no packet 8): a battle's background is therefore the `bg_color` of the
+loaded scenery, variant by variant (`_d`, `_e`, `_n`, `_dk`): it is what gives the sunset orange around the ground. (Towns, for their part, then receive a
+packet 8: `cmd_back_color` RVA 0xD14F44, alpha 1.) The FETC alpha is 0 in the 140 sceneries: no effect, the data pack's `BackColor` shader has no blending
+(Blend One Zero, ZTest Always, ZWrite Off): it writes the vertex color as is.
+------------------------------------------------------------------------------------------------------------------------------------------------------
+@@ e755ffa72a9d t
+battle sceneries (btl_*, btlc*, btld*, btls*, btlt*, btlm*, btly*)
+@@ 46f20906470c d
+Scenery tint (packet 33, `cmd_map_color_rate`): which scenery groups receive it.
+
+Unity side (read in libil2cpp, RVA 0xD14E44 `NativeManager.cmd_map_color_rate`, 0xCD79F4 `FldObject.update_material_color`, 0xCD811C `FldObject.save_org_color`):
+  - the packet gives three floats r, g, b: `FldObject.m_color` = (r, g, b, 1) (world map: `Field.SetColor` = color of the tile material and of each symbol);
+  - `FldObject.Update` calls `update_material_color` every frame: for every material of every Renderer of the map, `Material.color` = `_OrgColor` x `m_color`, EXCEPT if the material has
+    no main texture or if the NAME of that texture contains "tz_" (lamps, candles, torches, waves, damaging floors: `tz_akari1`, `tz_rousoku1`, `tz_nami`, `tz_damg01`...): those
+    keep `_OrgColor` alone (the day / evening tint does not touch them: they stay lit);
+  - `_OrgColor` is NOT the asset's `_Color`: `FldObject.save_org_color` (RVA 0xCD811C, called at the end of `init_fld`) re-reads `Material.color` then writes `_OrgColor` = (1, 1, 1, original alpha) for every
+    material of every Renderer (s0 to s2 rewritten to 1.0 in the disassembly). So `Material.color` = (m_color.rgb, alpha) every frame: the RGB color `_Color` stored in the asset is never used in game
+    (point clarified by the coordinator; the fix of the map cache, `data.py`, is done on another branch: this module and the uniform `tint` assume a cache without this asset color);
+  - the scenery shaders (`Custom/fld_normal`, `fld_atest`, `fld_trans`: texture x vertex color x `_Color`); the world map (`Custom/Field`: texture x `_Color`).
+Characters (`Chara`), shadows, bubbles and the interface are not touched.
+
+This module contains only what is needed to recognize the "tz_" groups: the map cache does not keep the texture names, only their identifier (path_id); the list of identifiers whose
+name contains "tz_" is read from the data pack ONCE (half a second after the pack loads, which itself takes a few seconds) and kept in the cache's `tz_cles.json`.
+@@ eeb13c87b99a d
+True if the tint changes nothing (1, 1, 1): nothing to do, the drawing stays identical to the pixel.
+@@ 8fe00be2286a d
+True if the scenery group `lookup_key` (map cache key: texture identifier, ('tr', priority, key) for a transparent material, ('pam', name, animation, event) for an animated palette)
+is a "tz_" texture and therefore not tinted. `ids_tz`: set of "tz_" texture identifiers (None = unknown: everything is tinted).
+@@ 4cca6443df17 d
+Set of "tz_" identifiers recorded in the cache, None if it is not there (yet) or if it is unreadable.
+@@ d6446501c4d0 d
+Reads the data pack (under `data`'s lock), collects the textures whose name contains "tz_", writes the cache file and returns the set. Raises an exception on failure.
+@@ 8d7885daeb02 d
+Set of "tz_" identifiers, read from the cache or computed as a background task; `ids()` returns None until it is ready (the scenery is then fully tinted: the lamps
+light up again as soon as the list arrives, a few seconds, once only).
+@@ d869fb8dcd0e d
+Background color (r, g, b) as floats 0 to 1 of the FETC block of a scenery .map file (FLD_MAP_ETC.bg_color: bytes 8 to 10 of the block, after 'FETC' and its size), or None if there is no block.
+@@ c94028c7904a d
+{scenery name: (r, g, b)} recorded in the cache, None if it is not there (yet) or if it is unreadable.
+@@ 2d4ba9bf46d1 d
+Reads the data pack (under `data`'s lock), collects the FETC of each battle scenery, writes the cache file and returns the dictionary. Raises an exception on failure.
+@@ 0d8538ebffd9 d
+Background colors of the battle sceneries, read from the cache or computed as a background task (once, a few seconds); `color(name_str)` returns None until the list is ready or if the scenery is not
+in it: the caller then keeps its estimate (Game._battle_background).
+## FILE dq4_pc/world/scenery_outlines.py
+@@ 063263e50dca t
+resolution of the alpha and color after processing (2 EPX passes)
+@@ 07a20d7b67c3 t
+Gaussian blur of the alpha, in pixels of the enlarged texture (0.3 original texel)
+@@ 76566c034af6 t
+smallest side (in texels) of a processed texture
+@@ 0264d291414d t
+maximum share of intermediate-alpha texels for a "binary" texture
+@@ 5cde9191aa92 t
+enlarged textures kept on the graphics card (the oldest are released)
+@@ d0926c553e90 t
+transparent texels: color of the neighboring opaque edge (3 rings)
+@@ b613b19b3823 d
+Outlines of the battle sceneries: trees, mountains, grass tufts, rocks.
+
+Cause (measured, see tools/test_scenery_outlines.py): these silhouettes are drawn in 256 x 256 textures whose alpha is STRICTLY binary (0 or 255, never an
+intermediate value: 41 textures out of 140 sceneries); the scenery is enlarged x6 then displayed 1280 to 2560 px wide, so one texel covers 4 to 10 screen pixels. Bilinear filtering softens
+the color but the outline (alpha 0.5) follows the texel grid: staircase steps of 4 to 10 px along the whole border, which MSAA (which only smooths ONE-pixel steps) does not
+touch. The transparent texels are moreover BLACK (0, 0, 0): bilinear filtering darkens the border of the foliage with a dark fringe.
+
+Remedy, on the texture alone, without touching the rest of the drawing:
+  - the alpha goes to x4 resolution: two EPX passes (Scale2x, which straightens the steps into straight slopes without losing the tips) then a 0.3 texel Gaussian blur that rounds the
+    corners and gives a one-screen-pixel ramp (alpha-to-coverage and the `FRAG` threshold make it an antialiased edge);
+  - the color (RGB) is enlarged x4 by bilinear interpolation (same sample positions as the GPU: the interior of the drawing stays that of the linearly filtered original, to within less than one
+    gray level on average, 9 at worst on a very high-contrast corner) after giving the transparent texels the color of the neighboring opaque edge (no more black fringe).
+Only cut-out textures with binary alpha at least 128 px on a side are processed (foliage, relief, rocks): skies, floors, opaque or semi-transparent (blended) textures,
+small pattern textures (grids, torches) are left as they are.
+@@ 4bac73a06da2 d
+True if the RGBA texture `arr` is a cut-out with binary alpha (foliage, relief) to be processed. `lookup_key`: scenery group key; ('tr', ...) = transparent (blended) material, excluded.
+@@ eb13ac27e030 d
+Enlarges x f by wrap-around (REPEAT) bilinear interpolation, texel centers like the GPU: the result, linearly filtered, gives back the filtered original image (difference < 1 level on average).
+@@ b4f5c1ea6106 d
+Same result as `_bilinear` (uint8) via PIL's bilinear resize (texel centers), 10 times faster; wrap-around edge via a 2-texel margin. None if PIL is missing.
+@@ b58fec15879b d
+Gives transparent texels the color of the nearest opaque texel, over `step` rings (wrap-around texture).
+@@ c26da14349bf d
+Separable Gaussian blur with wrap-around.
+@@ 3bb048ee7868 d
+PIL Gaussian blur on a uint8 mask (0 to 255), with wrap-around (4-sigma margin); None if PIL is missing.
+@@ b5e757bf036e d
+Binary mask (h, w) of bool -> float32 alpha (h * 2^passes, w * 2^passes) between 0 and 1, with wrap-around.
+@@ eb4956024752 d
+RGBA uint8 texture (h, w, 4) with binary alpha -> RGBA uint8 texture (h * f, w * f, 4) with a softened outline (see the module header).
+@@ a2a9af2bb95f d
+Texture to give the GPU for a battle scenery group: softened if it is a cut-out to be processed, otherwise `arr` unchanged.
+## FILE tools/dump_il2cpp.py
+@@ abfc65c8887b t
+net472 = .NET Framework, already present in Windows 10/11
+@@ 0df605582953 t
+the tool targets .NET 6: also accepts .NET 7/8/9 if installed
+@@ 1a8b03a6ffd0 t
+the tool waits for a key at the end
+@@ b4f1688a00a4 t
+a nonzero code after the write (key wait) is of no importance
+@@ 63cfe00abb4c d
+Extracts the STRUCTURE of the game's C# code (classes, fields, methods, addresses) with Il2CppDumper.
+
+Inputs (your files, never modified): libil2cpp.so and global-metadata.dat, taken from your APKs.
+Outputs: <root>/data/cache/il2cpp/  (dump.cs, script.json, DummyDll...) -> ignored by git (game code).
+## FILE tools/measure_toggle.py
+@@ d5961fed20a8 t
+frames counted after the end of the toggle call
+@@ 6d8b8aa08fc1 c
+what the player sees: the window is "shown" (visible(True)); a complete frame is "displayed" by the first flip; whatever is drawn or moved between the two is visible
+@@ 7da2c167dc9d t
+a frame has already been displayed since the recreation: the window appears with its content
+@@ f169d3f099a2 t
+rebuilds of the off-screen rendering buffers while the window is visible without a frame
+@@ 45745ef89f0c t
+compact sequence (consecutive repetitions are grouped)
+@@ 5ab24d22a78a c
+---- hooks on the game class
+@@ a856fdc86953 t
+depending on the state of the code being measured
+@@ 1ab4b17525fb c
+monitor mode changes (old exclusive full screen): set_mode; restore_mode is called by pyglet on every return to windowed mode, with no effect under Windows as
+long as set_mode has never been called

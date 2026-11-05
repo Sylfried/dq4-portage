@@ -1,0 +1,13 @@
+APK files read from: /tmp/console_data/apk
+Traceback (most recent call last):
+  File "/home/claude/wt-console/tools/dump_il2cpp.py", line 92, in <module>
+    main()
+    ~~~~^^
+  File "/home/claude/wt-console/tools/dump_il2cpp.py", line 62, in main
+    extract(find_apk('arm64'), 'lib/arm64-v8a/libil2cpp.so', os.path.join(INPUTS, 'libil2cpp.so'))
+            ~~~~~~~~^^^^^^^^^
+  File "/home/claude/wt-console/tools/dump_il2cpp.py", line 18, in find_apk
+    for f in sorted(os.listdir(APKS)):
+                    ~~~~~~~~~~^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/console_data/apk'
+exit 1

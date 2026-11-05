@@ -1,0 +1,122 @@
+## FILE tests/test_window_mode.py
+@@ 59e33be2eb11 t
+window always shown again
+@@ 9e419b05d56b t
+1920 x 1080: 1280 x 720 window at the center of the desktop
+@@ 5a569db2aa11 t
+position remembered by the window: kept (no recentering)
+@@ 53dca08b5d57 t
+(change, then return to the starting state)
+@@ b1d5d7ac10bb t
+(one complete frame is drawn before and after the window is shown)
+@@ 186d2ce518a1 t
+(the failure happens only once: the return to the starting state succeeds)
+@@ 13ab1a4457b8 t
+the call stack: where it failed
+@@ e5eac914e6f4 t
+(one more entry, appended: the log is never overwritten)
+@@ a161eb059483 t
+(unwritable)
+@@ d3906bdf8056 t
+(one more failure on each attempt)
+@@ a4d2f01ecba2 t
+(the next attempt works)
+@@ 4dc44f8e284d c
+---- #126: a screen plugged in while the window exists makes pyglet's monitor handle invalid
+@@ d47d797164fb t
+the kept monitor is the one from the new list
+@@ b4ddd1342872 t
+no error recorded
+@@ 814f962e7e73 t
+(e[0]: "Langue", D-238)
+@@ 9a1e11a45e10 t
+Yes / No switch, not a drop-down list
+@@ 88e2514044e7 t
+Enter / click toggles (Game.set_full_screen)
+@@ 25082217b97d t
+left = No, right = Yes
+@@ fd47e5ad40d0 t
+(already in that state: no change)
+@@ a6518c22a8a0 t
+(no more red text "Sans effet en plein écran": the line is only grayed out)
+@@ ca3f595cf2f7 t
+(from the keyboard, through the menu: a grayed-out line changes nothing)
+@@ d80a186ff084 t
+("Langue" at the top, D-238)
+@@ a8ce6b711dae t
+raw position, no setting
+@@ 040c63271d86 t
+(an old setting changes nothing here)
+@@ fa8cd18105d2 t
+old full correction (debugging)
+@@ e15c144caf58 d
+Test of the two window modes (windowed, full screen): `mode_fenetre` setting (bounds, migration of the old boolean `full_screen` and of the old exclusive full screen, abandoned keys), shortcuts F11 and Alt + Enter
+(real code of Game.on_key_press / on_key_release / _edges on a fake Game), one-step toggle (real code of Game.set_full_screen / _set_full_screen on a fake window: order of the calls, return to the starting state on
+failure), order and graying out of the lines of the "Affichage" page of the Esc menu ("Plein écran" switch, no more "Lissage des textures" or "Correction des bords des sprites"). No real window is opened.
+
+    python3 tools/test_window_mode.py
+@@ 094c94029cfc d
+F11 and Alt + Enter (real code of Game.on_key_press / on_key_release / _edges on a fake Game, no window): toggle, Enter swallowed, party chat (Alt) when Alt alone is released.
+@@ 7b43e2c47e11 d
+A pyglet monitor (x, y, width, height, name, is_primary).
+@@ 1786402e7521 d
+The calls the toggle makes to the pyglet window, in order (`logfile`), with the state they change. `failure`: name of the call that raises an error (once). `screens`: the monitors (FakeScreen; default: just one,
+the desktop); `screen_page`: the one of the window according to pyglet (`screen`, default the first).
+@@ f3301d26ec95 d
+Real code of Game.set_full_screen / _set_full_screen on a fake window: a single step (hidden, one set_fullscreen, a frame at the final size, shown), remembered size, fallback on failure.
+@@ d00f9f49921e d
+"Affichage" page of the Esc menu: desired order, "Plein écran" line = simple Yes / No switch, "Résolution" grayed out in full screen, no more "Lissage des textures" or "Correction des bords des sprites".
+@@ f948d1f9001e d
+Exclusive full screen, the "Correction des bords des sprites" option and the "Lissage des textures" option are no longer anywhere in the code (only their debug switches remain: environment variables).
+@@ 873d77aae488 d
+`mode_fenetre_retour` (#42), `edge_correction` and `smoothing` (removed options), `full_screen` (boolean from before #42): an old file contains them, they are ignored then disappear on save; the rest is kept.
+@@ 10bc8ee73742 d
+The event's MOD_ALT flag may be missing (Alt already held down before the focus, unusual keyboard): the state of the Alt keys is enough.
+@@ 39273d4eb64a d
+Esc menu open, name entry, entry logos: F11 and Alt + Enter toggle and are passed on neither to the menu, nor to the name entry, nor to the logos (which are skipped by any press).
+@@ 41d39957f08d d
+The pyglet 2.1 signature: (fullscreen, screen, mode, width, height).
+@@ 5e294a832727 d
+Number of toggle failures recorded in the error log (since #267 the window no longer displays a message: console and log only).
+@@ f4e30cf5436a d
+Issue #123: the line "Fenêtre impossible (...)" does not say where it failed: the full call stack, the state of the window and of the monitors go into window_errors.log (and the console).
+@@ b90f00bedd57 d
+A window whose monitor held by pyglet (`_screen`) is stale (same position and same dimensions as monitor 1 of the new list): a second screen has just been plugged in.
+@@ 44be22a59fbd d
+Sylfried's case (2026-11-03, 23:08): full screen, external screen plugged in, switch to windowed mode: works.
+@@ b45ac578dbda d
+Same defect the other way around: windowed, screen plugged in, full screen on pyglet's monitor (set_fullscreen(True) without a monitor, as before).
+@@ dc719b5df73c d
+If the switch to windowed mode fails for another reason, the return to full screen does not reuse the stale handle.
+@@ 8a680da205ee d
+The old monitor no longer exists (none at the same position): the kept monitor becomes the one where the window is, failing that the primary one.
+@@ dd514cae999a d
+No read of `reg['lissage']` / `reg['edge_correction']` / `reg['mode_fenetre_retour']` in the code.
+@@ 4a12ddd54a68 d
+Since #184 the edge correction is 0 by default (raw position of the NPCs, as in the game); the old full correction is requested with --correction-bords or DQ_CORRECTION_BORDS; an old setting changes nothing here.
+## FILE tests/test_window_name_collisions.py
+@@ 8e5738128b02 c
+written on purpose by the game (full_screen.py: size and screen of the pyglet window, updated by hand when the mode changes)
+@@ b7dcd3924471 d
+Test of the crash of 2026-11-05 (Windows, first launch after the code was switched to English, D-239): the `_cachee` method of the game window became `_hidden`, and pyglet's
+Windows window (`Win32Window`) already has a `_hidden = False` attribute: it shadowed the method and the first drawing of a menu crashed (`'bool' object is not callable`).
+Linux (tests, screenshots) does not have this attribute: nothing had caught it.
+
+This test reads pyglet's source code for ALL platforms (Windows, X11, macOS, Wayland, headless), so it runs everywhere, and rejects any game window name
+(method, class attribute, `self.x = ...` in the dq4_pc/window files) that is also a pyglet window name, except those written on purpose (list below).
+It also checks that a mouse click while the engine is loading (the logos) is ignored instead of reading `self.engine` before it exists.
+
+    python3 tests/test_window_name_collisions.py
+@@ 03e4a9394c6e d
+Names defined by a file: functions, class attributes, `self.x = ...`.
+@@ 24f4d9676ea3 d
+The game's `on_*` must be real pyglet events (a typo would produce a useless handler).
+@@ 22624b99693c d
+During the logos, `Game._ready` is false and `self.engine` does not exist yet: the click skips the logo, without reading anything else.
+## FILE tests/test_without_startup_callback.py
+@@ ef631f868dc0 t
+(t_startup remains: it is used for real-time measurements)
+@@ aed074e7ba3b d
+Test of issue #129: the small reminder "Échap : menu    F1 : infos" at the bottom left, displayed for 8 seconds at startup, is removed (request from Sylfried, 2026-11-03, 23:08).
+
+python3 tools/test_without_startup_callback.py

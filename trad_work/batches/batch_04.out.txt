@@ -1,0 +1,763 @@
+## FILE dq4_pc/menus/pause.py
+@@ a0569a67d498 d
+Delete: slider or choice -> original value; key -> the selected slot is cleared.
+@@ bc515fa810e1 d
+Keyboard / mouse memory of the window (Game.mouse_guard), or our own when the menu is tried without a window.
+@@ a19e0dc1f45c d
+The pointer moves. With the keyboard, the selection changes only if the pointer has moved more than EN.MOUSE_TOLERANCE pixels from where it was at the last key press (CUMULATIVE deviation: before, the test was on
+the change from one event to the next, and a mouse that sends movements of 1 to 2 pixels never took over again before a click or a very quick gesture); then the selection follows the pointer.
+@@ 0ce4bbae917f d
+The pointer has left the window: nothing is hovered anymore.
+@@ af67757e77fb d
+First visible line of the current screen (the selection does not change: the view does not return to it as long as it does not move).
+@@ 4511fa5d4c75 d
+Click on the scrollbar: arrows (one line), thumb (grabbed for dragging), bar track (one page).
+@@ 67e51575df6f d
+Movement (dx, dy) of the window with frame r = (x0, y0, x1, y1), corrected so that one of its edges (or its middle) falls on a grid line (32 x 18 cells): the nearest one.
+@@ 93e532673f16 d
+Press on the title bar of the editor panel (the gesture plays out in drag_to, do_update and release): the panel follows the pointer as soon as it moves more than PRESS_TOLERANCE away from the press point (drag
+right away, without waiting) or after a held press of LONG_PRESS_DELAY (it lifts); short press without moving = collapse / expand, once the double-click delay has elapsed without a second press; second short press
+within DOUBLE_CLICK_DELAY = return to the original position, with no folding at all (#145).
+@@ a91685ddafb1 d
+Would a press at (x, y) at time t be the second of a double click, as Windows judges it: the first short press is less than GetDoubleClickTime old (since ITS START, not since its release) and the second
+falls in the SM_CXDOUBLECLK x SM_CYDOUBLECLK pixel rectangle centered on the first.
+@@ afa6d5afe28d d
+The folding of a single click on the title bar (interface editor) happens only once the double-click delay has elapsed: collapses / expands the panel and waits for nothing more (no effect if no click is pending).
+@@ 405a98865ba6 d
+Mouse moved with the button held down: the held slider (or the scrollbar thumb) follows.
+@@ 03c79dcd1f5f d
+Characters typed while entering a value.
+@@ 2058a35337c3 d
+Window in the style of the mobile game's menus: black background with the same opacity as the other menus, white frame drawn with five strokes, rounded transparent corners (hud_mobile.border).
+@@ 7db771729b4f d
+Background of a button: the game windows' plate (Button sheet, like "Soigner tous"), pressed (darkened) when it is selected or hovered. `outline` (colored outline): no longer used by the Pause page,
+kept for the pre-game screens (saves, name, license). `grayed`: inactive line, colorless and darkened plate (the game's gray shader). Without the original menus: drawn plate (hud_mobile), veiled if grayed.
+@@ e596e79273e6 d
+Square "default value" button (arrow in a circle): bright when the value differs from the original, dull otherwise; darkens (75%, like a pressed game icon button) under the pointer.
+`grayed` (inactive line): dull, no click area or darkening.
+@@ d327f529ef39 d
+Square "mute" button of the "Son" page: speaker and waves when the sound plays, grayed speaker crossed out with a red cross when it is muted; darkens (75%) under the pointer.
+`grayed` (inactive line): dull, no click area or darkening.
+@@ d4fc88b47620 d
+Rectangle with rounded ends, vertically centered at yc.
+@@ 0eb96f827da0 d
+Sliding switch (rounded track, round knob): gold when on, gray otherwise; the knob slides from one position to the other (short animation); gold outline if selected.
+@@ c08f64f3405e d
+Texture of a savestate's thumbnail (None if there is none).
+@@ 49fc4b43f855 d
+Scrollbar to the right of the list: up arrow, track, thumb, down arrow (top of the list at ptop, bottom at pbot). Returns the bar's geometry (for clicks).
+@@ d9544daac853 d
+The game's red cross (erase a key), of c pixels, bottom-left corner at (x, y); dark: at 75% (under the pointer, like a pressed game icon button); grayed: inactive line, dull cross.
+@@ 91f6df05852b d
+Chevron ">": the line opens another menu (gray when the line is inactive).
+@@ 39f5c03fbbca d
+Cap height (pixels) of a text of size `fz` (points, 96 dpi) in the game font: used to center a text vertically in its cell, whatever the font.
+@@ 7603b66d255b d
+Label for `text` that fits within `maxw` pixels (the size shrinks if needed).
+@@ a6ed47243277 d
+Elements shown on screen for the chosen interface (on-screen buttons and D-pad, or the game window as a preview): [(x0, y0, x1, y1, mask, masculine)].
+`mask`: the element is not drawn in game: the whole interface hidden ("Afficher cette interface a l'ecran" = Non: buttons, D-pad, window) or, for the D-pad alone, "Afficher la croix" = Non.
+`masculine`: agreement of the "Masquée" label (buttons: "Masqué").
+@@ 099af26440f1 d
+Rectangles (x0, y0, x1, y1) shown on screen for the chosen interface (see _preview_elements).
+@@ df2cbd9fabcd d
+Original position of the editor panel (top right corner): at the top right (the buttons are on the left, the D-pad at the bottom right); if that hides the chosen interface, the first of the other screen corners
+(top left, bottom right, bottom left) that does not hide it, otherwise the one that hides the least. Computed from the expanded panel's size (the collapsed panel does not change corner).
+@@ 000cbdf09ae8 d
+Top-left corner (x0, y1) of the interface editor panel: the player's position (after a long press and a drag, kept for the session) or the original position (_origin_corner),
+always brought back inside the screen.
+@@ 06374e7c1f65 d
+Interface editor: the game stays visible; the chosen element is shown (on-screen buttons with their grid, or the game window as a preview, at its size and place); the other buttons stay on screen.
+@@ 2b434eae7999 d
+Help text of a menu line ('   ' separates the tooltip lines); '' if there is none.
+@@ 64643beae4b7 d
+Lines of a tooltip: split at triple spaces, then wrapped at width maxw. Each sentence (between two triple spaces) is translated BEFORE being wrapped to the width: a wrapped line is no longer a catalog sentence (D-238).
+@@ c217a829fb55 d
+Tooltip: help for the line hovered by the mouse (after 0.4 s), or the prompt for entering / capturing a key under the selected line.
+@@ 0f86058a4053 d
+Yes / No modal window (deleting a savestate): the menu stays visible, darkened; No is preselected.
+@@ c38cf4cdd03a d
+Dropdown list of a choice: below the line (above if there is no room), current value in gold, golden cursor as in the game's menus; a scrollbar
+(arrows, thumb, click on the track, wheel = next value) when not all the values fit.
+## FILE dq4_pc/menus/pre_game.py
+@@ daf4c4d13633 c
+cache files -> (archive, Unity object type, resource name)
+@@ b56841d8e3ef t
+SQUARE ENIX logo (Boot.m_logoTexture[1])
+@@ 8e05067c55a0 t
+ArtePiazza logo (Boot.m_logoTexture[2])
+@@ c2b383cfd029 t
+"Touchez l'ecran" (Resources/Title/TapToStart)
+@@ 68081522d983 t
+title copyright line (Resources/Title/Retro4_copyright)
+@@ 12128673aac3 t
+text of the License screen (Android variant)
+@@ 8d11dd32a7fa t
+chapter title banner (Menu/map/hyodai1, 256 x 128, Make_Chapter)
+@@ f4239dee5d9e c
+---- Boot.Logo (MoveNext 0xCC5618): constants of the Boot class
+@@ aba2fab6c176 t
+c_fadeTime, c_waitTime, c_fadeTime (real seconds: Time.deltaTime)
+@@ 94a248f7600c t
+the logo quad is a square of 450 units (720 x 720 texture), centered, in the 450 x 800 interface
+@@ 8527dd9b0bcb c
+---- TapToStart (interface class of port 12, type 73): constants from the dump
+@@ bcd9eba779ec t
+c_acc, c_cwait, c_firstWait (frames)
+@@ 2ce5a7c67460 t
+c_width, c_height; center 228 units BELOW the screen center
+@@ 3dc305217a43 t
+c_copyrightFirstWait, c_copyrightSecondWait, c_copyrightAcc
+@@ 0ecc307796cf t
+c_copyrightWidth / Height; center 25 units above the bottom edge
+@@ 64f9eac5dc1d c
+---- Title logo: DELIBERATE DEVIATION from the APK (requested by Sylfried, 2026-11-03, issue #108: "double the size of the logo and the subtitle")
+The logo is an engine mesh (packets 21 / 22, map `ev01`): model 8901 = "DRAGON QUEST" + "IV" + "TM" + subtitle ("L'epopee des Elus"), model 8900 = the animated
+glint on the logo; both at the same position (0, 1, 0), vertices in the panel's local coordinates (x toward the camera's right, mirrored from Unity, y up), x
+from -4.549 to 4.549 for "DRAGON QUEST".
+@@ 049d8490bb5e t
+desired enlargement factor (1 = the APK): 2 at first (#108, 19:38), brought back to 1.5 at Sylfried's request (21:05)
+@@ 8d35e9b0241f t
+local half-width of "DRAGON QUEST" (read from the vertices of packet 22)
+@@ 7c372c9f2595 t
+local y coordinate of the point that does not move: the logo grows around this point (which keeps it above "Touchez l'ecran" and below the top of the screen; see notes)
+@@ f8c48c97bb8c t
+the enlarged logo never exceeds 96% of the window width (very narrow window); it never becomes smaller than the APK's
+@@ abc1badd609e t
+width cannot be measured: the desired factor is applied as is
+@@ 1032e65774d8 c
+---- "Licence" screen (type 80, Make_License / LicensePolicy / LicenseNobu)
+@@ 9d374a1f7e22 t
+LicensePolicy.OnMouseUpAsButton: language != 0 (Japanese opens https://www.jp.square-enix.com/privacy/)
+@@ 5633a1401f16 t
+text area (x0, y0, x1, y1), interface units
+@@ a03dd984eb63 t
+"Privacy Policy" button
+@@ 3bf592029116 t
+(drawn by Pause._label, which translates it; "Privacy Policy" is the game's text)
+@@ 8eadea969d28 c
+Text added at the top of the License screen (in English, like the original list): what the port is and what it uses. The original list (TextAsset
+Menu/License_list_A) follows, unchanged.
+@@ 39757f6434a1 t
+(registers the game font)
+@@ fe3b0be22d9f t
+(hover: darkened plate, no yellow outline)
+@@ 0307a14e2829 d
+What the game's Unity layer does BEFORE the game starts: entry logos, the title's "Touchez l'ecran", resources.
+
+Everything comes from the original code (Boot, TapToStart, ApplicationQuit... of libil2cpp.so, re-read instruction by instruction: values and addresses in docs/technical-notes-dq4-port.md,
+section "Avant la partie"). This module depends neither on the engine nor on OpenGL apart from drawing the images (pyglet.sprite).
+@@ 74a0140604c0 d
+Enlargement factor of the logo: `desired`, reduced (down to 1) so that the enlarged logo fits within `margin` of the window width. `original_width` = width of the APK's logo
+as a fraction of the window width (0 to 1).
+@@ 1ffbc98db648 d
+Local vertices (n, 3: x, y, depth) of the logo enlarged by `factor` around the panel's point (0, y_fixed): x and y change, the depth (drawing order of the panel's layers: glint in front of the logo, etc.)
+stays the engine's. Returns a new array.
+@@ fdfd8ec30330 d
+Extracts from the APKs (only once) the images and text specific to the pre-game. -> True if everything is in the cache. Without UnityPy or without an APK: False (the game does without).
+@@ 0cf6c9f2e04f d
+Cache paths -> dict short name -> path (only those that exist).
+@@ e9832c5091d8 d
+Boot.Logo: one logo after the other, on a black background. Fade-in (1 s), hold (3 s), fade-out (1 s). A touch during the fade-in skips the hold,
+during the hold it starts the fade-out right away. French / English: SQUARE ENIX then ArtePiazza (the Japanese warning is shown only in language 0).
+@@ 48ef777d0b8b d
+TapToStart (type 73 of port 12): blinking "Touchez l'ecran" and copyright line. Counts game frames (30 Hz).
+Without the engine's CountReset message (code 0), the first display only happens after 720 frames; with it, it starts right away and the copyright stays fully opaque.
+@@ b3ff3ce630d1 d
+License text (TextAsset Menu/License_list_A) in a scrolling window, with the <color=orange> titles in orange. The exact positions of the original window were not recovered
+(they depend on the screen's aspect ratio): layout drawn here, scrolling with the wheel, the arrow keys, PageUp/PageDown, or by dragging the bar.
+@@ 58abbca75141 d
+A press (click, key): skips the hold of the current logo.
+@@ 248c02f4cd04 d
+Advances by dt real seconds.
+@@ abce8532d8bf d
+Square of 450 units (window height = 800 units) at the center of the screen, alpha blending.
+@@ 171e1ebad872 d
+TapToStart.CountReset: the engine announces the end of the first phase of the title.
+@@ a7b68d60c60f d
+One game frame (TapToStart.Update, once per rendered frame).
+@@ da5456300bbc d
+(cx, cy, ui_scale) = reference frame of the interface column (see Game._ui_reference); height_px = window height.
+@@ 6c749ccc3c3a d
+pyglet TextLayout of the window (recreated if the scale changes).
+@@ 2f13437f249d d
+The scrollbar thumb follows the pointer (LicenseNobu: thumb position -> proportion of the text); y in pixels (pyglet, upward).
+## FILE dq4_pc/menus/saves_screen.py
+@@ fa732e802b99 t
+interface units, origin at the center of the 450 x 800 column, Y upward
+@@ a44665d340b5 t
+(drawn by Pause._label, which translates them)
+@@ 4bea22371927 t
+(translated line by line when drawn: see draw_all)
+@@ 35e1ac74e5dc t
+(singular, plural): English has its own templates
+@@ ba2d7bdcf665 t
+true after a successful import: the game window rereads the adventure logs
+@@ be46eca4943d c
+---- logic
+@@ ac29e4588f34 t
+no dialog box: a port folder
+@@ 0678698105a8 t
+(Windows) opens the folder in Explorer
+@@ 3d0ce65faa0a t
+the lists ("Continuer", "Reprendre", "Supprimer", "Auto") immediately show the new adventure logs
+@@ b0f1b6c5bdaa t
+word too long (path): cut at the last character that fits
+@@ 5a306f55dce4 t
+the start menu stays visible, darkened
+@@ e09c2537f643 t
+(translated as a whole before being wrapped at words)
+@@ 05b22c0046b0 c
+result message
+@@ 5e6c306f343b t
+(the message stops before the back button, at the bottom right)
+@@ 6fb0d7f07f62 d
+"Sauvegardes" screen of the start menu (in place of the mobile game's "Sauv. cloud" slot): export and import save files.
+
+Does not exist in the original game: window drawn in the style of the other menus (black frame, the game's plates and back button). The file logic is in `saves.py`.
+The file is chosen through the Windows dialog box (tkinter, in a separate thread: the game window stays responsive); without tkinter, falls back to port folders (`saves/export`, `saves/import`).
+@@ 6bc050e4fe2d d
+"1 fichier de sauvegarde", "3 fichiers de sauvegarde": `models` = (singular template, plural template). The language's plural rule: in French 0 and 1 are singular ("0 etat instantane"), in English only 1 is ("0 save states").
+@@ a2079a7d7714 d
+Called every frame: handles the dialog box's response.
+@@ 2d68929356aa d
+Text wrapped at words (and at characters for a path without spaces) to fit within `width_px` pixels.
+## FILE dq4_pc/menus/ui_history.py
+@@ 2b3b3889afd8 t
+pixels: below this, a press in the list is not a drag
+@@ 004981ad301c t
+(names translated when drawn)
+@@ f77ab9ff48af t
+enlargement of the game windows relative to H / 800 (= window.UI_ZOOM): the history box has the size of a game dialogue box on screen
+@@ 31b02f8b27a4 t
+one pixel of the original font (SE-GARRIR) = 1.09 interface units in the game's message canvas (measured: a line of 371 font pixels = 407 screen pixels at scale 1.008; the layout header states 1.105, the engine rounds the advances)
+@@ b6a7431e1808 t
+(translated when drawn, as a whole before being wrapped at words)
+@@ 4428aafec30e t
+text lines (Box.STEP: 28 units) per wheel notch: a fine, constant step, never a whole entry
+@@ f801bb2bfcb4 t
+(in k) empty space above the first box and below the last box of the list (the content is never glued to the edge of the clipping window)
+@@ 8961780ee899 t
+pixels: below this, a message is "fully visible" (drawing rounding)
+@@ af04756ee315 t
+(in k) gap between two elements, between two boxes of the same element
+@@ 1eb3e5e1f6de t
+text lines (header included) that a battle box can hold before continuing in a following box (the box is then 126 + 9 x 28 = 378 units high)
+@@ 3c4a53ce9d8d t
+frame: x -223 to 229, z -251 to -125
+@@ b8c99a27781e t
+name tab: x -223 to 23, z -125 to -93 (extends above the frame)
+@@ 0c6b2d049e27 t
+three lines of 28 (PageLayout: limit_lines(types[0], 3, 28.0))
+@@ 211e871928b1 t
+left edge of the text and baseline of the 1st line: distances from the frame's top-left corner (measured on a game screenshot: text 11 px from the frame's left stroke, 1st baseline 31 px from the top stroke, at scale 1.008)
+@@ 2af81e2af490 t
+middle of the name (from the frame's left edge) and top of the name text (from the top of the frame: MenuMessage.m_who, 21 above) -- fallback without layout
+@@ 38f49ae27fb7 t
+(in units of k) margins of the history window around the box: left, star column, scrollbar
+@@ 3cd4f86212f1 t
+same with the game's message font (the engine canvas's): the canvas starts 15 units below the top of the frame, a line's cell is 20 rows above the baseline
+@@ cfe870e2ffc7 t
+scroll position, in pixels: 0 = all the way down (the most recent visible), larger = older (see scroll_offset and the reference point)
+@@ d31907f2a08d t
+selected message (golden arrow, Enter key): selected by up / down, by a click or, with the mouse, by hovering (see draw_all)
+@@ 3a0279555d65 t
+height of the content, of the list window (pixels) and of a text line (pixels), measured at the last frame; before the first frame: nothing to scroll
+@@ 1f1f34ff8112 t
+element to bring to the middle of the view as soon as the list is measured (go_to)
+@@ cda4bfd3678a t
+top of the first box and bottom of the last box of each element, pixels from the top of the content (measured at the last frame; empty until the list is measured)
+@@ 035a5f67a66e t
+"Favoris seulement" checkbox: checked? (saved setting); its on-screen area (click)
+@@ 76bcfa7f235f t
+drag in the list: [start y, start offset, moved?]
+@@ 2aea63fd03d2 t
+standard dialogue box (Box) and the two game message windows used to draw its frame (with / without tab)
+@@ 2516b7cbdfaa c
+---- data
+@@ a437dca8cdef t
+(favorites are stored by key: their text is requested again from the game, see History.refresh)
+@@ 1cdd4efa3a33 c
+---- "Favoris seulement" checkbox: its state is a setting (historique_favoris_seuls), kept from one session to the next
+@@ e6ed7374431a c
+---- continuous scrolling (no page, no notch: the position is a number of pixels)
+@@ a1b316fd59db t
+(a selected message pushed out of the window by the wheel or the bar: this press replaces it with the nearest visible message, without advancing one more rank)
+@@ 2680339df684 t
+the key that opens the history: "Dialogues" -> "Combats" -> closes everything
+@@ 5ab0af6aa4c4 t
+(F, or the Map key: "Favoris seulement")
+@@ 5b3d99ec5774 t
+up arrow: one line toward the older ones
+@@ 219409e35579 t
+track above the thumb: one page toward the older ones
+@@ 42f9ecf70b1e t
+the scrollbar thumb gives the distance from the top of the content
+@@ 104c04571d9d t
+the content follows the pointer, pixel by pixel (the pointer goes down: the list goes down, we move back toward the oldest)
+@@ c16f049f5e28 t
+the check mark (two strokes)
+@@ b504be964a51 t
+(fallback: the menu's translucent black frame and, for a name, a small frame stuck at the top left)
+@@ b5ba875852e2 t
+window resized: the view stays at the same place in the list
+@@ e8376c31dac7 t
+s: pixels per interface unit = those of a game dialogue box
+@@ 1e2775e3bd60 t
+su: one game font pixel = su screen pixels (title, tabs, help); size_value: system font (fallback)
+@@ ace147ebf9fd t
+same for the box text: as in the game (1.105 units per font pixel)
+@@ 27332e16ba05 t
+box text: the game's message font when available (one pixel of its canvas = one interface unit), otherwise SE-GARRIR
+@@ f4a84519f4fc t
+the tab row: the tabs then the "Favoris seulement" checkbox
+@@ e627c610733d t
+as transparent as the other game windows
+@@ 32e2a504a131 c
+tabs (game plates: the open tab is the "selected" plate)
+@@ e5f748d66648 t
+(below the title: its plates must not cover it)
+@@ 1c732de4d607 t
+"Favoris seulement" checkbox (to the right of the tabs)
+@@ 0683ce753ab6 c
+help (one or two lines, depending on the window width)
+@@ 5911f7b8b9d7 c
+list area: the box (game size) on the left, the star column to its right, the scrollbar at the edge
+@@ 54696c8e8761 t
+the message fits in the window: split into several centered lines (it used to overflow the frame when long)
+@@ a58af80f883b t
+y coordinate of the top of the content (integer position: the text keeps the same drawing at each position); the content is stuck to the bottom when it is shorter than the window
+@@ ccccabdcd0f7 t
+everything that overflows the list is clipped
+@@ 817aa548226d t
+only the boxes that touch the list window are drawn (from the oldest, at the top, to the most recent)
+@@ b271a2bc7216 t
+(topmost page shown of each element: the golden arrow is drawn there only once)
+@@ 04afc050ed94 t
+with the mouse, the hovered message is the selected message (selected before drawing: a single arrow)
+@@ d571338ea9a5 t
+(the area of a clipped box does not extend past the list window: no click on the tabs or the help)
+@@ 9eeae1e4067b t
+lines in addition to the game box (a battle)
+@@ 2d282ec09abd t
+game frame (+ tab and name): no graying on hover or on selection
+@@ bb9b71176d4f t
+the selected message (keyboard or mouse): the small arrow, and nothing else
+@@ bba0152c610b t
+header: the battle outcome on the left, the game time on the right
+@@ d8fae40a00e5 t
+star in the column to the right of the box, level with the 1st line
+@@ 2a38a81d239b t
+"1/2" under the star: the box is part of a sequence (simple label)
+@@ 91a1ef62f9cf t
+proportional thumb, continuous position (distance from the top of the content)
+@@ ffb0989e5972 t
+help and back button
+@@ 6c1eaaa7ee37 d
+"Historique" window ('historique' page of the Pause menu, see pause.py): two tabs, "Dialogues" (outside battle) and "Combats"; the most recent at the bottom. A "Favoris seulement" checkbox (to the right of the tabs) keeps in
+the open tab's list only its favorites; it is shared by both tabs (it stays checked when the tab changes and when the window is reopened) and its state is saved in the settings (key `historique_favoris_seuls`, written on every change):
+it is restored as is from one session to the next, like the favorites themselves (file historique_favoris.json, see history.py).
+
+THE LIST IS A SINGLE CONTINUOUS COLUMN: the oldest entries at the top, the most recent at the bottom, and the view opens at the very bottom (last entry visible). Scrolling is continuous, per pixel: no page, no notch, no
+layout that depends on the position (the boxes are laid out once and for all, the position only moves them); an entry that extends past the edge of the list is simply clipped by a scissor rectangle (glScissor), like
+scrolling text. List shorter than the window: stuck to the bottom, like a message thread (the most recent always stays in the same place, at the bottom). Pure functions: `arrange` (stacking), `element_au_repere`.
+
+Each element is drawn in a game DIALOGUE BOX (the field message window, 3 lines: frame 452 x 126 interface units, taken from the original layout; same scale as in the game; class
+`Box`), with the game's frame and name tab (frameData 192 and 191, drawn by ui_menu.MessageWindow), the original font SE-GARRIR and the lines laid out as in the game: a dialogue with the speaker's name
+in the tab ONLY if the game displayed it when it was said; a battle with its outcome, each enemy species (which is defeated, fled, vanished or remains), the gold and experience gained and the items obtained.
+A dialogue fits in a 3-line box (the rest is in a following box, "2/2": a simple label, scrolling does not stop there). A BATTLE GROWS IN HEIGHT to hold everything (#141): the box has as many
+lines as the battle requires, at least 3; the game's frame is stretched (it is a nine-slice frame: only the middle grows, the corners keep their size); beyond MAX_BATTLE_LINES lines, the rest
+continues in a following box. A star at the top right of each element makes it a favorite (it is then kept
+in a file until the star is removed; the rest of the history disappears when the viewer is closed). The window background is as transparent as the other game windows (hud_mobile.GAME_OPACITY).
+The game DOES NOT STOP while the window is open (#178: no pause in any menu): no key or click reaches the game, but it keeps running and writing to the history; the list follows (`follow_game`: new
+messages are added at the bottom when the view is at the bottom; when reading further up, the list does not move, it updates on returning to the bottom).
+Keyboard: up / down (previous / next message, repeated while the key is held), previous / next page (one window page minus two lines), Home / End, left / right (tab), Enter, Menu or Action
+(star of the selected message), F or Map ("Favoris seulement" checkbox), the history key ("Dialogues" -> "Combats" -> close), Esc / Cancel (back). Mouse: wheel (2 lines per notch), scrollbar (arrows: one line,
+track: one page, thumb: drag), drag in the list (the content follows the pointer), click on a tab, on the checkbox or on a star.
+SELECTED MESSAGE (`selected`, target of the Enter key): up / down move from message to message (they do not scroll the list); the view scrolls ONLY to show the selected message in full, when it is cut by an edge of the
+window or outside the window, and by the minimum necessary (its edge reaches the window edge: `offset_to_see`). With the mouse, the hovered message is the selected message. The selected message carries the small golden arrow, with the keyboard
+as with the mouse, and nothing else: neither grayed nor lightened on hover or on selection (an exception to the general rule of the menus). Scrolling with the wheel, the bar or by dragging does not change the selected message; with the keyboard, a selected
+message that is no longer in the window at all is first replaced by the nearest visible message.
+@@ faa6437215ea d
+Splits `text` into lines at spaces so that none exceeds `max_width` (width_px(t) = width of a line t, in the unit of max_width). A single word wider than the limit stays alone on its line (it cannot be split). -> list of lines, never empty.
+@@ acef1e18bbae d
+Stacks the whole list in ONE column, from the oldest (at the top) to the most recent (at the bottom). `inputs`: one tuple per element, (number of boxes, name tab on the first one?) or (number of boxes, tab?,
+[frame height of each box]) when the boxes do not all have the same height (a battle grows with its text); `border_top` is the height of the others. Distances in pixels, counted from
+the top of the content (downward): -> (boxes, starts, ends, height).
+boxes: (element, box, number of boxes, top, tab top, frame top); `topmost` = top edge of the box, name tab included (the frame starts `tab_top` lower);
+starts[i], ends[i]: top of the first box and bottom of the last box of element i; height: content height, top and bottom margins included (0 if the list is empty).
+Does not depend on any scroll position: the position only moves everything.
+@@ 8900aaa04e8b d
+What must be shown for message i to be "fully visible": (top, bottom) in pixels from the top of the content. The message itself (starts[i]: name tab included, ends[i]); for the first and the last
+of the list, plus the list margin (the first goes up to the top of the content, the last down to the bottom: when it gets there, the list is at the very top / the very bottom).
+@@ 364ad8b39401 d
+New offset of the view (pixels from the bottom: 0 = all the way down) that shows message i in full, changing the offset BY THE MINIMUM: unchanged if the message is already fully visible, otherwise just what is needed for
+its cut edge to reach the window edge (top or bottom). A message taller than the window: its start at the top of the window. The window is hv pixels tall and shows, from the top of the content, hc - scroll_offset - hv to hc - scroll_offset.
+@@ 54df0a07d525 d
+Indices of the messages visible in the window (see offset_to_see): those that are entirely in it (`fully_visible_only`), otherwise those that are at least partly in it.
+@@ 56f95e3ac8a5 d
+Game time (1/60 s) -> "1:05:12".
+@@ 77d9ed3592c2 d
+History key in the window: "Dialogues" -> "Combats"; "Combats" -> close (None).
+@@ ef5e2c311373 d
+Field dialogue box (MenuMessage type 0) with 3 lines, in game interface units (800 high): the size of the frame (frameData 192), of the name tab (frameData 191) and the placement of the text
+lines. The dimensions come from the original layout when it is loaded (`from_ml`), otherwise from values measured on game screenshots. A single box for everything: 1, 2 or 3 lines, dialogue or battle.
+@@ e958c319f8e3 d
+Vertices of a nine-slice frame (frameData 192: 12-unit corners, stretching middle) lengthened by `extra` units upward: every vertex of the upper half moves up, the top corners keep their size, the
+middle lengthens (its UVs do not change: the middle pattern is stretched, as the game does when it enlarges a frame). -> new list (the original layout is never modified).
+@@ 6a26d7f73712 d
+Number of text lines in a box: the page's rows, plus the header (outcome and time) on the first box of a battle; at least three (the game's box).
+@@ 2ac7ead2ad5b d
+Text rows -> pages of at most `lines` rows (at least one page, even empty); on the 1st page of a battle, the header (outcome and time) takes up one row.
+@@ 66aba1b5ec31 d
+Lines of `text` wrapped the way the engine wraps a message (MessageFont.wrap_text: the text's line breaks kept, no trailing space on a line or empty line at the end; at least one line).
+@@ 57782a60a868 d
+Text rows of an element, wrapped at `width_px` (measure(string) -> width in the same unit): the text of a dialogue (its line breaks kept); for a battle one row per enemy species (with the
+fate of each), then the gold and experience, then the items (HI.battle_lines); a line too wide for the box continues on the next row. The outcome and the time are in the header.
+With `font` (the game's message font, MessageFont) the lines are wrapped exactly as the engine wraps its own and `measure`, `width_px` are not used.
+@@ b780bbe5a76e d
+Box read from the original layout (PageLayout); the measured values if it is missing or unusable.
+@@ bdb5a0136dba d
+Pixels per unit: that of the game windows (H / 800 x BOX_SCALE), reduced so that the box, its star column and the margins fit in the viewer window.
+@@ a4680d5cfd25 d
+Distance from the baseline of line `rank` (0, 1, 2...) to the top of the frame, units.
+@@ 82b04a483646 d
+Like `base`, for text drawn with the game's message font.
+@@ 6b40141c2007 d
+Frame height (units) for `lines` text lines: that of the game's box up to 3 lines, then one more line (STEP) per line.
+@@ e84357525945 d
+Usable width of a text line (units): from the left edge of the text to the right margin of the canvas (the canvas is WIDTH - 18 wide).
+@@ ec50bb84ac29 d
+On opening the page: reloads the list, all the way down on the most recent element (then it follows the game: `follow_game`).
+@@ 290313950d03 d
+The game runs behind the window (#178) and may write to the history (a dialogue, the end of a battle). Called every frame: when the view is all the way down (nothing is hidden further down), the list is replaced by the
+up-to-date list; the selected message stays the same (recognized by its object), except if it was the last one: the selection then follows the most recent. When reading further up, or when a drag or the bar is in progress, the list does not move
+(the reading does not jump); it updates as soon as we return to the bottom. -> True if the list changed.
+@@ 78215195c7e2 d
+Saves the checkbox state in the settings (reglages.json, immediately: an abrupt shutdown does not lose it). An error never prevents checking or unchecking.
+@@ 70395783a6cc d
+Checks or unchecks "Favoris seulement" (applies to both tabs, saved in the settings). The selected element, if it is in the new list, stays selected (and the view recenters on it); otherwise we go to the most recent.
+@@ 8cf58c4ec580 d
+Toggles element i as a favorite (or removes it from the favorites) (the current element by default); -> True if it is now a favorite. With "Favoris seulement", the removed element disappears from the list (the view stays where it is).
+@@ 5b67740d5965 d
+Distance (pixels) the view can go up from the bottom: 0 when the whole list fits in the window.
+@@ 59b24a31215b d
+Actual offset of the view (pixels): the position clamped to the scroll range.
+@@ ce9a2f9c5c41 d
+The selected message must be in the window: otherwise (the list scrolled without it: wheel, bar, drag, page), it is the nearest visible message (the first if it is above the window, the last if it is
+below). `fully_visible_only`: only fully visible messages count (failing that, those that are partly visible). -> True if the selected message changed.
+@@ a536edc007fc d
+Scrolls by the minimum needed to show message i in full (nothing if the list is not measured yet: the view will settle as soon as it is).
+@@ dba456ecdc2a d
+Up / down: the message d ranks further (negative: older, toward the top of the screen), clamped to the list; the view scrolls only if this message is not fully visible, by the minimum necessary. Repeated by Pause.do_update while the key is held.
+@@ 3ef948eb9060 d
+Previous page (d negative) / next: the view scrolls by the window height minus two lines; the selected message, if it leaves the window, becomes the nearest fully visible message.
+@@ f9ede45efcc3 d
+Mouse (wheel, bar, drag): the view goes up by `px` pixels toward the older ones (positive) or down toward the recent ones (negative), clamped to the scroll range.
+@@ a587be7db093 d
+Selects element i; the view recenters on it as soon as the list is measured (next draw).
+@@ 996726c9bf95 d
+One wheel notch = WHEEL_STEP text lines, toward the older ones when the wheel is scrolled up (a fine, constant step; proportional to the movement for touchpads).
+@@ 8e6f8852898f d
+The game's message font (that of the engine's text canvas: all the game's glyphs, with its placement and wrapping rules) for the box text; None if it was not extracted (SE-GARRIR is kept).
+@@ c73c5ecb437a d
+A text line whose baseline is at ybase: the game's bitmap font (one texture per line, tinted), otherwise the system font.
+@@ 054c5fb3f5ab d
+Standard dialogue box (dimensions from the original layout if it is loaded); cached.
+@@ cdd9baab1081 d
+Pages of an element: list of lists of text rows (3 rows at most, a battle's header included). Cached (key: element, scale).
+@@ b18a5d411cd0 d
+Favorite star: golden when the element is a favorite, gray and hollow otherwise.
+@@ 2a5ac1dd3833 d
+Width of the plate of the "Favoris seulement" checkbox: margin, box, margin, small star, label, margin.
+@@ f47df4061b9f d
+"Favoris seulement" checkbox: a plate at the height of the tabs, to the right of the last tab (the tabs + checkbox group is centered in the window), with the box, a small star and the label;
+golden when checked. Its area (click) is kept in `filter_zone`.
+@@ 13425b6bb120 d
+Game message window (ui_menu.MessageWindow) that draws a box's frame: with the name tab (frameData 191) or without (192), without the canvas or the end-of-page cursor; None if the original layout
+is not loaded (the box is then drawn with a simple frame). `extra`: text lines in addition to the 3 of the game's box (a battle): the frame (without tab) is lengthened accordingly (stretch_border).
+@@ 2918243ef295 d
+Frame of the box whose bottom-left corner is (bx, by), at scale s: the game's frame (and the name tab with its text, as the game places them), otherwise a simple frame. Always the same: the selected message is neither
+grayed nor lightened (it only carries the small arrow, see draw_all).
+@@ 3ab3e37cd005 d
+Lays out THE WHOLE list in a column (arrange: a dialogue at the height of the game's dialogue box, whether the text fits on 1, 2 or 3 rows, and the name tab, on the first box of a dialogue with a name, is added above it; a battle has as many lines as its text requires, three at least: box_lines), for scale s and a list window of height hv (pixels). The layout never depends on the scroll position. Updates the scroll geometry (content height,
+window height, line height), keeps the proportional position when the scale changes, recenters the element requested by `go_to`, clamps the position and keeps the elements' edges (starts, ends) for keyboard navigation.
+-> boxes: (element, box, number of boxes, top, tab top, frame top, text rows); top = pixels from the top of the content.
+@@ af9ce40b438b d
+Pure part of _measure (tested without font or GL): the list is `hc` pixels tall (starts / ends: top of the first box and bottom of the last box of each element), the list window `hv`, a text line `step`,
+at scale s. Keeps the proportional position when the scale changes, recenters the element requested by `go_to`, clamps the position and keeps the elements' edges for keyboard navigation.
+@@ e05cab8c0a9d d
+Scissor rectangle (glScissor) on the rectangle (x, y, w, h) of the window (window pixels: scaled to the frame buffer on a high-density screen): whatever overflows the list is clipped, like scrolling text.
+-> True if the scissor is active (to be closed with glDisable(GL_SCISSOR_TEST)); False if it could not be set up (the clipped boxes are then not drawn).
+## FILE dq4_pc/menus/ui_menu.py
+@@ b83890a52a81 t
+(fallback font GMaruGoPro-M, used only without ui_garrir.*) line height of the font in "em" (OS/2 winAscent + winDescent of GMaruGoPro-M): consistent with the spacing of the PV/MF bars (28 px) and the centering of the buttons
+@@ 4c9410cadf2c t
+(fallback GMaruGoPro-M) native size of the game font (GMaruGoPro-M, Font.fontSize): 1 character = taille_caractere * 0.1 * 19 units
+@@ e362972980a6 t
+"^n" at the head of a text (IText): (x scale, character size)
+@@ a77ff17b790b t
+DQ_TEXTE_ORIGINAL=1 (test): exact vertical placement of the original game, without the optical recentering (see text_recentering)
+@@ b62c22062f73 c
+Button states (MenuParts.BUTTON_STATE_*, param (id, 0) of a plate): 0 normal, 1 pressed, 2 invisible, 3 grayed (gray shader), 4 inverted (inverse shader, pressed).
+@@ 32ddcb539152 t
+string 623 of the game (FR patch): the label of the auto plate when the engine does not send one (it only sends it with a valid data5.dat)
+@@ 0782040b68a7 t
+MenuParts.TEXT_COLOR_GRAY: text color of a grayed button (game palette)
+@@ 45206cf51f4d t
+number of the "Sauvegarde automatique" button of the start menu (type 53, engine cell (4, 1), bank 4 = data5.dat)
+@@ 01447358701a t
+frame width before / after
+@@ 57c46c780dbc t
+message: dialogue window (MenuMessage), absent from the old files
+@@ f94c95f2ee89 t
+battle (type 1): 3 lines like the field; the original frame (4 lines) stays at type 4, for the messages that have four
+@@ 592071b1f019 t
+battle action messages: text of the same size as in the dialogues
+@@ 392db9454111 c
+MenuPortItemTable.name_button_param (RVA 0xCF8E00-0xCF8F98, .cctor): (number of rows, initial y coordinate, step) of the Make_NameButton list; the engine
+chooses the layout by the window's code 6 (`<Make_NameButton>b__0`, 0xD08BE8: rows 0 to number - 1 are enabled and placed at `initial - step x rank`, the others
+are disabled until the 6th). The exporter cannot run this function ("List index").
+@@ 76aa8793f45a t
+exported layout: row k at y coordinate 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
+@@ 83cb7f126c4a t
+spell info panel (type 7): usable right edge of the cost line (right frame: x 63 to 221, measured on screenshots, minus the plates' margin)
+@@ c74bfe6a95a1 t
+spell info panel (type 7): usable right edge of the description (bottom frame: x -226 to 155.5, up to the back button, minus the plates' margin); the frame is only 2 lines high
+@@ 2593893cc8e4 t
+item info in battle (type 38): usable right edge of the description (left cell: x -226 to 64.7, measured on a screenshot of the real engine, minus the margin); the cell is only 2 lines high, the "Attaque E 24" cell is to its right
+@@ 894be960570b c
+Item and spell descriptions: (window type, port, string number) -> usable right edge (interface units) of their frame, which only shows 2 lines. The port is in
+the key: the casino window (type 46) has four other text cells at the same string number (the lists, port 0 to 3) which are not descriptions. The patch's French
+text has lines of 38 characters, or a single line of 50 ("Peut aussi etre utilisee comme objet au / combat.", "Au combat, ils peuvent inverser le cours du
+temps."): it overflowed the frame and covered "Attaque E 74" (type 38) or the bag button (type 10). Render._text re-wraps it to this width then, if 2 lines are
+not enough, compresses it (Render._adjust_description).
+@@ e9796a180586 t
+46, 60, 61, 63, 70: bottom bar of the shops and the casino (same frame as the spell info panel; Assumed: windows not opened in the engine, #219)
+@@ aa0cc91f5ffc t
+windows whose button labels are compressed to fit in their plate EVEN with the original font: the casino poker (type 48, SVC-03: "Abandonner" overflowed the 5 buttons under the cards and overlapped; player's choice: reduced font)
+@@ bf2001eb10d6 t
+maximum horizontal compression of a description that does not fit in 2 lines
+@@ 8bb6e9aee683 t
+C integer division (toward zero)
+@@ f87e4da555bf t
+sheet (0 = MenuTexture, 1 = Button...) -> opacity (height x width, uint8) of the game's sheet, set by Render: used to measure the VISIBLE edge of a frame
+@@ f5d9af104b6b t
+fractions of the cell, from the left and from the top
+@@ e9fe85ce3f42 t
+copy of the list: the church (type 66) adds the parts of its buttons to it
+@@ ed54401622cb t
+types that the port animates or completes: the game does them with code that the exporter does not see
+@@ 8d175382a42a t
+church: added elements, texts received before the buttons are created
+@@ 03bb52d2a53b t
+member plates in battle: shakes in progress (member -> state), start of the arrow's blinking
+@@ d7f59725afef t
+monster plates: group marks (battle backdrop: they do not count toward the window's extent)
+@@ ae9ee8e50774 t
+start menu: frame chosen by code 3
+@@ ee226811ba5e t
+Yes / No: the two plates stacked on top of each other (D-231)
+@@ 194773f2803c t
+last value of each received code; "Sauvegarde automatique" plate grayed by the viewer (see auto_plate)
+@@ 9d5763d2bd64 t
+IBar.firstFunc: zero/width read from the quad
+@@ 53ff2cdbdef8 t
+"function" codes (monster plate...): code -1 = nothing to show, initial state
+@@ d77ab82b3532 t
+list of named buttons (type 8): offset already applied to each row (see _name_entries)
+@@ 5fca51b6e2bb t
+list of 6 buttons but the engine only drives 5 (codes 0 to 4): the 6th (at the bottom, under "Sauvegarde rapide") stays hidden until a code shows it
+@@ 4346d8fc1c0b t
+start menu: the "Sauv. cloud" entry (button 8) no longer exists for the engine (byte g_isAmazon); the port puts its "Sauvegardes" button (export / import) there, label set here
+@@ c722c15b46ff t
+chapter title: the exporter sees the quad of MenuParts.CreateFromTexture("Menu/map/hyodai1", bFitWidth = true, haspect = 1) with its default mesh (square of 450) and no texture (created by the code)
+@@ cf430e866b6d t
+CreateFromTexture fits the width (450) and deduces the height from the texture (256 x 128: 225): gold banner on a blue background, centered
+@@ 05f7454c9ab6 t
+map window (type 25): map image name, texture (set by the viewer)
+@@ 2f2bb8b34a42 t
+world map: discovered locations (x, y in pixels of the 256 x 192 map image), blinking start; filtering mode of the map image
+@@ a1c2344c9008 t
+small world map: special location (code 4), (x, y) in pixels of the 256 x 192 map image, or None
+@@ 451fe3d60ca9 c
+---- applying messages
+@@ e532a391e136 t
+map window (type 25): the name of the map image texture (Menu/map) is set by the viewer (map_name)
+@@ e4f4956ade80 t
+status icons (dead, poison, sealed spell) and name color
+@@ ab0c09715ec6 t
+quantity of a line of the item list (type 9)
+@@ 888a97afed2d t
+BattleBar.Change(int): normal bar
+@@ 8eb117af6688 t
+BattleBar.Change(string) = RedApply: "red" bar = current value
+@@ c032e1bd9bb2 t
+description of a spell or an item: the frame shows 2 lines; if the text is wider or taller, it is re-wrapped to the frame's width (Render._adjust_description)
+@@ 51df3f355058 t
+spell info panel (Make_MagicInfo), line "Cout en PM  2/ 30" (anchored left, x 75): it must fit in its frame, see Render._text
+@@ da468d0dcbf6 t
+see expand_tabs: all the cells at tabSize (types 8, 20, 31, 33, 34, 35, 39), no longer just the spell list (#208, audit UI-03)
+@@ f56c460b61fb t
+(getattr: the tests build fake Window objects without this attribute)
+@@ 3b0c86741b50 t
+an element that other codes hide is visible for this one if it does not hide it
+@@ fb9f9f1678f4 t
+MenuParts.SetTextColor(code): color of the texts marked by the mask
+@@ f115a0298986 t
+(replay of a window: the row's code may already be known)
+@@ 56bb19acd34d t
+desired offset of row k (the game places the plate, its texts follow it)
+@@ 14237cb68160 c
+---- church (type 66, Make_ChurchRoot)
+The game makes the buttons in the window's code (Sub_ShopButton): the layout exporter only sees the title and the exit button ("Rien"). They are rebuilt here
+from the code received from the engine (0: five buttons, otherwise four): (x, z from the bottom of the screen, width without the borders); nine-slice mesh of
+the exit plate, button n = number n, gamepad 16 (confirm).
+@@ a8f5cc06b37c t
+existing button plate: the exit ("Rien", gamepad 32)
+@@ d56f892fdcdf t
+replaces the exported bindings (parts absent from the layout)
+@@ 5f56b3bbf1d5 c
+---- battle: member plates (type 29, Make_BattleUpStatus)
+@@ 4690ca62eeae t
+MenuMessage.s_shakeTable: offset of each frame, from the last (7) to the first (0); zero sum
+@@ 3f23ab16d8a9 t
+BattleUpCursor.c_waitTime: seconds between the arrow's two tints
+@@ 48a26fec6a7d t
+the whole plate moves: its root, its texts, its bar, its face
+@@ 4b3f9efb50a7 c
+---- status icons (MenuPortItemTable.StatusIconChanger)
+@@ 6d0f23079414 c
+---- battle: group marks under the monsters (MonsterMarkList, type 31)
+@@ 4c24bccef285 c
+---- start menu (type 54, Make_StartMenuSelect)
+@@ f56b097c3ce1 t
+the first button (and its texts) goes down to 135.75 from the bottom of the screen
+@@ 5cbd620a1a06 t
+no tab: full width
+@@ 9dbf0e2cc9a8 c
+---- monster name plates (MenuPortItemTable.MonsterNamePlate, type 31)
+@@ 749716ce7761 t
+color mark: removed by the plate
+@@ 32ea0f53c982 t
+window from 36 -> 18 high: top/bottom lines moved closer to the center
+@@ ff423bcd7515 t
+"nom \n \t×N": the tab (tabSize 25) pushes "×N" toward the right edge of the plate
+@@ 993bfe255864 t
+MonsterMarkList.SetMark: target choice (code 2) = a mark of the plate's color under each monster of the group, at the monster's x, z = -64
+@@ 68afe9ddd1ab t
+our own replacement label is not the engine's (counts only as long as code 0 is missing)
+@@ 583572fed757 t
+the auto save has appeared: normal plate (the engine gives the label)
+@@ b44b8d15d603 t
+(comparison) like the original game: plate hidden
+@@ 7d9214a4e37a t
+gap between the two stacked plates (the one that separated the two side-by-side plates: from -0.5 to +0.5)
+@@ 2f63c3286826 t
+the frame (two panels) is the common parent of the two plates
+@@ 5e7bd379943d t
+horizontal offset: the right plate moves onto the left column
+@@ 70756a63f844 t
+boundary between the two panels of the frame (local coordinate frame of the frame)
+@@ d5ff78adb039 t
+the height of one panel + the gap
+@@ 0e0dc73696f2 t
+the right plate and everything descending from it (its text)
+@@ 1ad9eac62a7f t
+frameData of the dialogue frame WITH name tab (192 = without tab: the one of type 0 in ui_layout.json)
+@@ 3de9fa44a80b t
+MenuMessage.m_who: local position of the name's TextMesh; the height has BIAS_FONT_Y added to it (= lang['dy'], added by Render._text)
+@@ 6754f840fa74 t
+characterSize of the name's TextMesh (that of the dialogues is 10.4975)
+@@ 5e98872f13fc t
+(for Render._text, which reads these two fields from the menu windows: type number, layout frame)
+@@ dd7fe6bb77d8 t
+TextMesh "m_who": local position (-104.5; 4; BIAS_FONT_Y - 104), size 10, anchor "top center", centered text, white
+@@ 67654c336428 t
+(the name tab does not count: the Yes/No and the scale keep the place of the frame without a tab)
+@@ 8f514cf8e950 t
+spaces that the game font draws wider (U+00A0: 11 px instead of 5) or does not have (U+202F, U+2009)
+@@ 3d1444101794 t
+margin (font px) around a line: some glyphs extend past their "advance" (W, ’, …)
+@@ 1933ed9588e0 t
+texture rows above / below the baseline
+@@ 49c0ec69b041 t
+row n = v * 256 (Unity texture coordinates: v = 0 at the bottom)
+@@ 04e0bd09c40b t
+"flipped" glyph: stored transposed in the atlas
+@@ 1c14bf9fdbcb t
+(advance, x offset, top of the glyph relative to the baseline (downward), bitmap)
+@@ 2405f615d954 t
+non-breaking space (U+00A0), narrow (U+202F) or thin (U+2009) = the normal space (5 px): the font's glyph 160 has an advance of 11 px (the FR patch puts U+00A0 before "!", "?" and ":")
+@@ 59601566e35d t
+control characters ("\r" at the end of a line): no width or drawing
+@@ 5d3be9e50812 t
+bilinear filter, like the game's atlas (Texture2D.filterMode = Bilinear)
+@@ cf0eb5dbf996 t
+the game's message font (that of the engine's text canvas: dialogues and battle), optional: without it the history keeps SE-GARRIR
+@@ 6d239d27cede t
+DQ_POLICE_GMARU=1 (test): old Japanese font, for comparison
+@@ b50a9d3e8267 t
+neighbors: visible windows of the frame (their frames are used to compress the texts of a window without a frame)
+@@ 3f0e93da3cf4 t
+1-pixel white texture (solid color squares: world map locations)
+@@ 5883198591d3 t
+(original opacity: visible edges of the frames)
+@@ a26f7691bef4 t
+transparent pixels = the color of the neighboring edge (alpha unchanged): the cells of these sheets kept white / pink under their transparent pixels, which linear filtering brought back as a light fringe ("aura") around the icons and portraits
+@@ c1a73f3433d9 t
+row 0 first = v 0, like the Unity texture
+@@ a36427854a05 c
+---- building the elements to draw
+@@ 18397079bfec t
+layer: above the frame background (depth 0), below the marker (12 and up)
+@@ 662244537492 t
+like Unity (transparent objects sorted by depth on the camera): depth first, then the most recent window in front; a window's background no longer covers another's buttons
+@@ 4fe62011eb59 t
+numbers carried by a confirm button (gamepad 16 / 64)
+@@ aff0638140dc t
+PRESSED page arrow: like the mobile game (IButton(Material), DisplayClass6_0.b__0: Material.color = 0.75 on the four channels)
+@@ d1428c824e99 t
+hovered page arrow (PC, the mobile game has no hover): lightened
+@@ 4af7e0944dbf t
+grayed / inverted / invisible: no hover or cursor (the contact test is cut off)
+@@ 855d5cfae763 t
+mouse: only the pointed (or pressed) element is highlighted, not the whole row that shares its number
+@@ fd307f44a789 t
+a cancel button (gamepad 32 / 128, e.g. "Rien") that shares its number with a confirm button ("Acheter") does not light up with it
+@@ 4ac29883feef t
+four x coordinates and four y coordinates: edges and corner limits
+@@ 39c4b74832b6 t
+the corner keeps its proportion with the plate's height (or the requested size)
+@@ efdcd0e9bf06 t
+large world map: 256 x 192 pixel window of the 1024 x 1024 map image, centered on the player
+@@ 9caf34a1f37e t
+enlarged map images (HD, veil included): linear filtering; large world map: sharp bilinear
+@@ faebc1a5a53a t
+code 4: special location, red cross (MenuTexture, sheet 5, cell 3; AddIcon 1.2 x 16 = 21.6 units), bottom-left corner at (-227 + x k, 402 - y k) (anchor assumed, like the feather's)
+@@ e6b2511495cf t
+discovered locations (BlinkMapSymbol): red squares of 4 units whose transparency goes back and forth (0.5 per second: 1 -> 0 -> 1 in 4 s)
+@@ f542a47d0b4e t
+square of 4 units centered on the location (like the player's marker, of 24 units, centered on its position)
+@@ 47fa07131c96 t
+margin (interface units) left on each side between the text and the edge of a button's plate
+@@ 815b193c7f02 t
+(texts to the left / right of a plate: only the start menu's lists, the other windows keep their layout)
+@@ 1fc66a4e945c t
+centered text: the whole plate
+@@ aba259bcb30f t
+text to the left / right of its anchor point (e.g. "Chapitre 1 Nv. 1 001:07" of an adventure log line): up to the edge of the plate
+@@ b7a0143518ed t
+original font (SE-GARRIR): 1 font px = characterSize * 0.1 unit; otherwise GMaruGoPro-M rendered by Pillow
+@@ 396032dc07c9 t
+the game adds dy to the text position (compensation for the font's line spacing)
+@@ 07293235fdae t
+description wider or taller than its frame: re-wrapped, then compressed if 2 lines are not enough
+@@ 255b91e7ed2d t
+TextMesh.anchor: the anchor point is the top (0-2), the middle (3-5) or the bottom (6-8) of the text block
+@@ 1e14ca8c2b2f t
+(original font only: the game's settings are computed for the Japanese font, GMaruGoPro-M, when it serves as a fallback)
+@@ 5b8883c4490a t
+"@cN" changes the text color (game palette); it carries over from one line to the next
+@@ 3832938a769f t
+window without its own frame (title and labels of a setting): the frame is in another visible window, take the smallest rectangle that contains the anchor point

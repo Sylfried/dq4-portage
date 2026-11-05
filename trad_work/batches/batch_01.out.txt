@@ -1,0 +1,754 @@
+## FILE dq4_pc/__main__.py
+@@ d6c82df4f49a d
+`python -m dq4_pc` launches the game.
+## FILE dq4_pc/battle/battle_effect.py
+@@ 3e1be38067e9 t
+int(32 / ASPECT_DEF) from the original: sets the duration of the effect
+@@ f00c5386ba8f t
+number of updates before the end (A from 0 to 56)
+@@ dec99050b242 c
+vertices of a chunk: 0 top left, 1 bottom left, 2 top right, 3 bottom right -> two triangles
+@@ 2be804cc8552 t
+original rows per displayed row
+@@ a3bb7d41499c t
+original row number (float)
+@@ 3e6e3d9c4088 d
+Battle start effect (Capture.BattleEffect of the Unity layer): a screen capture, cut into 32 columns of chunks, shatters and falls
+row after row, from top to bottom, then darkens to black.
+
+Reproduces the game's rules, one update per frame (30 Hz):
+  * two counters: A (0, 1, 2...) and B (0 until frame 21, then it follows A with a 20-frame lag); on every frame and for each chunk, the game randomly picks
+    (1 chance in 3 for B) the counter that drives that chunk;
+  * a chunk in row r moves if either counter exceeds r; the fall speed is -0.001953125 - (32 - r - column + counter) * 0.0015625
+    (in normalized screen coordinates, -1..1), half of that when it is the "lagging" counter that made it move; the left and right edges move closer
+    by about 0.001 per frame (the chunk narrows) and the chunk drifts 0.002 to the left;
+  * a chunk's opacity decreases by 8/255 per frame of movement;
+  * when A exceeds half the height, the capture's brightness drops by 2/56 per frame; the effect stops when A exceeds 56.
+The original game cuts the portrait screen into 32 x 56 square chunks (56 = 32 / 0.5625). On a 16/9 screen we keep square chunks (32 x 18) and each row
+takes the place of 56 / 18 original rows, so the timing (57 frames) is the same.
+@@ f73528ab881b d
+One update (one game frame).
+@@ fd79363482a6 d
+One RGBA per vertex: white, chunk opacity.
+## FILE dq4_pc/battle/battle_history.py
+@@ 901934018002 t
+g_Monster: at most 12 monsters
+@@ 2dfc32390387 t
+g_Monster + 8: array of MonsterStatus
+@@ e9ad7003882c t
+in a MonsterStatus: monster number (-1 = empty slot), encounter group number
+@@ f1613535c1d5 t
+in g_Party: experience and gold of the current battle (awarded on victory)
+@@ f7c8a1a57245 t
+g_BattleResult + 0x509: the party lost (ExitTask::terminate tests it before calling endBattle)
+@@ d07d96fef865 t
+(fallback name when the engine does not answer: translated at capture time, see BattleSensor)
+@@ 9ff791297b8d t
+consecutive frames outside the "battle" part before abandoning tracking (the normal end always arrives before the part change)
+@@ 95615d6409dd t
+maximum gap in Engine.frames between two do_update calls without declaring a discontinuity (savestate loaded...)
+@@ 3c0c17ef4ca5 c
+hooks (engine symbols): event -> name
+@@ 5b5e177e30ce c
+hooks in the MIDDLE of a function: (event, symbol, offset, instruction expected at that spot). The instruction is checked before installing the hook:
+a different engine does not get a hook placed at random (only the corresponding event is then lost, the capture goes on).
+@@ 336b7a5e6d5f t
+ldr w8, [x23, #0xd24]: monster flee counter
+@@ b8035f3e5598 t
+ldr w8, [x23, #0xd28]: vanish counter
+@@ 79425d775dfe t
+cmn w0, #1: right after PartyStatus::giveItem
+@@ d5fa9e5e7d20 t
+"item name" in the game's text macros (setMACRO0(0xa, 0x4000000, number))
+@@ 294a02f31564 t
+"monster name" (BattleActorMacro::setMacroActor: setMACRO0(1, 0x6000000, monster number))
+@@ 96d3f29e1de9 t
+BattleExecVictory32: number of the item to give
+@@ 814289615325 c
+---------------------------------------------------------------------------------------------------------------------------------- pure part (no emulator)
+@@ c5ea0eac2668 t
+"\t×3": the number of monsters in the group
+@@ 0ec29bfeb346 t
+one per monster seen, in order of appearance: {'num': monster number, 'vaincu': bool, 'fui': bool, 'disparu': bool} (at most one of the three)
+@@ 7d3a88fc4cb0 t
+items won: {'id': number, 'nom': name}, in order
+@@ 12d8261a5d06 t
+slot -> index in monstres (current occupant)
+@@ 63862979da87 t
+monster number -> name
+@@ 5128b33bdb7e t
+defeated monsters (execMonsterDeath hook)
+@@ 674a5c82c457 t
+BattleExecDefeatMonster::initialize has run
+@@ e35ddf0e7957 t
+BattleExecEscape::setup (successful or not)
+@@ 7f3114177407 t
+largest readings of the party counters (g_Party + 0x2f8 / 0x2fc)
+@@ 43298882efd3 c
+---------------------------------------------------------------------------------------------------------------------------------- reading the engine
+@@ 553bdb51512c t
+(fallback if the engine rejects an additional attribute: id -> (engine, sensor))
+@@ 5e0ead7ce96a t
+(with a different engine, only this event is lost)
+@@ 9598888d895b t
+(blocks already translated before the hooks: a sensor created after a few battles)
+@@ a64437474acc c
+---- check: the engine is the one we studied
+@@ 3dd3f0890be2 t
+index among the PRESENT monsters (getMonsterStatus counts the occupied slots), not the slot
+@@ b73ca5b6a730 t
+w20: monster index in the checkDeathMonster loop (same index as for execMonsterDeath)
+@@ 5181fbc8bbc8 t
+x20: the BattleExecVictory32 task (the item number is at +0xc)
+@@ 16ae6684891f t
+(safeguard if do_update is never called)
+@@ 6cf8f24c3ebe c
+---- one frame
+@@ ed8879940eb2 t
+savestate loaded (or frames skipped): the tracked battle is no longer the one in memory
+@@ cdc726372866 t
+outside battle: nothing else to do (most frequent path)
+@@ 69a86fe611cd t
+the capture must never stop the game
+@@ cfc3a614ed1f t
+(plates already there: those of the previous battle, not to be read)
+@@ f01b22fef73c t
+battle whose start was not seen: ignored
+@@ 4ec59db7508d t
+monsters without a plate (surprise attack...): the name comes from the engine, by number
+@@ 415120c8589e t
+left the battle without going through endBattle (return to title...): abandon
+@@ ef97c7ff8ac0 d
+Captures battle results for the battle history: defeated enemies, gold won, experience gained.
+
+    sensor = BattleSensor(engine)         # once, after the Engine is created (installs READ-ONLY hooks in the emulator; writes nothing to the engine's memory)
+    for battle in sensor.do_update(engine): ...  # ONCE per engine frame, after engine.step; returns the battles FINISHED at this frame (most often an empty list)
+
+Each battle: {'t': game time at the end (1/60 s, status::g_Game + 4), 'ennemis': [{'nom': 'Gluant', 'total': 3, 'vaincus': 1, 'fuis': 1, 'disparus': 0}, ...] (one element per species, in order
+of appearance; what remains, total - vaincus - fuis - disparus, is still there when the battle ends: the party fled or was defeated), 'or': int, 'xp': int, 'issue': 'victoire' | 'fuite' | 'defaite',
+'objets': [{'nom': 'Herbe médicinale'}, ...] (the items the game gives the party at the end of the battle: "Le gluant laisse tomber un coffre au trésor !")}. Gold and experience: those of the game's victory message,
+0 for a flee or a defeat (the engine does not award them).
+
+Method (ESTABLISHED by reading the disassembled engine and then by measurement: see tools/test_battle_history.py):
+- DEATHS are noted by a hook on BattleActorManager2::execMonsterDeath(this, i), the function the game calls once per defeated monster (not for a monster that flees or vanishes) and which adds
+  the monster's experience to g_Party + 0x2f8 and its gold to g_Party + 0x2fc. These are the two counters that BattleExecVictory01 / BattleExecVictory20 read to build the messages "N points d'experience" and "N pieces d'or"
+  (getBattleExp / getBattleGold, after the possible doubling by reflectBattleExp / reflectBattleGold): so we take the largest of their readings from one frame to the next, until they are reset to zero.
+- Monsters that FLEE and those that VANISH are noted by two hooks in the middle of BattleActorManager2::checkDeathMonster (the routine that, every frame, reviews the dead, fled or vanished monsters;
+  it counts them inline in +0x7d24 / +0x7d28, BattleEndTask::initialize reads them, and it calls execMonsterDeath only for a dead one): just before the increment of the flee counter
+  (+0x98, `ldr w8, [x23, #0xd24]`) and of the vanish counter (+0xc0, `ldr w8, [x23, #0xd28]`), w20 is the monster index (same index as for execMonsterDeath). Each monster goes through there only once
+  (a mask of the monsters already processed, +0xd30, guards against repeats).
+- The ITEMS won are given by BattleExecVictory32::setup (the task that follows victory: "laisse tomber un coffre au trésor !", "Ragnar l'ouvre.", "Il contient un arc de chasseur !"): it calls
+  PartyStatus::giveItem(item = task + 0xc), which returns the index of the member who takes it, or -1 when it goes into the bag (measured: "Ragnar met l'arc de chasseur dans le sac." with -1); in both cases the item is
+  obtained. Hook right after the call (+0x28, `cmn w0, #1`): x20 = the task. NOT VERIFIED: what the game does when the bag itself is full. The item name is requested from
+  the engine itself (TextAPI::extractText(buffer, 0x4000000 | number), which is what the game does for the "item name" macro), between two frames, never inside a hook; the ";" (the patch's name break marker) is removed.
+- The START is PartyStatus::startBattle, the END is Global::endBattle(bool) (true argument = party wiped out), the VICTORY BattleExecDefeatMonster::initialize (the "all enemies are defeated" routine,
+  which awards the experience), the FLEE BattleExecEscape::setup (called on every flee ATTEMPT, successful or not: a successful flee is therefore "attempt made, no victory, battle ended").
+- The ENEMIES are read every frame in g_Monster (12 slots of 0x538 bytes starting at +8; +0x4f8 = monster number, -1 if empty; +0x4fc = group number): one monster = one occupied slot;
+  the species is the monster number. Reinforcements called during the battle are added to the total.
+- The NAMES are those of the monster plates that the engine sends to Unity (Engine.ui, window of type 31: "Rat volant", "Gluant\n\n\t×3" -> "Gluant"), associated with the groups in order (plate j carries the
+  j-th group), only when there are as many plates as groups and before the first death. Without a plate (surprise attack: the game does not display any; plates for a different number of groups), the name
+  is requested from the engine itself at the end of the battle, by monster number (TextAPI::extractText(buffer, 0x6000000 | number): "londuleux", "armure ;errante", "scara$somniaque" -> "Londuleux",
+  "Armure errante", "Scara-somniaque"); "Monstre" if the engine does not answer.
+Everything is guarded: an error returns nothing and is written only once to the console. A battle whose start was not seen (savestate loaded mid-battle, sensor created during a battle) is never
+reported: better to say nothing than to say something false.
+@@ 83bdc59c650c d
+Name displayed on a monster plate; None if empty. The game writes "Gluant\n\n\t×3" (the count notation, which starts with a tab, is removed) and splits long names over two lines:
+"Armure \n\nerrante" -> "Armure errante"; "Scara-\n\nsomniaque" -> "Scara-somniaque" (a hyphen at the end of a line is rejoined without a space). Limitation: "Psaro l'Exter-\n\nminateur" gives
+"Psaro l'Exter-minateur" (the engine does not say whether the hyphen is a word break or a real hyphen).
+@@ c8c7d9fa3c5a d
+Associates plate names with monsters. groups: [(group number, monster number)] of the occupied slots; plates: [name, ...] in plate order (plate j = the j-th group,
+with groups taken in order of their number). -> {monster number: name}; {} if the number of plates differs from the number of groups (we do not make things up).
+@@ 0c0d6989a48d d
+What is known about a battle in progress (pure data: no dependency on the engine; see BattleSensor for reading memory).
+@@ df06b54507ce d
+The finished battle: API dict (see the module header). Gold and experience count only for a victory.
+@@ 5b406127c68a d
+Offset of an `ldr wN, [xM, #imm]` (32-bit access, unsigned offset); None if it is not this instruction.
+@@ 72812e11d73f d
+A reading of the slots: occupants = [(slot, monster number)] of the occupied slots. A new occupant (a free slot that fills up, or a different number) is a new monster;
+a slot that empties is forgotten (the defeated or departed monster has already been counted).
+@@ 752e29d7608b d
+The game declares that the monster in this slot is defeated / fled / vanished (key: 'vaincu', 'fui' or 'disparu'). A monster never seen (gone in the frame of its appearance) is added, as is a monster
+whose fate is already noted (another monster arrived in the same slot).
+@@ d8a82f565612 d
+The game declares the monster in this slot defeated (execMonsterDeath hook).
+@@ d4f19f26f807 d
+The monster in this slot fled (the game counts it in checkDeathMonster).
+@@ af9f1ccdb9f2 d
+The monster in this slot vanished (same).
+@@ 3b95b7d7aa6d d
+The game gives an item to the party at the end of the battle.
+@@ 42da9074335d d
+Reading of the battle's experience and gold counters: they only grow (doubling included) until they are reset to zero after the message; we keep the largest.
+@@ cafb19b4af12 d
+Outcome of the battle at its end: the game's victory routine ran ('victoire'); otherwise the party is wiped out ('defaite'); otherwise all monsters seen are defeated ('victoire'); otherwise the party left ('fuite').
+@@ 8cc61159372b d
+[{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] one entry per species (same name, or same number when the name is unknown), in order of first appearance.
+@@ e33dd2e4dfbb d
+The sensor for this engine: created on first request, always the same afterwards (the hooks are installed only once). Allows adding just ONE line to the frame loop, without creating anything
+elsewhere: `for battle in BattleSensor.for_(eng).do_update(eng): ...` right after `eng.step`.
+@@ e88f689f3330 d
+The structures read are those of the studied engine: getBattleExp / getBattleGold do read g_Party + 0x2f8 / 0x2fc, MonsterStatus::isEnable does read +0x4f8 (monster number).
+@@ 3b18d464446d d
+[(slot, monster number, group number)] of the occupied slots of g_Monster, in slot order.
+@@ 613391e12554 d
+Game time in 1/60 s (status::g_Game + 4, like history.Sensor.time_and_key).
+@@ 99fc8983e100 d
+To be called ONCE per engine frame, after engine.step. -> list of battles finished at this frame (API dicts).
+@@ dbd50e23826d d
+Reading of the frame for the tracked battle: slots, counters, names.
+@@ 348983d6814b d
+Text that the engine gives for (kind, number) -- TextAPI::extractText, which is what the game calls for a name macro --; None if no answer. Called between two frames (do_update), never from a hook.
+The ";" (patch name break) is removed, the "$" (break with hyphen) becomes a hyphen.
+@@ 7e3b0b6e81a8 d
+Name of the item (the name the game displays); cached. No answer: "Objet n°12".
+@@ 1a763408c413 d
+Name of the monster, with a capital letter (the engine gives the name as in a sentence: "londuleux"); cached. None if no answer.
+@@ b67c12941707 d
+{window: (dict of each plate, ...)} of the monster plates that Engine.ui holds in memory (window of type 31). We keep the objects themselves: the engine creates new ones on every refresh.
+@@ ab7d19eb0753 d
+Names of the monster plates sent by the engine to Unity, as long as no monster is defeated. Only plates that arrived since the start of this battle count (objects different from those of that time).
+## FILE dq4_pc/battle/battle_speed.py
+@@ 5ec716b03819 t
+the original engine runs at 30 Hz
+@@ b3730e7affa9 t
+maximum duration (s) of engine steps within a single displayed frame when the clock is accelerated: beyond it, the game falls behind instead of freezing the display
+@@ 130c0064aaaa t
+a step is taken as soon as 85% of its duration has elapsed (60 Hz screen: exactly one step every 2 frames, with no 2 / 3 frame jitter)
+@@ 386b1037b596 t
+at most 3 catch-up steps per displayed frame at normal speed (a longer stall is forgotten)
+@@ 82fc070083fe d
+Battle speed: the engine clock during a battle (pure logic, no window or engine: tested by tools/test_battle_speed.py).
+
+Principle: the original engine advances in steps of 1 / 30 s (Time.fixedDeltaTime). The viewer makes it perform 1, 2 or 3 times more steps per real second during a battle (setting "Vitesse de combat":
+Manuel and Normal: 1; Rapide: 2; Tres rapide: 3), instead of changing anything in the engine. Each step is exactly the game's own: the result of a battle (damage, action order, random draws, delays counted in
+frames) therefore does not depend on speed; only the real duration changes. Everything the viewer animates during a battle is counted in engine steps (`engine.frames` + fraction `alpha`): damage numbers,
+plate shakes, fades, battle start effect, message scrolling (written by the engine), 3D model animation; they therefore follow the accelerated clock.
+
+What is NOT accelerated, on purpose:
+  - music and sound effects: they are played by pyglet at their normal speed (real time, file duration); only the trigger TIME of a sound effect follows the engine. If acceleration makes the same
+    sound effect arrive several times in the same displayed frame, it is played only once (`sounds_to_play`);
+  - key READING while the player is being waited for (command menu, target choice, "Manuel" message waiting for a key): the engine runs there at the setting's speed (monsters keep their idle animation
+    at that speed) but only steps at normal cadence (one every 1 / 30 real seconds) read keys; the others are "muted" (window.tick(mute=True)): cursor and key repeat unchanged;
+  - the accelerator key: it only multiplies walking and the camera outside battle. `factor` deliberately has no parameter for it.
+@@ dffaa2c020a1 d
+Engine clock factor during a battle; None outside battle (the caller then applies the walking speed). `speed`: setting "Vitesse de combat" (0 Manuel, 1 Normal, 2 Rapide, 3 Tres rapide):
+Manuel and Normal keep the game's clock (factor 1; Manuel also advances messages by hand, see settings.scroll_code). Even when the engine is waiting for the player (command menu, target, message waiting
+for a key) the factor stays the setting's: monsters keep their idle animation at the chosen speed, and it is the key READING that stays at normal cadence (unmuted steps, see window._do_battle_step).
+@@ f32ed072a4b7 d
+One displayed frame: the engine clock advances by `dt * f` seconds; `do_step()` performs one engine step as many times as the clock requires (at most 3 x ceil(f)), limiting the computation time to `budget`
+seconds when f > 1 (accelerated walking, battle). `do_step()` returns False when the engine has just started waiting for the player: we stop there, without catching up on the rest.
+-> (remaining acc in engine seconds, number of steps done, budget exceeded). The remaining clock is forgotten if the catch-up is at its maximum, if the budget is exceeded or if the engine is waiting for the player.
+@@ 6d76caf10cad d
+Sound orders of an engine step [(packet type, value)] -> those to play, without launching the same sound effect (packet 35) twice in the same displayed frame: `already` is the set of sound effects
+already launched since the start of this frame (updated here). A stop (packet 36) frees its sound effect: a new start after it is played. Music (packet 37) is never filtered. `already` None: everything passes.
+## FILE dq4_pc/battle/full_screen_effects.py
+@@ 508f9e68d881 c
+Effect models (5000 + effect number) whose quad covers the whole 4:3 field: effect 35 (packet 25, quad of 12.9 x 12.9: a purple tint over the whole screen).
+The other wide quads (effect 9, 7 units) are larger than the field and remain correct; add a model here only after seeing it next to an untinted band.
+@@ 6c9aaf1044ac t
+the quad was drawn for this screen
+@@ 2a0414096a9a d
+Battle effects made of a full screen quad (tint, flash): fitted to the original game's 4:3 screen, hence too narrow when the battle is widened to 16/9 (#223, audit CMB-02).
+@@ 7c41c6e18eb2 d
+Local coordinates (n x 3, axis 0 = screen horizontal) of a battle mesh: those of a full screen quad are stretched in width by aspect / (4/3) around their center, to cover the whole wide screen. Other
+meshes, and a screen of 4:3 proportions or narrower, are rendered as is (same object). -> coordinates to use.
+## FILE dq4_pc/core/emu_core.py
+@@ 187ee398c428 c
+----------------------------------------------------------------------------------------------
+Log: screen + file
+----------------------------------------------------------------------------------------------
+@@ f90096bc8aec c
+----------------------------------------------------------------------------------------------
+ELF 64-bit AArch64
+----------------------------------------------------------------------------------------------
+@@ 51a2884afe12 c
+----------------------------------------------------------------------------------------------
+Game files: read from the APKs
+----------------------------------------------------------------------------------------------
+@@ 7ba051863e2b c
+----------------------------------------------------------------------------------------------
+minimal printf (AArch64 va_list)
+----------------------------------------------------------------------------------------------
+@@ e95f7c4753e8 c
+----------------------------------------------------------------------------------------------
+Emulator
+----------------------------------------------------------------------------------------------
+@@ cffa4dd939b7 t
+enables FP / NEON
+@@ b9063db35ec8 c
+memory
+@@ aee88b4e6604 t
+"ret" everywhere
+@@ 8efdda19789c t
+return address of calls (stub 0)
+@@ 53962e57eefd t
+stack canary (bionic)
+@@ 1753f638d679 c
+lib
+@@ 3caff6568670 c
+counters
+@@ 4cdb5ba96479 c
+-- memory access
+@@ 4a66d6ee8108 t
+ENG-01: the heap is never freed (h_free does nothing) and is 256 MB; the window warns the player at 200 MB (78%) then at 240 MB (94%): see Game._watch_heap
+@@ 6f8a058522c7 c
+-- imports
+@@ ccd142750458 t
+weak and unknown -> NULL
+@@ 6c07315256ba t
+we only read the registers the handler needs (very frequent call)
+@@ 9d1aa5a943ef c
+-- symbols
+@@ cd7763fb2c32 c
+-- calls
+@@ d8779fbb3e2f c
+-- virtual files
+@@ 4573bcd8ca4e c
+-- memory / strings
+@@ bc280f2ad37a c
+-- C++ / system
+@@ d97339c5868c c
+-- OpenGL (counting only)
+@@ af6f82368596 c
+----------------------------------------------------------------------------------------------
+Test scenario on DQ4
+----------------------------------------------------------------------------------------------
+@@ fff2073e3942 c
+The 1st argument of DevInit is the path of the ARCHIVE (data APK): the engine reads its contents itself
+@@ 25e428738639 c
+Menu communication buffers: values read from the game's C# constants
+(c_portNum=32, c_unityTotalSize=129, c_nativeTotalSize=1089, in 16-bit half-words)
+@@ 0d068dfd4a7b d
+Feasibility test (route A) for the PC port of Dragon Quest IV.
+
+Loads libdq4core.so (64-bit ARM code of the game engine) into an emulator (Unicorn) on PC,
+without Unity, then calls its entry functions: IsLoadNativeCode, DevInit, GameInit, GameUpdate...
+The game files are read directly from YOUR APKs (nothing is copied or distributed).
+The full result is written to rapport_test.txt (at the end, to be sent to Claude).
+
+Normal usage: lancer_test.bat
+Options: --apks FOLDER  --lib FILE.so  --lang N  --frames N  --dry  --variant n
+@@ e237e49bbf98 d
+Applies the relocations in the image. stub_for(name, bind) -> address of an external import.
+@@ 0d9352b948dd d
+Addresses of the constructors, in call order (after relocation).
+@@ d20d5cfbcc3b d
+Heap bytes already allocated (the pointer never moves back, except when loading a savestate).
+## FILE dq4_pc/core/encounters.py
+@@ 364afc9c92ef d
+Random encounters, day / night clock and walking speed (#45, #163).
+
+What the original game does (read from the disassembly of libdq4core.so):
+  - Every engine frame where the hero's position has changed (world map: FieldPlayerDoku::checkDokuDamage; towns and dungeons: TownDamageFloor::checkDamageFloor, both through
+    CommonWalkDamage::checkWalk) calls `Encount::execWalk`. It counts 16 calls, then launches `Encount::exec` (once, or five times when [+0x2c] is non-zero).
+  - `Encount::exec` calls `CountDown::exec` (0x1f454c): the counter [Encount+0x134] loses `2 x [Encount+0x144]`; the encounter is triggered when it becomes negative (state [+0x1c]: 0 -> 1 -> 2, then `brew`
+    and `Global::startBattle`). The counter is drawn by `CountDown::setup` (0x1e00 + table[rand(31)]) on each map initialization (`Encount::setup`, so also on return from a battle);
+    its loss per call (`[+0x144]`) comes from `TileSubtractValue[tile] x table du terrain >> 8` (setTileIdRate / setLandType, recomputed on every `exec`).
+  - None of this depends on real time: the game counts ENGINE FRAMES where the hero moves (so steps).
+
+What the viewer does: accelerated walking ("Vitesse de marche", accelerator) makes the engine run `a` times faster, so the hero takes `a` times more steps per real second and, without correction,
+`a` times more encounters per second. We want (1 + a) / 2: x1 unchanged, x2 = 1.5 times, x3 = 2 times, x4 = 2.5 times (walking speeds up without battles becoming unbearable). Each step therefore counts
+(1 + a) / (2 a) times what it used to count: `factor_per_step`. The correction is applied to the engine's own counter (a hook on the write in `CountDown::exec`, see Engine._encounter_hooks),
+not by an extra draw: the counter's loss on each call is multiplied by this factor (accumulated fractions: `Reducer`), the distribution of monster groups, the counter draw and everything
+else stay the game's own. Only when a > 1 (x1: the hook does nothing).
+@@ 7723e8980d0b d
+Share of the encounter counter's loss that remains applied at each step when the engine runs at speed `a` (1 = normal): (1 + a) / (2 a) if a > 1, otherwise 1 (never more than the game).
+@@ 4d5d50d4cf9d d
+Encounters per real second, as multiples of those at x1, at speed `a`: a x factor_per_step(a) = (1 + a) / 2 for a > 1.
+@@ 169d79cd07f5 d
+Multiplies the counter's loss by `factor` (0 to 1), carrying fractions over: the sum of applied losses is, to within one unit, `factor` x the sum of the game's losses.
+@@ 311e2c0881c8 d
+Lets through the fraction `factor` (0 to 1) of calls, evenly, carrying fractions over: out of n calls, floor(n x factor) (to within one) are let through; at 1 or more, all of them.
+@@ 5a417148da48 d
+Loss (integer >= 0) of the game's counter for this call -> loss to apply.
+@@ 0561cbdd8b87 d
+True if this call must take place.
+## FILE dq4_pc/core/engine.py
+@@ 70be4d914827 t
+bounds of the world map scale (packet 30; the engine only sends 1.0 to 1.25: the bound only serves to discard an outlier value)
+@@ da6be8d411cd t
+write cursors (integers / floats) in the library
+@@ 4c3560fb6165 t
+start menu (GameStartPart: log list, creation, deletion, license)
+@@ 345f1d75eb7b t
+town, dungeon, tower (3D scenery)
+@@ c3dd3a39fac7 t
+FieldPart: world map
+@@ fb67b879f047 t
+Global::startCasino: slot machine (map ev05) and poker (map ev04), windows of types 44-48
+@@ aa7ec4a1b555 t
+Global::startBook: monster book (window of type 28); keeps the town map
+@@ 4070f2566297 t
+title screen map (sky, logo, island, dragon: scene without a hero)
+@@ f848c93b80d9 t
+engine "full screen" parts that draw their elements with dynamic meshes (packets 21 / 22) using their own camera
+@@ fd78a1e7ee3c t
+(test) log of the engine message states
+@@ 1c8709e6c47a t
+(test) log of packets 32 (title dragon: position, rotation, color, sequence)
+@@ 7355dea9aaa1 t
+Global singleton
+@@ 1557f88e56a0 t
+name of the map resource requested from Unity (e.g. m/ma/in/mak1f1)
+@@ 050c32c9945e t
+Global+0xd8: copy, on every GameUpdate, of the first integer of the output buffer (state word shared with Unity); its bit 1 = "screen effect in progress" (Global::IsScreenEffectEnd waits for it to drop)
+@@ cdbc01d6f3ae t
+engine byte g_isAmazon: at 1, the "Sauv. cloud" cell of the start menu does not exist
+@@ 1178497ca15a t
+message identifier of the "Revenir a l'ecran titre" box of the original "Parametres" (TownMenu_OPERATION_SETTING::menuUpdate + 0x1c8: `mov w1, #0xba2f ; movk w1, #0xc, lsl #16` then TownMenu_MESSAGE::addMessage(int)): b0834000.mpt, 834095
+@@ e7bc81f8c3d9 t
+TownMenu_MESSAGE + 0x10: box answer (1 = Oui, 2 = Non; reset to 0 on opening); read by TownMenu_OPERATION_SETTING::menuUpdate (state 5)
+@@ b617ad786d4a t
+packet 34 (cmd_screen_effect): value & 0xf = 4, Capture.BattleEffect (the screen chunks fall)
+@@ 10d4616f0b4d t
+Capture.BattleEffect: the counter goes from 0 to divY (56) inclusive, one game frame each
+@@ 3b2ff48bc44d t
+frames (30 Hz) of black screen after the start of a journey (Capture.Tabi) before giving up waiting for the arrival (safeguard: the game always launches it, well before)
+@@ de83abecbe4b t
+opacity (0 to 1) of a fade plane from which the screen is "covered": a map load that arrives then is shown only once the scene is in place (State.loading)
+@@ a6f76d3e7435 t
+engine frames after packet 0: at least 1 (the engine places the camera and characters on the next frame, on 529 maps), 2 at most to wait for the visible characters' positions, 6: safeguard (never a longer wait)
+@@ a8e0e2ae8684 t
+frames (30 Hz) of black screen before giving up waiting for the battle scene to load
+@@ 9d0acb6db8b5 t
+frames after a battle scene loads (packet 0, bit 8) during which a fade launched by the engine is the battle arrival fade (State.battle_transition)
+@@ 89c32e7d282a t
+frames after leaving the battle part during which a fade launched by the engine is the fade back to the map
+@@ bee1882de726 t
+frames during which the battle transition stays "in progress" after one of its fades ends (the engine changes scene 1 to 3 frames later, then launches the next fade)
+@@ 649581bcd00e t
+library byte read by Global::NativeExec: countdown (in frames) of the exit sound effect; startTown, startField, ChangeGamePart, startFirstTown and startDebugTown arm it to 15 when the game leaves a town or the world map,
+@@ 6d9cade88312 c
+NativeExec decrements it every frame and, at 0, calls TownSystem::playTownExitSE / FieldSystem::playFieldExitSE
+(sound effect 305: only if the old scene is still alive, its byte 0 = 1); see Engine._exit_countdown
+@@ f26e3d218e95 c
+keys (mask sent to GameUpdate): up, down, left, right checked; A/B to be confirmed
+@@ 41921376d75d t
+on a town field, bits 4 and 5 of the held keys are not A / B but the game's camera buttons (window::NormalControl::checkCamera reads (Global + 0xe0) >> 4 & 3): 1 turns left,
+@@ 80d698263391 c
+2 right, 3 (both) returns the camera to north; the engine itself applies limits, locks and scenes (TownPlayerManager::setCameraRot)
+and rotates the walking directions and the sprite rows
+@@ aa022f7b5506 t
+degrees of a game camera rotation (TownCamera::rotateL / rotateR: 0x200 out of 65536 per turn), one per engine step while the button is held: 84.4 degrees per second
+@@ cb33cb587a8b t
+CAMERA_ROT_TYPE: TownPlayerManager + 0x698 (requested rotation, waiting for the next setCameraRot); 3 / 4 = return to north in progress / finished
+@@ b36421b119c9 t
+SDrawCTRL object (message text canvas) in the library
+@@ 9f489a2daa5b t
+texture of Unity's message canvas (MenuMessage: Texture2D(512, 512)); the engine writes to it in a loop
+@@ ef9bfec60709 t
+actual size allocated for the message queue (Unity announces 1089)
+@@ 12d5ed221546 t
+ui_MsgLoop: message open (byte), state (1 reading a code, 2 writing the letters, 3 / 5 waiting for a key), index of the current letter and of the end of line, letters per frame / 4 of the window type
+@@ 3aefec559392 t
+ui_MsgLoop + 0x128: `sxth w20, w8` after `lsl w8, w8, #2` (state 2: number of letters written in this frame)
+@@ 4eb8cdb4017a t
+OptionStatus.battleSpeed: 0 to 3 = wait of 12 / 22 / 32 / 42 frames between two battle messages (BattleAutoFeed::setMessageSpeed), 4 = no automatic advance
+@@ 29a4512a97ed t
+Global.Flag (shared state word, Engine.flags): a fade is in progress; the game has locked the player (event, scene: Global.PLAYER_LOCK)
+@@ 0191c46c420c t
+status::HaveStatus::levelup(bool) + 0x3f8: `tbz w20, #0, ...` (w20 = the argument; true: the character regains all their HP and MP, their max HP/max MP having just been recalculated)
+@@ 5d1e439be731 t
+MenuManager: pointer to the manager (at +8, up to 8 open menus, one pointer each); gMaterielMenu_EXTRA_PRESENT_EXP (experience gift): state at +0x30, 2 = last wait (see awaits_touch)
+@@ 2a645f6f0a3f t
+CountDown::exec + 0xc: `str w8, [x0]` (w9 = encounter counter before, w8 = counter after losing 2 x [x0 + 0x10])
+@@ 1a90a30038a4 t
+FieldPlayerDoku::checkDokuDamage + 0x38: `b FieldStage::ChangeTime` (tail jump, via the PLT stub 0x2246b0; w1 = 0, the world time advances by 2), + 0x44: the function's `ret`
+@@ cf9049182ce5 t
+the 4 instructions of the PLT stub 0x227d90
+@@ 33603d173ea5 c
+Global::NativeExec + 0x14: `mov w1, #2`; + 0x20: `bl GameStatus::addPlayTime` (via the PLT stub 0x227d90: x0 = status::g_Game, w1 = 2, void):
+once per engine step, +2 units (1/60 s) of play time
+@@ d33e7805496f t
+TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x428 and TownMenu_MAGIC_ROOT::useMagicNoTarget + 0x188: `bl UseAction::execUse` (via the PLT stub 0x2269c0) of the field Magic menu
+@@ 955e31dd8cf1 t
+PlayerStatus + 0x7e: current MP; UseActionParam + 0x210: list of result messages (ends with 0), + 0x1d8: action number
+@@ ed74c464f976 t
+TownMenu_MAGIC_CHARSELECT::menuUpdate + 0x100: `sub w8, w8, #0xc4` (w8 = action number; if the result is <= 2, it is a healing spell and the engine plays sound effect 501, `playSe(0x1f5)`, whatever its effect)
+@@ e0ccddfef445 t
+gTownMenuItemUseManager + 0xaa: number of targets whose result the engine displays (and for which it plays the healing sound effect, once each); useMagicNoTarget + 0x2e0: exit of this loop
+@@ 6bfcb5e76144 t
+identifier of the engine message "Mais rien ne se passe." (failure field of the action table: Resurrection, Antipoison, Sifflet...); serves as an engine version marker (action 201): it is no longer displayed by the no-effect spells rule
+@@ 2837bd38d134 t
+identifier of the engine message "Mais il ne se passe rien." (the one Evac' puts in param + MAGIC_RESULT outside a dungeon; measured: field 5 of the action table gives 0xaae7e for action 204, but it is not the displayed message): official text displayed by the "spell that costs MP with no effect" rule (requested by Sylfried, #48)
+@@ 10a43ceeb81b t
+frames (30 Hz) before telling the engine that an object animation (door...) is finished
+@@ e190075814f4 t
+frames after its creation after which an animated character without a position is placed at the origin (see State.apply, packet 13)
+@@ 7984ee73928f t
+(test) when the engine opens a save file
+@@ 15efc8cee248 t
+save files the engine could not write (list of sentences, read and emptied by the window: small message + log)
+@@ b84ce81ad8ed t
+(persistence/write_dir.py: shared with the save import)
+@@ 4afffa6f24a3 t
+the engine continues (it thinks it wrote, as before): the window warns the player
+@@ c04907d6844a c
+Savestates recorded before the project switched to English (05/11/2026): their `State` (ex-`Etat`) and `Interface` objects keep the old attribute names,
+in French, in their pickle. `__setstate__` restores them to their current name on read; a state recorded since (English names) passes through as is.
+@@ 5431baeec177 t
+fades to black last 1 / fade_speed of their original duration: FIXED at 1 (game duration) since #101, no longer a player setting (tests vary it)
+@@ 01b95e5090ba t
+packet 1 (cmd_map_effect_sepia: FldObject.calculateExecSepia): the town scenery switches to the `Custom/fld_*_sepia` shaders (flashbacks) until the next map load; class attribute: a savestate recorded before #254 does not have this attribute
+@@ d6f512eb0dbe t
+packet 30, integer < 0: Field.SetScale(scale): the world map's orthographic camera sees scale x more of the field (balloon: 1.0 to 1.25, sent again every frame by FieldData::setOffset); class attribute: a savestate recorded before #252 does not have this attribute
+@@ 884569aee5af t
+packet 34, values 3 (journey), 5 (lamp), 6 (Riremito): Capture class effect in progress {'n': frames elapsed, 'duree': engine frames, 'images': original MoveNext calls, 'genre', 'inverse', 'matin'} (see Engine._start_screen_effect); class attribute: a savestate recorded before #256 does not have this attribute
+@@ 80d926c24560 t
+end of a journey's departure (Capture.Tabi: both layers go to alpha 0, the game camera stays cut off): {'n': frames elapsed} as long as the screen stays black, until the end of the arrival (see Engine._screen_effect)
+@@ bc59f3a492ef t
+packet 30, integer >= 0: Field.SetFloatingObject(slot): this character's panel (the balloon: slot 12) is enlarged by `field_scale` (Field.FloatingObject.SetScale), so it keeps its on-screen size when the field is seen from farther away; its shadow is not touched
+@@ 2bd98cb2e8e7 t
+world map: icons (packet 29) idx -> {genre, x, y (top-left corner in px), alpha, visible}
+@@ 4f4dc5dc8c9d t
+battle: slot -> model id (texture m<id>); slot -> dynamic mesh (packet 22)
+@@ dd67de695d14 t
+battle: slot -> {'shader', 'vis', 'col', 'off'} (packets 21, 23, 24, 25, 26: MeshChara on the Unity side)
+@@ ba1308e3c47c t
+packet 11: near, far, yOffset (None = Global.CameraInitParams values), free camera (no target), lookDownAdjust (None = 0.2 from SceneCamera's .cctor)
+@@ 8778176a076c t
+packet 11 (camera_sub): nominal field of view in degrees (Unity multiplies it by 4/3, SceneCamera.Update); None = battle value (48)
+@@ fc73fd2453ce t
+packet 19 with a slot >= 16 (TouchPad.SetPadBlink): the game makes the central disc of the D-pad blink (orange ball and halo) as long as an action is possible / awaited; icon number < 0 = end (#131)
+@@ ab3fcb2620d6 t
+packets 19/20 (Riseup): slot (0..15) -> {'id' (32 x 32 cell of the MenuTexture sheet), 'pos', 'alpha'}: "!" bubble above a character
+@@ 8595e00b3f19 t
+background: average of the two tints of packet 8; top_background / bottom_background: tints of the top and bottom of the screen (BackColor, gradient; None = no packet 8); object_cmds: orders on map objects (packets 2 to 5 and 7), emptied by the window: (kind, object, values...)
+@@ eee0f62dc82d t
+game part (0xc town, 0xe world map); world map: tiles to display
+@@ f34fb6400e57 t
+battle: slots whose mesh (packet 22) arrived in THIS frame: Unity draws in immediate mode, no packet = nothing on screen (blinking of a hit received, defeated monster)
+@@ 38b6ee017201 t
+Fade.FadePlane: current opacity, target opacity, step per frame, remaining frames, color, frames spent fully black. TWO planes (Fade.l_fade, bit 14 of packet 9's integer = Fade.l_targetLayer): 0 = "FadeForMenu" (shader Custom/FrontFade, Overlay queue: in front of everything, windows and messages included); 1 = "FadeForBG" (Custom/BackFade, Background queue: in front of the scene, behind the windows)
+@@ dcc65ecbed98 t
+packets 35/36/37: pending sound orders (type, value), emptied by the window every frame; last requested music (None = stop)
+@@ 9189fa3ac10b t
+battle start screen effect in progress: {'n': frames elapsed} (the engine waits for it to end, see Engine._battle_effect)
+@@ f2cc1d796464 t
+map load (packet 0) while the screen is covered by a fade: {'n': engine frames since packet 0, 'cam': packet 10 received since} as long as the scene is not in place; the window then draws only the fade (see update_loading)
+@@ 7dbd7eb41dcc t
+last fade to black launched by the engine: (engine frame, played duration / original duration); 1.0 = game duration (see Engine._exit_countdown)
+@@ 20da74a1a18a t
+battle transition (see battle_transition): remaining frames of the "battle arrival" window, of the "return to the map" window, of the guard between two fades
+@@ 92bc5456fbe4 t
+{'base': number of scene loads already seen, 'n': frames waited}: black screen until the battle scene has arrived
+@@ ce9828e22fc8 t
+entire world map read from the engine: {'ids': tiles (H x L) after animation, 'l', 'h'}; None outside the world map
+@@ 02a842ac8124 t
+packet 33 (cmd_map_color_rate): scenery tint (FldObject.m_color, or Field.SetColor on the world map): multiplies the color of each scenery material (except "tz_" textures: lamps, candles, waves); 1, 1, 1 = neutral
+@@ fd4cbf3a4a55 t
+packet 17 (Chara.SetSleepNear): body height of lying characters (Y component of s_lieOffset, static of Chara: it survives map changes); 0 as long as the engine has sent nothing
+@@ 05010e0a5914 t
+animated 3D models (packets 31 / 32: the title dragon): slot -> {'id', 'vis', 'pos', 'rot', 'scl', 'col', 'anim': [(engine frame, sequence number, force)]}; frame: number of the current engine step (filled in by Engine.step)
+@@ d8d1c80cb2a6 t
+'combat': battle transition fade (game duration, see battle_transition)
+@@ 243edde6b4c0 t
+states recorded before the two fade planes (and before the switch to English: see OLD_ATTRIBUTES)
+@@ 55540d30037b t
+Fade.FadePlane.CheckFade: remaining frames > 0 on one of the two planes
+@@ bc8ce05085bf t
+screen already covered by a fade at the time of the map load?
+@@ 3063e3164854 t
+battle scene (cmd_fld_load, bit 8): the fade launched right after is the battle arrival fade
+@@ d8467d18e9c9 t
+new map: fresh FldObject, white m_color (FldObject.init_fld); the engine sends the map tint again after packet 0
+@@ 76db3eed4aeb t
+cmd_fld_color (D12C98) = cmd_map_effect_sepia: no argument; FldObject.calculateExecSepia (CDD9E0) replaces the shader of each scenery material with "<name>_sepia" (not the characters')
+@@ a0cef3d4d376 t
+clear color: average of the two tints (fallback, off-screen rendering); the background itself is a vertical gradient (#111)
+@@ 1a917f1fb046 t
+cmd_back_color (RVA 0xD14F44): 6 floats -> BackColor.SetColor(top, bottom, 0) (0xCC43F8): top = vertices 0 and 1 of the full screen quadrilateral, bottom = vertices 2 and 3
+@@ 28d2e1f172ae t
+cmd_map_color_rate (D14E44): r, g, b; FldObject.m_color = (r, g, b, 1) (town and battle scenery: FldObject.update_material_color, every frame, Material.color = _OrgColor (1, 1, 1, alpha) x m_color, except materials whose texture has "tz_" in its name); on the world map: Field.SetColor (tiles and symbols)
+@@ f32985fd5ccc t
+cmd_field_load: Field.Init, fresh material (white color); the engine sends the world map tint afterwards
+@@ 7c897a40981a t
+(Field.Init resets the original camera size; the engine registers the balloon (packet 30, slot 12) right after, on every world map load)
+@@ b8eef1b67444 t
+cmd_field_scale (D12794): integer >= 0 = Field.SetFloatingObject(Chara of this slot); integer < 0 = Field.SetScale(float)
+@@ 68e077980638 t
+(FieldData::setOffset: 1 + offset / 128, offset <= 32: from 1.00 to 1.25)
+@@ 9d4f9eb4de80 t
+FieldData::drawBlock: 16x16 tile window of the world map (cols x rows) around the camera
+@@ 7c1cdd5f8665 t
+FieldData::draw_symbol: idx | genre << 8 + [x, y, alpha]; 0x8000 | idx = hide; 0xc000 | idx = show again
+@@ 93c3ed77d6ce t
+cmd_chara_on_off: Chara.SetVisible(value != 0) = Renderer.enabled of the character (and its shadow)
+@@ bb30ed14ff53 t
+cmd_chara_sleep_pose (D132FC): character = v & 0xff; bits 8-9: Chara.SetSleepPose(bit 8); bit 10: Chara.SetSleepDir(v >> 12) (see lying_pose.py)
+@@ 2dd1f8a3c876 t
+SetSleepPose(true): quadrant 0, identity rotation (the direction follows in the same packet)
+@@ 1864403634fb t
+cmd_chara_sleep_near (D133E4): (defNear, offset); Chara.SetSleepNear: height of the lying body
+@@ 530c1789da3b t
+cmd_chara_pose (D13474): v = character | number << 8: Chara.SetTexture(number) = the character changes sprite sheet (TownCharacterDraw::changePose)
+@@ 4ad2833892f3 t
+cmd_chara_shadow (D13150): character = v & 0xff; bits 8-9: shadow visible (bit 8); bits 10-11: separate shadow (bit 10); bit 12: shadow position (3 floats,
+@@ 135fd494956d t
+SetShadowPosition); bit 13: opacity (SetShadowAlpha); bit 14: shadow position on the world map (SetFieldShadowPosition)
+@@ afef96c48249 t
+SetFieldShadowPosition: (x, y, height) in map pixels; the balloon: 32 pixels (2 tiles) south of its feet
+@@ 9167f884e130 t
+cmd_rise_icon_load with a slot >= 16: not a bubble, the D-pad blinking (TouchPad.SetPadBlink); number < 0 = stop
+@@ ac177b5c00f8 t
+cmd_rise_icon_load: slot, icon number (< 0 = release); Riseup object, Custom/Riseup material on the MenuTexture sheet
+@@ 6bc89b8037b1 t
+cmd_rise_icon: slot; x, y, z (SetPosition) then alpha (Material.color = 1, 1, 1, alpha)
+@@ 94f5f81d7748 t
+cmd_fade: duration in frames = v & 0x7ff; bit 12: fade out to a color (otherwise fade in); bit 11: color r, g, b as floats; bit 13: white (otherwise black); bit 14: background plane "FadeForBG" (behind the windows; otherwise plane "FadeForMenu", in front of everything: see State._fade)
+@@ 3d49062ff554 t
+cmd_fld_common_anim: object = v & 0xffff, common animation number = v >> 16 (FldObject.SetCommonAnimation)
+@@ 09947ec8c942 t
+cmd_fld_on_off: object = v & 0xffff, flag = v >> 16 (SetMapObjOnOff: non-zero flag = object hidden)
+@@ 5046b01fcb39 t
+cmd_fld_alpha: object = v & 0xffff, level (0..31) = v >> 16 & 0xff (SetMapObjAlpha: opacity = level / 31)
+@@ 768fa60f1ceb t
+cmd_fld_pos: object; x, y, z
+@@ d5cc670cbfea t
+cmd_fld_rot: object; rotation x, y (z = 0)
+@@ ff11060d8b43 t
+battle: rotation (pitch, yaw, roll) in degrees
+@@ a6ba39eeb848 t
+DSSAObject::send_unity_load(slot, model id); id < 0 = release
+@@ 2b71c7e39b24 t
+MeshChara..ctor: shader 1 (DssaMonster0) except id > 999 (DssaCharaTransparent); white color
+@@ 8087a889500d t
+cmd_fbx_load: slot, model number ("fbx/c<number>", FbxObject); < 0 = release. The model is created hidden, without rotation (the FbxObject constructor does not set one; the engine sends the absolute rotation with the 1st packet 32: FbxObject.SetRotation = Quaternion.Euler then Transform.set_rotation, 0xCD1748), scale 1
+@@ f427cacbdcee t
+cmd_fbx: slot = v & 0xff; bits 8-9: visibility (bit 8 = visible); 10: force the animation; 11: scale (3 floats); 12: color (4); 13: position (3); 14: rotation, degrees (3); 15: animation (one integer: sequence)
+@@ a1a68140db4c t
+(test) DQ_FBXLOG=1: all packets 32 (position, rotation, scale, color, sequence)
+@@ b9269c549766 t
+cmd_mesh_on_off: slot, visible
+@@ 967896ed0d36 t
+cmd_mesh_shader: slot | shader number << 8 (0 Chara, 1 DssaMonster0, 2 DssaMonster1, 3 DssaCharaTransparent)
+@@ 839c6592aba2 t
+cmd_mesh_color: slot; r, g, b (Material.color, alpha 1)
+@@ 5c8b4d442cbf t
+cmd_mesh_tex_offset: slot; u, v (Material.SetTextureOffset)
+@@ b8bbc0f08011 t
+cmd_camera_sub: bit 0 near, 1 far, 2 fov, 4 yOffset, 5 lookDownAdjust (one float each, in bit order), 7 free camera (s_targetCamera = false)
+@@ d3904075336a t
+SceneCamera.SetFOV2: clamped to 78
+@@ 82b1a20269b8 t
+dynamic mesh: [slot, vertex count, colors (1 byte/vertex, 4 per integer), indices...] + floats [x, y, z, (u, v, x, y, z) * vertex count]
+@@ 75664218eba5 t
+col: one byte per quad (4 vertices), 255 = opaque
+@@ 1cc3787af688 t
+cmd_se_play / cmd_se_stop / cmd_bgm (Sound.PlaySE, StopSE, PlayBGM; value >= 4096 = StopBGM)
+@@ e30225c33fca t
+cmd_chara (D12EA8): bit 11 = Chara.SetScale(scale): Transform.localScale = 1.8 x scale on the character's panel (not on its shadow)
+@@ 08e6c2624d19 t
+(a character's 1st update, the one that places it, carries a throwaway starting value: 0.0253 to 0.08 then 1.0 in one frame; observed on 529 maps, 1062 characters: ignored)
+@@ fdfb64644972 t
+0x8000: same position, world map version (pixels)
+@@ 3c03b888bafa t
+the engine only sends a position if it differs from the one it believes is already set (its record of the character: (0, 0, 0)):
+@@ f702685010cc c
+an animated character that has not received one after a few frames is at the origin (Chara created at (0, 0, 0) by Unity); mqtf3, mom2f1, msm1f1, slot 8: the NPC
+in the middle of the room was not drawn. (The others' positions arrive 1 frame after creation: no one-frame appearance at the origin.)
+@@ e7e86d45bab0 t
+map load: drawing held back (see update_loading) if the screen is covered, either by a fade already there or by the fade-in launched with this load (it restarts from opacity 1)
+@@ e4afc7133454 t
+fade launched by a game script command (mark set by Engine._fade_hooks): its duration is the script's
+@@ 6abe562f7b7a t
+bit 14: Fade.l_targetLayer (NativeManager.cmd_fade D14D10), the plane that receives the command
+@@ a4c7c4a5387a t
+battle fade (arrival in the scene, exit, return to the map): mark for battle_transition (its duration follows "Vitesse de transition" like any fade to black, #47)
+@@ 9903e9b6ea70 t
+shorter fade to black (map change, battle arrival, battle end, return to the map): "vitesse des transitions" setting (not for a script fade)
+@@ 0569c3d5a04e t
+shortened fade to black: the engine's exit sound effect countdown follows (Engine._exit_countdown)
+@@ 9f43ed2fb27f t
+engine frames since the load (0 at the load frame: own count, no frame difference: a loaded state can reset the frame counter to zero)
+@@ fd10576b4ffa t
+world map: also wait for its tiles (packet 28)
+@@ 5ddfafc43b33 t
+drawing held back after a load: a fade-in only starts with the scene in place
+@@ 8ce29a524f7e t
+battle black exit finished: the engine changes scene within 1 to 3 frames, then launches the fade-in; the clock must not change between the two
+@@ f54863a6dab7 t
+message window (port 1): window type, canvas scroll, end-of-page cursor, speaker name ("qui"); qui_att: the next packet on the port carries this name
+@@ e43b6cc7b79f t
+damage numbers to make hop on the monsters: (monster, height, damage), emptied by the viewer
+@@ 28712f414af1 t
+port 0 messages addressed to the host: (code, arguments...); 999 = quit (MenuPortSendQuit), 6 = portal, 4 / 5 = volumes, 7 = name size, 8 = gamepad
+@@ 6a8b3171b369 t
+optional observer (viewer): open_menu(port, type), shutdown(port), param_int/param_str/code/selection
+@@ 9d8e00d11d44 t
+message window: drawn from the engine's canvas; MenuMessage.NoticeReceive: 0 type, 1 cursor, 2 shake, 3 scroll, 4 speaker name
+@@ fd4e726d4991 t
+[4, 1] announced a name: the next packet on the port is its text (one integer per character, like the menu cell texts)
+@@ 9b80d1c5f736 t
+[4, 0]: no name (frame without tab); [4, 1]: the name follows (frame with tab, only for the field window: MenuMessage.NoticeReceive, command 4)
+@@ 443d79cd406c t
+[window, 3, visible]: MenuPort.SetVisible
+@@ abc91ac6dac0 t
+[window, 2]: closed
+@@ a7ba3910a117 t
+(the engine's stop messages can set "act" again: "ferme" stays until the next creation)
+@@ c0687a2cdade t
+[window, 1, category, type]: creates a menu of the given type (MenuPortItemTable.Make_*)
+@@ 7e27fe0bee19 t
+MenuPortSystem.internalUpdate (D10A54): [port, 2] destroys the element (`s_ports[port] = null`), the port messages received afterwards (same frame: ports 12 to 31 are read after port 0)
+@@ ec91c5de7b20 t
+no longer have a recipient (`if (item != null) item.NoticeReceive`); before, the end of the log list (5, 6, 4) reopened the closed window for one frame: purple "simple" box
+@@ b43ff504f964 t
+Make_BattleHoppingNumber: [12, 0, 0] then [monster, height, damage] (BattleMenu_setHoppingNumbers)
+@@ c01afcab4eaf t
+text of the announced cell
+@@ 8f5c4a21991d t
+map window (type 25): the list of numbers that follows the engine's codes 3 (discovered places) and 5 (veil) (MenuPort.Receive of the Make_CityMap functions), not a command
+@@ 8d6e7cb7f6ac t
+monster plate: messages that follow a code > 0 (name, then [x, y, ...])
+@@ cab42a7e5870 t
+MenuPortItem.NoticeReceive: first command -> parts activated, drawing forced
+@@ 7959fdcf251f t
+dynamic window: fresh content
+@@ 26d8e5c4a039 t
+setItemMenu: columns, rows, number of cells of the engine's cursor
+@@ 4f0d52f3c0c6 t
+input request (every frame while the menu waits for a key)
+@@ 2679d260eed1 t
+draw request: the engine resends it every frame as long as the window must be visible
+@@ 20209353d560 t
+stop: parts deactivated
+@@ 6ac41a465910 t
+ignore draw requests (always visible)
+@@ a9a4ce1deb27 t
+setItemParamInt [id, no, low, high]: 32-bit value
+@@ b39a669c2eb6 t
+kept to replay the window (savestates)
+@@ 3e410510b53d t
+number of times each code has arrived (the title: TapToStart.CountReset = code 0 of port 12)
+@@ 73ed27091ebf t
+ICityMap: code 3 = discovered places (x + 256 y, one per number), code 5 = veil (16 numbers: one bit per 10 x 10 pixel unexplored block)
+@@ 6ce1c88124fd t
+MonsterNamePlate.ReceiveParameters(code >= 1)
+@@ bc68c2f56f3d t
+plate layout (number of plates)
+@@ e9010fd968d2 t
+MenuPortItem.Update: visible as long as the engine requests drawing every frame
+@@ 0c1010387eca t
+settings / hooks that the engine of THIS apk did not let install (see _record_missing); the window announces them once (Game._report_missing_hooks)
+@@ f64a5810cb85 t
+interface <-> engine message queues (allocated by the caller)
+@@ 47c5f2e66a05 t
+start menu: no "Sauv. cloud" (Google Play Games / Square Enix server absent on PC); the original removes the same cell for the Amazon version
+@@ 9053102e407d t
+engine -> interface messages (menus), last frame
+@@ 5d7b320be780 t
+menu windows remembered
+@@ b0b7c1c86436 t
+exit sound effect countdown (see _exit_countdown)
+@@ 6c969340366f c
+map object animations (doors...): the engine waits for Unity to finish them (bit0 of byte +0x14 of the entry)
+@@ 904a1d2f2d1b t
+[(due frame, object index)]
+@@ d9d95b7c4af7 t
+(object, number) -> frames before the common animation ends (given by the window, from the map data); None = ANIM_DURATION
+@@ 42cea1d3973a t
+message window displayed? (MenuPort::SetVisible on the message port)
+@@ fa16cdf25fb5 t
+MenuMessage.SetVisible(false) clears the name text (m_who)

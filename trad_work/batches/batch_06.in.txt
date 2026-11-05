@@ -1,0 +1,875 @@
+## FILE dq4_pc/persistence/settings.py
+@@ 57d6a94cd346 d
+« Retablir cette interface » : l'interface `target` de l'editeur (SCREEN_TARGET, 'msg' ou nom Make_* d'une fenetre du jeu) revient entierement a son etat d'origine, et elle seule :
+position, taille, affichage (« Afficher cette interface a l'ecran ») et ses autres options. Boutons et croix de l'ecran : tout SCREEN_KEYS (affichage, taille de la croix et des boutons, positions) ; bouton de vitesse de combat : tout SPEED_KEYS.
+Fenetre du jeu : son entree de WINDOW_KEYS (absente de DEFAULT = taille, position et affichage du jeu). Les options de l'editeur (EDITOR_KEYS) ne bougent pas.
+@@ 78f9b1a842db d
+« Retablir toutes les interfaces » : toutes les interfaces (SCREEN_KEYS et WINDOW_KEYS) et les options de l'editeur (EDITOR_KEYS : grille, aimantation) reviennent a DEFAULT.
+@@ c516c262e8e1 d
+Codes pyglet des touches d'une action.
+@@ c8a27e3acbff d
+Action liee a une touche (ou None) : une touche ne sert qu'a une action.
+@@ 2a9086e29a88 d
+Lie une touche a (action, colonne 0/1) ; la touche est retiree de toute autre action. -> nom de l'action qui l'avait, ou None.
+@@ c2efbbe2dcb6 d
+Remet les touches d'une action a leurs valeurs d'origine (une touche d'origine prise depuis par une autre action lui est retiree). -> noms des actions qui l'ont perdue.
+## FILE dq4_pc/persistence/write_dir.py
+@@ 293069fbcfaf d
+Ecriture de fichier sans jamais en laisser un a moitie ecrit (sauvegardes du jeu, import de sauvegardes).
+@@ 45053d85dec4 d
+Ecrit `raw` dans `path` : fichier temporaire a cote puis remplacement d'un coup (jamais de fichier a moitie ecrit) ; en cas d'erreur d'E/S (antivirus qui verrouille le fichier, disque plein, dossier en
+lecture seule) le tout est retente `attempts` fois, espacees de `pause` s. -> None si tout va bien, sinon l'exception de la derniere tentative ; l'ancien fichier reste alors intact.
+## FILE dq4_pc/render/capture_effects.py
+@@ 8355eece90a2 t
+paquet 34 : valeur & 0xf -> effet (Capture.ScreenEffect, 0xCC6474)
+@@ 422e90097fe8 t
+appels de MoveNext jusqu'a celui qui rend faux (le bit 1 retombe a cet appel)
+@@ bc1e37c5e327 t
+appel (numerote a partir de 1) ou `Fade.SetFadeOutBlack(0)` rend l'ecran tout noir d'un coup (il le reste jusqu'au fondu d'entree lance par le moteur)
+@@ 6f15b221db3b t
+voyage, arrivee : `Fade.SetFadeIn(30)` est lance a l'appel 3 (mise en place de l'effet)
+@@ 97540d6155ca t
+images de ce fondu d'entree
+@@ ce8b892bb20e t
+appels de MoveNext deja faits
+@@ 0aa406e3a8ff t
+MoveNext a rendu faux : le jeu a abaisse le bit 1 de Global.Flag
+@@ 05d3d21ab5eb t
+MeshRenderer de l'objet Capture : tant qu'il est coupe, le jeu reste affiche normalement
+@@ 0ccb1e1c4e08 t
+rappel on_blur(effet, indice) : « rendre dessins() (etat de l'image precedente) dans la texture de flou n° indice, de demi-resolution »
+@@ 791174e3ff0a t
+indice de la texture de flou que lit le fond de l'image courante ; None tant qu'aucune passe n'a eu lieu (texture noire)
+@@ a9eddf24dd54 t
+Capture.l_blurTexNum
+@@ d9ab175df140 t
+Capture.l_bBlur
+@@ cba4a24cf156 t
+Capture.l_bCapture (Snap)
+@@ 94d9503efbe2 t
+Caputer : la capture est prise avant MoveNext de l'appel suivant (la fenetre l'a deja copiee)
+@@ f5d947a9e1ca t
+le fond lit la texture qui vient d'etre ecrite ; la premiere image fait une seconde passe dans l'autre texture, ecrasee avant d'etre lue : rien a faire
+@@ 90705be9ca86 c
+les deux triangles du fond plein ecran (sommets : 0 haut gauche, 1 bas gauche, 2 haut droit, 3 bas droit) et ses uv
+@@ 664e088a5b2e d
+Effets d'ecran de la classe `Capture` de la couche Unity (paquet 34, valeur & 0xf = 3 : voyage / ailes de Chimere, 5 : lampe / Ranaruta, 6 : Riremito ; le 4, debut de combat, est dans combat/battle_effect.py).
+
+Module pur (numpy seulement, rien de graphique) : constantes communes et squelette de la boucle de `Capture`. Chaque effet est une coroutine C# (`Capture.<Tabi>d__49`, `<DarkLamp>d__47`, `<Riremito>d__48`)
+que `Capture.Caputer` fait avancer d'UN pas a chaque LateUpdate (30 Hz), dans cet ordre :
+  1. si une capture est demandee (`Snap`) : la camera du jeu (sans l'interface) est rendue dans une texture, la « capture » ;
+  2. si le flou est actif (`SetBlur(actual)`) : la camera de l'interface rend l'etat de l'image PRECEDENTE (fond flou + maillage de l'effet) dans une texture de DEMI-resolution (deux textures en alternance) :
+     c'est le fond flou de l'image courante, une remanence ;
+  3. un appel de `MoveNext` (un pas : sommets et couleurs du maillage) ; quand la coroutine rend faux, le jeu abaisse le bit 1 de `Global.Flag` que le moteur attendait (`IsScreenEffectEnd`).
+Les sommets sont en coordonnees d'ecran normalisees (-1..1 : les shaders `Custom/Capture` et `Custom/CaptureBlur` recopient la position dans `gl_Position`, sans matrice) ; le dessin est decrit par `drawings()` :
+d'abord le fond (`Blend SrcAlpha Zero` : texture floue x couleur, remplace l'ecran), puis la capture (`Blend SrcAlpha OneMinusSrcAlpha`), sur un fond noir uni, la camera du jeu etant coupee.
+Les durees ne dependent ni du hasard (aucun `Random`) ni d'une horloge : tout est fonction du nombre d'images. Les regles de chaque effet ont ete lues dans le desassemblage de libil2cpp (adresses en commentaire),
+puis comparees au vrai code machine execute sous Unicorn (Tabi et lampe : sommets, couleurs, champs identiques au bit pres).
+@@ 6da7aaee0ac7 d
+Flottant 32 bits a partir de son motif binaire (les litteraux de libil2cpp, lus tels quels).
+@@ dc4489401ed6 d
+Nombre d'appels de MoveNext d'un effet (`inverse` : arrivee du voyage, bit 7 de la valeur du paquet).
+@@ dde5857f0486 d
+Appels de MoveNext faits quand l'effet a vecu `n` images du moteur (0 = celle ou le paquet est arrive : le premier appel a lieu la meme image). `duration` = images du moteur de l'effet
+(`frames` quand « Vitesse de transition » est a x1, moins ensuite : l'effet est alors rejoue plus vite, comme la cascade du combat), `frames` = ses appels d'origine.
+@@ d59d436a5dc2 d
+Squelette de `Capture` : la capture et la passe de flou sont faites par l'hote (fenetre), qui s'inscrit dans `on_blur` ; les sous-classes donnent `_move_next` et `drawings`.
+@@ 6b0318007805 d
+Indices des triangles d'une grille de `columns` x `rows` cases dont les sommets sont ranges rangee par rangee (colonnes + 1 par rangee) : (a, a+1, b) et (a+1, b+1, b), a = r * (colonnes + 1) + c, b = a + colonnes + 1
+(boucle 0xCCB71C de Tabi, 0xCC895C de la lampe : les deux ont le meme sens).
+@@ e65cd0eb3a91 d
+Un LateUpdate de `Capture` : capture (faite par l'hote avant le premier appel), passe de flou, un appel de MoveNext. Rend vrai tant que l'effet continue.
+@@ 3a2c4571a7cb d
+Liste de dessins (nom, positions (n, 2), uv (n, 2), rgba (n, 4)), dans l'ordre du jeu : 'flou' (fond, remplace l'ecran : texture de flou) puis 'capture' (melange alpha : texture de la capture).
+Triangles non indexes. Vide quand le MeshRenderer est coupe.
+## FILE dq4_pc/render/lamp_effect.py
+@@ 5f73fb0874a5 t
+0xCC8624 : cases par rangee
+@@ 55cf971a71ab t
+sommets par rangee
+@@ 2312e210f856 t
+h_divY = m_divY >> 2 (0xCC8E24) avec m_divY = 56
+@@ 763b68103043 t
+0,255 : registre de calcul (la valeur 0..255 d'un sommet / 1000), pas un z d'affichage (ZTest Always)
+@@ c90c5f5f25b5 t
+1,0015 : etirement horizontal des sommets interieurs par image (0xCC90D8)
+@@ 4d103e7fee1a t
+-0,0152587890625 : vitesse initiale de `movement` (pool 0x4C1228)
+@@ f605b0423308 t
+0,6 et 1,2 : bornes de `bias` (pools 0x4C1348, 0x4C139C)
+@@ 073b7050dd88 t
+-0,1 : decalage de |y| pour les colonnes voisines (pool 0x4C1520)
+@@ 093103196ce3 t
+0xCC9580, 0xCC958C
+@@ 0cf3b8efb71d t
+z -> valeur 0..255 ; valeur -> z (0,001)
+@@ 7fdc72a0b9ee t
+0,9125 : alpha initial de la grille (pool 0x4C0BE4)
+@@ 22d73f4562e0 t
++0,0875 (fond), -0,01 (grille) pendant les 10 premieres mises a jour (pools 0x4C12A4, 0x4C13C0)
+@@ d7d1f618fc2d t
+-1/30 : noircissement de la capture des la mise a jour 30 (pool 0x4C13E0)
+@@ 75ebb6588b21 t
+0xCC8BE4, 0xCC9628, 0xCC8BD8
+@@ 7b2fb3f18cc4 t
+<>1__state
+@@ b99d0c97fc34 t
+_Color des materiaux Custom/CaptureBlur et Custom/Capture
+@@ 8bc4136f8e26 c
+maillage (0xCC873C-0xCC89F0) : x += 2/16, y -= 2/h_divY, u += 1/16, v -= 1/h_divY, cumules en float32 comme le jeu
+@@ f40c4950cbd6 t
+y initial de chaque rangee (pt[], jamais modifie)
+@@ 71b9f0cabd11 t
+sommets (rangee, colonne, xyz)
+@@ 9a0644fa7339 t
+Color32 (c_white)
+@@ f2fc9f2a1c62 c
+------------------------------------------------------------------ un appel de MoveNext
+@@ 3d099c795b5e t
+0xCC8620 : SetBlur(true), Snap()
+@@ 78cf17df1476 t
+0xCC864C : maillage construit ; la capture a ete faite au debut de cet appel
+@@ 9c804210595f t
+0xCC8B74 : une fois la capture faite, l'effet commence : mise a jour 0
+@@ 4c02f517b1f5 t
+0xCC8BC8
+@@ a824cd683355 t
+0xCC8CD0 : SetBlur(false) ; l'hote rend l'ecran noir (Fade.SetFadeOutBlack(0))
+@@ 8e78c9f61940 t
+0xCC8BF0 : Mesh.Clear, rendu coupe : MoveNext rend faux
+@@ 99a10b8cb25e t
+opacites (10 premieres mises a jour) : fond 0,0875 -> 0,875, grille 0,9125 -> 0,8125
+@@ c618eb831fa2 t
+passe 1 : les sommets interieurs s'etirent en x (son calcul de y est ecrase par la passe 2)
+@@ 95b30f2cf33a t
+passe 2 : « paupiere » : y = pt (1 - a) + a (bias pt) sur les colonnes hx - 7 a hx + 7 ; les colonnes 0 et 16 gardent leur y initial
+@@ 32ebdc9d6b56 t
+passe 3 : valeur 0..255 par colonne (plus vite au centre), teinte et z = valeur / 1000
+@@ 618f2b6505c2 t
+noircissement de la capture
+@@ cd0644117815 c
+------------------------------------------------------------------ dessin
+@@ 9120d1d12508 t
+vs_COLOR0 = couleur du sommet x _Color
+@@ f0569af07508 d
+Effet « Ranaruta » (Capture.DarkLamp, valeur du paquet 34 & 0xf = 5 ; bit 7 = bMorning) : la capture de l'ecran, plaquee sur une grille de 16 x 14 cases, se « pince » verticalement autour de sa colonne centrale (une paupiere
+en cloche qui se ferme puis se rouvre), se teinte (nuit : bleu ; matin : jaune), laisse une remanence floue, puis s'assombrit jusqu'au noir.
+Regles de Capture.<DarkLamp>d__47.MoveNext (libil2cpp, RVA 0xCC8520), en float32 comme le jeu, a l'instruction pres (adresses en commentaire) : maillage, couleurs et champs identiques au bit pres au code machine
+execute sous Unicorn. 64 appels de MoveNext : 2 de preparation (le jeu reste affiche), 60 mises a jour du maillage (compteur 0 a 59), 1 de noir immediat (SetBlur(false), Fade.SetFadeOutBlack(0)), 1 de nettoyage
+(MoveNext rend faux : le bit 1 retombe) ; l'ecran reste noir ensuite, jusqu'au fondu d'entree du moteur.
+Seul le nombre de rangees depend de l'ecran (`h_divY = m_divY >> 2`, m_divY = int(32 / aspect) : 14 en portrait 9/16, 4 en 16/9) : on garde les 14 rangees du mobile, car la courbe de la « paupiere » est en
+coordonnees d'ecran normalisees (4 rangees en feraient un contour anguleux).
+@@ 54a253410e60 d
+matin = bMorning (bit 7 de la valeur) : seul le bleu baisse (teinte jaune) au lieu du rouge et du vert (teinte bleue) ; rangees = h_divY.
+@@ e375c0c20b2a d
+Une mise a jour du maillage (0xCC903C-0xCC9624) : appel 3 (compteur 0) a appel 62 (compteur 59).
+## FILE dq4_pc/render/postfx.py
+@@ 0bd953352854 c
+Passe finale : lecture bilineaire de la scene (une reduction exacte x2 donne la moyenne de 4 pixels), nettete adaptative (CAS d'AMD FidelityFX, licence MIT : le gain est limite la ou le
+contraste local est deja fort, donc pas de halo), luminosite = courbe de gamma (noir et blanc inchanges).
+@@ c026c5ba813c t
+False apres un echec : dessin direct pour le reste de la session
+@@ 0021651a65a9 t
+anticrenelage reel (limite par la carte graphique)
+@@ 2acedc079fea t
+(largeur, hauteur) des tampons crees
+@@ 96b4b3a7c08e t
+(taille, echantillons) pour lesquels ils ont ete crees
+@@ 24cc88a62ac1 t
+le cadre en cours est dessine hors ecran
+@@ c28cf51ea3ab t
+alpha-to-coverage utilisable (tampon multi-echantillons)
+@@ 02d2f0879f8c c
+---- reglages (lus a chaque image : un changement du menu Echap s'applique tout de suite)
+@@ 82d04822c00f c
+---- creation des tampons
+@@ c6db0c8b3fa6 t
+scene multi-echantillons, puis recopie (resolution) dans la texture
+@@ 7ff9151c6aa0 t
+sans multi-echantillonnage : dessin directement dans la texture
+@@ 8e1269121b6e c
+---- cadre
+@@ fac502018a03 t
+(fenetre reduite dans la barre des taches : zone de dessin nulle, rien a creer ; ce n'est pas une panne)
+@@ 8985df2580e6 t
+rien a faire : dessin direct
+@@ 0fb96210bee2 t
+(test) DQ_SANS_A2C=1 : decoupes en alpha-test dur, comme avant
+@@ c63594594634 t
+pas de passe finale : simple recopie (resolution du multi-echantillonnage comprise)
+@@ edb8af6be4e9 d
+Rendu de la scene hors ecran puis passe finale : anticrenelage MSAA reglable a chaud, suréchantillonnage, nettete, luminosite.
+
+La scene (decor, personnages, vignette, fondus de fond) est dessinee dans un tampon hors ecran (renderbuffers multi-echantillons) puis recopiee dans la fenetre ;
+l'interface (messages, menus, boutons, menu Echap) est dessinee ensuite directement dans la fenetre : elle n'est ni lissee ni retouchee.
+Aucun reglage actif (MSAA 0, echelle 1, nettete 0, luminosite normale) = pas de tampon hors ecran : le dessin direct d'avant.
+Tout echec de creation (pilote sans multi-echantillonnage...) retombe sur le dessin direct et le dit dans le journal.
+@@ f142c6e0e519 d
+(echantillons demandes, echelle, nettete, gamma) ; l'echelle n'est utile qu'en dessous de 1 pixel d'ecran par pixel de scene.
+@@ 9aa7ea156ddc d
+Commence le dessin de la scene ; retourne (largeur, hauteur) de la zone de dessin a utiliser pour glViewport. Efface avec la couleur de fond.
+@@ 895cca78980a d
+Termine la scene : recopie dans la fenetre (avec la passe finale si un effet est reglé). Remet l'etat attendu par le dessin de l'interface.
+## FILE dq4_pc/render/riremito_effect.py
+@@ 7d4ef64f1435 t
+0,11 degre par image (pool 0x4C1304)
+@@ 2dc1944252cc t
+pi / 180 (pool 0x4C13A0)
+@@ c5fe384102bf t
+0,1 : pas du fond ET ecart en z entre copies (pool 0x4C136C ; le z n'a pas d'effet : ZTest Always)
+@@ 6ac2b35a68cf t
+-0,08 : pas de l'opacite des copies (pool 0x4C1508)
+@@ ecd16ccecea0 t
+-0,00005 : facteur des deplacements (pool 0x4C1490)
+@@ 7dd7167ac2f1 t
+-1/30 (pool 0x4C13E0)
+@@ 4c3791205bb8 t
+0,9 ; 0 ; 0 ; 1 (pool 0x4DBB00)
+@@ d3d1c9f8ce20 t
+0xCCA248, 0xCCA404, 0xCC9E28
+@@ d7ff6215f4dd t
+sommets d'une copie : haut gauche, bas gauche, haut droit, bas droit
+@@ d7c6eca602c1 t
+triangles d'une copie (boucle 0xCC9B48)
+@@ 789d6dc5c3cd t
+sommets des quatre copies (x, y, z)
+@@ 17529ef8a3f4 t
+0xCC98F4 : SetBlur(true), Snap()
+@@ ee831f53b011 t
+0xCC99B0 : maillage
+@@ 281228acdd62 t
+0xCC9DC4 : une fois la capture faite : debut de l'affichage et mise a jour 1
+@@ 5b6d90623c26 t
+0xCC9E18
+@@ 9a631de260d4 t
+0xCC9E38 : SetBlur(false) ; l'hote rend l'ecran noir (Fade.SetFadeOutBlack(0))
+@@ 65690b60b6a1 t
+0xCC9EDC : nettoyage, MoveNext rend faux
+@@ 387dcbd01ced t
+Quaternion.Internal_FromEulerRad(0, 0, angle) = (0, 0, sin(angle / 2), cos(angle / 2))
+@@ 654fbca3983b t
+Quaternion * Vector3 (formule de Unity)
+@@ b5fc4188261c d
+Effet de sortie de donjon (Capture.Riremito, valeur du paquet 34 & 0xf = 6) : la capture de l'ecran est affichee en QUATRE copies translucides superposees qui s'ecartent en diagonale en tournant tres legerement,
+pendant que la camera du jeu est coupee ; derriere elles, un plan plein ecran montre le rendu precedent (remanence floue a mi-resolution) ; des l'image 30 les copies noircissent, tout s'eteint, puis noir net
+(Fade.SetFadeOutBlack(0)). 63 appels de MoveNext : 2 de preparation (le jeu reste affiche), 59 mises a jour du maillage (compteur 1 a 59), 1 de noir net, 1 de nettoyage (MoveNext rend faux : le bit 1 retombe).
+Regles de Capture.<Riremito>d__48.MoveNext (libil2cpp, RVA 0xCC97FC), en float32 comme le jeu (adresses en commentaire) :
+  * a la mise a jour de compteur c : la rotation (degres) croit de 0,11 par image ; la copie i (0 a 3) est le carre [-1, 1]^2 tourne de cet angle autour de Z, puis decale de (+-3 u, +-u) avec u = 10 (i + 1) c x 0,00005
+    (diagonales : i = 0 droite-bas, 1 droite-haut, 2 gauche-haut, 3 gauche-bas) ;
+  * mises a jour 1 a 9 : le fond passe a (b, b, b, 1) avec b = 0,1 c, l'opacite des copies a 0,9 - 0,08 c (0,18 a l'image 9, puis constante) ;
+  * a partir de c = 30 : la couleur des copies (r = g = b) baisse de 1/30 par image jusqu'a 0 (atteint a c = 59).
+Le maillage fait toujours 20 sommets (il ne depend pas de l'ecran) et les positions sont en coordonnees d'ecran normalisees : les copies couvrent tout l'ecran quel que soit son rapport (en 16/9 le deplacement,
+en fractions de l'ecran, est plus horizontal qu'en portrait : reproduit tel quel).
+@@ 2daa5bbb4d26 d
+Mise a jour du maillage et des materiaux pour le compteur courant (0xCCA204-0xCCA4C0).
+## FILE dq4_pc/render/tabi_effect.py
+@@ 212a4dc626bc t
+h_divX (0xCCAD38) : cases par rangee
+@@ 5feb53501430 t
+divX : sommets par rangee
+@@ 1b73dddb6293 t
+h_divY = m_divY >> 1 (0xCCAD74) avec m_divY = 56 (ecran portrait d'origine)
+@@ b3871fe5b69a t
+1e-4 : valeur de repli d'un sommet qui franchit le centre (pool 0x4C1258)
+@@ c9f829af24ca t
+1,4142 (pas la vraie racine de 2) : pool 0x4C1438
+@@ 99f478665f05 t
+fmov 0xCCB2BC
+@@ e3c2aede12b9 t
+fmov 0xCCB25C
+@@ 2ae4c607b2b7 t
+-0,01 : decroissance de bAlpha par unite de temps (pool 0x4C13C0)
+@@ 3c3f7cc1f78f t
+-0,075 : decroissance de cAlpha (pool 0x4C1278)
+@@ 610f9381bab3 t
+-1,05 : rotAcc (pool 0x4DC044)
+@@ 691e513802f2 t
++1/60 : timeAcc du depart (pool 0x4DC04C)
+@@ d16fbd19f62c t
+2/3 : temps initial de l'arrivee (pool 0x4C0CC8)
+@@ a0bfa2815a6b t
+0,23125 (depart) / 0,24375 (arrivee) : montee de bAlpha par image (pool 0x4C0B68)
+@@ ba2d8d7d83f1 t
+-0,0625 : pas de cAlpha au depart (pool 0x4DC040)
+@@ 32b1e8f7d2fc t
++0,0625 : pas de cAlpha a l'arrivee (pool 0x4C0FF8)
+@@ 172df0bf9166 t
+0xCCB0D4 : fin quand le compteur atteint 61
+@@ 407008746835 t
+0xCCB170 : le depart seulement
+@@ c4f842a2c16f t
+fAlpha : les alphas montent tant que compteur < fAlpha (4 images)
+@@ 0b21e7eb62a1 t
+0xCCBA7C : compteur initial de l'arrivee
+@@ 73585dd41a22 t
+0,255 (sans effet : ZTest Always)
+@@ c829767b0c4c t
+sommets de la grille
+@@ a341dd82cd7f t
+pas de la grille (0xCCAD94), cumules en float32 comme le jeu (0xCCAF4C)
+@@ c40f77cb2dad t
+(3 * 2 * cases, 2) : constant
+@@ 8d82f582642f t
+x, y des sommets de la grille (z sans effet)
+@@ 2b2c38a00722 t
+fin du depart : _Color des deux materiaux = (0, 0, 0, 0)
+@@ 8d9d6cb25feb t
+0xCCAD34 : SetBlur(true), Snap()
+@@ 38e65f043907 t
+0xCCADCC : maillage (la grille est ecrite telle quelle par l'etat 2)
+@@ 8699e8be7d61 t
+0xCCAF80 : une fois la capture faite : mise en place, puis premiere image du tourbillon
+@@ b48d62d194f4 t
+0xCCB0C0
+@@ 5b8fe8392592 t
+0xCCB510
+@@ 4938a0e1c62a t
+0xCCB9A8 : les deux materiaux a (0, 0, 0, 0) : ecran noir ; rien n'est remis en etat (la camera du jeu reste coupee jusqu'a l'arrivee)
+@@ 9bcf2cbab6d3 t
+0xCCB530 : SetBlur(false), puis une image de plus
+@@ 8a08f1c5a2cd t
+0xCCB430 : Mesh.Clear, rendu coupe, camera du jeu reactivee : fin de l'arrivee
+@@ 8658219c86ed t
+0xCCBA60
+@@ 8806242a6edd t
+montee des alphas (4 images)
+@@ cb097a61a467 t
+decroissance (depart seulement) : cAlpha = 0 des l'image 41, bAlpha 0,69 a l'image 60
+@@ a82b0c259258 t
+distance au centre
+@@ d4564e90e8e5 t
+0 aux coins, 1,4142 au centre
+@@ 1b45ae4ce9c5 t
+pincement vers le centre
+@@ 887a39b5a63d t
+un sommet qui changerait de cote du centre y est ramene (position x 1e-4)
+@@ adadd301d074 t
+sincosf de bionic, a 1 ulp pres
+@@ 30ab55b44ba0 d
+Effet de voyage (Capture.Tabi : ailes de Chimere, valeur du paquet 34 & 0xf = 3) : la capture de l'ecran, posee sur une grille de 16 colonnes de cases, est aspiree dans un tourbillon (zoom arriere + rotation
++ pincement vers le centre) pendant que deux couches se superposent : la capture (alpha « cAlpha ») et une copie floue de l'image precedente (alpha « bAlpha », remanence).
+  * depart (bit 7 de la valeur a 0) : le tourbillon se resserre pendant 61 images (temps 0 -> 1, pas de 1/60), puis les deux couches passent a l'alpha 0 : ecran noir, la camera du jeu reste coupee ; 64 appels de MoveNext ;
+  * arrivee (bit 7 a 1, apres le changement de carte) : le meme tourbillon parcouru a l'envers (temps 2/3 -> 0, 41 images) avec un fondu d'entree de 30 images, puis le jeu est remis en etat ; 45 appels.
+Regles de Capture.<Tabi>d__49.MoveNext (libil2cpp, RVA 0xCCAC3C), a l'instruction pres (adresses en commentaire) : sommets identiques au bit pres au code machine execute sous Unicorn.
+Le maillage de l'original depend de l'ecran (`Capture.m_divY` = int(32 / aspect) lu sur la camera du jeu : 56 en portrait 9/16, donc 28 rangees de cases ; 18 en 16/9, donc 9) : on garde ici les 28 rangees du mobile, car
+les formules sont en coordonnees d'ecran normalisees (le tourbillon a la meme forme a l'ecran, mieux echantillonnee ; 9 rangees feraient des facettes visibles). Ces coordonnees rendent le tourbillon elliptique sur
+un ecran 16/9 (comme il l'est, dans l'autre sens, sur le mobile) : reproduit tel quel.
+@@ b71849453070 d
+inverse = bReverse (arrivee) ; rangees = h_divY (28 : le maillage du mobile).
+@@ 2d6bbfebc3d4 d
+Etat 2 (0xCCAFE8-0xCCBAF4) : rendu active, fond noir, camera du jeu coupee ; variables du depart ou de l'arrivee.
+@@ 38be350eb5c0 d
+Une image du tourbillon (0xCCB0DC-0xCCB3D8) : alphas des deux couches, puis sommets de la grille.
+## FILE dq4_pc/render/title_sky.py
+@@ 9dc37429530b t
+SceneCamera.ASPECT_DEF : ecran portrait 450 x 800
+@@ 1038f625aa50 t
+colonnes de bande par carreau (11,5 unites) : l'etirure varie sur ~ 0,6 carreau, au moins 9 colonnes par ondulation
+@@ 381a201b7ad2 t
+(amplitude, longueur d'onde en carreaux, phase) des deux ondulations de l'etirure horizontale (somme des amplitudes < 1 : le sens de la texture ne s'inverse jamais)
+@@ 678d3f1b2e33 t
+phases ajoutees a gauche (0) et a droite (1) : deux cotes differents
+@@ be4217d006be t
+idem pour le glissement vertical de la texture au milieu de chaque rangee (fraction de la hauteur du carreau) ; nul aux bords de la rangee : leur raccord est intact
+@@ 731390bbbe9e t
+une rangee des bandes est decoupee en 4 pour suivre le glissement (nul au bord de la rangee, maximal au milieu)
+@@ ac7f20faf044 t
+distance (en carreaux) sur laquelle l'effet monte de 0 a 1 (lissage cubique) : raccord sans cassure au bord de la zone
+@@ 8cfe1e6ed0e6 t
+(test) "a1,a2,glisse,longueur_glisse" : essais de reglage
+@@ f580f17455ac t
+garde-fou (fenetre absurdement large)
+@@ 4275599cb217 t
+rendu a plat (#174) : largeur d'une tuile a l'ecran, en hauteurs de fenetre (texture carree : 1)
+@@ da95365c3250 t
+colonnes de maillage par tuile (la plus courte onde de l'etirure : 0,61 tuile, soit 14 colonnes)
+@@ 4714b888d4f5 t
+lignes de maillage dans la hauteur (profil du glissement vertical et degrade de teinte ; les coupures du degrade s'y ajoutent)
+@@ 7693098bb95d t
+(test) largeur de la tuile en hauteurs de fenetre
+@@ cb8074ce7422 t
+d : tuiles depuis le bord gauche
+@@ 496c6d9d919e t
+les coupures du degrade (bords des rangees d'origine) deviennent des lignes du maillage
+@@ b9c8e1447ffe t
+profondeur (normalisee) du ciel a plat : au fond, devant le plan eloigne (le test de profondeur GL_LESS le laisse passer), derriere tout le reste
+@@ 5db56fbab2f4 t
+table fine (1/256 de carreau), integree au trapeze : G exacte a la precision de la table, deterministe
+@@ a8b66dcaf451 t
+(n, 4) : abscisse gauche / droite, u gauche / droite, tries par abscisse
+@@ a18d2c6543fc t
+2 demi-carreaux = 1 carreau de texture
+@@ 735007e2e36e t
+u par unite du monde
+@@ 1ad586af5e76 t
+fenetre aussi etroite que le portrait : rien a ajouter
+@@ 8e51a6513ca8 t
+sous-rangees, du bord bas (0) au bord haut (1)
+@@ 9ad8e69a3fd7 t
+(S + 1, 2), (S + 1, 4) : couleur de sommet lineaire, comme le ciel d'origine
+@@ fff797b66c27 t
+u relatif au point de depart (raccord ajoute a chaque image)
+@@ 27e42147675b t
+abscisses croissantes : meme sens de parcours (donc de face) que les quadrilateres d'origine
+@@ ba15af9ad2ac d
+Ciel de l'ecran-titre en format large (fonctions pures : aucun appel OpenGL, tout se teste sans fenetre).
+
+L'original compose le titre pour un ecran portrait (9:16). Son ciel (objet « kumo », modele 000_kumo2) est un tapis de carreaux de nuages IDENTIQUES : 4 rangees (empilees dans la hauteur, decalees d'un demi-carreau
+l'une par rapport a l'autre) de 3 carreaux de 11,5 unites ; l'objet glisse de 0,0192 unite par image puis revient (periode 11,5) : la zone portrait en voit moins de un carreau et de largeur. En 16/9, 21/9 ou plus large,
+le meme carreau apparaissait 3 a 6 fois de suite, tel quel (« on voit trop le fait que le pattern soit repetitif »).
+
+RENDU PAR DEFAUT (#174, 04/11/2026 11 h 30) : « ajuste la hauteur pour automatiquement s'adapter a la hauteur de la fenetre, et ca sera sur la largeur que la repetition se fera, et applique bien comme convenu les effets
+visuels » : le ciel est dessine a plat, a l'echelle de l'ecran (`screen_sky`) : la texture (carree, 256 x 256) a pour HAUTEUR celle de la fenetre, a toute taille de fenetre, sans agrandissement supplementaire ; elle se repete sur la
+LARGEUR (1,78 fois en 16/9) ; l'effet de vague de l'ancien rendu en bandes (etirure horizontale ondulee 0,52 a 1,48 fois et glissement vertical, `STRETCH` / `SLIDE`) est applique a toute la largeur, fixe a l'ecran pendant que
+la texture defile dessous (les nuages se deforment en passant) : les copies d'une meme tuile ne se ressemblent donc pas ; le degrade de teinte des rangees d'origine (orange en haut et en bas, blanc au milieu) est repris tel
+qu'il apparaissait a l'ecran (`screen_gradient`) ; le defilement garde la vitesse d'origine (une tuile pour 11,5 unites de glissement de l'objet, soit 599 images du moteur). Les rendus precedents restent disponibles : `DQ_CIEL_AGRANDI=1`
+(essai #130 ci-dessous), `DQ_CIEL_BANDES=1` (bandes), `DQ_CIEL_COPIES=1` (copies).
+
+ESSAI #130 (agrandi, `DQ_CIEL_AGRANDI=1`) : l'image du ciel est AGRANDIE autour du centre de l'ecran (`screen_zoom` : x 3,16 en 16/9) de facon que la fenetre entiere ne montre que ce que montrait la zone portrait du jeu d'origine : un seul
+carreau, jamais repete ; plus de bandes. L'ancienne solution (bandes etirees, ci-dessous) reste disponible avec DQ_CIEL_BANDES=1 pour comparer.
+
+Solution precedente (bandes) : la zone portrait centrale (largeur = hauteur x 9/16) reste EXACTEMENT le ciel d'origine ; de chaque cote, a partir de son bord, des bandes de meme geometrie que les rangees du ciel
+(memes y, z, memes couleurs de sommet) reprennent la texture avec une etirure horizontale qui varie en douceur le long de la bande (de 0,52 a 1,48 fois la taille d'origine, moyenne 1 : meme echelle d'ensemble), et un glissement vertical de la texture a l'interieur de chaque rangee (nul sur ses bords : les coutures entre rangees restent celles de l'original), avec des phases differentes a gauche et a droite : la meme forme de nuage n'apparait plus deux fois au meme endroit ni a la meme taille. L'etirure vaut 1 au bord de la zone :
+raccord continu, aucune couture. Les coordonnees de texture suivent le defilement de l'objet (le raccord au bord reste exact a chaque image).
+@@ 97f71759ec66 d
+Rendu a plat : abscisse de texture (en tuiles) a la distance `d` (en tuiles, tableau) du bord gauche de la fenetre. Integrale exacte de 1 + somme des ondes de `STRETCH` : G(0) = 0, pente entre 0,52 et 1,48 (jamais de retournement),
+echelle d'ensemble 1 (la somme des ondes est de moyenne nulle). Meme effet de vague que les bandes, mais periodique et sans rampe : il s'applique a toute la largeur.
+@@ 0af63583c7c5 d
+Rendu a plat : glissement vertical de la texture (fraction de sa hauteur, avant le profil sin(pi t) qui l'annule en haut et en bas de la fenetre) a la distance `d` (tuiles) du bord gauche.
+@@ 25340b21bb43 d
+Degrade de teinte du ciel d'origine tel qu'il apparait a l'ecran : -> (y, couleurs) : `y` = ordonnees d'ecran normalisees croissantes (-1 bas, +1 haut), `colors` (n, 4) = couleur de sommet correspondante, a partir de la
+projection (matrice `M`) des bords et de quelques points intermediaires de chaque rangee d'origine (la couleur est lineaire dans le monde, pas a l'ecran). Les points hors de l'objectif (derriere la camera) sont ignores.
+@@ da46a674da17 d
+Ciel a plat, a l'echelle de l'ecran (#174) : triangles (positions, coordonnees de texture, couleurs) en coordonnees normalisees (x et y de -1 a 1, profondeur au fond), pour une fenetre de rapport
+largeur / hauteur `aspect`. La texture a pour hauteur celle de la fenetre (v de 0,998 en bas a 0,002 en haut, comme les rangees d'origine) et pour largeur `tile` hauteurs de fenetre (`TILE_WIDTH`) ; elle se repete sur la
+largeur (u en tuiles, texture en REPEAT). `phi_tiles` = defilement de l'objet en tuiles (le contenu glisse vers +x quand il augmente, comme l'objet d'origine). `gradient` = (y, couleurs) de `screen_gradient` (blanc si None).
+L'etirure (`stretch_plate`) et le glissement (`flat_sliding`) sont fixes a l'ecran : la texture defile dessous.
+@@ 44345cf4d6b1 d
+Colonne portrait 9:16 du milieu de la fenetre, en pixels : (x du bord gauche, largeur). Toute la fenetre quand elle est plus etroite (ou egale) que le portrait.
+@@ ea36fb8eb0ab d
+Demi-largeur de la zone portrait en coordonnees d'ecran normalisees (-1..1) pour une fenetre de rapport largeur / hauteur `aspect`.
+@@ fbe483276fcb d
+Zoom (essai #130) du ciel de l'ecran-titre, centre sur l'ecran : 1 pour une fenetre aussi etroite que le portrait (ou plus), sinon `aspect / ASPECT_PORTRAIT` (16/9 : x 3,16 ; 21/9 : x 4,15) : la fenetre entiere
+montre alors ce que montrait la seule zone portrait du jeu d'origine (moins d'un carreau de nuages de large), donc le meme carreau n'y est jamais repete. `DQ_CIEL_ZOOM` (test) force une valeur.
+@@ c8c6d206b3ef d
+Matrice de projection `M` (4 x 4, colonnes d'espace de coordonnees homogenes) suivie d'un agrandissement `z` de l'image autour du centre de l'ecran (x et y d'ecran multiplies par z ; la profondeur ne change pas).
+@@ d733ffe3212c d
+Deformation de la texture a la distance `d` (unites du monde, tableau) du bord de la zone portrait, du `side` 0 (gauche) ou 1 (droite).
+-> (G, dv) : G = abscisse de texture parcourue, en unites du monde (G(0) = 0, G'(0) = 1, G' reste entre 0,52 et 1,48 : monotone, et d'ensemble G ~ d : meme echelle). dv = glissement vertical (fraction de texture, dv(0) = 0, dv'(0) = 0) : le
+constructeur l'applique avec un profil en sin(pi t) sur la hauteur de chaque rangee, car les rangees du ciel sont empilees avec un decalage d'un demi-carreau et ne se raccordent que si leurs bords lisent la texture de v = 0 a 1.
+@@ 6c41a3760a26 d
+Une rangee de carreaux du ciel : bord bas / haut (y, z, v, couleur), carreaux (xg, xd, ug, ud) et periode.
+@@ 8ad4a2341a4e d
+Rangees du ciel a partir des sommets de l'objet (N sommets, N multiple de 6 : triangles de quadrilateres alignes sur x et y). ValueError si la structure n'est pas celle attendue.
+@@ 78e265c7e972 d
+Abscisses du monde ou la zone portrait (|x d'ecran| <= demi) et la fenetre entiere (|x d'ecran| <= 1) coupent le ciel, sur la partie VISIBLE des rangees (|y d'ecran| <= 1,02).
+-> (zone_bas, zone_haut, ecran_bas, ecran_haut) : bornes exterieures de la zone (aucun point de la zone en dehors de [zone_bas, zone_haut]) et de la fenetre ; None si rien n'est visible.
+@@ 1b29d8855c89 d
+Bandes de ciel de part et d'autre de la zone portrait. `pos` / `uv` / `col` : sommets de l'objet « kumo » a sa position d'origine (avant defilement).
+@@ e9f6a7207773 d
+Positions des sommets d'une copie d'un plan de ciel (`ext_map`) : `dx` nombre = copie DECALEE de dx sur x (ciel du titre) ; `('miroir', xe)` = copie SYMETRIQUE par rapport au plan x = xe (x -> 2 xe - x : les points du bord xe ne bougent pas,
+l'image se prolonge sans couture ; plans de ciel de dpout et ev09, MAP-05). Tableau de sommets (n, 3), float32 ; `cur` n'est pas modifie.
+@@ 0f3c409e7b95 d
+u de la texture du ciel d'origine a l'abscisse `x` (tableau, hors defilement), exactement celui des quadrilateres (y compris au-dela des 3 carreaux : le motif se repete).
+@@ 076c27fc6aa5 d
+Geometrie des bandes (positions, couleurs, etirure : tout sauf le raccord de u au bord, qui suit le defilement).
+@@ f95e9ad3c42a d
+-> (positions (N, 3), coordonnees de texture (N, 2), couleurs (N, 4)) en float32 : triangles des bandes de part et d'autre de la zone ; None s'il n'y a rien a ajouter.
+`phi` = deplacement en x de l'objet depuis sa position d'origine (defilement) : le u des bandes est celui du ciel d'origine au bord de la zone.
+@@ f5f41f83b3cb d
+(n, S + 1, k) : colonnes x sous-rangees -> triangles (bas g, haut g, haut d, bas g, haut d, bas d) de chaque quadrilatere (meme ordre que le ciel d'origine).
+## FILE dq4_pc/sound.py
+@@ 7ff42f07e6f3 t
+bloc d'extra a 0xc0 (u16 a 0xc0 : 0, taille de bloc a 0xc2, echantillons u32 a 0xc4, debut de boucle u32 a 0xc8)
+@@ e2aaa94b1af2 c
+en-tete : indices de prediction (1 octet par canal), deltas (s16), echantillon 1 (s16), echantillon 2 (s16), chacun regroupe par canal
+@@ 327806658591 t
+stereo : les quartets alternent gauche (poids fort) / droite
+@@ 38f1ef1e4d59 t
+division entiere vers zero (code de reference Microsoft)
+@@ f939eec4c955 t
+version des bruitages gardes dans le cache disque (son_SE*.npz) : 2 depuis #201 (boucles des SE 329, 331, 1118) ; un cache d'une autre version est refait
+@@ dd404e5ccd3a t
+echantillons : au-dela, l'en-tete est juge incoherent et le son n'est pas bouclé (garde d'origine du portage)
+@@ d4a923f23506 t
+fin de boucle qui depasse de quelques echantillons la fin des donnees (reste d'un bloc ADPCM : SE 329, 331, 1118 ; #201) : la boucle va jusqu'a la fin des donnees
+@@ 918b70e69307 t
+cmd_bgm : valeur >= 0x1000 = Sound.PlayBGM(valeur - 0x1000) avec reprise : la musique en cours est memorisee et reprise (depuis le debut) quand ce morceau est fini (jingle)
+@@ d6439bf71298 t
+valeur >= 0x4000 = Sound.StopBGM (SoundManager::stopBgm envoie 0x4000 | duree, battleStop 0x4008) ; la duree est ignoree par Unity (arret immediat)
+@@ 1ced4c46350b t
+secondes : un bruitage qui vient d'etre lance n'est jamais libere parce que son lecteur ne se dit pas encore « en lecture » (marche acceleree : le moteur fait plusieurs pas, donc plusieurs tick(), a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village)
+@@ fd12136bf8b7 t
+secondes : un bruitage en boucle dont le moteur n'enverrait jamais l'arret est coupe
+@@ 1b549d3c433c t
+echecs de lecture consecutifs (bruitage ou musique) avant de couper le son un moment (peripherique retire ou change, pilote : #221, audit SND-10)
+@@ fca04661ca3f t
+secondes avant le nouvel essai, selon le nombre de coupures deja subies (le dernier delai se repete)
+@@ 1d49679a8c83 t
+lignes de journal au plus par session (une panne qui dure ne remplit pas le fichier)
+@@ 31ede5544667 t
+images du moteur par seconde a vitesse normale (un pas du moteur = 1/30 s)
+@@ 8e6231bc874e c
+Musiques decodees d'avance (tache de fond, un fil a part, une a la fois, quand rien d'autre n'est a decoder) et gardees en memoire (jamais chassees par le cache ; 59 Mo en tout) : le decodage d'une musique longue prend du temps
+(BGM 23, 113 s : 0,6 a 1,2 s ici, plus sur un PC lent ; les jingles : 0,01 a 0,14 s), alors que le moteur arrete une musique demandee pendant un combat accelere 2,7 a 3,9 s apres l'avoir lancee (x3) : sans cela, la musique
+de la defaite (BGM 23, demandee quand tout le groupe est battu) n'etait decodee qu'a ce moment-la (elle partait en retard, et un arret du moteur arrive avant la fin du decodage la supprimait : le groupe mourait en silence).
+@@ 6f332f4f3553 c
+---- categories de sons (menu Echap > Son). Unity ne connait que PlayBGM / PlaySE (classe Sound) : ni voix, ni canal « ME » a part. Les categories sont celles que le MOTEUR distingue par la facon de jouer un son :
+musique (PlayBGM, avec boucle) ; jingles et fanfares (PlayBGM sans boucle : BGM 6, 8, 10, 13, 35 a 50 de 2,9 a 23,2 s, ou demande avec la reprise de la musique d'avant, 0x1000 | n = SoundManager::playRestart) ;
+bruitages (PlaySE) ; sons de l'interface (bruitages 300 a 304 : 300 = bouton de menu joue par Unity et page de message jouee par ui_MsgLoop, 301 = menu EXTRA_PRESENT_EXP, 304 = ouverture d'un Oui / Non ;
+302 et 303 : meme bloc de la banque, jamais appeles directement par le moteur, donc supposes de l'interface).
+@@ 99df1c87525e t
+fanfare de victoire (BattleEndTask : SoundManager::play(409), 2,9 s) : jouee comme un bruitage mais c'est une fanfare ; reglee avec « Jingles et fanfares » (volume de l'option « bruitages » du jeu conservee)
+@@ f178150028b3 t
+secondes : un morceau sans boucle plus court que cela est un jingle ; BGM 1 (111 s) et 34 (655 s), sans boucle, sont de vraies musiques (sauf demande avec reprise)
+@@ 6dce4701a170 t
+options « volume » du jeu (fenetre Parametres) : facteurs 0,2 a 1
+@@ bb5ffe024d84 t
+journal(texte) : ligne ajoutee au journal des erreurs ; alerte(texte) : petit message a l'ecran (coupure et retour du son)
+@@ 94bc984e7865 t
+echecs de lecture consecutifs ; coupures subies ; heure du nouvel essai (None = pas de coupure en cours) ; musique a relancer au retour du son
+@@ a2a031765bcd t
+prechargement des musiques : un fil a part, pour qu'il ne retarde jamais un son demande par le moteur
+@@ 3e90ae3272ee t
+musiques a decoder d'avance (noms), noms gardes en memoire
+@@ d26513176edf t
+ordres de musique retenus pendant un jingle (valeur, image du moteur) ; image du moteur de l'ordre qui a lance la musique en cours
+@@ cd81f9e33e97 t
+jingle : musique a reprendre, heure de fin du jingle
+@@ ed41322df4d9 t
+heure et position (secondes) du depart de la lecture ; position demandee pour la prochaine musique (chargement d'un etat)
+@@ ca1d25938204 t
+[_SFX]
+@@ 2e8cdb85af73 t
+volume propre a la musique en cours et sa categorie ; heure du debut de la pause (menu Echap)
+@@ 8b9479b54cab t
+menu Echap ouvert ; page Son du menu (les sons jouent pendant que le moteur est arrete)
+@@ 7b5dd97275e9 t
+la fenetre n'a plus le focus (Alt + Tab, minimisee) : tout est en pause, meme pendant l'ecoute de la page Son (#235)
+@@ 6607ad69c219 t
+(snd_vol.dat : lu a la premiere utilisation, voir vol_snd)
+@@ 19abaf0b2128 t
+lecture des musiques (Ogg Vorbis) ; les bruitages n'en ont pas besoin
+@@ 99ebd2c601a0 c
+---- echecs de lecture (#221, audit SND-10 et SND-12)
+@@ 8e2c2f4a4af5 c
+---- volume propre de chaque son (snd_vol.dat)
+@@ c1674c8c5271 c
+---- lecture des fichiers
+@@ c2ff2f20bf85 t
+(cache d'une ancienne version : refait)
+@@ 67ada8a22d30 t
+les bruitages sont petits : cache disque (une musique longue, elle, prend plus d'une seconde : voir BGM_PRELOADED)
+@@ acb79646c8fb t
+(meme son coupe au depart : le prechargement attend qu'une musique joue)
+@@ 0ce91fc660a6 c
+---- appele a chaque image
+@@ 1a822889fb58 t
+rien d'autre a decoder et une musique joue : on avance le prechargement d'une musique
+@@ c55ec80fa54e t
+Sound.SystemUpdate : le jingle est fini, la musique d'avant reprend
+@@ fee8c21d6aff t
+un bruitage termine (ou depasse sa duree) est libere
+@@ 0dd9747cc595 c
+---- ordres du moteur
+@@ 56dd12bea752 t
+(test) journal des ordres du moteur
+@@ d2901a0400d7 t
+jingles coupes : rien a proteger
+@@ fd50b4d440a3 t
+bruitage 0 : « aucun » (le moteur l'envoie avec chaque coup critique, SE0000 n'existe pas dans les donnees)
+@@ d7ae815219f1 t
+son coupe (panne en cours, ou pas de pilote audio) : rien n'est tente, les echecs ne s'accumulent pas
+@@ ff7b53c7ad4f t
+bruitages en boucle (14 sur 634) : jusqu'a l'ordre d'arret du moteur (paquet 36)
+@@ b839f0480884 t
+categorie coupee (ou volume a zero) : un bruitage court n'est pas joue ; un bruitage en boucle l'est a volume nul : il s'entend si on rouvre la categorie
+@@ b081fca50489 t
+cmd_bgm : >= 0x4000 = Sound.StopBGM
+@@ b09c7f98b5a9 t
+arret pendant un jingle a reprise : StopBGM d'Unity ne remet pas son etat a zero, la musique d'avant repart (audit SND-05)
+@@ 1e78c0bbc65f t
+Sound.PlayBGM avec reprise : jingle, puis retour a la musique en cours
+@@ 8dca11fedbef t
+deja en cours (un morceau sans boucle arrive a sa fin n'est plus « en cours » : le redemander le relance, audit SND-06)
+@@ f0e049c85099 t
+une autre musique a ete demandee entre-temps
+@@ acced293e1f8 t
+son coupe : a relancer au retour
+@@ 56b8319d3169 t
+reprise au moment enregistre (etat charge)
+@@ 129b9b424a92 t
+(avant play : le lecteur lit tout de suite quelques secondes d'avance)
+@@ 1c92ff1cc975 t
+(en-tete du fichier x snd_vol.dat : le volume de l'original, #237)
+@@ 8c77165ed56e t
+(la musique tourne meme coupee ou a zero : rouvrir la categorie la fait entendre au bon endroit)
+@@ c806eaf03de1 t
+jingle sans boucle : heure de la reprise de la musique d'avant
+@@ 2ce557c86dfc t
+a relancer au retour du son (un jingle rate n'a plus d'objet)
+@@ e1988e07ecfc c
+anciens noms (volume de la musique / des bruitages) : conserves pour l'interface existante
+@@ bff9f74bae77 d
+Son du jeu : musiques et bruitages d'origine (assets/sound/*.akb du paquet de donnees), joues par pyglet.
+
+Format AKB (conteneur Square Enix, lu dans libsdlib_android.so : akbMaterial*) :
+  0x00 'AKB ' ; 0x04 u16 version ; 0x06 u16 taille de l'en-tete ; 0x08 u32 taille du fichier ; 0x0c u8 codec (2 = MS-ADPCM, 5 = Ogg Vorbis) ;
+  0x0d u8 canaux ; 0x0e u16 frequence ; 0x10 u32 nombre d'echantillons ; 0x14 u32 debut de boucle ; 0x18 u32 fin de boucle (0 = pas de boucle) ;
+  0x20 float volume ; donnees a 0xcc : Ogg complet (codec 5), ou 4 octets puis blocs MS-ADPCM (codec 2, taille de bloc = u16 a 0xc2).
+Les paquets du moteur : 35 = bruitage (SE%04d), 36 = arret d'un bruitage, 37 = musique (BGM%02d ; valeur >= 4096 = arret).
+Rien n'est ecrit hors du dossier cache ; aucun fichier du jeu n'est modifie.
+@@ 3c79bf68a644 d
+-> dict (codec, canaux, frequence, echantillons, debut, fin, volume, bloc) ou None si ce n'est pas un AKB.
+@@ 4faf15ebf8ef d
+MS-ADPCM par blocs (quatre bits par echantillon) -> int16 (n, canaux). Les blocs sont independants (leur en-tete donne l'etat) : on decode tous les blocs a la fois.
+@@ 5d4b26a3ff47 d
+Ogg Vorbis -> int16 (n, canaux). Lu en flottants puis ECRETE a la pleine echelle : Vorbis depasse parfois +-1,0 apres decodage, et la lecture directe en int16 faisait deborder ces echantillons
+(un pic devenait un pic de signe oppose : BGM 14, 3 echantillons vers 91 s ; BGM 34, 7 echantillons ; #200).
+@@ a22f9ef3e21f d
+Fichier AKB -> dict (pcm int16 (n, canaux), frequence, debut, fin, volume) ou None.
+@@ 793a63257718 d
+'jingles' pour un morceau sans boucle demande avec reprise de la musique d'avant, ou court ; 'musique' sinon (un morceau en boucle ne revient jamais a la musique d'avant : c'est une musique).
+@@ 69c59cad7828 d
+Option « volume » de la fenetre Parametres du jeu (OptionStatus, 0 a 4, enregistree dans la sauvegarde) -> facteur : Sound.SetVolumeBGM / SetVolumeSE font s_bgmVolume = s_seVolume = (indice + 1) x 0,2.
+@@ dd25393977e2 d
+Volumes (0 a 1) et interrupteurs par categorie. gain(categorie, volume propre au fichier) = volume general x volume de la categorie x volume propre x option « volume » du jeu
+(musique et jingles : celle de la musique ; bruitages et interface : celle des bruitages), 0 si la categorie est coupee. Pur calcul : aucun lecteur audio.
+@@ 4ec903e641e2 d
+Un bruitage en cours : identifiant, lecteur, heure de fin, categorie, volume propre du fichier.
+@@ bfdd94e0417b d
+Lecture : une musique a la fois (avec boucle), des bruitages en parallele. Le decodage se fait en tache de fond.
+@@ 86634eebc47f d
+option : « musique » ou « effets » = quelle option « volume » du jeu s'applique ; par defaut celle de la musique pour la musique et les jingles, celle des bruitages pour le reste (un bruitage range dans « jingles » passe option='effets').
+@@ 915e14245f56 d
+Une ligne dans la console et dans le journal des erreurs (au plus NOTES_MAX par session) ; `alert` : le meme fait, en bref, a l'ecran.
+@@ 912419ca6ce5 d
+Erreur sans consequence immediate (volume, reprise apres pause) : notee une seule fois par session.
+@@ 6174160f48d4 d
+Un bruitage ou une musique n'a pas pu etre lance : FAILURES_MAX echecs de suite coupent le son un moment (nouvel essai tout seul, voir tick) au lieu de le couper jusqu'a la fermeture du jeu.
+@@ 75d4b9650b41 d
+Un son vient de partir : la serie d'echecs est finie (et, apres une coupure, le son est retabli).
+@@ 5459ee80f294 d
+Fin de la coupure : le son est rouvert ; un seul echec de plus le recoupe aussitot (delai plus long). La musique demandee pendant la coupure est relancee.
+@@ 8f2850c0e0e3 d
+Pendant la coupure les ordres du moteur sont perdus, sauf la musique de fond : la derniere demandee est relancee au retour du son (un arret la supprime ; un jingle a reprise est ignore).
+@@ 252ba71c0db8 d
+Facteur de `assets/sound/snd_vol.dat` pour un son : musique `BGM%02d` = indice du numero de fichier, bruitage `SE%04d` = indice de son numero (1171 flottants ; 1,0 pour presque tous). L'original joue en-tete x snd_vol x option (`SoundControl.Play`) : 49 musiques de 0,7 a 0,95 et le bruitage 409 (fanfare) a 0,6 (audit SND-01, #237). 1,0 si le fichier manque ou si l'indice est hors table.
+@@ 98d8ff5c9000 d
+Appelle rappel(donnees) : tout de suite si `name_str` est deja decode, sinon depuis tick() quand la tache de fond a fini.
+@@ 671a25683f40 d
+Decode en tache de fond les bruitages courants.
+@@ 3fb178f3e26f d
+Musiques a decoder d'avance : une par image du jeu, seulement quand aucun autre decodage n'attend (la premiere musique du jeu passe donc la premiere) et une fois qu'une musique joue. Elles restent en memoire.
+@@ f53ca967d79c d
+Cache de decodage : 80 sons (hors musiques epinglees) et 400 Mo au plus ; les plus anciennement utilises partent les premiers.
+@@ 7192374c30b2 d
+evts : [(type de paquet, valeur)] de l'image : 35 bruitage, 36 arret de bruitage, 37 musique. engine_frame : numero de la derniere image du moteur (30 par seconde a vitesse normale) :
+sert a ne pas couper un jingle quand le jeu tourne plus vite que la normale (voir _is_jingle_protected).
+@@ 46c137899673 d
+Ordre de musique du moteur (image e) : appliques tout de suite, ou retenu tant qu'un jingle le meriterait (et derriere ceux qui attendent deja : l'ordre des ordres est garde).
+@@ 328926845de5 d
+Vrai si un jingle joue encore ET que l'ordre du moteur d'image e serait arrive apres lui a vitesse normale. Un combat accelere enchaine ses ordres (arret, reprise de la musique, ...) 2 a 3 fois plus tot : la fanfare etait coupee
+(montee de niveau, BGM 47 de 3,1 s : jouee 1,75 s a x3). L'ordre attend donc l'heure a laquelle il serait arrive a vitesse normale (image e - image de l'ordre qui a lance le jingle, a 30 par seconde) ou la fin du jingle, la premiere des deux.
+@@ 1124eb84cef4 d
+Ordres de musique retenus : appliques dans l'ordre des que le jingle n'a plus de raison de les retenir. Jingle fini et ordre suivant = un autre jingle (avec reprise) : la musique d'avant reprend d'abord, comme sans retard (Sound.SystemUpdate).
+@@ b7ed8bd4d5ab d
+Vrai si le morceau sans boucle en cours est arrive a sa fin (le lecteur reste en place, `bgm_id` aussi : seule l'heure de fin le dit).
+@@ cfd7b126e615 d
+Position de lecture de la musique en cours (secondes dans le morceau, boucle comprise), ou None si rien ne joue.
+@@ 41a583e6eac2 d
+Ce qu'il faut pour reprendre la musique au meme moment (etats enregistres) : {'id', 'pos', 'reprise'} ou None.
+@@ d11854afeae7 d
+Chargement d'un etat : la musique repart du moment enregistre (sans `info`, ancien etat : depuis le debut de `default`, la derniere commande du moteur).
+@@ 71a0a37b6a06 d
+Menu Echap : nouveaux volumes / interrupteurs, appliques TOUT DE SUITE aux sons en cours (musique, jingle et bruitages deja lances).
+general : 0 a 1 ; volumes, actifs : {categorie: valeur} ; jeu : {'musique': facteur, 'effets': facteur} (options « volume » du jeu).
+@@ 76839bb16b21 d
+Compatibilite : volume de la musique et des bruitages (0 a 1).
+@@ d768a72af59b d
+Les lecteurs doivent-ils etre en pause ? Oui sans focus (toujours), ou menu suspendu hors ecoute de la page Son.
+@@ 6a221f416c77 d
+Menu Echap ouvert (oui) ou ferme : musique et bruitages en pause, sauf pendant l'ecoute (page Son du menu : on entend les reglages).
+@@ e22973dfb349 d
+Fenetre sans focus (oui) ou de retour (non) : comme Sound.SystemPause de l'original, musique et bruitages en pause ; au retour, ils reprennent la ou ils s'etaient arretes (les echeances sont decalees de la duree de la pause, `_pause_audio_players`).
+@@ f0846275fb5c d
+Page Son du menu Echap : les sons reprennent (la musique en cours, les bruitages d'essai) pour entendre les volumes qu'on regle ; a la sortie de la page, ils se remettent en pause.
+@@ 70623b9a77ae d
+Pause reelle des lecteurs ; a la reprise, les echeances (fin d'un jingle, d'un bruitage) sont decalees de la duree de la pause.
+@@ 39e50d8525ab d
+Touche : son active / coupe.
+@@ bf618ad052e3 d
+Musique avec boucle a l'echantillon pres (debut, fin) ; fin == 0 : jouee une seule fois.
+## FILE dq4_pc/texts_en/__init__.py
+@@ 6a5040d49561 d
+Traductions anglaises des textes de l'outil (D-238). Un fichier par domaine, chacun definit `EN = {text french: text anglais}` ; voir `dq4_pc/language.py`.
+## FILE dq4_pc/texts_en/divers.py
+@@ 1f8439469eee c
+---- paths.py
+@@ 54a1efbd0cf7 c
+---- monde/flat_sceneries.py
+@@ affa6af8596e c
+---- monde/donnees.py
+@@ d053856663fa c
+---- monde/map_tint.py
+@@ d52afecd3ca5 c
+---- noyau/moteur.py
+@@ 47d2dc8ea085 c
+---- persistance/etats.py
+@@ 569413432811 c
+---- persistance/logfile_format.py
+---- persistance/reglages.py
+---- persistance/sauvegardes.py
+---- main.py
+@@ 83d6a9b8f139 c
+---- sound.py
+@@ bee800c09135 d
+Textes anglais : divers (aide de la ligne de commande, demarrage, reprise des dossiers, sauvegardes, son, moteur, monde ; voir language.py).
+## FILE dq4_pc/texts_en/menus.py
+@@ ca890aceb117 c
+---- ecran « Sauvegardes » (menu de depart)
+@@ c99281d0d0fd c
+---- logique des fichiers de sauvegarde (persistance\sauvegardes.py, logfile_format.py) : messages d'erreur montres par l'ecran Sauvegardes, boites de dialogue de fichiers
+@@ 5ea97781ad31 c
+---- fenetre Historique (dialogues et combats)
+@@ cf0222c8905e c
+textes que l'outil compose autour de ceux du jeu (entete et lignes d'un combat, favori dont le message manque)
+@@ 62545cb7c371 c
+messages de la console
+@@ a5a01395105a c
+---- saisie du nom, licence
+@@ 24cae96b3612 c
+---- noms des elements dans l'editeur d'interface (boutons de l'ecran)
+@@ 69efb6f3768b c
+---- textes d'essai des dialogues (editeur d'interface), une ligne par entree
+@@ e5fabc4dd4d8 c
+---- infos F1
+@@ a9dc97d4fa88 c
+---- notifications et etats instantanes
+@@ 06b99f7d1dc4 c
+---- messages de la console (ressources du menu, polices, titre)
+@@ 79130f20f711 c
+---- textes probablement aussi traduits par le lot « pages Parametres » (menus\pause.py) : meme traduction ; a dedoublonner a la fusion (test_language : pas de doublon entre fichiers)
+@@ 11cbe709e472 d
+Textes anglais : ecrans et fenetres de l'outil autres que les pages Parametres (D-238, voir language.py) : ecran Sauvegardes (+ messages de la logique des fichiers et boites de dialogue), historique (libelles, aide, textes composes autour
+des textes du jeu), saisie du nom, licence, noms des elements de l'editeur d'interface, textes d'essai des dialogues, notifications, infos F1 et messages de la console de ces modules.
+Les textes du jeu (dialogues, noms, menus d'origine) ne sont jamais traduits. Ponctuation anglaise : pas d'espace avant « : ».
+## FILE dq4_pc/texts_en/pause.py
+@@ 67a36dcf338e c
+---- titres des pages, ligne Langue
+@@ 3c4a4dc09f05 c
+---- racine
+@@ 392144b83ee0 c
+---- Affichage
+@@ 10cf3505ed37 c
+---- Son
+@@ 2d216430bbaa c
+---- Commandes : sections, gestes de la souris, cases
+@@ 1facb5aab4ab c
+---- Commandes : actions
+@@ 71cb9f4b4494 c
+---- Commandes : noms de valeurs
+@@ dacdded50bd5 c
+---- Commandes : aides
+@@ 85dc9780911b c
+---- Commandes : consignes des touches (KEY_HELPTEXT) et de la capture
+@@ c9f1c4ebf5d9 c
+---- consignes générales des lignes (curseurs, listes, interrupteurs), saisie
+@@ 3bf98d7c9b37 c
+---- Modifications
+@@ 8a905729c820 c
+---- États (états instantanés)
+@@ 2adc4de8c11a c
+---- Quitter
+@@ d0fc5c5e19d6 c
+---- Interface (éditeur de l'interface) : lignes, aides, infobulles
+@@ f1375926b7c8 c
+---- Interface : groupes de la liste « Interface à modifier »
+@@ bdad3d20c6fe c
+---- Interface : noms des fenêtres du jeu (WINDOW_NAMES)
+@@ a59dfe5aece5 c
+---- messages d'information (barre au-dessus du cadre)
+@@ b1fdc7845847 c
+---- noms des touches (RG.key_name : le menu les traduit en les dessinant)
+@@ 5e5e151e83bf c
+---- messages de la console (settings.py, pause.py)
+@@ fbecf3ad69e5 d
+Textes anglais : pages du menu Paramètres (Pause) (voir language.py).
+Clé = le texte français tel qu'il est écrit dans le code (menus/pause.py, persistance/reglages.py). Les aides des lignes sont traduites phrase par phrase : le menu coupe une aide aux espaces triples (`   `) et traduit chaque phrase
+avant de la couper à la largeur de l'infobulle (une aide assemblée avec KEY_HELPTEXT se traduit donc phrase par phrase). Les mots identiques dans les deux langues (Interface, Modifications, Casino, Menu, Normal, Action, Tab...) n'ont pas d'entrée.
+## FILE dq4_pc/texts_en/window.py
+@@ 35b8a7ea0e25 c
+---- fenetre/aides.py
+@@ d9a6be353e20 c
+---- fenetre/champ.py
+@@ a16043a749ec c
+---- fenetre/keyboard_mouse.py
+@@ e67ac3077092 c
+---- fenetre/instantanes.py
+@@ 7b7c7e36ea04 c
+---- fenetre/jeu.py
+@@ b3bfe50acd9a c
+---- fenetre/full_screen.py
+@@ b97006282bd3 c
+---- fenetre/battle_scene.py
+@@ c5b4a510d17f c
+---- rendu/postfx.py
+@@ 003121675519 d
+Textes anglais : fenetre (messages de la console et de la fenetre du jeu : fenetre\, rendu\ ; voir language.py).
+## FILE dq4_pc/window/battle_scene.py
+@@ 5edeed653bf6 t
+rattachement du bouton de vitesse de combat (voir _anchor_battle_speed et hud_mobile.Buttons.ancre)
+@@ a5c10210ebb5 t
+(tf : repere sans le decalage dzm du message)
+@@ 2bbc288cdd4e t
+le cadre de la fenetre : le plus grand rectangle
+@@ f990e7e705d6 t
+plaque accrochee sous le cadre, a son bord droit
+@@ 8c540b492b7c t
+25 numeros n'ont pas de texture m<id> (#225, audit CMB-03)
+@@ 80600c8e1796 t
+monstre non dessine (texture transparente) plutot qu'un arret du jeu
+@@ 72c03a2166b6 t
+MeshChara.SetBillboard : rotation de la camera x SceneCamera.s_yReverse (Euler(0, 180, 0))
+@@ 0cade789c012 t
+mode immediat : pas de paquet cette image = pas dessine
+@@ cc5f6a6cdccf t
+ecran-titre : les textes des credits (Yuji Horii...), avant le logo ; poses par le moteur, sans correction (1 pour 1 avec le mobile)
+@@ 4fe1e9061156 t
+(test) sans les credits : la difference avec la capture normale donne leur position exacte
+@@ a11a830dbbf7 t
+(essai) quadrilateres en ordre inverse
+@@ 1a05f555fa99 t
+effet a quad plein ecran (35) : etire a la largeur de l'ecran 16/9 (CMB-02)
+@@ 5237843d284b t
+ecran-titre : logo et sous-titre deux fois plus grands (ecart voulu, issue #108)
+@@ 0914f1e4d25c t
+un octet par quad = opacite de la partie (ombres, apparitions en fondu, clignotements)
+@@ 800bb6c72180 t
+Material.color (paquet 25) x couleur de sommet
+@@ fa0d930143ac t
+capacite FIXE : recreer une liste quand le nombre de sommets change corrompt les autres monstres (glitchs/clignotements)
+@@ 3c13ef57f83f t
+sommets inutilises : triangles degeneres (au point 0), jamais dessines
+@@ 9f57f3eacf8e t
+file de rendu des shaders Custom/DssaChara, DssaMonster0, DssaMonster1, DssaCharaTransparent
+@@ e30d6a00abed t
+sol de la peripherie de l'arene
+@@ 18f7ed7db074 t
+cascade raccourcie par « Vitesse de transition » : la simulation avance de plusieurs images du jeu par image du moteur
+@@ 2f84b01b6a3a c
+saut des chiffres des degats : decalage vers le haut (unites d'interface) a chaque tick de 2 / 30 s (HoppingNumber.Update)
+@@ 600704f5c706 t
+image du moteur, fraction comprise
+@@ d370b124346a t
+ticks ecoules depuis la creation (1 tick = 1 image du moteur)
+@@ e9ad9227da0e t
+termine (dernier chiffre : wait >= 38)
+@@ cd8cc227d82b t
+HoppingNumber.Setup : chiffre de 16 px agrandi x 2 (AddIcon size 2,0) soit 32, avance de 16 (PartsInfo[11].m_dps) par chiffre, le tout x 0,8 (echelle locale) : les cases se chevauchent de moitie, les chiffres (7 px sur 16) restent serres
+@@ c8aa2f906812 t
+compteur du chiffre : 2 ticks de decalage entre chiffres, 2 par tick
+@@ d8b0dd0aebb9 t
+fondu au noir en cours (ou noir maintenu)
+@@ 97a7da5a48b4 t
+une page qui attend une touche doit se voir

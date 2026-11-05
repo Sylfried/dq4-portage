@@ -1,0 +1,16 @@
+usage: simulate_encounters.py [-h] [--apk APK] [--saves SAVES]
+                              [--lieu {donjon,monde}] [--pas STEP]
+                              [--vitesses VITESSES] [--graine SEED]
+
+Simulation statistique des rencontres aleatoires a marche acceleree (#45), sur
+le VRAI moteur (libdq4core.so emule) : combien de rencontres par pas a x1, x2,
+x4 ?
+
+options:
+  -h, --help            show this help message and exit
+  --apk APK
+  --saves SAVES
+  --lieu {donjon,monde}
+  --pas STEP
+  --vitesses VITESSES
+  --graine SEED

@@ -1,0 +1,1017 @@
+## FILE tests/test_params_without_pause.py
+@@ 281786532ccd d
+Test (sans moteur ni affichage) de l'ecran « Paramètres » (#136) : l'ecran qui s'appelait « Pause » (menu Echap) s'appelle « Paramètres » et ne met plus le jeu en pause : le jeu tourne derriere lui
+(sans touche ni clic : les touches du menu ne font pas marcher le heros). Depuis #178 (D-229, « il ne faut aucune pause dans aucun menu ») AUCUNE page ne l'arrete, pas meme « Historique » ni « Quitter » ;
+le mecanisme (Pause.FROZEN_PAGES, vide) reste et est essaye ici avec une page figee de test.
+
+    python3 tools/test_params_without_pause.py
+
+  1. le titre de la racine est « Paramètres » (plus « Pause ») ;
+  2. Pause.freezes_game : faux menu ferme, faux sur TOUTES les pages (racine, reglages, historique, question de sortie ; toute page `_e_*` du menu), Pause.FROZEN_PAGES vide ;
+  3. Game._sync_freeze : le son et l'horloge ne s'arretent qu'en entrant sur une page figee (ici une page de test ajoutee a FROZEN_PAGES ; aucune par defaut), et repartent en la quittant (sans rattrapage du temps passe) ; Game.pause_game : ouvrir ne coupe rien, fermer rend le son s'il etait arrete ;
+  4. Game.tick : aucune entree n'est envoyee au moteur menu ouvert ; Game._speed_factor : pas de marche acceleree menu ouvert (aucune direction n'est envoyee au jeu) ;
+  5. Game._boucle : le moteur tourne menu ouvert (sauf page figee : aucune).
+@@ 0291dca2a280 d
+Ce que la boucle de la fenetre demande au menu, au son et au reste (champs de Jeu utilises par les methodes essayees).
+@@ b4108b90c307 d
+Le mecanisme d'arret (page de FROZEN_PAGES), essaye avec la page « historique » ajoutee le temps du test : par defaut plus aucune page n'arrete le jeu (voir TestFrozenPages).
+## FILE tests/test_paths.py
+@@ 165bd5222e58 t
+ancien fonctionnement : APK et sauvegardes du telephone la-bas, le reste dans donnees
+@@ 2ec08dd4ca93 t
+les journaux du portage d'avant passent avant la copie du telephone (T1)
+@@ 32a53ec9592f t
+... qui complete ce qui manque (la plus recente seulement)
+@@ f64528a2b794 t
+(pas celui d'une date plus ancienne)
+@@ 6c6a12898ebd t
+reglages deja changes dans la nouvelle version : gardes
+@@ 16c53388a315 t
+le dossier d'ecriture d'hier : ce que le jeu a ecrit ensuite l'emporte sur le vieux portage (P1)
+@@ 92afb61b8b16 t
+D-235 : le dossier avant_import_... effacé revenait a chaque demarrage (recopie depuis dq4_pc\\sauvegardes)
+@@ 10cbc5791312 t
+(tout effacé : seul le fichier de reprise empeche la recopie)
+@@ 47e218a4a314 t
+(l'ancien dossier n'est toujours pas touché)
+@@ 8e78e9fad782 t
+le cas de Sylfried : la reprise a eu lieu avec une version d'avant D-235, il a effacé avant_import_... a la main
+@@ cfad7d557eb5 t
+(rien a renommer : l'etape D-239 n'est pas notee)
+@@ b98497d323d0 t
+comme une premiere fois : copie sans rien ecraser, puis le fichier est refait
+@@ dab6328a3e4d t
+(les phrases de la reprise sont testees en francais)
+@@ d7f476c896bc t
+la disposition d'avant D-239, telle qu'elle est sur le PC
+@@ df43aa322f88 t
+(les dossiers ranges par la reprise restent tels quels)
+@@ e5874b06b494 t
+(anciens noms d'etapes traduits, dates gardees ; les autres etapes : destination deja en service ; etape D-239 ajoutee)
+@@ 7a46ca602690 t
+(une seule fois)
+@@ 5627cbe2b06f t
+(aucun contenu perdu, aucun ajoute)
+@@ 5c814da36138 t
+un reglage existe deja a la nouvelle place : il gagne, l'ancien reste ou il est
+@@ 2494085c99dd t
+(a leur place d'avant, intacts)
+@@ e25123cbebb9 t
+(le reste est renomme)
+@@ 0073b39763a2 t
+(pas note fait : le renommage sera refait au prochain demarrage)
+@@ bbe12595651f t
+`data\\saves` existe deja (renommage interrompu) : on y remet le reste, un fichier a la fois
+@@ 9a3763f66fb2 t
+Windows : un dossier ouvert dans l'Explorateur ne se renomme pas ; ses fichiers, eux, se deplacent un par un
+@@ a83a0968f3cb t
+(rien n'a bouge ni disparu)
+@@ 2649bd53582d t
+le demarrage suivant termine
+@@ 326f59361b8d t
+DQ4_DATA / DQ4_DONNEES : le dossier est le tien, seul son contenu est renomme
+@@ 9145f04cb94d t
+(le nouveau nom l'emporte)
+@@ 982e791599e8 t
+(dossier deja renomme, mais `reprise.json` d'avant, avec `etapes` et les anciens noms d'etapes, pas encore)
+@@ 16253f960c96 t
+la reprise de la toute premiere disposition arrive deja dans les bons noms (etats, copies de securite)
+@@ f6ccc0166860 t
+D-239 : un .zip exporte par une version d'avant (`etats/etat_NN.dqs`) s'importe, les etats sont ecrits sous leur nouveau nom
+@@ e30cefeba440 t
+D-235 : le jeu ne lit pas manifest.json (liste des fichiers + sha256 faite par l'outil de copie) ; les journaux ont leur propre controle
+@@ 8cef48c0f588 t
+(tests, --saves-ecriture) : tout reste sous ce dossier
+@@ 2b80bea2170f c
+on fabrique un pickle tel que l'ancienne version l'ecrivait : le module de la classe s'appelait `engine`
+@@ 776b3638aa9c t
+(sans la correspondance, c'est bien le probleme)
+@@ 35684bc4a313 d
+Dossiers du portage (paths.py) et reprise de l'ancienne disposition : disposition par defaut, variables d'environnement, migration sans ecrasement ni suppression,
+import / export de sauvegardes avec les nouveaux dossiers, anciens etats instantanes (noms de modules d'avant le rangement du 04/11/2026). Sans fenetre ni moteur.
+
+    python3 tests/test_paths.py
+@@ f22563438faa d
+D-239 : les dossiers et fichiers que les versions d'avant creaient en francais sont renommes sur place (sans copie, sans rien ecraser ni supprimer).
+@@ 6a97729b152d d
+Un journal du jeu valide (en-tete « rate », somme de controle, chiffre) ; `n` le distingue des autres.
+@@ 220f1ffa7e82 d
+Import / export avec la disposition de data\saves (etats et copies a cote de `portage`).
+## FILE tests/test_pause_language.py
+@@ a0e8c3688526 c
+Mots identiques en français et en anglais, ou noms techniques : dessinés tels quels dans les deux langues, sans entrée dans le catalogue (une entrée identique ferait un doublon avec les autres fichiers).
+@@ 1d608a2f1085 t
+(le faux nom que le faux jeu donne à une fenêtre que l'outil ne connaît pas)
+@@ e38858e98df5 t
+messages de la console (testés dans la classe Console)
+@@ e96f93c22a64 t
+(+ une fenêtre inconnue de l'outil : groupe « Autres »)
+@@ 8680e68e6384 t
+identifiant de page (chaine) -> fin du nom de la methode `page_...` de Visite
+@@ ac5d390eccd4 t
+(le catalogue en vigueur pendant ce parcours)
+@@ 0bc35534dc0c t
+page qui defile : chaque ligne passe dans la fenetre
+@@ ec05119e1798 t
+(une page de lignes a la fois, avec une ligne de recouvrement)
+@@ 0f966b950360 t
+chaque sorte d'emplacement : miniature et date, date seule, rien, vide (« Pas de miniature », « Emplacement vide »)
+@@ 37ee261e6a6e t
+fenetre de confirmation (n = 9 : emplacement vide, sans date)
+@@ 162d8629f513 t
+« Limité à x4... » ; resolution grisee en plein ecran
+@@ 8354c08f5193 t
+« Appuie sur la touche pour... »
+@@ cde9aa86b2a3 t
+saisie d'une valeur
+@@ 4ddd7ee7139a t
+chaque liste deroulante ouverte
+@@ ac29e0d33553 t
+« Replacer sous la boîte de combat » / « Replacer sur le bord gauche »
+@@ 164b32329d8f t
+masque : « Masquée » / « Masqué » sur l'apercu
+@@ d312b06b33a1 t
+infobulle de la barre de titre
+@@ 912dae97633c t
+panneau replie
+@@ b2008ca643cf t
+liste « Interface à modifier » ouverte (intertitres de groupe)
+@@ 7d8070f8c398 t
+« État enregistré dans l'emplacement 2. »
+@@ 61a36e82990f t
+(le fichier n'existe pas : « Impossible de supprimer l'état »)
+@@ a65fc28317e4 t
+« État 2 supprimé. »
+@@ ff006d5ac354 t
+« Cette touche est réservée (F11). »
+@@ 3f2aae829d52 t
+« Tab retirée de « Infos à l'écran ». »
+@@ 0968a242fccd t
+« Une touche d'origine est retirée de « Infos à l'écran ». »
+@@ d55dc257dfff t
+« X retirée de « <chaque action, meme celles qui ne sont pas dans la page> ». »
+@@ f2b253827ce5 c
+---- ce qu'on en tire
+@@ 347df3234fd8 t
+chaque texte francais dessine : sa traduction (ou un mot identique) est dessinee en anglais
+@@ 80db3c5dc519 t
+chaque phrase d'aide
+@@ 6b4f0658bcd5 t
+en anglais, chaque phrase recue est rendue traduite (rejointe : l'infobulle la coupe a sa largeur)
+@@ 6f70c7b92898 t
+(la traduction selon le catalogue du parcours en anglais)
+@@ 2ead7414e4c5 t
+(la console : voir la classe Console)
+@@ d4c75a54adb6 t
+(un nom d'action n'est dessiné que dans un message : « ... retirée de « Page suivante ». »)
+@@ 5c1c5489d8df t
+(plus de 4 secondes : disparu)
+@@ 8b400de1e25f t
+(texte à trou : traduit puis rempli, voir Pause._entries_display)
+@@ 1be12fbeb2fd t
+(avec les globales du module telles qu'elles sont pendant le parcours : l'horloge figée, par exemple)
+@@ a26b22333be1 d
+Langue de l'outil (D-238) : pages du menu Paramètres (Pause), en anglais et en français.
+
+Le menu est piloté avec un faux « jeu » (voir test_pause_pages.py) et DESSINÉ pour de vrai dans une fenêtre pyglet cachée (EGL sans écran sous Linux) ; chaque étiquette demandée à la fenêtre (`_lbl`) est notée.
+Le parcours couvre toutes les pages (racine, Affichage, Interface avec chacun de ses éléments, Son, Commandes, Modifications, États, Quitter), toutes les valeurs de toutes les listes, l'aide de chaque ligne, les consignes
+de capture d'une touche et de saisie d'une valeur, l'infobulle de la barre de titre, la fenêtre de confirmation, les messages d'information (par leurs vrais appels), les noms de toutes les touches du clavier.
+
+    python3 tests/test_pause_language.py
+
+Règles : (1) en anglais, aucun texte dessiné n'est du français ; (2) tout texte français dessiné a sa traduction (liste blanche : les mots identiques dans les deux langues) et l'anglais dessiné est bien celle du catalogue ;
+(3) en français, les textes sont exactement ceux d'avant (le catalogue vidé donne, en mode anglais, les mêmes textes que le français : la traduction est la seule différence) ; (4) les DONNÉES du menu (libellés, noms de valeurs,
+noms de touches, messages) restent en français, elles sont traduites en les dessinant (les autres tests et les autres écrans, comme l'historique, s'y fient) ; (5) pas de clé inutile ni de traduction vide ou identique dans
+texts_en\pause.py ; (6) mutations de contrôle : une clé retirée, un `tr` retiré de plusieurs endroits, une traduction vidée ou laissée en français font échouer la vérification.
+@@ 4c19e43a1d01 d
+Fenêtre pyglet cachée (le dessin du menu a besoin d'un contexte GL) ; SkipTest si la machine ne peut pas en ouvrir une.
+@@ d88ca7a46441 d
+Le faux jeu des pages avec ce que `draw_all()` lui demande. `seen` : les textes demandés à `_lbl`, notés avec le moment du parcours (`moment`).
+@@ 0aacf4cebaf1 d
+Le menu qui note chaque appel de `_helptext_lines` : (texte brut reçu, lignes rendues).
+@@ 7dcedcf5486a d
+Le module `time` du menu, dont l'heure ne bouge plus (le curseur clignotant de la saisie, les animations : le dessin est le même d'un parcours à l'autre).
+@@ 783503cc8d3d d
+Le parcours de l'interface du menu dans une langue : `seen` = [(moment, texte)] dessinés (moment : page, aide, infobulle, message) ; `helpers` = [(texte brut, lignes rendues)]. `parts` : les morceaux
+du parcours (par défaut tous : les pages, les messages d'information, les noms de touches).
+@@ c3d77d43a797 d
+Découpe `lookup_key` en [texte, trou, texte, trou, ..., texte].
+@@ fc7c53896b6a d
+Expression régulière d'un texte à trous (%d, %s...) du catalogue.
+@@ d6389ea7f613 d
+Rien à traduire : pas de mot (chiffres, dates, signes) ou nom brut d'une touche (« BRACKETLEFT », « F5 » : les noms de pyglet, techniques).
+@@ 68aeb0fa5932 d
+Ce qui cloche entre le parcours en français `fr` et le parcours en anglais `entry` (Visite) selon le catalogue `category` : liste de textes, vide si tout va bien.
+@@ ad19ba9fabdd d
+Le parcours d'une langue avec le vrai catalogue, fait une seule fois pour tous les tests (le menu et le catalogue ne changent pas d'un test à l'autre).
+@@ 58103945680b d
+Les données du menu restent en français quelle que soit la langue : les autres tests, la fenêtre et l'historique s'y fient ; la traduction se fait en dessinant.
+@@ 2d605125230b d
+Les messages de la console de settings.py et de pause.py.
+@@ 23d173d246e7 d
+Les règles du catalogue (tests/test_language.py) pour texts_en\pause.py seul, plus : pas de traduction vide ni identique, une traduction n'est pas elle-même une clé.
+@@ a8f13ff18855 d
+Le contrôle de la vérification elle-même : chaque faute introduite à la main est vue par `problemes`.
+@@ f8b286af75b8 d
+Les noms de toutes les valeurs des listes, et l'aide de chaque ligne (comme l'infobulle : phrases coupées à la largeur).
+@@ 1513ce190cd1 d
+Les messages d'information, par leurs vrais appels.
+@@ 3f77e458a9d0 d
+Les noms de toutes les touches que le clavier peut donner.
+@@ 5d7314a52f39 d
+Catalogue vidé, en mode anglais = exactement les textes du français : la traduction est la seule différence entre les deux langues (les textes français sont ceux d'avant).
+@@ 19c5997e47a6 d
+Une clé qui ne sert nulle part est une faute de frappe (le vrai texte resterait en français) ou un reste.
+@@ bf46335d499c d
+Le fichier de police du jeu existe mais pyglet ne peut pas le charger (ici : refusé exprès) : la console le dit dans la langue de l'outil.
+@@ aa05fd8443a1 d
+Le menu traduit parfois un texte déjà traduit (aide assemblée, message dont les valeurs sont traduites) : l'anglais ne doit pas être lui-même une clé du catalogue.
+@@ 1b872fd77da9 d
+`problemes` pour ces morceaux du parcours, avec ce catalogue (None : le vrai) ; cat : le catalogue de pause.py selon `problemes`.
+@@ 39aedffb64fa d
+Remplace, le temps du bloc, la méthode `klass.name_str` par une copie dont le texte `old` est devenu `new` (exécutée avec les globales du module de la classe).
+@@ 1825bd7bad3b d
+Le catalogue du parcours et celui de `problemes` sans ces clés.
+@@ 3ed064eb14ca d
+Le nom de l'action dans « Tab retirée de « Infos à l'écran » » est traduit lui aussi.
+@@ 2d913cbfa75a d
+Un menu sans le `tr` des aides rend en français exactement les mêmes textes (le français est la clé).
+## FILE tests/test_pause_pages.py
+@@ aa1897b6650b t
+plus petit, ni or ni blanc
+@@ 459448f7057f t
+terne (moins lumineux que le blanc) mais encore un gris dore (pas un gris neutre)
+@@ f0055fd5c993 t
+(et nettement moins vif que l'or de la valeur courante)
+@@ 8005277b5c9c t
+l'or reste celui de la valeur courante
+@@ d38908b55aa7 t
+l'intertitre n'est plus dessine en or
+@@ db0deb99cd8d t
+plus de page du texte : ses deux options sont dans Commandes
+@@ a866c015e2bb t
+« Modifications » (ex-« Jeu ») : juste sous « Commandes »
+@@ 2ddd2317a34e t
+chaque ligne : une barre de volume (curseur), un bouton muet, un bouton « par defaut »
+@@ b9fd89d49f01 t
+Musique
+@@ 9d0dddb5517b t
+Entree : muet
+@@ f41bf04e6b93 t
+Suppr : par defaut
+@@ 27c415594a38 t
+Debut : aussi
+@@ 1e6ab73a0bf0 t
+bouclage : en haut de la liste on arrive en bas
+@@ 71bf03b6735b t
+deux options, puis la section suivante
+@@ c78358f2de4e t
+(derniere ligne des vitesses)
+@@ 0a8b1c589365 t
+(la camera ne fait que tourner et se recentrer : D-233 ; plus de zoom ni de molette)
+@@ 42f754d3bbc4 t
+D-237 : « Regroupe toutes les options de caméra directement dans un groupe nommé "Caméra" »
+@@ c4a5cf750f05 t
+(le groupe vient apres le deplacement)
+@@ 7d9a70216cee t
+la fenetre est prevenue
+@@ 81c4e693d938 t
+(la liste boucle) Très rapide -> Manuel
+@@ 783059348061 t
+↺ : Normal
+@@ 7ccb97e8235f t
+titre de la page : « Modifications »
+@@ dffc033b75ae t
+valeur invalide : retour au defaut (Non)
+@@ 076eeeb8d3bf t
+(plus de « Vitesse de transition » depuis #101 : fixe a x1)
+@@ 1d639a6b09c6 t
+l'accelerateur garde son curseur
+@@ ba24cfa95614 t
+(ancien libelle : renomme)
+@@ 76c54ee7b2fc t
+(puis la section suivante)
+@@ d46d3174d0d5 t
+(un seul reglage : dans la section Défilement du texte, pas dans Vitesses)
+@@ db040807320a t
+(#101 : retiree, les transitions restent a x1)
+@@ 25202a8acc18 t
+le pointeur sort : la zone se rallume
+@@ 9c0c4a251b76 t
+sous une fenetre modale : le survol lui appartient
+@@ 4f5a1e7416c8 t
+« Boutons et croix de l'écran » reste seul dans son groupe
+@@ c54a8000cd5d t
+le bouton de vitesse : premier element du groupe « Combat »
+@@ d8677177dfbb t
+la remise ne touche que le bouton
+@@ 1d001e3e0ef3 t
+plus dans « Boutons et croix de l'écran »
+@@ c5550ad20c84 d
+Test (sans fenetre) des pages du menu Pause : racine, Son (une ligne par son : nom, volume, muet, par defaut), Commandes (vitesses x1 a x4, section « Defilement du texte »), Modifications (ex-« Jeu »).
+
+    python3 tools/test_pause_pages.py
+
+Le menu est pilote avec un faux « jeu » (reglages reels, son et fenetre simules) : les memes fonctions que celles du menu, clavier compris (Pause.touche).
+@@ a083fb5d52d6 d
+Ce que le menu Pause demande a la fenetre.
+@@ 50e7a34dfff4 d
+Liste deroulante « Interface à modifier » : les intertitres de groupe (« Écran tactile », « Dialogues »...) sont discrets, jamais en or (l'or est celui de la valeur courante).
+@@ d2d196229177 d
+Commandes > « Défilement du texte » : « Vitesse du texte » et « Vitesse de combat » (ex-page « Vitesse de défilement du texte » du menu racine), nouvelle section juste sous « Vitesses ».
+@@ 1172c1993548 d
+Plus d'encadre jaune : sous le pointeur (mode souris), une zone s'assombrit ; au clavier, rien n'est survole.
+@@ b34a6cd551ce d
+Liste « Interface à modifier » : bouton de vitesse de combat dans son propre element du groupe « Combat », avec ses propres reglages.
+@@ a4b46eeb8f58 d
+« Vitesse de combat » : le menu previent la fenetre (qui impose aussi le defilement : 4 en Manuel, 2 sinon) ; la liste boucle ; ↺ remet Normal (au clavier : la ligne est choisie dans la page Commandes).
+@@ 6989db258968 d
+Page « Modifications » (ex-« Jeu ») : un interrupteur Oui / Non, Non par defaut (comme le jeu), qui previent la fenetre ; ↺ le remet sur Non.
+@@ 0e49f59057a9 d
+Commandes > Vitesses : pas de reglage de vitesse de combat (il est dans la section « Défilement du texte », juste dessous), seulement la touche « Changer la vitesse en combat », juste sous le multiplicateur de l'accelerateur.
+## FILE tests/test_play_time.py
+@@ 18cfa65f36f9 t
+le temps de jeu suit l'horloge reelle
+@@ 02857cd8afaa t
+exactement 2 par pas
+@@ 763bb8584e13 t
+(ralenti : inchange, le crochet ne rattrape pas)
+@@ 5dcfb5f84582 t
+le temps avance toujours par 2 (les appels sont sautes, jamais coupes)
+@@ e9d1ec50558e d
+Temps de jeu de la sauvegarde sur l'heure reelle (#239, audit ENG-04, sondage du 04/11/2026) : le moteur ajoute 2 unites (1/60 s) par pas ; quand le jeu est accelere (marche x1,5 a x8, accelerateur, combat rapide) il fait `a` fois
+plus de pas par seconde reelle : le crochet de `Engine._game_time_hooks` ne laisse passer que 1 / a des appels `GameStatus::addPlayTime`.
+
+    python3 tests/test_play_time.py
+    DQ_APK=... DQ_SAVES=... python3 tests/test_play_time.py      (ajoute les tests du vrai moteur)
+@@ ded23afad9da d
+Sur 1200 pas a la vitesse a, 1200 / a appels passent (a un pres) : 2 x 1200 / a unites de temps, soit 2400 / a / 60 s de temps de jeu pour 1200 / (30 a) s d'horloge reelle.
+## FILE tests/test_poker_font.py
+@@ 1a06ec57549a t
+ui_menu a besoin de pyglet (absent de la CI) : les tests sont alors ignores
+@@ 1eb835f2398e t
+police de repli : toujours
+@@ 75b9ab5ab0d9 t
+limite posee par la fenetre (cout d'un sort)
+@@ 55ea1db53976 t
+(casino : machine a sous 44-47 et pari de l'arene : inchanges)
+@@ 0a7848acbb35 d
+Etiquettes du poker (SVC-03, choix du joueur : police reduite) : « Abandonner » sortait des cinq boutons sous les cartes et se chevauchait (le francais est plus long que l'anglais du bouton).
+
+`ui_menu.compress_label` : un texte plus large que sa plaque est comprime pour y tenir avec la police de repli, avec la police d'origine seulement si la fenetre pose une limite (fiche d'un sort) ou si c'est la fenetre du
+poker (type 48) ; ailleurs il depasse comme sur le mobile (choix du joueur, audit UI-05 : on ne touche pas a ces debordements).
+
+  python3 tests/test_poker_font.py
+## FILE tests/test_return_to_title.py
+@@ aee61fcd80db t
+manette du jeu envoyee aux menus : bas 1, haut 2, droite 4, gauche 8, A 16, B 32 (Game._menu_input) ; le moteur range Oui / Non en une colonne (grille 1 x 2) : « droite » de la visionneuse part en « bas »
+@@ 1142a2a4c70f c
+---------------------------------------------------------------------------------------------------------------------------------- 1. le menu Pause
+@@ a40735dd6853 t
+la question est celle du jeu (boite d'origine), pas une page du menu
+@@ 1acd85ae62ce t
+le jeu reprend : c'est lui qui pose la question
+@@ e330d4d44896 t
+grisee, avec son explication
+@@ 1079ead12ce1 t
+rien ne part
+@@ d4e3d2e99688 c
+---------------------------------------------------------------------------------------------------------------------------------- 2. le moteur (simule)
+@@ 7ee47bbdfdc2 t
+(une ancienne reponse ne compte pas : remise a 0)
+@@ 922d1c4001e1 t
+seulement la lecture de l'etat de la boite
+@@ 74bff4fcab9f t
+le joueur est libere
+@@ 3f76a9767ccf t
+et on peut redemander
+@@ 09cfe799d77d t
+le texte s'ecrit, puis Oui / Non
+@@ 4a1aed8dff7f t
+Oui / Non attend
+@@ 7263c4081ac4 t
+elle attend : rien ne se passe sans reponse
+@@ 063e8f12bf7b t
+ni banque effacee, ni titre
+@@ c9dc83fa6f4a t
+aucun fondu
+@@ 75f4011b79c6 t
+le curseur d'origine est sur « Oui »
+@@ 2b7f5ccce22d t
+banque 4 effacee puis titre, une fois chacun
+@@ 19e5126753ef t
+progressif (un trente-troisieme par image), jamais d'un coup
+@@ c80a5c8315eb t
+une trentaine d'images de fondu
+@@ 615a5f68798f t
+et la meme question se pose de nouveau
+@@ 5e421115b077 d
+Test du retour a l'ecran-titre (issue #109) : menu Pause > « Revenir à l'écran titre » = la boite d'origine du jeu (son texte, Oui / Non), puis le fondu au noir du jeu, puis le titre.
+
+    python3 tools/test_return_to_title.py [--apk <dossier des APK patches> --saves <dossier des sauvegardes>]
+(ou DQ_APK et DQ_SAVES ; sans eux seules les parties 1 et 2 tournent). La partie 3 charge le vrai moteur (environ 1 minute) : a lancer par `tools/session_flow/engine_slot.sh`.
+
+Partie 1 (sans moteur) : la ligne du menu Pause. Elle ferme le menu et demande le retour au titre au jeu (plus de page de confirmation du menu Pause : la question est celle du jeu) ; elle est grisee
+quand le jeu n'est pas en ville ni sur la carte du monde.
+Partie 2 (moteur simule) : `Engine.request_return_to_title` et les deux moments joues autour de GameUpdate (`_return_to_title_before` / `_return_to_title_after`) : les appels du moteur dans l'ordre du menu des
+Parametres d'origine (TownMenu_OPERATION_SETTING::menuUpdate, etat 5), « Non » ne change rien, « Oui » efface la banque 4 puis lance Global::startTitle ; une boite fermee sans reponse libere le joueur.
+Partie 3 (vrai moteur, en ville) : la boite s'ouvre et reste ouverte ; « Non » (flèche vers Non puis A) la ferme sans lancer le titre ; « Oui » (A, curseur d'origine sur Oui) lance killbank puis startTitle dans le
+pas meme de GameUpdate et le fondu au noir est progressif (30 images, jamais un saut), puis la carte du titre se charge.
+@@ 775216d99f8e d
+Place le curseur de la racine sur la ligne du retour au titre.
+@@ cf30856768d5 d
+Remplace emu_core : enregistre les appels du moteur (noms de symboles), garde une memoire a mots.
+@@ 609dde434d6b d
+Le fondu du titre est un paquet lu avec ceux du pas : startTitle doit etre lance entre `pk.begin()` et `pk.packets()`, autour de GameUpdate (sinon le fondu est perdu et l'ecran saute au noir).
+@@ 3b3855a18408 d
+Une touche de la manette envoyee au menu du moteur qui a la saisie (comme Game._menu_input : [1, -1, manette]), relachee a l'image suivante, puis 8 images de repos.
+## FILE tests/test_root_scenery.py
+@@ db9c95170521 t
+l'objet 0 de la carte a de la geometrie
+@@ 33515291e664 t
+deux objets numerotes (000_..., 001_...), comme avant
+@@ 5141d7e8f2a8 d
+Decors dont le maillage est porte par la RACINE de la carte (MeshFilter + MeshRenderer sur le GameObject `<name_str>.fld`, aucun enfant `NNN_...`) : l'objet 0 de la carte est la racine elle-meme.
+Avant, `Data._extract_map` ne regardait que les enfants numerotes : ces 32 cartes (18 decors de combat : btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_* ;
+14 lieux : ddb1b, dnb1b2, dnb2b3, dnb3b4, ev04, za1f6, za1f8, za1f9, za2f4..7, za2f9, za3f1) sortaient EMPTY_MESSAGES (zero sommet). Verifie (si le paquet de donnees existe : DQ_APK, sinon
+/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks) qu'elles ont de la geometrie, et qu'un decor ordinaire (enfants numerotes) est inchange.
+
+    python3 tools/test_root_scenery.py
+## FILE tests/test_save_notifications.py
+@@ 4242c3b3f1b6 t
+(début du texte de chaque appel)
+@@ 9848b85c73ae t
+(D-238 : tr('texte') % x ou N_('texte') : le texte francais est dedans)
+@@ ef0d637aa700 t
+(le crochet « alerte » du son n'est pas branche)
+@@ 4ecfcfc809d4 t
+un seul message a la fois
+@@ dcb857b635af t
+rien d'importe : aucun message
+@@ 0638e173de9c d
+Notifications en haut de l'ecran : seulement celles des sauvegardes (D-228 les avait toutes retirees le 04/11/2026 a 22 h 14 ; D-230 rend celles des sauvegardes, demande de Sylfried de 23 h 02 : « Remets les notifications
+pour les sauvegardes alors... »).
+
+  1. liste blanche : chaque appel `toast(...)` du code est un message de sauvegarde (etats instantanes enregistre / charge / vide / annule / echecs, sauvegarde du jeu impossible, sauvegardes importees) ; ni vitesse de combat, ni plein
+     ecran, ni memoire du moteur, ni reglages du moteur, ni son, ni ouverture de page ne s'annoncent a l'ecran ;
+  2. les messages sont produits : etats (enregistrer / charger / vide, annuler le chargement, echec), echec d'ecriture d'une sauvegarde (test_save_writing), import ;
+  3. `Game.toast` pose un message qui expire ; changer la vitesse de combat ne montre rien (et rend la nouvelle vitesse).
+
+    python3 tests/test_save_notifications.py
+@@ 4f96fcf591f5 d
+[(fichier, ligne, texte de l'appel)] de tous les `.toast(...)` du code de dq4_pc (texte = 1er argument : chaine ou formatage d'une chaine ; None si ce n'est pas une chaine).
+## FILE tests/test_save_writing.py
+@@ 3b3b381421ac t
+sans __init__ : pas de bibliotheque ni d'emulateur pour tester l'ecriture
+@@ c3ba51a8677e t
+le .tmp a disparu
+@@ 07f14289042f t
+aucune exception
+@@ eabe6884a58a t
+intact
+@@ 1c7dc6b6ac8c t
+pas de .tmp qui traine
+@@ ebaabca067d6 t
+le fichier est ferme quand meme (comme avant)
+@@ 33f5db83787e t
+« fichier » n'est pas un dossier
+@@ 51a24b978644 t
+(message a l'ecran rendu aux sauvegardes : D-230)
+@@ 61a2a5ed9318 t
+vide : un seul message par echec
+@@ 316b9597aeea d
+#198 (audit ENG-02) : ecriture des sauvegardes du moteur : atomique, et une erreur d'E/S ne plante plus le jeu.
+Lancer depuis la racine : PYGLET_HEADLESS=1 python3 tests/test_save_writing.py
+## FILE tests/test_saves_import.py
+@@ b58707a2d32b t
+banque neuve (DWEN) ou supprimee (DLED) : valides, sans somme
+@@ ae1df36d3927 t
+data9 (512 octets) : pas de somme ; la taille est controlee ailleurs
+@@ a0d8f9b587ec t
+le fichier abime n'est pas ecrit
+@@ cf3c5df6b44e t
+inchange
+@@ 5af14d15b2bb t
+l'autre est passe
+@@ 61ee017b8726 t
+aucun fichier temporaire oublie
+@@ a3608b5205d5 d
+#214 (audit ENG-07) : l'import de sauvegardes controle la somme de chaque journal (un fichier abime ou qui n'est pas un journal du jeu est refuse avec sa raison au lieu de donner « banque vide » au chargement) et ecrit chaque
+fichier en entier ou pas du tout (fichier temporaire puis remplacement : un echec laisse l'ancien fichier intact). Sans fenetre ni moteur ; les vraies sauvegardes (DQ_SAVES) sont aussi controlees si elles sont la.
+    python3 tests/test_saves_import.py
+@@ f72faedfe048 d
+Journal du jeu en clair puis chiffre ; `n` le distingue des autres ; mot0 = FJ.NEW / FJ.DELETED pour une banque vide.
+## FILE tests/test_saves_in_one_folder.py
+@@ d5b3f6978273 t
+le portage (ce que le jeu ecrivait) passe devant
+@@ cdaeeea3a5ce t
+... meme plus ancien : comme avant (aucun choix a la date)
+@@ fa3612501851 t
+la copie la plus recente, pas une plus ancienne
+@@ a5bed3609a80 t
+plus de portage\ ni de mobile\
+@@ 7ed3ea56569c t
+chaque fichier d'avant est la OU on l'a range, avec le meme contenu
+@@ 9d6c84efd503 t
+etats et copies d'import : a leur place
+@@ 2acc1bb035a4 t
+(et il n'est pas touche)
+@@ f34ff123ada5 t
+Windows : un dossier dont un fichier est ouvert ne se deplace pas ; les copies de fichiers (tmp -> destination) passent
+@@ b44625517184 t
+rien n'a bouge
+@@ 05621056ecc0 t
+(le jeu lit deja sauvegardes : copie faite avant le deplacement)
+@@ cb43f4582fe6 t
+puis la reprise suivante termine
+@@ ff712c8a60a0 t
+(le jeu la lit toujours en second)
+@@ fd8b76c3c42b d
+Un seul dossier de sauvegardes (D-232 ; demande de Sylfried du 04/11/2026 à 23 h 55 : « tu ne pourrais juste pas stocker tous les fichiers directement dans le dossier "sauvegardes" ou un seul sous-dossier pour coller
+à la logique des états ? Comme ça si je veux transférer toutes les sauvegardes du mobile sur le patch je n'ai pas besoin de faire de gymnastique mentale à deviner quel fichier mettre dans quel dossier »), sans fenêtre ni moteur :
+
+  1. disposition : `data\saves` reçoit data1.dat à data5.dat, data9.dat ET `savestates\` (comme le .zip d'export) ; `portage` n'est plus qu'un autre nom de ce dossier ;
+  2. reprise des anciens `saves\portage` et `saves\mobile\<date>` au démarrage : les journaux sont COPIÉS dans `saves\` (le portage d'abord, puis la copie du téléphone la plus récente, sans rien écraser : ce que le jeu lisait
+     avant, fichier par fichier), puis les deux anciens dossiers sont DÉPLACÉS tels quels dans `before_tidy_<date>\` ; rien n'est supprimé, une seconde reprise ne fait rien ;
+  3. cas réel de Sylfried : fichiers du portage plus anciens que ceux du téléphone, `manifest.json` dans la copie du téléphone, vieux `dq4_pc\saves` encore là (ne doit pas passer devant les fichiers d'aujourd'hui) ;
+  4. sécurité : un journal déjà posé dans `saves\` n'est pas écrasé, une erreur de déplacement laisse tout en place (le jeu lit déjà `saves\`), DQ4_JEUX (copie du téléphone ailleurs) n'est pas touché ;
+  5. le moteur lit ce dossier (`effective_files`), l'export le met à plat et l'import y écrit.
+
+    python3 tests/test_saves_in_one_folder.py
+@@ 0ca97f508c97 d
+Le dossier `portage` n'existe plus que comme ancien nom (paths.py : repris puis range) ; aucun autre module ne le construit.
+@@ c005814f1708 d
+Ce que son PC contenait au 04/11/2026 : portage (data1, data5, data9 d'aujourd'hui ; data2 à data4 plus anciens), copie du téléphone plus récente pour data2 à data4, plus un manifeste, et un vieux dq4_pc\sauvegardes.
+@@ 7e507030341f d
+Il reste chez lui un `dq4_pc\saves` d'avant le premier rangement (copie, pas deplacement) : ses vieux data1 et data3 ne doivent pas remplacer ceux du portage.
+@@ f75c436100c0 d
+Il a deja copie les data du telephone dans `saves\` : ils gagnent ; ceux de l'ancien portage ne sont pas perdus (ranges).
+@@ 4f3185d0680f d
+Un dossier nomme `data1.dat` occupe la place : le journal du portage n'a pas pu etre copie, donc l'ancien dossier ne bouge pas.
+@@ 3f8a2f62bb17 d
+Le geste voulu : les data1.dat... du telephone dans `saves\`, rien d'autre ; le moteur les lit (dossier d'ecriture d'abord) et l'export les range a plat avec les etats.
+@@ 1cddb1e0dfb2 d
+Ce que l'export met dans le .zip est ce que le dossier contient (a part les copies de securite) : le dossier se copie d'un PC a l'autre comme le .zip se decompresse.
+## FILE tests/test_savestate_fixes.py
+@@ a39f7014e846 t
+moteur neuf : correctif pose
+@@ de310a8c5c2d t
+etat « ancien » : ces octets de la bibliotheque sont ceux de l'image d'origine
+@@ e4a03cef9fbf t
+le moteur tourne toujours
+@@ 9395489c55c3 d
+Un etat instantane (savestate) enregistre par une version qui n'avait pas encore un correctif memoire de la visionneuse (fenetre des lieux elargie, « Sauv. cloud » retiree, bouton « Paramètres »)
+ne doit pas les faire perdre : etats.appliquer recharge l'image d'origine de la bibliotheque puis rejoue `Engine.reapply_fixes`.
+(Ignore sans l'APK : DQ_APK, sinon /mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks ; ecritures dans un dossier temporaire, jamais dans les sauvegardes de l'utilisateur.)
+
+    python3 tools/test_savestate_fixes.py
+## FILE tests/test_savestates_order.py
+@@ 253f2ac46a60 t
+avant : la memoire du moteur etait deja ecrasee
+@@ 117d5c909896 t
+le moteur avance : sa memoire differe maintenant de celle de l'etat
+@@ 5cdf8461c0d8 t
+pickle tronque
+@@ 1eb2601658b9 t
+l'etat sain se charge encore
+@@ 8d7acec9b5ba d
+#206 (audit ENG-06) : charger un etat instantane ne touche pas au moteur si l'etat est inutilisable (fichier abime, autre bibliotheque) ; l'empreinte de la bibliotheque est enregistree.
+Sans APK : cas avec faux moteur. Avec l'APK (DQ_APK) : le meme essai sur le vrai moteur.
+    python3 tests/test_savestates_order.py
+## FILE tests/test_savestates_whitelist.py
+@@ edbc996179d5 t
+(sans passer par __setstate__ : l'objet garde les anciens noms)
+@@ 7a4ac81d2937 t
+(open est pickle sous le nom _io.open)
+@@ 29acfd20d6a6 t
+(numpy.save : un module de numpy que la liste ne contient pas)
+@@ 968534a8c3ab t
+(le constructeur du moteur ne doit pas etre appelable par un fichier)
+@@ ac19dbe41ef0 t
+PROTO 4, SHORT_BINUNICODE, SHORT_BINUNICODE, STACK_GLOBAL, STOP
+@@ 2c2ae627aed1 t
+(et il s'applique)
+@@ 29b042691f60 d
+#241 (audit ENG-05, sondage du 04/11/2026 : « liste blanche de classes ») : un fichier d'etat (.dqs) recu d'une autre personne ne doit pas pouvoir executer de code a la lecture (le pickle peut appeler n'importe quelle
+fonction d'un module importable). `savestates._Unpickler` n'accepte que les classes du portage (`State`, `Interface`), les conteneurs de base, les tableaux numpy et trois conteneurs de `collections`.
+Sans APK : pickles fabriques (dont des pieges : os.system, eval, subprocess, noms avec point, classes du portage hors liste). Avec l'APK (DQ_APK, DQ_SAVES) : de vrais etats (ville, carte du monde, combat) restent lisibles.
+    python3 tests/test_savestates_whitelist.py
+@@ 181f86f4b1ea d
+Un objet dont le pickle appelle `function(*args)` a la lecture (la technique classique).
+@@ 25a16ddc24ee d
+Les etats que le portage ecrit vraiment (carte du monde, ville, combat force, apres un menu) restent lisibles : la liste blanche ne doit jamais empecher de recharger un etat legitime.
+@@ b937113e61bc d
+Un etat d'avant le rangement du 04/11/2026 dit `engine.State` : relu (le nom est traduit d'abord, la liste blanche s'applique ensuite).
+@@ 687b538a91d7 d
+Un etat enregistre avant le passage a l'anglais (05/11/2026) dit `dq4_pc.noyau.moteur.Etat` et garde les anciens noms d'attributs (`carte`, `partie`, `fondu`...) : relu, il porte les noms actuels.
+@@ ec01b983879c d
+Protocole 4 : `STACK_GLOBAL` accepte « os.system » comme nom dans le module `dq4_pc.core.engine` (qui importe os) ; la liste blanche compare le nom entier : refuse.
+@@ 44ad214cda43 d
+Un etat dont la partie `python` ou `viewer` est piegee : `read` rend le dictionnaire (rien d'execute, ce sont des octets), `apply` refuse AVANT d'ecrire dans le moteur (#206).
+## FILE tests/test_scenery_culling.py
+@@ b9ec3ab749e4 t
+coupe et sens par defaut d'OpenGL remis
+@@ 23d955a15f47 t
+l'ancien rendu
+@@ 1713a9c29380 t
+illisible : comme le defaut
+@@ 91664479034f t
+chaque groupe du decor ; le ciel du titre jamais
+@@ 7db2f3868505 t
+coupe apres les groupes : les bandes / copies du ciel et la suite gardent leur reglage
+@@ 1e0cd8f9e63f t
+modeles 3D : Custom/ImdChara, Cull Back, leur propre variable
+@@ fa164047659a t
+modeles 3D + _scenery_culling : rien d'autre ne l'allume
+@@ cb41e50c1cc7 d
+Faces cachees du decor (#182 : « en interieur les murs doivent devenir transparents ... les faces externes n'ont pas de textures, si on tourne la camera on doit pouvoir voir a travers les murs ») :
+
+Les shaders du decor de carte du jeu (Custom/fld_normal, fld_atest, fld_trans, fld_transz et leurs variantes sepia) sont en « Cull Back » (ShaderLab culling = 2, lu dans le paquet de donnees) ; seule la carte du monde (Custom/Field)
+est sans culling. `Game._scenery_culling` allume donc le culling des faces arriere (face avant = sens horaire a l'ecran, Unity etant en main gauche) pour chaque groupe du decor, sauf le ciel du titre (ses propres sommets) ;
+sans fenetre ni GL : les appels GL sont enregistres.
+
+    python3 tools/test_scenery_culling.py
+
+  1. mode par defaut : culling des faces arriere, face avant = sens horaire (GL_CW) ; DQ_DECOR_CULL = 0 : rien (l'ancien rendu) ; 2 : sens inverse (essai) ; actif = False : toujours coupe et sens remis ;
+  2. `_paint_scenery` : le culling est regle groupe par groupe (jamais pour le ciel du titre) et coupe apres les groupes (ombres, sprites, effets, modeles 3D gardent leur propre reglage) ;
+  3. les reglages GL des modeles 3D (Custom/ImdChara), des ombres et des effets sont inchanges.
+## FILE tests/test_scenery_outlines.py
+@@ 697c8f514a30 t
+pente de 1 texel pour 2,7 (flanc de montagne)
+@@ 962f66e7978f t
+trait d'un texel de large (brin d'herbe, pointe de sapin)
+@@ 43c3e16dca25 t
+le coeur du trait reste opaque
+@@ 5ee32b5c2ca0 t
+largeur a mi-hauteur, en texels
+@@ 8ad04d8f1c45 t
+pixels de la rampe d'alpha : couleur du bord, plus de noir
+@@ 7756194606a2 t
+vert (60, 160, 60) partout, pas d'assombrissement vers (0, 0, 0)
+@@ c5da699c1c4e t
+peinture lisse : degrade + ondulations (comme les textures du jeu)
+@@ b6d756facfd2 t
+loin du bord : opaque
+@@ b224bba84a5c t
+filtrage bilineaire du GPU (centres de texels, texture en boucle)
+@@ 5df6bcee4e7a t
+materiau transparent (melange) : intact
+@@ f06641ae86cf t
+sol, ciel : opaques
+@@ 2fde99b417da t
+entierement transparente
+@@ a71149f1f9d1 t
+petite texture de motif (grille, torche)
+@@ de342109acc7 t
+alpha intermediaire : ce n'est pas un decoupage dur
+@@ f840e7c21813 t
+100 texels sur 65 536 : toujours binaire
+@@ 6f584a4c7e52 d
+Contours des decors de combat (retour de Sylfried, 14 h 08 : « ameliorer visuellement le contour des arbres et montagnes ») : adoucissement de l'alpha binaire des silhouettes (scenery_outlines.py).
+
+Mesures sur des formes synthetiques (pas de moteur ni de GPU) : ecart du contour a la droite ideale, pointes fines conservees, surface, couleur sous les texels transparents ; avec
+DQ_CACHE=<cache des cartes> : les 140 decors de combat du jeu (texture traitee seulement si decoupee, surface conservee a 1,5 % pres).
+
+    python3 tools/test_scenery_outlines.py                (DQ_CACHE=... pour les textures reelles)
+@@ 711214355ced d
+Ecart quadratique moyen (en texels) entre le contour (niveau 0,5) du champ d'alpha et la droite i = pente * j + base, hors des bords.
+## FILE tests/test_screens.py
+@@ c3f8fa0e1c1b t
+(pyglet peut donner le principal en second)
+@@ 6fcb3b847718 t
+(a defaut : celui en (0, 0))
+@@ 28fc64e362f8 t
+(a defaut du defaut : le premier)
+@@ 732b78f7cf02 t
+(un ecran illisible est ignore ; `source` retrouve l'objet pyglet)
+@@ 62fe06c98fbe t
+celui de la fenetre
+@@ 9c50666bbdee t
+fenetre inconnue : le principal
+@@ 2e677beb30e5 t
+(le principal, meme en second)
+@@ 757ea5502c36 t
+a cheval : celui du centre (2140, 460)
+@@ 9c2ef065d308 t
+a cheval, centre (1800, 250) : A
+@@ e23aabe480c7 t
+centre (2000, 250) : B
+@@ 26e3712d77f7 t
+un ancien fichier de reglages : les deux cles ne sont pas relues
+@@ 694dda31a42a t
+... et disparaissent du fichier a la prochaine sauvegarde
+@@ ddd9d1620e81 t
+defaut = glisser vers la droite tourne comme la fleche droite
+@@ cb782f83efc5 t
+(valeur absurde : defaut)
+@@ cd5e34fa9354 t
+(l'inclinaison est retiree : plus d'inversion haut / bas)
+@@ 7f4402a733ab t
+c'est deja le moniteur de pyglet : rien d'impose
+@@ 4460ca0c0220 t
+un seul moniteur
+@@ e3df27557ed7 t
+(pyglet croit toujours la fenetre sur A, elle est sur B)
+@@ 273026e5bccd t
+fenetre 1280 x 720 : centre en x = 2140 -> moniteur B
+@@ 9c9a1bb8c85b t
+(deja en plein ecran : rien ne bouge)
+@@ 7a0a233a44a0 t
+pyglet garde son moniteur
+@@ bcc2f210439e t
+(lancee en plein ecran sur B)
+@@ 561439d26406 t
+(A debranche pendant le plein ecran) : seul B reste
+@@ 3f1f5e0dca87 t
+la fenetre serait hors de tous les moniteurs : elle est recentree
+@@ f6b98f2bddb9 t
+(et plus rien dans la fenetre pour le choisir)
+@@ a9c843f6b51d d
+Test du moniteur du plein ecran : le plein ecran (F11, Alt + Entree, interrupteur « Plein écran ») se fait toujours sur le moniteur ou se trouve la fenetre. Le choix du moniteur (reglage `ecran_plein`, ligne
+« Écran du plein écran ») a ete retire le 03/11/2026 sur demande de Sylfried. Sans fenetre reelle, avec de faux moniteurs (`FakeScreen`) et la vraie logique de screens.py et de fenetre.Game (liee a une fausse
+fenetre qui journalise ses appels).
+
+  1. screens.py : liste des moniteurs (principal marque), moniteur de la fenetre (celui de son centre), cible (celui de la fenetre, a defaut le principal) ;
+  2. reglages : `ecran_plein` et `sortie_audio` n'existent plus (cles obsoletes, jamais relues) ; les cles de la camera a la souris restent booleennes ;
+  3. plein ecran : le moniteur ou se trouve la fenetre sert a chaque entree (meme apres un deplacement), un seul moniteur comme avant ; moniteurs illisibles = repli sans plantage ; echec = fenetre gardee ;
+     retour en fenetre ou elle etait (ou centree sur le moniteur du plein ecran) ;
+  4. page Affichage : plus de ligne « Écran du plein écran ».
+
+    python3 tools/test_screens.py
+@@ 66713ee29930 d
+Fenetre deplacee d'un moniteur a l'autre entre deux passages : chaque entree en plein ecran se fait sur le moniteur ou elle est.
+@@ 3a11bd2bc1f7 d
+Le retour en fenetre passe la taille par `width` / `height` : le 2e et le 3e argument positionnels de pyglet sont le moniteur et le mode (l'ancien appel `set_fullscreen(False, width_px, height_px)` les confondait).
+## FILE tests/test_sepia_scenery.py
+@@ c6d7380a28ea t
+pas une bascule : un second paquet ne l'annule pas
+@@ bce43d878f9d t
+FldObject neuf : materiaux d'origine
+@@ 84a7512c3f16 t
+un nouveau retour en arriere, apres le chargement
+@@ 681f2980b6cb t
+le gris est calcule sur la couleur non bornee, comme le shader du jeu
+@@ 859349414e99 t
+apres texture x sommet x teinte
+@@ e7f48c374dac t
+l'alpha n'est pas touche
+@@ 429d5643a173 d
+Effet « sepia » des retours en arriere (paquet 1, `cmd_map_effect_sepia` ; audit UNI-04 / MAP-04) :
+
+1. `State` : le paquet 1 (sans argument) passe le decor en sepia ; il reste ainsi (le jeu ne le retire pas) jusqu'au chargement de carte suivant (paquet 0), qui le remet a faux ; les autres paquets n'y touchent pas ;
+2. un etat enregistre avant ce correctif (sans l'attribut) se comporte comme neuf (pas de sepia) ;
+3. le shader du decor reprend la formule de `Custom/fld_normal_sepia` du jeu (lue dans le paquet de donnees, GLSL ES) : gris (0,299 ; 0,587 ; 0,114) de texture x couleur de sommet x teinte, plus
+   (0,109375 ; -0,0546875 ; 0), alpha inchange ; applique AVANT l'ecriture bornee a 0-1 ; sans effet tant que le uniforme `sepia` est a 0 (valeur par defaut d'un uniforme).
+
+  python3 tests/test_sepia_scenery.py
+## FILE tests/test_sound_decoding.py
+@@ 462a31fe1b56 t
+(le cas test est bien un cas de depassement)
+@@ a51dc8674b07 c
+un pic positif reste positif (la lecture directe en int16 le retournait en pic negatif)
+@@ 1535ed0fc698 t
+ancien format : 4 valeurs, sans boucle
+@@ c4f249f23b71 t
+re-decode (pas les zeros du cache)
+@@ ee9c7548d194 t
+et cache reecrit a la version courante
+@@ ec9268ceae3b t
+plus de source : seul le cache peut repondre
+@@ 89c91dc2d902 d
+Decodage des fichiers AKB (sound.py) : Ogg ecrete (#200, audit SND-02), boucle des bruitages (#201, audit SND-03).
+Lancer depuis la racine : PYTHONPATH=. python3 tests/test_sound_decoding.py (sans carte son ; soundfile necessaire pour les cas Ogg).
+@@ 5ad8de5a1a2e d
+Un Ogg Vorbis d'un signal carre presque plein : apres decodage il depasse +-1,0 (surmodulation normale de Vorbis).
+@@ 586bfdfd694c d
+Un AKB (codec 5 = Ogg) minimal : un son de n_samples echantillons, avec un debut et une fin de boucle declares dans l'en-tete.
+@@ ed217545331a d
+#201 (audit SND-03) : une fin de boucle qui depasse de quelques echantillons la fin des donnees (reste d'un bloc ADPCM) est ramenee a la fin des donnees.
+@@ fc470899b466 d
+Le cache disque des bruitages (son_SE*.npz) d'une ancienne version (sans les boucles de #201) est refait.
+## FILE tests/test_sound_failures.py
+@@ 348b680aaeb4 t
+pas de pyglet : Son le prend pour « son indisponible », on lui donne de faux lecteurs
+@@ 73fb65374186 t
+vrai : tout nouveau lecteur refuse de jouer (peripherique retire)
+@@ dadd063f3dd4 t
+un son qui part remet le compteur a zero
+@@ d16ba7de6033 t
+trop tot : rien
+@@ c097cc970643 t
+delai ecoule : le son est rouvert
+@@ b43708d8e5cf t
+toujours en panne : un seul echec recoupe, delai plus long
+@@ d35e0b2289fe t
+la sortie est revenue
+@@ 877bc44f2e94 t
+le retour n'est annonce qu'une fois
+@@ ed28b993c926 t
+le moteur demande la musique 2 : retenue (le bruitage est perdu)
+@@ 09a73cb5169d t
+la musique est partie : retabli
+@@ d35d07179ef3 t
+un jingle a reprise ne remplace pas la musique de fond
+@@ 13fbaa8dc55a t
+un jingle rate n'est pas a relancer
+@@ 497b5a1d09bf t
+appels directs (clic de menu...) pendant la coupure : ni essai ni echec ni ligne de journal
+@@ 3055f9c92496 t
+pas de pilote audio (import de pyglet impossible) : ni coupure ni nouvel essai
+@@ 22ccda747812 t
+une fois pour la musique, une fois pour les bruitages, pas a chaque reglage
+@@ af6374ebb6d1 d
+#221 (audit SND-10 et SND-12) : un echec de lecture ne coupe plus le son jusqu'a la fermeture du jeu : FAILURES_MAX echecs de suite le coupent un moment, nouvel essai tout seul (delais croissants), la musique
+demandee pendant la coupure est relancee au retour, tout est note dans le journal ; les erreurs avalees (volumes, reprise apres pause) sont notees une fois. Sans fenetre ni carte son (faux lecteurs).
+    python3 tests/test_sound_failures.py
+## FILE tests/test_sound_mixing.py
+@@ 909430d1ad59 t
+(pas de pyglet : ni fenetre ni pilote audio ; Son le prend pour « son indisponible » et on lui donne de faux lecteurs)
+@@ 62c09ae8bbe0 t
+bruitage en boucle
+@@ c13a573be7e9 t
+musique (boucle)
+@@ 4fdcf00b4c3d t
+jingle (court, sans boucle)
+@@ d244d96f916d t
+morceau long sans boucle : de la musique
+@@ 80d3d2379ba8 t
+en boucle
+@@ 3e4f560e7edd t
+court sans boucle
+@@ 333ec237cac2 t
+demande avec reprise de la musique d'avant
+@@ 3c5c18fd2e4d t
+long sans boucle
+@@ 25eb1f9242f6 t
+en boucle : on ne revient jamais a la musique d'avant
+@@ 2d75719e4ce3 t
+volume propre au fichier
+@@ a9543d5f46c5 t
+options « volume » du jeu : musique + jingles / bruitages + interface
+@@ 1e5fdc3b97d9 t
+jamais plus de 1
+@@ 13d8e1a80653 t
+la musique en cours change
+@@ d80cb9b30a9a t
+les bruitages en cours aussi
+@@ f6a93acbda49 t
+(le lecteur ne s'annonce pas encore)
+@@ 48f18f11160c t
+huit pas a la suite
+@@ 5fb725865d61 t
+delai de grace passe : lecteur arrete = bruitage libere
+@@ 479d65d8faa9 t
+en lecture : garde
+@@ ffc8f689eb96 t
+duree depassee : libere
+@@ 6745efafa33a t
+le chargement de la carte a bloque la boucle 0,5 s
+@@ 8540627137c8 t
+1,4 s ecoulees : le 305 (1,0 s + 0,5 s de marge) est encore la, le 309 (1,5 s) aussi
+@@ 1b9d941f32f2 t
+duree depassee : liberes
+@@ 6f7a930f0364 t
+long morceau sans boucle : de la musique
+@@ 6ad55aff53a4 t
+(BGM 3 : la musique du moment, avec boucle)
+@@ 4571574951fa t
+la musique du jeu passe la premiere
+@@ f1a9dd0954d4 t
+decodage demande par le moteur : le prechargement attend
+@@ 4e3752839927 t
+image 160 = 2 s apres l'image 100 : l'heure qu'il est
+@@ 07cb1988af84 t
+a x3 : l'ordre de l'image 160 arrive a 0,7 s au lieu de 2 s
+@@ efc96922b220 t
+images 400 et 430 : 10 s et 11 s apres (le jingle dure 5 s)
+@@ 9681b086ba56 t
+2e fanfare, apres la fin de la 1re a vitesse normale
+@@ 26413618a021 d
+Test du mixage du son (categories, volumes, interrupteurs) sans fenetre ni carte son : les lecteurs de pyglet sont remplaces par de faux lecteurs qui gardent leur volume.
+
+python3 tools/test_sound_mixing.py
+@@ 5ad8e607d39a d
+Laisse finir les decodages de fond, puis tick() (le decodage tourne dans un fil).
+@@ 74e135843099 d
+SN : les musiques que le moteur demande puis arrete aussitot en combat (BGM 23 : defaite du groupe ; jingles) sont decodees d'avance et gardees en memoire.
+@@ abe6a9b5df0b d
+SN : un jeu accelere (combat x2, x3) enchaine les ordres de musique du moteur plus vite : la fanfare etait coupee (montee de niveau, BGM 47 de 3,1 s : 1,75 s a x3). Un ordre qui serait arrive apres le jingle
+a vitesse normale attend l'heure ou il serait arrive (image du moteur, 30 par seconde) ou la fin du jingle ; sans image du moteur, rien ne change. Horloge simulee ; jingle = BGM 8 (5 s), musique = BGM 2 (boucle).
+@@ 53281f29c505 d
+Marche acceleree : le moteur fait plusieurs pas (donc plusieurs tick()) a la suite dans la meme image affichee, juste apres l'ordre du bruitage de porte ou de sortie de village ; un lecteur qui ne se
+dit pas encore « en lecture » ne doit pas faire perdre le bruitage. Passe le delai de grace, un lecteur arrete est libere comme avant.
+@@ 16558fa4201b d
+Porte (309) puis transition de carte (305, demande par le moteur entre le debut du fondu et le chargement : voir test_transition_sfx) : le chargement de la carte bloque la boucle jusqu'a 0,5 s et le moteur
+fait plusieurs pas a la suite (marche acceleree) ; les deux bruitages restent joues, a leur volume, jusqu'a la fin de leur duree d'origine, puis sont liberes.
+@@ 7aa929b9146d d
+SE 409 (victoire) : volume et interrupteur de « Jingles et fanfares », mais l'option « bruitages » du jeu (pas celle de la musique).
+@@ 4850956411cf d
+Le moteur demande BGM 23 (tout le groupe est battu) : la musique part tout de suite, sans attendre un decodage que l'arret du moteur annulerait.
+@@ 13d2d8a9507f d
+Ce que le prechargement evite : musique non decodee, ordre puis arret avant la fin du decodage -> rien ne joue.
+## FILE tests/test_sound_music_limits.py
+@@ 50cf580f7029 t
+musique en boucle
+@@ 4769ebf9ac9f t
+musique sans boucle (comme BGM 1 et 34)
+@@ 3902b15ea647 t
+jingle (coffre)
+@@ 7867c56f73db t
+(la musique d'avant, en boucle, depuis le debut)
+@@ 4071606ac0df t
+fin du jingle : la musique d'avant reprend toute seule
+@@ 8bcf5b699f49 t
+(le premier relance la musique, le second l'arrete)
+@@ a1477a546d96 d
+#229 (audit SND-05 et SND-06) : deux cas limites de la musique, comme dans le jeu d'origine (Sound.StopBGM / PlayBGM de SoundControl).
+- Un arret de la musique PENDANT un jingle lance avec reprise (0x1000 | n) ne remet pas l'etat du jingle a zero dans Unity : la musique d'avant repart (depuis le debut). Sans jingle en cours, l'arret arrete.
+- Un morceau sans boucle arrive a sa fin n'est plus « en cours » : le redemander le relance. Un morceau en train de jouer (en boucle ou non) redemande n'est pas relance (le moteur ne le redemande pas).
+Sans fenetre ni carte son (faux lecteurs).
+    python3 tests/test_sound_music_limits.py
+## FILE tests/test_sound_text_settings.py
+@@ 529d5db2b798 t
+les anciens reglages sont conserves
+@@ 0d3236285a20 t
+= le comportement d'avant : Normal (vitesse et messages d'origine)
+@@ 8c69ce749b78 t
+valeurs absurdes : celles par defaut
+@@ 49602183439a t
+rien n'etait impose : rien ne l'est apres la migration
+@@ 4ae240daeba2 t
+(le moteur garde la duree d'origine)
+@@ 70003a166f5a t
+l'accelerateur garde son curseur (1 a 2)
+@@ 2e22eb07ad02 d
+Test des reglages ajoutes (son par categorie, vitesse du texte, defilement des combats, vitesses x1 a x4) : un ancien reglages.json reste valide (migration des anciens curseurs et de l'ancien defilement des combats), les valeurs absurdes sont ramenees.
+
+python3 tools/test_sound_text_settings.py
+@@ f30d312228c8 d
+Anciens reglages « Defilement automatique » (oui / non) + « Vitesse de defilement » (0 a 3), puis « Messages en combat » (0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) -> « Vitesse de combat » : seul « a la main » (impose) a un equivalent : Manuel.
+@@ c19cac655f2e d
+Le cran « Normal » (4 lettres par image) est la vitesse standard du jeu : c'est la valeur que la regle de priorite du jeu (game_priority.letters_per_frame) remplace par le reglage du joueur, et celle qui ne change rien.
+@@ 02f57f9d0545 d
+#101 : les transitions restent a la duree du jeu (x1), ce n'est plus un reglage. Un ancien fichier qui avait x2, x3 ou x4 se charge sans erreur, la cle est ignoree et n'est plus reecrite.
+@@ ba849a882301 d
+Anciens curseurs (0,5 a 2) -> le cran x1 a x4 le plus proche (a egalite le plus rapide), jamais moins que x1.
+## FILE tests/test_sound_volumes.py
+@@ a9b9234db5cb t
+(table plus courte : valable pour ses indices, 1,0 au-dela)
+@@ 9bb3eb183189 t
+(0, > 1, nan, negatif : pas de silence ni de gain)
+@@ 70c5dc013ab4 t
+(BGM14 : 1,0, inchangee)
+@@ e759c6126249 t
+curseur x option du jeu x en-tete x snd_vol
+@@ 7c0d56cc6666 t
+(un reglage change plus tard garde le facteur du fichier)
+@@ 3c4c126a4f69 d
+#237 (audit SND-01, sondage du 04/11/2026 : « aligner sur l'original ») : le volume de chaque son est celui de l'en-tete du fichier multiplie par `assets/sound/snd_vol.dat` (1171 flottants, indices = numero de fichier
+BGM ou numero de bruitage), comme `SoundControl.Play` d'Unity : 49 musiques de 0,7 a 0,95 et la fanfare SE0409 a 0,6. Fichier absent ou indice hors table : 1,0.
+Sans fenetre ni carte son (faux lecteurs, faux APK).
+    python3 tests/test_sound_volumes.py
+@@ c9cf8101bb5d d
+Un faux APK (zip) qui contient assets/sound/snd_vol.dat (ou rien si table est None).
+## FILE tests/test_special_sheets.py
+@@ 29546839a5a0 t
+panneau de 0,8 x 0,8 : 40 pixels de carte, le hero (0,48 x 0,64) en fait 24 x 32
+@@ af73756ab4ee t
+navire : rangees 0 a 3 pleines, la 4e a 8 cases
+@@ af130658ea17 t
+sillage : rangees 5 a 8 pleines
+@@ c40387d5993f t
+rien apres la rangee 9 (nl = 10)
+@@ f85c0cbb0a8e d
+#210 (audit SPR-01) : decoupage des feuilles de sprites. Un personnage = cases de 24 x 32 sur 3 colonnes (4 ou 8 rangees) ; le bateau de la carte du monde (h193 ; 194 = alias) = cases de 40 x 40 sur 12 colonnes
+(navire : rangees 0 a 4, sillage : rangees 5 a 9) et panneau de 0,8 x 0,8 (au lieu de 0,48 x 0,64). Sans fenetre ni moteur (numpy seul) ; avec la vraie feuille h193 si elle est dans le cache (DQ_CACHE_CARTES).
+    python3 tests/test_special_sheets.py
+@@ e1ab55b6b7ea d
+Feuille tw x th ou chaque case a sa couleur : (rouge = colonne + 1, vert = rangee + 1).
+@@ 0cf4d25d0aeb d
+La case (colonne, rangee) de l'atlas, lue avec `uv_cell` (celle du dessin), a bien la couleur de la case (colonne, rangee) de la feuille.
+## FILE tests/test_speed_button.py
+@@ 0a4b72607988 t
+cadre des commandes 459 unites x 1,1111 = messages d'action du combat (types 2 et 3 : 510 unites)
+@@ 2d2070d472bf t
+et centre au meme endroit : meme bord gauche
+@@ 7a73bfb15d45 t
+le joueur a remis 100 % apres la migration : son choix fait foi
+@@ fcfb415dac44 t
+ancre de secours (boite des messages), pas le bas du bandeau (y = 655)
+@@ c8f823d2e912 t
+plus de boite : l'ancre reste
+@@ fbfd63e7a9f7 t
+place choisie par le joueur
+@@ dede379daff0 t
+menus simples : position de la grille
+@@ 417dadbb0810 t
+absente, vide ou illisible : le defaut
+@@ 677e0607171b t
+case (0,4 ; 8) de la grille : bord gauche
+@@ e86f974e1cc5 t
+(jamais sous la boite du bas : x ~ 380 a 460)
+@@ 4d6174bf5ec4 t
+plaque d'origine du bouton, pas celle de « Fuir »
+@@ 8dc744859c00 t
+mode rattache a la boite du bas (defaut de #47) ; le defaut depuis #188 (bord gauche) : RealBattleLeftEdge
+@@ d2ce45536b08 t
+(avant : x = 16, y = 346 pendant 4 images)

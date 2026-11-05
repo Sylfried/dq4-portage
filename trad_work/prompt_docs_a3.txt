@@ -1,0 +1,25 @@
+Tu traduis du français vers l'anglais des morceaux de documentation Markdown d'un projet (portage PC de Dragon Quest IV). Chaque morceau est un extrait d'un fichier .md ; une autre étape les remettra bout à bout, donc la structure doit rester IDENTIQUE.
+
+Dossier de travail : `/tmp/claude-0/-home-claude/45fdf246-f4ad-5078-9633-8be9ccf9e9c9/scratchpad/trad/`
+- À lire d'abord : `GLOSSARY.md` (vocabulaire et conventions imposés : tous les traducteurs doivent employer les mêmes termes ; la section « Pilot feedback » à la fin et les lignes qui la suivent comptent aussi).
+- Tes morceaux : `docs__archives__agent-reports-40-44.md.011.in.md`, `docs__archives__agent-reports-40-44.md.012.in.md`, `docs__archives__agent-reports-40-44.md.013.in.md`, `docs__archives__agent-reports-40-44.md.014.in.md`, `docs__archives__agent-reports-40-44.md.015.in.md` (dans `docs/`, fichiers `*.in.md`). Pour chacun, écris `docs/<même nom>` avec `.in.md` remplacé par `.out.md`.
+
+## Règles de traduction
+- Fidèle et complet : même sens, rien d'ajouté, rien de retiré, même ordre ; anglais technique naturel, ton neutre. Le français est parfois sans accents (ASCII) : c'est du français.
+- Structure IDENTIQUE : mêmes titres (`#`) dans le même ordre et aux mêmes niveaux, mêmes lignes de tableau (même nombre de colonnes `|`), mêmes puces et numéros, mêmes blocs de code (lignes ```), mêmes liens `[texte](cible)` (la cible ne change JAMAIS, même un lien vers un titre ; traduis seulement le texte du lien), mêmes lignes vides. Une ligne source = une ligne traduite (n'en fusionne ni n'en coupe aucune).
+- Ancres : si un lien interne pointe vers un titre (`#titre-en-francais`), laisse la cible telle quelle (une étape ultérieure recalculera les ancres).
+- Blocs de code et commandes : ne change rien, sauf les commentaires français (`# ...`) à l'intérieur, qui se traduisent. Les messages de programme affichés en français dans un bloc de code restent tels quels.
+- NE CHANGE PAS : identifiants (`Game._loop`, noms de fonctions, variables), noms de fichiers et chemins, options de ligne de commande (`--largeur`...), variables d'environnement (`DQ_*`), nombres, valeurs hexadécimales, code entre accents graves, numéros d'issues (#123), de PR et de décisions (D-123, SVC-03...), noms de personnages et de lieux du jeu, noms de sorts, objets, menus et libellés du jeu (restent en français entre guillemets, ex. "Premiers secours", "Coût en PM"), titres de PR commençant par « Avance #N : ... » et titres d'issues GitHub cités en entier (ils restent en français tels qu'ils sont sur GitHub).
+- Citations de Sylfried (le propriétaire du projet), entre « » ou en italique : garde le français EXACTEMENT, suivi immédiatement d'une glose anglaise entre parenthèses : « Si c'est comme ça dans le jeu tu laisses » (EN: "If that's how it is in the game, leave it"). Une citation déjà accompagnée de sa traduction ne reçoit pas de seconde glose.
+- Dates : 05/11/2026 devient 2026-11-05 ; « 05/11 à 10 h 40 » devient 2026-11-05 10:40 (garde l'année si elle est dans le texte). Virgule décimale → point (2,8125 → 2.8125). Milliers : 1 620 → 1,620. Guillemets « » → guillemets droits " ".
+- Mots d'état : établi / supposé / non vérifié → established / assumed / not verified. « tu / ton / ta » (adressé à Sylfried) → you / your. « Avance #N » en tant que nom de PR reste « Avance #N ».
+- Anciens noms français d'identifiants ou de fichiers renommés : écris le nom actuel s'il est évident (table `ancien<TAB>nouveau` : `/home/claude/dq4-portage/docs/rename_identifiers.tsv`, et `/home/claude/dq4-portage/docs/rename_map.md` pour les fichiers et dossiers). DANS les documents d'historique qui racontent le renommage (rename_map.md, history.md, decisions.md quand elles décrivent l'ancien et le nouveau nom), garde l'ancien nom tel quel : il fait partie du récit.
+- Orthographe américaine. Pas de commentaire de ta part, pas de « translated by », pas de texte avant ou après le morceau.
+
+## Méthode
+1. Lis `GLOSSARY.md`. Lis chaque morceau avec l'outil Read (par tranches si besoin ; ils font ≈ 30 Ko).
+2. Écris la traduction complète du morceau avec l'outil Write dans `docs/<nom>.out.md`. Pour un morceau long, écris-le en deux appels successifs : Write de la première moitié, puis ajoute la seconde avec Bash `cat >> fichier <<'EOF'` — les coupures doivent tomber entre deux lignes complètes.
+3. Contrôle : `python3 -I /tmp/claude-0/-home-claude/45fdf246-f4ad-5078-9633-8be9ccf9e9c9/scratchpad/trad/docs_check.py docs/<nom>.in.md docs/<nom>.out.md` (depuis le dossier de travail). Il signale : titres, blocs de code, lignes de tableau, liens différents (BLOQUANT : corrige), nombre de lignes très différent, ELEMENTS PERDUS (un nombre, identifiant ou code a disparu : vérifie et rétablis sauf faux positif évident), FRANCAIS ? (du français reste : traduis, sauf citations et libellés du jeu autorisés). Corrige jusqu'à zéro bloquant et zéro avertissement non justifié.
+4. Réponds en 3 lignes : nombre de morceaux traduits, avertissements restants et pourquoi, termes qui t'ont posé problème (que le glossaire devrait préciser).
+
+Ne touche à aucun autre fichier que tes `docs/*.out.md`.

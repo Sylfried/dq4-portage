@@ -1,0 +1,109 @@
+usage: dq4_pc [-h] [--apk APK] [--saves-lecture SAVES_READ]
+              [--saves-ecriture SAVES_WRITE] [--cache CACHE] [--slot SLOT]
+              [--sans-logos] [--logos] [--largeur WIDTH_PX]
+              [--hauteur HEIGHT_PX] [--auto-message AUTO_MESSAGE]
+              [--ui-simple] [--clics CLICKS] [--msg-origine]
+              [--ui-pos {centre,droite,gauche}] [--sans-preparation] [--hd HD]
+              [--sans-son] [--volume-musique MUSIC_VOLUME]
+              [--volume-bruitages SFX_VOLUME] [--plein-ecran {0,1,2}]
+              [--correction-bords 0-100] [--msaa MSAA] [--reglages SETTINGS]
+              [--historique HISTORY] [--script-combat BATTLE_SCRIPT]
+              [--shots-effet SHOTS_EFFECT] [--shots-combat SHOTS_BATTLE]
+              [--images-combat IMAGES_COMBAT] [--force-champ FORCE_CHAMP]
+              [--touches-test KEYS_TEST] [--options-test OPTIONS_TEST]
+              [--shots-boucle SHOTS_LOOP] [--shot SHOT] [--images FRAMES]
+              [--script SCRIPT]
+
+options:
+  -h, --help            show this help message and exit
+  --apk APK             folder of the 3 APK files (French version); default
+                        data\apk
+  --saves-lecture SAVES_READ
+                        extra read-only folder containing data1.dat... (tests;
+                        default: none, the game reads and writes in
+                        data\saves)
+  --saves-ecriture SAVES_WRITE
+                        saves folder (data1.dat... read and written by the
+                        game); default data\saves (savestates are in
+                        data\saves\savestates)
+  --cache CACHE         folder of the files computed from the APKs; default
+                        data\cache
+  --slot SLOT           save number to load directly (1-5), skipping the title
+                        screen; 0 (default) = the game starts with its logos,
+                        its title and its start menu
+  --sans-logos          skips the intro logos (SQUARE ENIX, ArtePiazza)
+  --logos               (test) plays the logos even for a screenshot
+  --largeur WIDTH_PX    window width (default: the one from the Esc menu,
+                        otherwise 1280)
+  --hauteur HEIGHT_PX
+  --auto-message AUTO_MESSAGE
+                        automatically closes the message shown after loading
+  --ui-simple           simple menus (text boxes) instead of the original
+                        windows
+  --clics CLICKS        (test) simulated mouse clicks:
+                        "frame:x:y,frame:x:y:d,..." (d = 1 right click, 2
+                        hover without click)
+  --msg-origine         keeps the field message window at its original
+                        (portrait) position instead of moving it to the bottom
+                        of the screen
+  --ui-pos {centre,droite,gauche}
+                        position of the original interface column (portrait
+                        450 x 800) in the 16/9 window
+  --sans-preparation    (test) does not prepare the map, sprite and monster
+                        cache in the background
+  --hd HD               sprites: 0 original (sharp pixels), 1 EPX, 4 pixel
+                        perfect (2 and 3, removed, count as 1); default: the
+                        one from the Esc menu
+  --sans-son            turns the sound off for this session (the Esc menu can
+                        turn it back on)
+  --volume-musique MUSIC_VOLUME
+                        music volume (0 to 1); default: the one from the Esc
+                        menu
+  --volume-bruitages SFX_VOLUME
+                        sound effects volume (0 to 1); default: the one from
+                        the Esc menu
+  --plein-ecran {0,1,2}
+                        0 = starts the game in a window, 1 = full screen
+                        (borderless window at the desktop resolution); 2
+                        (former exclusive full screen, removed) counts as 1;
+                        the window is created directly in this mode; default:
+                        the Esc menu setting (test screenshots stay windowed)
+  --correction-bords 0-100
+                        (debug) correction of the tilt of town sprites near
+                        the left / right edges of the screen, as a percentage:
+                        0 = none (the original billboard, leaning outwards),
+                        100 = full; default always full, it is no longer a
+                        player setting (environment variable
+                        DQ_CORRECTION_BORDS for the same thing)
+  --msaa MSAA           hardware antialiasing (0 = none, 4 = x4); default: the
+                        one from the Esc menu
+  --reglages SETTINGS   player settings file (Esc menu: display, sound, keys)
+  --historique HISTORY  history favorites file (in data\settings, never in the
+                        saves folder); the rest of the history is not kept
+  --script-combat BATTLE_SCRIPT
+                        (test) keys during a battle: "n:mask,..." (n = frames
+                        since the start of the battle)
+  --shots-effet SHOTS_EFFECT
+                        (test) screenshots at these frames of the battle start
+                        effect: "1,10,30,..."
+  --shots-combat SHOTS_BATTLE
+                        (test) intermediate screenshots at these battle
+                        frames: "30,60,..."
+  --images-combat IMAGES_COMBAT
+                        (test) takes the screenshot N frames after the start
+                        of a battle
+  --force-champ FORCE_CHAMP
+                        (test) forces the switch to the world map at this
+                        frame
+  --touches-test KEYS_TEST
+                        (test) pressed keys: "loop_frame:NAME,..." (pyglet
+                        names: ESCAPE, DOWN, RETURN...)
+  --options-test OPTIONS_TEST
+                        (test) Display page options applied along the way:
+                        "frame:Label=value;frame:Label=value" (JSON value)
+  --shots-boucle SHOTS_LOOP
+                        (test) screenshots <shot>_b<n>.png at these loop
+                        frames (Esc menu included); the last one quits
+  --shot SHOT           (test) saves a screenshot then quits
+  --images FRAMES
+  --script SCRIPT       (test) e.g. "20:2,30:0": frame:key mask

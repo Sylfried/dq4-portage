@@ -1,0 +1,878 @@
+## FILE tests/test_speed_button.py
+@@ 0aabce3685ac d
+Bouton de vitesse de combat (retours de 22 h 29, #47) : il ne doit jamais « apparaitre » au mauvais endroit (une image a gauche de l'ecran, ou sous le bandeau de l'equipe), et il ne doit pas se decaler quand un message
+d'action remplace le menu de commandes au debut d'un tour (cadre des commandes a la largeur des dialogues).
+
+    python3 tools/test_speed_button.py                                    (parties sans moteur : reglages, migration, ancre)
+    DQ_APK=<APK patches> DQ_SAVES=<sauvegardes> tools/session_flow/engine_slot.sh python3 -W ignore tools/test_speed_button.py
+        (ajoute le vrai combat : une rencontre forcee sur la carte du monde, position du bouton a CHAQUE image dessinee du debut du combat, en fenetre 1280 x 720 sans ecran (PYGLET_HEADLESS=1))
+Les sauvegardes ne sont ouvertes qu'en lecture. La « sonde » (--sonde journal.jsonl) est le programme que le test lance : une session complete de la visionneuse qui note le rectangle du bouton a chaque dessin.
+@@ 4aaf24488a72 d
+Lance une session (slot 4, rencontre forcee, on valide tout) et note, a chaque dessin du bouton en combat, son rectangle, le type du message et le menu actif.
+@@ 3e5e0a012d62 d
+Fenetre factice : seules comptent la boite des messages et les fenetres de commandes ; entre deux boites l'ancre ne bouge pas ; au tout premier dessin du combat elle existe deja.
+@@ 6253f51b8250 d
+DQ_VITESSE_ANCRE fixee (ou retiree : None) le temps d'un bloc.
+@@ d76c390c5010 d
+Boutons sur une fenetre factice (seuls comptent la taille de la fenetre, les reglages du bouton de vitesse et l'ancre eventuelle).
+@@ 228d8dd60891 d
+#188 (« pour le bouton d'acceleration du combat remets-le sur le bord gauche pour le moment ») : par defaut le bouton de vitesse de combat est a sa case de la grille, sur le bord gauche de l'ecran, jamais rattache a la boite
+du bas (DQ_VITESSE_ANCRE=1 redonne le rattachement de #47).
+@@ 39e7e936cea7 d
+Defaut depuis #188 (aucune variable) : a CHAQUE image dessinee du combat le bouton est sur le bord gauche de l'ecran, a sa case de la grille, et ne bouge jamais.
+@@ b6012e95b1ff d
+Sur la vraie mise en page : cadre des commandes x taille par defaut = cadre des messages d'action (a un demi-unite pres).
+@@ 4ec38b3708a9 d
+Mode rattache a la boite du bas (DQ_VITESSE_ANCRE=1, defaut de #47) : le bouton n'est montre que s'il a une place.
+@@ f0543ca00749 d
+Toutes les images dessinees du combat (de l'ecran noir qui suit la cascade au dernier message) : bouton en bas de l'ecran, au bord gauche des boites (x de 380 a 460 pixels sur 1280).
+@@ fa1f6e044546 d
+Le menu de commandes puis le premier message d'action (type 2 ou 3) : meme bord gauche, a une fraction de pixel pres.
+## FILE tests/test_stacked_yes_no.py
+@@ 99c6bc96e91f t
+(CI : ni pyglet ni fenetre)
+@@ b9cd03ad93b4 t
+même colonne
+@@ 40cb660ca59e t
+« Oui » n'a pas bougé
+@@ 9f91e263f24d t
+un panneau (48) + une unité
+@@ 2b34ae30a974 t
+le texte de « Non » a suivi sa plaque
+@@ 0024bb1cc339 t
+« Non » juste sous « Oui », une unité entre les panneaux
+@@ 3fd23e13d002 t
+(-10 ; 87) : deux panneaux l'un sur l'autre
+@@ 9a33cf8cdf5e t
+une seule colonne, celle de gauche
+@@ 34e56b0513d6 t
+mêmes bords gauche et droit
+@@ f71896153e8f t
+« Oui » (0) entièrement au-dessus de « Non » (1)
+@@ 709ae1079667 t
+une seule plaque : rien à empiler
+@@ 000b2274ccc2 t
+un autre type de fenêtre
+@@ d88a9792181b t
+dessin : colonnes 2 à 13, rangées 1 à 3
+@@ 3bb427c5a466 t
+sous le seuil : ne compte pas
+@@ 79743ca969b3 t
+rangée 1 sur 4 depuis le haut ; bas de la rangée 3 = bas de la case
+@@ a8ff0acdd902 t
+avec un seuil bas la rangée 0 (opacité 100, sur toute la largeur) compte : bords de la case entière
+@@ 3baf5b12e469 t
+boîte de dialogue : bords visibles
+@@ 16e6c175e0af t
+pile Oui / Non : bords visibles de sa mise en page d'origine
+@@ aa0b98fa9b54 t
+bas de la pile (décalé) = haut de la boîte + 1
+@@ c615cd40aa7a t
+(centre x, bas y, échelle) de la boîte
+@@ b646d402e0fa t
+bords droits
+@@ ebf3d4581ec5 t
+bord bas : ne bouge pas avec la taille
+@@ 6e0b62407261 t
+définition + dessin + aperçu de l'éditeur
+@@ 1cc71fc243ab t
+zones de clic = repère de dessin
+@@ 93c5833b7e53 d
+Oui / Non empilés en haut à droite de la boîte de dialogue, comme sur DS (D-231 ; demande de Sylfried du 04/11/2026 à 23 h 02 : « tu les mets l'un sur l'autre posé sur le coin en haut à droite de la boîte de dialogue
+avec les bords droits alignés »), sans fenêtre ni moteur :
+
+  1. `Window` de type 1 (Make_YesNo) : la plaque « Non » passe sous « Oui » (même colonne, une unité entre les deux), avec son texte ; son panneau du cadre la suit ; l'étendue verticale grandit d'un panneau, l'étendue horizontale
+     est celle d'une seule colonne ; les zones tactiles sont empilées (Oui en haut) ; une autre mise en page (pas deux plaques) n'est pas touchée ;
+  2. `visible_edges` : le bord VISIBLE d'une maille de cadre (les colonnes et les rangées de la feuille dont l'opacité dépasse le seuil), pas le bord de la maille ;
+  3. `_yesno_on_message` / `_ui_yesno` : la pile pose son bord bas VISIBLE `YESNO_BOX_SPACING` au-dessus du bord haut visible de la boîte, et son bord droit visible sur celui de la boîte, à toutes les échelles du joueur ;
+  4. (si le cache d'interface existe : DQ_UI_CACHE ou DQ_CACHE_UI, sinon /tmp/uicache4) la VRAIE mise en page : (-10 ; 87) sur une colonne de -134,5 à -0,5 ; clavier et clic inchangés (haut = Oui, bas = Non).
+
+    python3 tests/test_stacked_yes_no.py        (pyglet seul est nécessaire ; sans pyglet les tests sont passés)
+@@ 46bfccb1e232 d
+Mise en page minimale de Make_YesNo (même structure que l'export du jeu) : cadre (z 87) de deux panneaux de 134 x 48 (x -134,5..-0,5 et 0,5..134,5, une case chacun), deux plaques (x -67,5 et 67,5, z 62,5) et leurs textes.
+@@ bccb1f57b15e d
+Case de 10 x 6 unités sur une feuille de 16 x 8 pixels (la case couvre les colonnes 0 à 15, les rangées 0 à 3 : u de 0 à 1, v de 0 à -0,5).
+@@ c124384a5371 d
+Fenêtre qui ne sait que donner son étendue visible (x0, x1, z0, z1).
+@@ 03bb78d7897c d
+Sans pyglet : la pose est branchée aux endroits qui comptent (dessin, zones de clic, aperçu de l'éditeur).
+@@ 05eddfc63074 d
+Deux cases côte à côte : les bords sont ceux de l'ensemble.
+@@ d25e9895f644 d
+Quelle que soit la taille réglée par le joueur (v[0]), le bord droit de la pile est celui de la boîte (tant que le joueur ne la décale pas) ; le bord bas aussi autour de son pied.
+@@ 0ecff888074d d
+Sans mesure (bords = None) la pile garde son ancienne pose : x = centre de la boîte + décalage.
+## FILE tests/test_start_menu_plate.py
+@@ 74606c680fbc t
+MenuParts.BUTTON_STATE_*
+@@ cc9d80684cf0 t
+le code 0 l'emporte
+@@ 3a7d9a923f10 t
+le moteur : pas de data5.dat, pas d'etiquette (4, 1)
+@@ 546f230504ba t
+idempotent : appelee a chaque image
+@@ 63b1b7deb10e t
+visible, avec son etiquette
+@@ df5e73f93f33 t
+grisee
+@@ e10fe8be1846 t
+inactive : plus de zone tactile ; Continuer, lui, reste actif
+@@ 691d8cf983da t
+on ne remplace jamais l'etiquette envoyee par le moteur
+@@ 1392a680cb0e t
+data5.dat apparait : le moteur renvoie code et etiquette
+@@ 26c158ca64db t
+ni code ni etiquette : grisee (et notre etiquette de remplacement ne la « valide » pas a l'image suivante)
+@@ b774e1b39cd6 t
+etiquette du moteur (differente de la notre) sans code : disponible
+@@ 2b1c0d8012eb t
+une plaque grisee par le moteur (aucune banque) : meme regle
+@@ ef28d3a7cc55 t
+Continuer (grise par le moteur) et Sauvegarde automatique (grisee par la visionneuse)
+@@ 8e69b61a3852 t
+la sauvegarde auto existe : texte normal
+@@ 83e367c70757 t
+le jeu d'origine cache la plaque
+@@ 42970763a618 d
+Test de la logique pure de la plaque « Sauvegarde automatique » du menu de depart (type 53), sans fenetre ni moteur :
+
+1. etats d'un bouton (MenuParts.BUTTON_STATE_*) : normal et enfonce reagissent, invisible / grise / inverse ne reagissent pas (IButton : le test de contact est coupe) ;
+2. disponibilite de la sauvegarde auto : le code 0 du moteur (1 = data5.dat valide, 0 = absent) l'emporte ; sans code, l'etiquette envoyee par le moteur tranche ;
+3. `Window.auto_plate` : plaque TOUJOURS visible avec son etiquette ; sans sauvegarde auto elle est grisee (etat 3) et sort des zones tactiles (`buttons` : ni clic, ni survol, ni validation au clavier) ;
+   des que la sauvegarde auto existe : etat normal, etiquette du moteur, zone tactile ; les autres plaques (Continuer...) ne sont pas touchees ; l'ancien comportement (plaque cachee) reste disponible (DQ_AUTO_CACHEE).
+
+  python3 tools/test_start_menu_plate.py        (Linux sans ecran : pyglet en mode « headless »)
+@@ 1717de564ebd d
+Mise en page minimale du menu de depart : deux plaques (Continuer = bouton 0, Sauvegarde automatique = bouton 4), chacune avec son etiquette.
+## FILE tests/test_text_recentering.py
+@@ c1919a5f6b66 t
+SE-GARRIR : interligne, ascent, hauteur des majuscules (px de police)
+@@ 070316514c2d t
+capture du mobile : px par unite, centre vertical du bouton de cible (px depuis le haut)
+@@ 2ffac01e13d1 t
+ordonnee mesuree (px, vers le bas) -> unites relatives au centre du bouton (vers le haut)
+@@ 5964aa296e2d t
+« Rat volant » : ligne de base a y = 182 px
+@@ f4ff33b2765a t
+« Scarapince » : y = 165 px
+@@ d69fb6da2f61 t
+« x2 » (3e ligne) : y = 200 px
+@@ ff0757d22bcd t
+haut : le bloc pend sous l'ancre
+@@ 84ea62b5c520 t
+milieu
+@@ 80f8dda2f7bd t
+bas : le bloc monte au-dessus de l'ancre
+@@ 0249cdb74c42 t
+cibles : 6,5 unites (11 px a 1,688)
+@@ 93cb67ce53f9 t
+plaques de monstres
+@@ 4a009222ed08 t
+onglets, boutons, noms
+@@ e4595a390c04 t
+PV / PM / Nv. et listes : inchange
+@@ 6da088a61836 t
+milieu des majuscules
+@@ 47410141db90 t
+majuscules de la 1re ligne ... ligne de base de la 3e
+@@ 5bb490543042 t
+le bloc tient dans le bouton (demi-hauteur visible 24,3 unites) : « x2 » ne touche plus le bas
+@@ a5a52ac9e4ba d
+Test du placement vertical des textes de menu (TextMesh d'Unity avec la police SE-GARRIR), logique pure, sans fenetre ni moteur :
+
+1. `first_line_baseline` reproduit le jeu d'origine : lignes de base mesurees sur la capture du mobile (ecran4 : bouton de cible « Rat volant » = 1 ligne, « Scarapince / x2 » = chaine « Scarapince\n\n\t x2 » = 3 lignes ;
+   bouton de 82 px de haut centre a y = 159,2 ; echelle 1,688 px / unite ; characterSize 9,945, lineSpacing 0,441, ancre MiddleLeft) a 0,6 unite pres ;
+2. `text_recentering` : ecart de l'encre au centre de la boite de ligne (nul pour lineSpacing >= 1, borne par DQ_TEXTE_ORIGINAL) ; apres recentrage le milieu des majuscules d'une ligne unique est a moins de 0,6 unite du point d'ancrage,
+   pour tous les lineSpacing du jeu (0,441 a 1) ; le bloc de 3 lignes (« Scarapince / x2 ») est centre sur l'ancre a moins de 1 unite.
+
+  python3 tools/test_text_recentering.py        (Linux sans ecran : pyglet en mode « headless »)
+## FILE tests/test_text_scrolling.py
+@@ d4ad73a77982 t
+menu de commandes -> « Parler » : le message de la scene s'ouvre
+@@ cfc7d9604359 t
+(le message ne doit toujours pas bouger : la boucle ci-dessus avait deja attendu 150 images)
+@@ b7d545ba6102 t
+ecriture lente : le temps est dans les lettres, a l'image pres
+@@ 0e93a5e1cf3e t
+BattleAutoFeed::setMessageSpeed : attente en images selon OptionStatus.battleSpeed
+@@ 5568f5805913 d
+Tests objectifs (sans fenetre) de la vitesse du texte et du defilement des messages de combat.
+
+Le moteur d'origine tourne sous Unicorn ; on compte des IMAGES DU MOTEUR (30 par seconde), pas du temps :
+  - texte : images entre l'ouverture d'un message de dialogue (ui_MsgLoop actif) et la fin de l'ecriture de sa premiere page (etat 3 ou 5 : attente d'une touche) ;
+  - defilement : images pendant lesquelles un message de combat attend avant de passer seul au suivant (ui_MsgLoop etat 5 sans menu de commandes), selon OptionStatus.battleSpeed.
+
+Usage (depuis la racine du depot) :
+    python3 tools/test_text_scrolling.py --apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" [--slot 4]
+Les sauvegardes ne sont ouvertes qu'en lecture : le moteur ecrit dans un dossier temporaire.
+@@ 3bb98d175531 d
+(images entre l'ouverture du message et la fin de sa premiere page, lettres de la page).
+@@ 0797e932220a d
+Attentes (en images) des messages de combat qui passent seuls, defilement impose = code. Renvoie (liste des attentes, option du jeu a la fin).
+@@ 9cd4fe665b91 d
+Defilement a la main : un message de combat reste affiche tant qu'on n'appuie pas (150 images sans touche), puis passe a la touche A.
+@@ 43ff3c319633 d
+Un message de dialogue (hors combat) attend la touche 400 images meme avec le defilement automatique de la sauvegarde : renvoie True s'il n'est pas passe seul.
+## FILE tests/test_title_camera.py
+@@ 735a8a8b6207 t
+camera du titre relevee dans le moteur (image 400)
+@@ 482eff07cb83 t
+points de la scene du titre (logo, ile, dragon)
+@@ 46ebff901de2 t
+sans sprite, et avec le sprite 0 charge mais cache
+@@ 40100292dbb0 c
+---- retour de 22 h 29 : le titre doit etre centre, a toute taille de fenetre (la camera est toujours centree sur le heros : le titre, sans heros, est exempte)
+@@ 895ed6488b20 d
+Test de la camera de l'ecran-titre (carte ev01), sans fenetre ni moteur : `Game._town_camera` est appelee sur un faux objet, comme dans test_town_camera.py.
+
+1. le titre est NO_DEFAULT heros (le moteur charge pourtant le sprite 0, cache) : la scene est celle de l'original, champ horizontal fixe (fov x 4/3) a l'ecran portrait 0,5625 ; la formule « le heros prend une fraction de la
+   hauteur » ne s'y applique pas (avant : zoom de 1,185, logo plus large que la zone portrait) ;
+2. la meme camera, une fois la fenetre elargie, garde la zone portrait du milieu 1 pour 1 : un point de la scene projete a la meme distance (en pixels) du centre, a la meme hauteur, en 1280 x 720 (zone 405 x 720)
+   et dans une fenetre portrait 405 x 720 ;
+3. (retour de 22 h 29 : « le logo et le decor ne sont plus centres ») le titre est CENTRE a toute taille de fenetre : la cible de la camera (le milieu de la scene, x = 0) reste au milieu de l'image, meme si le sprite
+   du heros garde une position perimee. Depuis #264 la camera de TOUTES les cartes est celle du jeu (plus de zoom commun du heros, ni de centrage, ni de reste d'une partie precedente).
+
+  python3 tests/test_title_camera.py
+@@ 236395244c24 d
+x de la fenetre large : (ndc x) x (largeur / 2) = distance au centre en pixels ; y : ndc y x (hauteur / 2). La zone portrait de 1280 x 720 est la fenetre portrait 405 x 720.
+@@ 1f7924021ad2 d
+La cible du jeu (l'origine, au milieu du logo) est au milieu de l'image (NDC x = 0), meme avec un sprite 0 perime d'une partie precedente a 10 u de la cible (le centrage sur le heros ne vaut pas pour le titre).
+@@ 38875c91c172 d
+Deux points de la scene symetriques par rapport au plan vertical de la camera (x = +/- a, meme profondeur) donnent des NDC x opposes : rien ne penche d'un cote, a aucune taille.
+## FILE tests/test_title_centering.py
+@@ 24c08d9f4485 t
+lettrage rouge-violet du logo
+@@ d59711536f34 t
+dessous orange de l'ile du chateau
+@@ 38c3fccc8f8e t
+(l'ile est dans le tiers bas ; plus haut, des ailes de dragon et des bords dores du logo sont aussi orange)
+@@ fe0f31818cb3 t
+reglages par defaut (l'option « Centrer la camera » n'existe plus : la camera est toujours centree, le titre en est exempte)
+@@ 2a4f5f393c49 d
+Test du centrage de l'ecran-titre sur le RENDU reel (retour de 22 h 29 : « pourquoi le logo et le decor ne sont plus centres ? »).
+
+La visionneuse est lancee (moteur d'origine, rendu Mesa sans ecran ; avant la correction, les bornes 16/9 de la carte glissaient la camera du titre de 4,5 unites quand l'option « Centrer la camera »
+sur le joueur etait sur Non, option supprimee depuis) a trois formats (16:9 de 1430 x 815, 4:3, 21:9), et on mesure sur la capture de l'image 700 (dragon au-dessus du logo, avant « Touchez l'ecran ») :
+  1. le barycentre du logo (pixels rouge-violet du lettrage) est au milieu de la fenetre, a quelques pixels pres : decalage horizontal / hauteur de la fenetre < 0,03 (avant la correction : 0,29) ;
+  2. ce decalage est le meme (a 0,004 pres) a tous les formats : le placement du logo est celui du jeu pour le cadre portrait central, quel que soit le format de la fenetre ;
+  3. pas de bande noire dissymetrique : les 8 colonnes de chaque bord ne contiennent aucun pixel noir (le ciel remplit toute la fenetre) ;
+  4. le chateau (ile orange) est a droite du logo, a la meme distance (en hauteur de fenetre, a 0,01 pres) a tous les formats.
+
+    python3 tools/test_title_centering.py --apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" --cache "<dossier du cache d'interface, avec ui_layout.json>"
+(ou les variables DQ_APK, DQ_SAVES, DQ_UICACHE ; sans elles les tests sont ignores). Un test dure environ 40 s par format ; a lancer par `tools/session_flow/engine_slot.sh`.
+@@ 2cbb42f8d014 d
+(decalage horizontal du logo, ecart logo -> ile, colonnes noires de bord), en hauteurs de fenetre / pixels.
+## FILE tests/test_title_logo.py
+@@ dd4bb8c1dd23 t
+profondeur (ordre des couches) inchangee
+@@ 6909b48351ed t
+l'entree n'est pas modifiee
+@@ 8439686df6e0 t
+le logo agrandi tient dans 96 % de la largeur
+@@ 663f01e3ecaf t
+jamais plus petit que l'APK, meme si le logo d'origine deborde deja
+@@ 288da8ebd48d t
+8901 : logo + sous-titre ; 8900 : eclat anime
+@@ b33a5aa0821b t
+lettrage rouge-violet de « DRAGON QUEST »
+@@ de1778b2e86a t
+bande centrale : le « IV » seul (l'ile du chateau commence plus a droite)
+@@ f95dd0b72493 d
+Test du logo et du sous-titre de l'ecran-titre agrandis 1,5 fois (issue #108 ; d'abord 2 fois, ramene a 1,5 le 03/11/2026 a 21 h 05 ; ECART VOULU avec l'APK : demande de Sylfried du 03/11/2026).
+
+Partie 1 (sans moteur) : les fonctions pures de `pre_game` (`upscale_logo`, `logo_factor`) : x et y sont multiplies autour d'un point fixe, la profondeur ne change pas, le facteur est reduit
+dans une fenetre trop etroite (le logo ne deborde jamais) et ne descend jamais sous 1.
+
+Partie 2 (rendu reel, Mesa sans ecran) : la visionneuse est lancee avec le moteur d'origine a 16:9, 16:10, 4:3 et 21:9, a l'image 770 (logo, sous-titre, « Touchez l'ecran » au maximum de son clignotement),
+et une fois avec DQ_LOGO_ECHELLE=1 (le logo de l'APK, a 16:9) pour comparer. On mesure sur les captures :
+  1. la largeur du lettrage « DRAGON QUEST » (pixels rouge-violet) vaut 1,5 fois celle de l'APK (a 3 % pres), a tous les formats (en hauteurs de fenetre) ;
+  2. le logo reste dans la fenetre (aucun pixel du lettrage sur les 1 % de bord) ;
+  3. le bas du « IV » reste au-dessus du haut de « Touchez l'ecran » (zone calculee comme `Game._ui_reference` : 228 unites sous le centre, hauteur 41,48, echelle H / 800 x UI_ZOOM) d'au moins 2 % de la hauteur ;
+  4. le haut du logo reste dans la fenetre (a plus de 5 % du bord haut) ;
+  5. le logo est centre horizontalement (a 1 % de la largeur pres).
+
+    python3 tools/test_title_logo.py --apk "<dossier des APK patches>" --saves "<dossier des sauvegardes>" --cache "<dossier du cache d'interface, avec ui_layout.json et ap_taptostart.png>"
+(ou les variables DQ_APK, DQ_SAVES, DQ_UICACHE ; sans elles seule la partie 1 tourne). La partie 2 dure environ 2 minutes ; a lancer par `tools/session_flow/engine_slot.sh`.
+@@ b31cc18c2347 d
+Dict : largeur du lettrage (en hauteurs de fenetre), x0 / x1 / y0 (fractions de la fenetre), bas du « IV » (fraction de la hauteur, bande centrale), largeur / hauteur.
+@@ 657bfef07426 d
+Haut de « Touchez l'ecran » en fraction de la hauteur de la fenetre : centre 228 unites sous le centre de l'ecran, hauteur 41,48, echelle H / 800 x UI_ZOOM (Game._ui_reference, titre sans fenetre ouverte).
+## FILE tests/test_title_sky.py
+@@ 083d151197dd t
+fenetre portrait : tout est la zone
+@@ 0e871426060a t
+meme zone en pixels et en coordonnees d'ecran (la zone fait 2 x demi de la largeur de la fenetre / 2)
+@@ de7dffc8fe1e t
+pente 1 et glissement nul avec pente nulle au bord de la zone : raccord sans cassure
+@@ 9019beff1c21 t
+jamais de retournement du motif, etirure de 0,52 a 1,48 au plus
+@@ 6817292ef19f t
+meme echelle que l'original en moyenne
+@@ b1bf630b8db8 t
+pas de symetrie gauche / droite
+@@ a189639e444b t
+ecart de plus d'un dixieme de carreau en plusieurs endroits
+@@ 293f1fb867fb t
+et presque partout : le motif est decale d'au moins 3 % de carreau sur plus de la moitie de la bande
+@@ 1855a9558b4e t
+tries de bas en haut
+@@ e0a15778ba75 t
+rangees contigues
+@@ d76265d7f210 c
+u(x) = celui des quadrilateres de la rangee, partout dans l'objet, et il se repete au-dela
+@@ d874fab29a57 t
+rangees decalees d'un demi-carreau
+@@ b90b34b17f6d t
+sommet hors de l'alignement des quadrilateres
+@@ 5f95eed080d7 t
+motif non periodique
+@@ cb73c9f4a094 t
+sommets des bandes : hors de la zone, a la marge des rangees inclinees pres
+@@ 3866af7aafbc t
+points de la zone sur la rangee, de bas en haut : leur abscisse monde est entre les bandes
+@@ 49f829cbbce7 c
+abscisse monde qui projette en xn (dichotomie) : doit etre dans [zb, zh]
+@@ 7e876db333e5 t
+chaque bande (rangee, cote) a ses propres sommets (les rangees voisines partagent un bord y, z)
+@@ 676a5a973c85 t
+decalage identique sur toute la bande (une rangee, un cote) : la texture glisse d'un bloc
+@@ cbb1b4f42c0b t
+le motif de l'objet avance de 3 unites : u change de taux x 3 (modulo un carreau, 0,996 : le u d'origine est replie dans [0,002 ; 0,998])
+@@ 6b5cf303c5ce t
+portrait (ou plus etroit) : ciel d'origine, rien a agrandir
+@@ f954d0efe8fb t
+plus la fenetre est large, plus le zoom est fort
+@@ 7688302e8433 t
+la demi-fenetre agrandie = la demi-zone portrait d'origine : pas de repetition horizontale
+@@ 770a294ae003 t
+(jamais un zoom arriere)
+@@ ae36ca940f98 t
+valeur illisible : calcul normal
+@@ a0c08b96227d t
+x et y d'ecran multiplies
+@@ 0c47f32df2de t
+profondeur et w intacts
+@@ 79763ee706ce t
+(M n'est pas modifiee)
+@@ 2ff7c9acf7c2 t
+G(0) = 0 : pas de decalage au bord gauche
+@@ 43f8449cd66c t
+comme l'etirure des bandes : jamais de retournement, 0,52 a 1,48
+@@ 775c495d292b t
+echelle d'ensemble 1 : la vague oscille autour de l'identite, sans derive
+@@ 915381236a00 t
+le motif ne revient pas identique une tuile plus loin
+@@ 023a26dcf33e t
+deterministe
+@@ 2f160764155c t
+(la vague verticale existe)
+@@ a26d3d0095d5 t
+le ciel couvre toute la hauteur
+@@ d93b465b5a6d t
+et toute la hauteur de la texture (pas de zoom supplementaire)
+@@ 36f380b6debd t
+toute la largeur
+@@ 262919666294 t
+~ `aspect` tuiles sur la largeur (texture carree), a la vague pres
+@@ c7a429914c9b t
+plus la fenetre est large, plus la texture se repete (jamais etiree)
+@@ 71f895c59c0a t
+portrait : moins d'une tuile
+@@ 1379bd0c15c7 t
+la vague est fixe a l'ecran
+@@ e7bb157d8b1f t
+periode 1 tuile : (texture en REPEAT) rien a recaler
+@@ 45d45384e6d1 t
+aucun triangle retourne
+@@ 13f90f46d13e t
+l'aire totale = rectangle couvert : pas de trou ni de recouvrement
+@@ 9fc866a7c8cc t
+au fond
+@@ ca34bfe28047 t
+ordonnees d'ecran strictement croissantes
+@@ d8d36ae396b4 t
+orange en bas et en haut, comme les rangees d'origine
+@@ ab3552f6cf16 t
+blanc au milieu
+@@ d27cb0060518 t
+chaque sommet a la couleur du degrade a son ordonnee
+@@ a377a271ae33 t
+blanc au milieu, orange en haut de la fenetre
+@@ b9ac88b0fe80 t
+sans degrade : blanc
+@@ ab9872bea034 t
+w < 0 partout
+@@ 3434f380598e t
+repli : degrade blanc (jamais d'erreur)
+@@ 7377a52b1f46 d
+Test de la logique pure du ciel de l'ecran-titre en format large (`dq4_pc/title_sky.py` : sans fenetre, sans moteur, sans APK) :
+
+1. zone portrait (colonne 9:16 du milieu) : 1280 x 720 -> 405 px de large, centree ; 720 x 1280 -> toute la fenetre ; demi-largeur normalisee ;
+2. deformation de la texture : G(0) = 0, pente 1 au bord, pente toujours entre 0,52 et 1,48 (jamais de retournement), echelle d'ensemble conservee, deterministe, differente a gauche et a droite,
+   et le motif ne revient pas identique un carreau plus loin (c'est tout l'objet : « on voit trop le pattern repetitif ») ;
+3. analyse de l'objet « kumo » (reconstitue ici a l'identique : 4 rangees de 3 carreaux de 11,5, decalees d'un demi-carreau) : rangees, periode, u exact, refus des structures inattendues ;
+4. bandes : aucun sommet dans la zone portrait (le ciel d'origine y reste intact), raccord continu au bord (u et v du ciel d'origine, a toute position du defilement), memes sommets / couleurs que les rangees,
+   meme sens de parcours des triangles que les quadrilateres d'origine, rien a ajouter en portrait, plus de bandes quand la fenetre s'elargit.
+
+5. essai #130 (ciel agrandi au lieu de bandes) : `screen_zoom` (1 en portrait, 16/9 : x 3,16, 21/9 : x 4,15, `DQ_CIEL_ZOOM` force une valeur) et `zoom_matrix` (x et y d'ecran multiplies, profondeur intacte) : la fenetre
+   entiere ne montre alors que la largeur de la zone portrait d'origine, donc moins d'un carreau ;
+6. rendu a plat par defaut (#174) : la texture a la hauteur de la fenetre (v de 0,998 a 0,002 sur toute la hauteur, a tout format), se repete sur la largeur (u s'etend de `aspect` carreaux), effet de vague (`stretch_plate`,
+   `flat_sliding`) fixe a l'ecran et jamais retourne, defilement = decalage de u seul, degrade de teinte des rangees d'origine (`screen_gradient`), triangles tous de meme sens, sans trou.
+
+  python3 tools/test_title_sky.py
+@@ 345f41e49771 d
+Meme forme que `window.matrix` (reecrite ici : pas de pyglet).
+@@ 7e1b19e5ef76 d
+Camera du titre telle que la calcule le portage (valeurs relevees dans le moteur a l'image 400 : position (0, 27,70, -34,18), cible (0, 0, 0), fov 10, tangage 3,019 ; SceneCamera.Update).
+@@ 185aacb797c1 d
+Sommets (positions, uv, couleurs) du ciel du titre (objet 000_kumo2) : 4 rangees (y, z, couleur de sommet comme dans l'original), 3 carreaux de 11,5 par rangee coupes en deux quadrilateres de 5,75,
+u de 0,002 a 0,998 sur le carreau ; deux rangees sur quatre sont decalees d'un demi-carreau (u de 0,502 d'abord).
+@@ 98b739a55eff d
+Aire signee (dans le plan x, y) d'un triangle de 3 points.
+@@ 7eee90b62929 d
+Rendu a plat (#174) : texture a la hauteur de la fenetre, repetition sur la largeur, effet de vague.
+@@ a05b550f1c05 d
+Un carreau (11,5) plus loin, le motif est lu a une abscisse de texture differente : sans etirure G(d + 11,5) - G(d) = 11,5 partout (repetition exacte).
+@@ d68e39f0c60b d
+Aucun point de la zone portrait (|x d'ecran| <= demi, dans le champ) n'est recouvert par une bande : on projette les triangles et on teste un quadrillage de la zone.
+@@ 93d899f11a33 d
+Sommets de chaque bande au bord de la zone : u = celui du ciel d'origine a cette abscisse (decale du defilement de l'objet), v = celui du bord de la rangee, a toute position du defilement.
+@@ 0fdf8f45a1dd d
+Positions et couleurs des bandes ne dependent pas du defilement ; leur u en depend d'un decalage constant par bande (au bord de la zone la texture glisse comme l'objet : taux x dx).
+@@ 33cb968cfc6d d
+Tous les triangles des bandes tournent dans le meme sens que ceux du ciel d'origine (face visible identique).
+@@ c6a085e1f7c5 d
+A chaque abscisse d'ecran (hors zone) et chaque hauteur visible, le point du ciel est couvert par une bande : l'etendue des bandes depasse le bord de la fenetre.
+@@ 4496e978d9fb d
+Le glissement vertical est nul sur les bords haut / bas de chaque rangee (ils lisent la texture de v = 0 a 1 comme l'original : sinon couture visible entre les rangees decalees d'un demi-carreau) et agit a l'interieur.
+## FILE tests/test_town_camera.py
+@@ b474fb40f49f t
+euler Unity : cap, tangage vers le bas ; eulerAngles.x -= s_lookDownAdjust
+@@ 22eafb610fe5 t
+avance de s_distanceAdjust
+@@ ff12da92d522 t
+worldToCamera d'Unity (regarde vers -z)
+@@ f04489ccb9b2 t
+Matrix4x4.Perspective(fov x 4/3, 1 / aspect, near, far)
+@@ 0e176309e1b7 t
+[0] et [5] echanges : champ horizontal fixe
+@@ f32e5af82de1 t
+s_yOffset
+@@ 40b7794343e8 t
+(la position que le moteur envoie apres la rotation)
+@@ 212c6a6d4615 t
+la cible reste ou le jeu la met
+@@ ad4dc02aa7c1 t
+meme distance
+@@ 9b3814238e71 t
+meme hauteur, meme tangage
+@@ 489e1ae2b67f t
+cap + rotation
+@@ ff99379173d5 t
+(a droite : le cap avance vers +X)
+@@ 9e929b9ce808 c
+---- interpolation entre deux pas du moteur (Game._interpolate_camera)
+@@ 361544506a42 t
+(le cas a traiter : plus que le seuil d'un saut sur une seule coordonnee)
+@@ 96ef4e5e1128 t
+meme distance, meme hauteur
+@@ 120ae0f48e6f t
+camera vers -Z de la cible, tourne de part et d'autre de 180 degres
+@@ 5126e5f528cf t
+la cible est a mi-chemin
+@@ 72fc4234b550 t
+la cible a saute : changement de carte, plan de scene
+@@ b368aaf377fc t
+angle regle d'un coup (script du jeu, 90 degres en un pas) : coupure
+@@ b8e9cfa84b10 t
+jusqu'a ~20 degres par pas (vitesse x4 : 11,25) : une rotation, interpolee
+@@ d53036a12081 t
+(D-233 : la rotation de la visionneuse a cote du jeu, retiree en D-234)
+@@ 09254f560b86 t
+la camera ne s'accelere plus, et n'a plus d'inclinaison
+@@ b822f2394a4e t
+la vitesse de reference (x1) est celle du jeu : un cran de 2,8125 degres par pas, 84,4 degres par seconde
+@@ f462df4e8445 d
+Test de la camera des villes (sans fenetre ni moteur : `Game._town_camera` est appelee sur un faux objet). Depuis #264 elle est celle du jeu, et depuis D-234 la rotation gauche / droite du joueur l'est aussi :
+
+1. la matrice du portage = le pipeline d'Unity re-ecrit a part (SceneCamera.Update : LookAt, tangage - lookDownAdjust, avance de distanceAdjust, Perspective(fov x 4/3, 1/aspect) dont on echange
+   [0] et [5], s_yOffset) a l'ecran portrait d'origine (0,5625) ;
+2. elle ne depend QUE de ce que le moteur envoie (position, cible, champ, decalage, rotation libre) : ni du heros, ni de l'historique des images (aucun lissage, aucun centrage,
+   aucun reste qui glisse), ni zoom, ni inclinaison, ni rotation ajoutee par la visionneuse (D-233 la faisait a cote du jeu : elle « se teleportait » quand une scene du jeu prenait la camera) ;
+3. la rotation que le joueur donne par les boutons de camera DU JEU est dans la position de la camera que le jeu envoie : la vue la montre telle quelle (distance, tangage, place de la cible a l'ecran inchanges) ;
+   entre deux pas du moteur elle est interpolee en arc autour de la cible (`Game._interpolate_camera`), un angle regle d'un coup ou un changement de plan est une coupure ;
+4. les autres reglages et gestes du joueur sur la camera n'existent plus (zoom, distance, inclinaison, centrage, acceleration, molette).
+
+  python3 tests/test_town_camera.py        (Linux sans ecran : pyglet en mode « headless »)
+@@ cbb0066888c5 d
+Le strict necessaire : si la camera relisait un reglage du joueur retire (zoom, angle, distance...) ou un etat de rotation de la visionneuse (D-233), ce faux jeu leverait AttributeError.
+@@ c3b590e4a201 d
+-> (matrice, repere, faux jeu) : la camera de la ville pour l'etat `e` (le faux moteur est celui de `e`).
+@@ 8a26309f57de d
+SceneCamera.Update (mode avec cible) + NativeManager.cmd_camera, d'apres le code d'origine.
+@@ d44ce1e9ea9b d
+Le heros au centre, a l'autre bout de la carte, absent : meme image (la cible du jeu, bornee aux bords de la carte, fait foi ; la visionneuse ne recentre plus).
+@@ aee1d9d6924e d
+Aucun lissage, aucun reste : l'image ne depend que de l'etat envoye par le moteur a cet instant (marche, escalier, coupure de scene, retour de scene...).
+@@ 9d5ae53b1ca7 d
+Un escalier : la cible du jeu monte de 4 unites, l'image suit tout de suite (aucun retard comme l'ancien lissage de hauteur).
+@@ 6d29b7e9fefd d
+Camera libre d'une scene (paquet 11, bit 7 : position + angles) et decalage vertical : ce que le jeu commande, rien de plus.
+@@ e7eb79d58335 d
+La camera du jeu tourne autour de sa cible (boutons de camera du jeu, ou scene) : le jeu envoie la position tournee, la vue la montre sans rien y ajouter : distance, tangage et place de la cible a l'ecran inchanges,
+cap = cap d'origine + rotation (positive vers +X, comme la fleche droite).
+@@ 5009bd6db32f d
+Rien d'autre que ce que le moteur envoie ne change la vue : le faux jeu n'a ni rotation, ni poids de scene, ni verrou (D-233 en avait), et la vue est la meme quel que soit l'etat de la partie.
+@@ de9d38137d1f d
+Un cran de rotation (2,8125 degres) deplace la camera de plus de CAM_JUMP_TOWN sur une coordonnee quand elle est a 34 unites de sa cible (ev01, cbout : (0 ; 27,7 ; -34,18)) : l'ancienne interpolation coordonnee par coordonnee y voyait un saut,
+et la rotation restait a 30 pas par seconde. En arc autour de la cible : meme distance, cap intermediaire.
+@@ 7fca27ea5b21 d
+Une scene qui monte la camera ou l'approche de sa cible pendant qu'elle tourne : la hauteur et la distance suivent a mi-chemin (pas de marche d'escalier a 30 pas par seconde).
+@@ a2b69c8b2863 d
+Retires en #264 et qui ne reviennent pas : zoom / distance, inclinaison, centrage sur le heros, lissage de hauteur, acceleration de la camera. Reviennent en D-233 : la rotation gauche / droite et son recentrage.
+@@ d51d64b16ff2 d
+Les fils qui relient la camera au reste (on ne peut pas faire tourner la vraie boucle ici) : la visionneuse n'a plus de mise a jour de la camera par image ni d'etat de la TownCamera a lire (verrou, limite, scene : c'est le jeu qui decide),
+plus de rotation de la marche ni des rangees de sprites (le jeu envoie les directions deja relatives a sa camera) ; les boutons de camera partent avec les touches du pas, et le clic molette y est relie.
+@@ 55fabf496dd7 d
+Par defaut : Gauche > fleche gauche, Droite > fleche droite, vitesse de camera x1, sens du glissement non inverse. Visibles dans Commandes (voir test_pause_pages).
+@@ 1b86d79f6b37 d
+Un reglages.json d'avant #264 (distance, angle, vitesse de camera, touches Page haut / Page bas) se lit sans erreur : la vitesse de camera et le sens du glissement sont de nouveau valides et gardes ;
+les cles retirees (distance, angle, inversion haut / bas) ne sont pas reecrites.
+## FILE tests/test_transition_sfx.py
+@@ 38f0d7aa5473 t
+« Vitesse de transition » : 1.0 = comme le jeu ; 4.0 = le maximum du menu
+@@ a2284085a0b2 t
+images du fondu au noir de startTown / startField (UnitySetFade(0x101e))
+@@ 30e4f2b38931 t
+message d'accueil de la sauvegarde : A jusqu'a sa fermeture
+@@ dc285e5bb7ea t
+(quelques pas sur la carte du monde, l'entree du village est a gauche)
+@@ 3d8e783eebf2 d
+Test du bruitage de transition de carte (porte, sortie / entree de village, escalier, carte du monde <-> ville) avec la « Vitesse de transition » de la visionneuse.
+
+Cause (retours de 22 h 29 : « il n'y a toujours pas les bruitages de transition de map ») : le bruitage 305 de la transition n'est pas lance par Unity ni par la porte (celle-ci joue le 309 a l'ouverture) mais par
+Global::NativeExec, 15 images apres que startTown / startField ont lance le fondu au noir de 30 images (decompte de l'octet LIB + 0x258254) ; il n'est joue que si l'ancienne scene vit encore. Le chargement de la carte suivante
+arrive a la fin du fondu : dans le jeu d'origine, le bruitage est demande a mi-fondu. Avec un fondu raccourci (x3 : 10 images, x4 : 8 images ; marginal a x2 : 15 images), l'ancienne scene etait detruite avant les 15 images
+et le moteur ne demandait plus rien. Engine._exit_countdown remet le decompte a la meme proportion que le fondu ; la duree des fondus ne change pas.
+
+  1. calcul pur : proportion du fondu memorisee par State._fondu, ajustement du decompte (faux coeur) ;
+  2. moteur d'origine (DQ_APK + DQ_SAVES, sauvegarde 1 : Ragnar a Strattbourg) : la porte de l'eglise et la sortie du village vers la carte du monde, dans les deux sens, a chaque « Vitesse de transition » (x1 a x4) : un seul bruitage 305, demande entre le debut du fondu et
+     le chargement de la carte, apres le 309 de la porte ; fondu de la duree reglee ;
+  3. visionneuse (Son, faux lecteurs) : les deux bruitages restent joues jusqu'a leur fin quand le chargement de la carte bloque la boucle (voir test_sound_mixing).
+
+    DQ_APK=... DQ_SAVES=... python3 tools/test_transition_sfx.py
+@@ 30452027c25f d
+Memoire du moteur reduite a l'octet du decompte.
+@@ 1545712e88c2 d
+Un pas ou le moteur arme le decompte (15, deja decremente une fois : 14) et ou le fondu de cette sortie arrive.
+@@ 12e06cf09e66 d
+Marche dans `direction` jusqu'a la porte (ou la sortie du village) puis laisse la carte suivante se charger. -> [(image, genre, valeur)] : SE (paquet 35), FONDU (duree, paquet 9 vers le noir), CHARGE (premier paquet 0 ou 27 :
+decor de ville ou carte du monde), N (images du fondu apres son 1er pas : duree reglee - 1).
+@@ ec6b9201d214 d
+Le village (`maout`) s'ouvre sur la carte du monde a droite : sortie (startField, TownSystem::playTownExitSE) puis retour (startTown, FieldSystem::playFieldExitSE), memes bruitages 305.
+@@ 9dfa363840c8 d
+Sans fondu raccourci, rien ne change : le bruitage 305 est demande 14 images apres le fondu, comme avant.
+## FILE tests/test_turn_chaining.py
+@@ c1ff5a6a29c2 t
+Manuel : a la main (inchange) ; Normal, Rapide, Tres rapide : 12 images
+@@ 88a2991b8fe4 t
+l'animation du coup garde sa duree du jeu
+@@ f7d3ec529d99 t
+(ancien Normal : 23 images, 0,77 s)
+@@ 6cc1cc8ec669 t
+maintenant 13 images (0,43 s) : tout de suite apres la fin de l'animation
+@@ d7f5ba244f18 d
+Enchainement des animations d'un tour en vitesse automatique (retour de Sylfried, 14 h 12) : « quand je donne un coup, le montant des degats doit apparaitre plus vite ».
+
+Moteur reel (images du moteur, 30 par seconde) : un coup d'attaque sur la carte du monde (slot 4, rencontre forcee). `Speed from_ battle` impose OptionStatus.battleSpeed (g_Option + 5) : 0 / 1 / 2 / 3 = attente de
+12 / 22 / 32 / 42 images entre deux messages ; Normal / Rapide / Tres rapide imposent 0 (reglages.CODE_SCROLL_AUTO), l'ancien Normal imposait 2. Mesure : animation du coup (modele 5303) -> nombre de degats ;
+la duree de l'animation elle-meme ne change pas.
+
+    DQ_APK=<dossier des APK patches> DQ_SAVES=<dossier des sauvegardes> python3 tools/test_turn_chaining.py
+@@ b735f4961cf7 d
+-> (image de la commande validee, image du modele d'effet, image de son retrait, image du nombre de degats) du premier coup d'un combat.
+## FILE tests/test_unknown_map.py
+@@ 2de3caf2f403 d
+#76 (audit ENG-10) : `Engine.start_town` refuse un nom de carte sans fichier `assets/map/<name_str>.stg` au lieu de laisser le moteur d'origine planter (pointeur nul dans FldStage::getCameraLimitL) ;
+`za3f3` (carte orpheline : aucun `.stg` dans l'APK) en est le cas connu. Sans moteur : faux moteur et faux APK. Avec l'APK du jeu (DQ_APK) : les 529 cartes de l'APK sont acceptees, `za3f3` refusee.
+    python3 tests/test_unknown_map.py
+## FILE tests/test_upright_sprites.py
+@@ 414294ea58f6 t
+decalage (x, z) du PNJ par rapport au heros, en unites de ville : du coin bas a un coin haut de l'ecran
+@@ cb9995e7b1f3 t
+(#264 : plus de lacet, d'angle ni de zoom : la camera est celle du jeu)
+@@ b1e373176e5a t
+fixed_test : un pas de 1/60 s par appel, sans horloge
+@@ eb60d2a42580 t
+(le reste du centrage se resorbe : meme etat qu'apres quelques images)
+@@ 35a73549f8a8 t
+bords gauche / droit verticaux ET bas / haut horizontaux (ecart en pixels)
+@@ 4be497aa8328 t
+proportion constante a +- 1 % (0,72 x la hauteur au centre de l'image : 0,738 mesure)
+@@ 8384228a17a3 t
+l'option de la ligne de commande l'emporte
+@@ 41125d727be7 c
+panneau par defaut (t = 0) = panneau d'origine : meme coins que le calcul direct des decalages le long de l'axe de la camera du jeu
+@@ 3404feba615b t
+butte, puis une montee d'escalier de 3 u et sa descente
+@@ 6d83447f8462 t
+au centre de l'image (la camera est centree sur le heros : un PNJ a ses pieds est au centre, quelle que soit la camera)
+@@ 4f5ba6a040c4 t
+bas de l'ecran, haut de l'ecran
+@@ 6bde97a4337d t
+milieu du bas du panneau
+@@ 5b4f11bec296 t
+le PNJ du bord gauche, a differentes hauteurs d'ecran (= le heros qui monte ou descend)
+@@ a683ce451316 t
+(la vue est la camera du jeu : meme repere avec ou sans correction)
+@@ a192be5d84cc d
+Sprites de ville toujours droits a l'ecran (#134 : « quand mon perso monte ou descend, les sprites des PNJ se penchent », sans fenetre ni moteur : `Game._town_camera` et `Game._town_panel` sont appelees sur un faux objet) :
+
+1. les 4 coins du panneau d'un PNJ, projetes par la matrice REELLE de la visionneuse, donnent un rectangle a bords gauche / droit verticaux (ecart bas -> haut < 0,01 px) et une proportion largeur / hauteur
+   constante, a toute position de l'ecran (haut, bas, gauche, droite, coins, centre) et dans tous les etats de camera : fov, s_yOffset, hauteur
+   (butte #110 : la camera monte avec le sol), echelle SetScale ;
+2. la correction des bords ne touche NI la profondeur (z-buffer, recouvrements) NI la position et la hauteur a l'ecran : memes profondeurs de coin, meme bas du panneau, meme haut, qu'avec le panneau d'origine ;
+   au centre de l'image rien ne change (centre du haut = centre du haut d'origine, largeur moyenne identique) ; ailleurs la LARGEUR change par construction (proportion constante 0,738 au lieu de 0,65 en haut a 0,81
+   en bas de l'ecran pour le panneau d'origine) ;
+3. garde-fou : le panneau d'ORIGINE (correction coupee) se penche bien de plus de 8 degres pres des bords, donc le test 1 verifie quelque chose ;
+4. essai d'inclinaison (#134) : avec `inc` > 0 le panneau est cisaille vers la verticale du monde, pieds fixes, a taille, profondeur et position de bas inchangees ; son bord penche de atan(inc x tan(angle d'une
+   verticale du monde au pied)) ; inc = 1 : parallele aux murs ; 0 PAR DEFAUT depuis #180 (« remets l'affichage des PNJ comme sur la version mobile ... ils s'etirent pres du bord » : le cisaillement a 0,5 deformait les
+   sprites ; `Game._sprite_tilt`, variable DQ_SPRITE_INCLINAISON pour l'essayer) : la correction des bords seule (sans cisaillement) donne des bords exactement verticaux et la proportion constante (elle n'est plus le defaut depuis #184 : DQ_CORRECTION_BORDS=100) ;
+5. constat (cause de l'impression de #134, voir `Game._town_panel`) : les VERTICALES DU MONDE (murs, portes) penchent a l'ecran selon leur position (point de fuite sous l'image, camera a 47 degres), de beaucoup plus en 16/9 que
+   sur le portrait d'origine, et cet angle change de plusieurs degres quand le heros monte ou descend (le PNJ change de hauteur a l'ecran) alors que le sprite, lui, reste a 0 : le sprite parait pencher PAR RAPPORT aux murs voisins.
+
+6. #184 (« reviens a la position brute des PNJ, exactement comme dans le jeu ... avec le nouveau systeme de camera ils ne doivent pas s'aligner si on monte ou descend la camera ») : par defaut le panneau est celui du jeu (correction
+   des bords nulle) et son repere (`Game._sprite_reference`) est celui de la camera DU JEU : Haut / Bas ne le change pas (coins identiques en monde), Gauche / Droite le font tourner de face avec l'inclinaison du jeu ;
+
+  python3 tools/test_upright_sprites.py        (Linux sans ecran : pyglet en mode « headless »)
+@@ be8a00570ed3 d
+Inclinaison (degres) d'un bord a l'ecran par rapport a la verticale ; + = le haut part vers la droite.
+@@ f82aa5c93f69 d
+Hauteur du sol sous le heros, pas du moteur par pas : rampe de `topmost` unites en `climb_step` pas, plateau, descente symetrique (la butte du village du prologue, carte mlout1 : +0,5 u en ~8 pas).
+@@ f97c1d8bd250 d
+(M, coins du panneau en MONDE, repere de la camera, position de la camera) d'un PNJ dont les pieds sont en `foot`, comme le fait `Game._draw` (voir la boucle des sprites).
+@@ fe7a886a857b d
+Inclinaison des bords gauche et droit (degres), proportion largeur / hauteur et coins en pixels (bas gauche, bas droit, haut droit, haut gauche).
+@@ 9f2cf71939e7 d
+(M, repere de la vue, repere des sprites choisi par `Game._sprite_reference`, position de la camera de la visionneuse) pour l'etat de camera `j`.
+@@ 36167b5d689c d
+Inclinaison (degres, vers le bas) d'un axe avant.
+@@ 9dffeb37ff44 d
+#184 : le panneau d'un PNJ garde l'inclinaison de la camera DU JEU : monter ou descendre la camera (Haut / Bas) ne le change pas, la rotation autour du heros (Gauche / Droite) le suit.
+@@ 14fadfb95255 d
+#184 (« reviens a la position brute des PNJ, exactement comme dans le jeu ») : par defaut la correction des bords est nulle, le cisaillement aussi : le panneau est celui du jeu, sans reconstruction a l'ecran.
+L'ancienne correction complete (#134 : bords verticaux, proportion constante) reste disponible par DQ_CORRECTION_BORDS / --correction-bords.
+@@ 14b33b1a84c2 d
+La correction des bords complete (DQ_CORRECTION_BORDS=100, #134 / #180) donne toujours un rectangle droit a l'ecran, a toute camera.
+@@ f865b7e218f9 d
+Camera de la butte (#110) : la hauteur de la camera suit le sol (CAM_Y_RELIEF) ou retarde (escalier) ; a chaque image, un PNJ au bord gauche, au bord droit et en haut reste droit.
+@@ 1694042212a7 d
+z-buffer (profondeur de chaque coin le long de l'axe de la camera) et hauteur a l'ecran inchanges ; bas du panneau identique ; au centre de l'image, haut identique et largeur moyenne identique.
+@@ 95e033dd2ad8 d
+Sans la correction (panneau d'origine) le sprite se penche de plus de 8 degres pres des bords gauche / droit du 16/9 : le test 1 mesure donc bien quelque chose ; au centre il reste droit a 1 degre pres.
+@@ 4f5d812f0c4a d
+Cause de l'impression de #134 : une verticale du monde (arete de mur, porte) a 9 u du heros penche a l'ecran de 11 a 19 degres selon la hauteur de l'ecran ou elle se trouve (16/9, camera a 47 degres), contre
+4 a 6,5 degres sur le portrait d'origine ; quand le heros monte ou descend l'angle change de plus de 5 degres, alors que le sprite reste a 0. (C'est la perspective du decor, pas le panneau : voir test 1.)
+@@ e5a523e203db d
+Essai #134 : avec `inc`, le bord du sprite penche de atan(inc x tan(angle de la verticale du monde au pied)) (a 0,05 degre pres) ; inc = 1 : parallele aux murs ; le sprite et le mur ne s'ecartent plus que de (1 - inc)
+fois l'ecart initial ; sens : le sprite penche du meme cote que le mur ; au centre de l'image (verticale du monde droite) rien ne change ; les bords gauche et droit restent paralleles.
+@@ 65fb2811d296 d
+Cisaillement pur, pieds fixes : bas du panneau, hauteur et largeur a l'ecran, profondeur de chaque coin (z-buffer) = ceux de `inc` = 0.
+@@ 556de03186a6 d
+Constat de #134 : un PNJ au bord gauche, quand le heros monte ou descend, change de hauteur a l'ecran et l'ecart sprite / mur varie de plusieurs degres ; avec inc = 0,5 la variation est divisee par deux (a 5 % pres).
+@@ f9e7b9ad664a d
+DQ_SPRITE_INCLINAISON : 0 a 100 (%) ; absente, vide ou illisible : 0 % (defaut depuis #180) ; bornee.
+@@ 3163ff51870a d
+Sans camera (C inconnue) ou avec la correction des bords coupee (t = 0) : le panneau d'origine, meme avec `inc`.
+@@ 9653e944a053 d
+Camera du jeu telle quelle : le repere des sprites est celui de la vue ET celui de `_game_border` (la camera du jeu : depuis #264 la vue n'ajoute plus ni zoom, ni rotation, ni inclinaison).
+@@ 12b296a4e7f8 d
+Le panneau d'origine est quasi vertical dans le monde (le haut penche de 36 degres vers la camera) ; cette pente (angle du bord bas -> haut avec la verticale) est la meme a toute hauteur du heros.
+@@ 49551015419d d
+Correction des bords > 0 (essai #134) : le repere de la vue (la reconstruction a l'ecran en a besoin) ; DQ_SPRITES_SUR_VUE : l'ancien alignement ; sans camera : rien.
+@@ ac0cc71fbc9d d
+Camera libre (position et angles fixes par le script) : le repere des sprites est celui de la vue ; sans appel de la camera, repli sur la vue.
+## FILE tests/test_window_language.py
+@@ 3273a9bb89ec t
+les entrees de ce lot (window.py, divers.py)
+@@ 1b894b5d869a t
+tout le catalogue : un meme texte n'a qu'une entree, dans le fichier du premier lot qui l'a ecrit (test_language.py : pas de doublon)
+@@ 1c1a8810c882 t
+(« Casino », « Normal », « Menu »... : identiques en anglais, sans entree)
+@@ 27cf0c747011 c
+liste blanche : (fichier, debut du texte) des messages de console que le joueur ne voit pas (traces des options de test et des variables DQ_*, journal interne du moteur)
+@@ f85328b106ee t
+DQ_SON : ordres du moteur
+@@ 3ca65363dac0 t
+DQ_SAVEDBG, DQ_MSGDBG, DQ_MENUDBG, DQ_FBXLOG
+@@ c17d79e97a45 t
+DQ_PROJ, DQ_CAMV
+@@ 3709e8c976c7 t
+DQ_SPR, DQ_DEBUG, --shot, --shots-combat
+@@ ff1cbeed4b72 t
+--options-test, DQ_PAS
+@@ 26f416092f79 t
+versions des logiciels dans le journal d'une bascule ratee : des noms propres
+@@ 7e6faeb66c02 t
+nom du module + exception : un identifiant, pas une phrase
+@@ bfd2b5ad8d51 t
+outil en ligne de commande de lecture des FLD
+@@ 7cf2a757c698 t
+journal du moteur d'origine (Silencieux), pas la console
+@@ 3ee0978c0149 t
+'texte %s' % x, 'debut' + x
+@@ d989cd9c8b64 t
+le francais d'avant, mot pour mot
+@@ 64602a333527 t
+(argparse formate l'aide avec % : un pourcentage nu la casserait)
+@@ c1b78b700e05 t
+les options de test restent annoncees comme telles
+@@ bd85ee606e6e t
+valeur manquante : c'est l'analyseur qui s'en plaindra
+@@ 465838471261 t
+--reglages l'emporte sur le fichier par defaut ('fr')
+@@ 0f7e8976b2e6 t
+pas de fichier : la langue de l'ordinateur
+@@ 768e35426554 t
+sans les noms d'options, leurs valeurs et les listes de choix
+@@ 5b64dc755423 t
+(comme Game.toast : le texte est traduit a l'affichage)
+@@ aa474d84eac6 c
+---- bascule plein ecran <-> fenetre (fausse fenetre de test_window_mode)
+@@ 0f657678add9 t
+(constante de module marquee N_ : traduite a la creation de la fenetre)
+@@ ba7fcd3e3b45 t
+ni pyglet ni soundfile : « indisponible »
+@@ b117d4c35a19 d
+Langue de l'outil, lot « fenetre » (D-238) : messages de la console et de la fenetre du jeu, demarrage, ligne de commande (`--help`), reprise des dossiers, sauvegardes, son, moteur.
+Sans fenetre ni APK (faux Jeu, fausse fenetre pyglet) : chaque scenario est joue en francais (le texte d'avant, mot pour mot) puis en anglais (plus un mot de francais : `french()` de test_language).
+
+  1. couverture (lecture du code) : chaque texte passe a tr() / N_() dans le perimetre a sa traduction anglaise, aucune cle du catalogue n'est orpheline, rien n'est traduit a l'import, les textes passes a `_wait`,
+     `_log_window`, `_note_once` sont marques N_, et AUCUN message de console n'est reste en francais sans tr() (liste blanche des traces de debogage, chacune justifiee) ;
+  2. ligne de commande : l'aide `--help` (analyseur et processus complet) dans les deux langues, la langue reglee AVANT la migration et l'analyseur (reglages.json par defaut ou donne par --reglages), messages de
+     demarrage (APK introuvables, migration impossible) ;
+  3. reprise des dossiers (chemins.migrer), export / import de sauvegardes, etats, journaux : les raisons montrees au joueur ;
+  4. fenetre : messages de Jeu (echecs d'etats et de sauvegarde, memoire du moteur, reglages manques, chargement), bascule plein ecran <-> fenetre (console et journal des erreurs), ligne de journal de la fenetre,
+     moniteurs, taille ; son ; alertes de version du moteur (`Engine._record_missing`) ; preparation du cache (processus a part, langue transmise).
+
+    python3 tests/test_window_language.py
+@@ 74c1e367a67f d
+[(ligne, texte)] des textes litteraux passes a tr() / N_() (LG.tr compris).
+@@ 4f0c49560435 d
+Joue ce qui suit dans la langue `code` ('fr' ou 'en').
+@@ 2d69def461c8 d
+-> (resultat, texte imprime) de f(*a, **k).
+@@ 44a221d5e624 d
+Le texte sans les chemins (dossiers temporaires) : ce ne sont pas des mots.
+@@ 9a11ac51f59c d
+Lecture du code : rien ne manque, rien ne traine.
+@@ 064346fa7c99 d
+chemins.migrer : les phrases de la reprise de l'ancienne disposition.
+@@ 796368839299 d
+Un journal valide de 15 360 octets (comme test_saves_import).
+@@ 7f484426a2a8 d
+Les raisons montrees au joueur : export / import des sauvegardes, journaux, etats.
+@@ 9f78952726a6 d
+Alertes de version du moteur (Engine._manque) : un autre APK que celui etudie.
+@@ 050944db3608 d
+Chaque entree de window.py et divers.py sert dans le code (un texte change ou retire dans le code ne laisse pas sa traduction derriere lui).
+@@ 27f659044419 d
+`tr(...)` ne s'execute que dans une fonction (la langue change en cours de partie) ; une constante de module est marquee N_ et traduite a l'affichage.
+@@ ea0bd9b6a6eb d
+`_wait(text)`, `_log_window(when)` et `_note_once(lookup_key, e)` traduisent leur argument : le texte litteral doit etre passe a N_(), sinon le test de couverture ne le voit pas.
+@@ a23d05c24b49 d
+Un `tr(...)` ajoute dans un module qui ne l'importe pas ne plante qu'au moment du message (souvent une erreur rare : echec de bascule, son coupe...) : on le voit ici, a la lecture du code.
+@@ 62d190888a4b d
+Un `print(...)` / `log(...)` / `toast(...)` dont le texte est un litteral (ou un litteral formate) doit passer par tr() ; sinon il est dans la liste blanche DEBUG. emu_core.py (journal de l'emulateur,
+outil de developpement) n'est pas balaye.
+@@ 515563192c9d d
+{option: texte d'aide} de l'analyseur construit dans la langue courante.
+@@ f90e6688c43c d
+main(argv) sans migration reelle ni fenetre : -> (langues vues par migrer, texte imprime, code de sortie).
+@@ 17ee5245f150 d
+Les messages de la migration (chemins.migrer) sont dans la langue du reglage : reglages.json par defaut, ou celui de --reglages ; et la langue ne depend pas de celle de l'ordinateur.
+@@ b02efb0cbb1f d
+Le vrai processus : `--help` ne ouvre rien, lit la langue dans le fichier de --reglages et imprime l'aide dans cette langue (les noms d'options restent les vrais).
+@@ c3216a103346 d
+Un dossier nomme data1.dat occupe la place : l'ancien dossier ne bouge pas, et la phrase le dit (avec la raison).
+@@ b7a5a8ad1c98 d
+`python -m dq4_pc.paths` (lance par launch_dq4.bat avant le jeu) lit la langue dans reglages.json avant de migrer.
+@@ 70e728e28863 d
+Un import qui ecarte un journal trop court, un abime, un qui n'en est pas un, un etat trop petit et un faux .zip, mais qui garde un bon journal.
+@@ 8d0783d1a048 d
+Les types de fichiers des boites « Enregistrer sous » / « Ouvrir » (tkinter, remplace ici par un faux).
+@@ 90633828b0e0 d
+Le processus a part (monde/donnees.py) ne connait pas reglages.json : le jeu lui passe la langue (DQ4_LANGUE), pas celle de l'ordinateur.
+@@ c5262cdc343a d
+Vrai processus `python -m dq4_pc.world.data` (APK absent : « interrompue »).
+@@ ce7abe8fc08a d
+`--slot N` : l'etat du chargement direct, dans les deux langues (les deux phrases entieres du catalogue).
+@@ d03bc24db121 d
+Un moteur dont les fonctions sont introuvables : chaque installateur le dit, en francais comme avant (`KeyError`) et en anglais sans un mot de francais.
+## FILE tests/test_window_mode.py
+@@ 442a0f0cb867 t
+l'ancien plein ecran = fenetre sans bordure : le mode 1
+@@ 2fc29e87d5e7 t
+ni l'un ni l'autre : fenetre
+@@ 08162093d7c3 t
+valeur absurde
+@@ ada6f5d87578 t
+le nouveau reglage prime
+@@ 75f2540c561f t
+(le dernier mode non exclusif de la #42 est abandonne)
+@@ f3253dcdf4a9 t
+(F11 n'est plus une touche d'action)
+@@ 440926bf66d6 t
+(F11 n'etait pas une touche du jeu)
+@@ 2a5aa8ee17c2 t
+(souris / mouse_guard : Game.on_key_press memorise la position du pointeur a chaque touche)
+@@ 65c3bbc6aefc t
+(un ancien fichier qui lie F11 a une action : elle ne part pas)
+@@ f6bffbea5d6b t
+Alt tenue : rien tant qu'il n'est pas relache
+@@ a03947b0c2a0 t
+Entree avalee : ni validation, ni menu
+@@ a86fb054da84 t
+Alt relache apres Alt + Entree : pas de discussion de groupe
+@@ cb89c6a2ac33 t
+(Entree seule fonctionne de nouveau)
+@@ 6a57c4b4910c t
+(Alt seule non plus)
+@@ 4e0052dcdada t
+(Alt seule arrive au menu)
+@@ 698551b0e14f t
+Alt + Entree : bascule, pas de touche Entree pour le menu
+@@ e00f8a166539 t
+Entree seule y arrive
+@@ b537ab51cd89 t
+(un appui sur une autre touche saute les logos, pas F11)
+@@ ceb97fe24382 t
+Alt Gr aussi
+@@ 6df2ac74b347 t
+la fenetre perd le focus : le relachement n'arrive jamais
+@@ 118aba552879 t
+(le menu Echap n'envoie rien au jeu)
+@@ 54ed2c79b182 t
+discussion = G seule : au moment de l'appui, comme avant
+@@ c28834a40230 t
+Alt ne sert plus a rien
+@@ f3a72f341dff t
+la page Commandes attend une touche : F11 lui revient (elle repond « reservee »)
+@@ 668ae726bcf4 t
+(avalee quand meme : pas de validation)
+@@ 34bf3449dfbe t
+perime : sa poignee Windows n'est plus valable (apres un branchement d'ecran)
+@@ d7393840962d t
+(pyglet : BaseWindow.screen renvoie _screen)
+@@ 98b121a80d9b t
+(Win32Window._create : Screen.get_dpi -> GetDpiForMonitor sur une poignee qui n'est plus valable ; l'etat a deja change, comme dans pyglet)
+@@ 2cb30c411f7d t
+(les echecs simules ne s'ecrivent pas dans le depot)
+@@ a5300f29fee8 t
+(un bureau 1920 x 1080 : la taille de l'ecran de test ne compte pas)
+@@ 1afc173282f2 t
+(la taille de la fenetre est gardee pour le retour)
+@@ 788d587cd06b t
+(les tampons du rendu hors ecran ne sont pas invalides de force : refaits seulement si la taille change)
+@@ cf05a463884d t
+un seul par bascule, jamais « fenetre puis plein ecran »

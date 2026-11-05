@@ -1,0 +1,895 @@
+@@ 3b817fbc6742 d
+Measures what happens at each toggle of the game between window and full screen: number of pyglet calls (set_fullscreen, window recreation, hide / show, monitor mode changes), resize events,
+drawn frames (and how many have a size that is not the final size) and rebuilds of the off-screen rendering buffers (postfx.py). Used to compare two states of the code: the same
+scenario is run on each and the "BASCULE" lines are compared.
+
+    python3 tools/measure_toggle.py <dq4_pc folder to measure> [window.py options...]
+
+The game is launched as is (window.main): the counters are set from the outside on the Game class, on PostFX and on the screen, without changing the measured code. A toggle is detected on entry to
+Game.set_full_screen (today's code) or Game.regler_mode_fenetre (the code of #42); counting stops 12 frames after the end of the call. One line per toggle:
+    BASCULE n=1 vers=1 : set_fullscreen=1 recreations=1 cache/montre=1/1 mode_moniteur=0 (restore_mode=0) redimensionnements=3 trames=14 (instables=0) tampons=1 ... || fenetre visible sans image : 0.0 ms (tampons refaits pendant ce temps : 0, deplacements : 0)
+"fenetre visible sans image" = time between the window being shown (visible(True)) and the first flip that fills it: 0 if a complete image has already been displayed before showing it (today's code); with the code
+of #42, the window appears first, the image only arrives on the next frame (after the rebuild of the off-screen rendering buffers and, when returning to windowed mode, the window move). Under Mesa / xvfb: 250 to 280 ms
+toward full screen, 65 to 70 ms on the way back, versus 0; on a real GPU the durations will be much shorter, the structure (window visible before its first image) is the same.
+To be run under xvfb (only one at a time on the machine: see /tmp/run_wt.sh). Toggles are triggered by the keys of the harness:
+    --touches-test "60:F11,120:F11"                       (F11: today's code = window <-> full screen; code of #42 = exclusive full screen)
+    --options-test "60:Fenêtre=1;120:Fenêtre=0"            (code of #42: borderless full screen) ; "60:Plein écran=true;120:Plein écran=false" (today's code)
+
+LIMIT: X11 (xvfb, without a window manager) is not Windows. The pyglet event counts differ (under Windows, set_fullscreen = hide, change the style, resize, show, move back, plus the WM_SIZE / WM_MOVE
+messages) ; they show what the game code requests and triggers, not what the player's screen displays.
+@@ b967f41e56ce d
+Analysis of bal2_tout.json (sweep v2): failures, rare packets, missing textures, NPCs without a position, sounds, etc.
+@@ 951992f636cd c
+walks the ScriptMethod entries (method starts): disassembles each one and looks for bl/b toward target
+@@ 7d95e68c8084 c
+linear sweep of the executable segment in 4-byte words: bl = 0x94000000|imm26, b = 0x14000000|imm26
+@@ cb124cc90cf5 d
+Callers (bl/b) of an address in libil2cpp.so: DQ_IL2=... python3 audit_callers.py <RVA hex> [...]
+@@ b64f58ddbbfe c
+end = next known method
+@@ 858460d0b149 c
+---------------------------------------------------------------- annotation of the fields (instance / static) of a dump.cs class
+@@ f0b56e3c6b92 d
+Annotated disassembler for libil2cpp.so for the menus / D-pad audit.
+Usage: DQ_IL2=/home/claude/il2 python3 audit_dis.py <start RVA hex> [<end RVA hex> | +<length>]   (or -n ClassName.method)
+Annotates: calls (ScriptMethod names), TypeInfo / MethodInfo / string slots (via R_AARCH64_RELATIVE relocation),
+float constants (ldr s/d from a literal or a page), field offsets (via dump.cs: field of the current class).
+@@ 50935c65c989 d
+-> (instance{offset:name}, static{offset:name}) read from dump.cs (Fields section of the class).
+@@ c9811008922d d
+Like dis(), but annotates [reg,#off]: statics of `cls` when reg comes from [TypeInfo+0xb8], instance fields when reg is in this_regs (or x0 at the start).
+@@ 1e6d37624a52 c
+PLT: JUMP_SLOT relocs -> names
+@@ 37b294d75e65 t
+adrp
+@@ 1e370365636c t
+add imm (64)
+@@ ca5235a296ec t
+ldr/str unsigned offset
+@@ 8bb715741f39 d
+Disassembler for the libdq4core.so engine (AArch64) with symbols (nm -D), data references via adrp+add/ldr and reference search.
+Usage: python3 audit_eng.py dis <name-or-address> [hex-length]      | python3 audit_eng.py xref <data address hex> | python3 audit_eng.py sym <regex>
+@@ c375687d96db d
+Fast scan of the instructions: adrp xN, page ; (add xM, xN, #lo | ldr/str/ldrb... [xN, #off]) with page+lo == t (exact byte target).
+@@ e10e4a536ef3 d
+adrp+add/ldr/str referencing `target` (page + offset): scan of the .text
+@@ 1925cdb3fe94 d
+Scene level1 of the datapack (the TouchPad one: MainCamera + MPad ...). Lists GameObjects / Transform / Renderer / Mesh / Material and decodes the PPtrs of the TouchPad MonoBehaviour.
+@@ cb22591fd34a d
+Hierarchy of the 'MPad' GameObjects of the datapack (components, transforms, meshes, materials).
+@@ 5cc7ffc1a804 c
+material
+@@ 4bab60809c87 d
+Meshes of the TouchPad (level1 scene of the datapack): vertices + UVs (in pixels of the 'Button' 512x512 sheet), material.
+@@ d38d859f8b6c d
+Locates in datapack.unity3d the SphereColliders / MonoBehaviours (candidates: TouchPad object) and displays their GameObject, hierarchy, meshes.
+@@ dc572223c320 d
+Displays the lines of an annotated listing (audit_dis) between two addresses, without the IL2CPP initialization noise.
+@@ cb0904c6c79e d
+Searches datapack.unity3d for: GameObjects whose name contains pad / touch / button, MonoBehaviours whose script is TouchPad, Button / MenuTexture textures.
+@@ b576775cb5d5 c
+MOVZ w : 0x52800000 | imm16<<5 | rd
+@@ d18901e53e2a d
+Searches libdq4core.so for the calls to the functions that send to the Unity interface: setItemParam (PLT 0x225070 : item, id, no, data), setItemCode (0x225060 : item, code, value)
+and the string setItemParam text (0x225190..), with the immediate values passed (mov w1/w2/w3 #imm) and the calling function.
+Usage: python3 audit_scan_itemparam.py [substring of the function name]
+@@ 4b924d038942 d
+Searches data.unity3d (base.apk) and datapack.unity3d for the objects related to TouchPad: MonoBehaviour(TouchPad), Pad / Map Button GameObjects, meshes, etc.
+@@ 7fa689aad06b c
+float statics set in .cctor: q0 read at 0x4dc310 (16 bytes -> +0x48), d1 read at 0x4c0aa0 (8 bytes -> +0x58)
+@@ 257508434fed d
+TouchPad..cctor (0xD255B4): static arrays c_PadScaleTBL (float[3]) and c_padDirTable (int[8]) + static floats s_*  (read from global-metadata.dat / libil2cpp.so).
+@@ 260f178a1c40 t
+c_PadScaleTBL (FieldRVA, hash 60DE99C6...): index = g_pad_size (0 large, 1 medium, 2 small)
+@@ d82b83293101 t
+ring: quad +-128 over the area (256..512, 256..512) of the Button texture (mesh of the level1 scene, MPad object)
+@@ 0ca1f32d4e28 t
+c_PadBaseScaleXY: local scale of MPad (SetPadPos 0xD22E60 : localScale = 0.63 x tbl)
+@@ 87f4e9b2771f t
+radius of the ring for sc = 1: 80.64
+@@ a15f06af953b t
+from the bottom of the screen (anchor 7 = CenterBottom) + NotchFix.TouchPadAdjustmentValue (0 on PC)
+@@ 1cc2e2f57065 t
+1.7578125: units per pixel of the 256 x 192 plane
+@@ fac5a3519a43 t
+localScale of the plane and of the veil
+@@ f25107a1e4ba t
+half-height of the reference portrait
+@@ 209a773f7c52 t
+Build(indent 0, screen 0, x = 2, y = 12, z = -2 - NotchFix.AdjustmentValue) ; AdjustmentValue = 0 on PC
+@@ 119013840145 t
+PartsInfo 12: startNo 6, widthNum 16, ps 32, start y = 192 (Button texture 512 x 512) ; uv_icon() of the port
+@@ e18ed24c58cc d
+audit_values.py: recomputes the derived values cited in /tmp/specs/audit_menus_pave.md from the raw constants read in libil2cpp.so / libdq4core.so
+(origin of each constant in a comment: RVA of the method or name of the field). No dependency: python3 audit_values.py
+
+Reference points: original interface = 450 units wide (eIndent.CalcScreenPosition: x from -225 to 225), reference portrait 450 x 800 (the port converts by H / 800).
+@@ debfa42d253d d
+Call graph of libdq4core.so (direct bl / b, PLT resolved) -> /tmp/audit/cg.pkl: {callee_name: {caller_name, ...}}.
+Usage: python3 callgraph.py build | python3 callgraph.py up NAME [depth]   (callers, recursive, by name substring)
+@@ d4d7b1aed938 t
+(trial) displays the casino / bestiary part like a town: used to prove the cause of the missing rendering
+@@ 717ab913d366 d
+Trial launcher (outside the repository): starts the normal viewer, then, at frame CAS_N of the loop, launches a casino mini-game in the engine
+(Global::setMinigame(CAS_JEU) + Global::startCasino ; 500 tokens written into the TEST engine). CAS_JEU=0: poker (ev04), 1: slot machine (ev05).
+Same command line as window.py. No change to the repository.
+@@ 492a84d7369d d
+Windowless harness: Engine (Unicorn) alone. Usage: see the functions. Save writes in /tmp/sv_audit_<name>.
+@@ 656654da5efc d
+Probe: Global::startBook ("Bestiaire" menu, part 0x10) in the test engine. What the engine sends and what the viewer would know about it.
+@@ 6575a48ef5b0 d
+Probe: starts the casino (Global::startCasino, like cmd_mini_game) from save 1 and logs packets / windows / messages.  python3 probe_casino.py [game_type] [machine_type] [frames]
+@@ 5e7371d43dd4 d
+Poker probe (Global::setMinigame(0) -> ev04, type 48) with 500 tokens in the TEST engine. mode: viewer (held=0x10, decl=0x10) | kw (decl=0x100) | menu (MenuPort [1, button, gamepad])
+@@ 360ce7305200 d
+Poker: 'automatic player' game loop: message visible -> A (like the window) ; otherwise menu -> button 0 (A) ; observes until the end / 3000 frames.
+@@ 03fc79111fdd d
+Probe: slot machine (casino) -> press on 'Lancer' (button 0, A) ; logs packets 5/6/7/22, windows, messages.
+@@ a4beab4bbbbc d
+Probe 2: slot machine. Does the engine read the KEY WORD (GameUpdate arg2)? We send A (0x100) without going through MenuPort.
+@@ 718867b025b1 d
+Probe 3: slot machine WITH tokens (coins written into the TEST engine only). Inputs: 'viewer' (held=0x10, decl=0x10 like window.tick with a visible message) or 'kw' (decl=0x100).
+@@ ee926222bb9b d
+Probe 4: slot machine with tokens; the bet goes through MenuPort (button 1, gamepad 2 = up / 1 = down), Lancer = button 0 gamepad 0x10.
+@@ 26183187f4d3 t
+reg -> page ; reg -> 'key'
+@@ 0205282bc95e c
+window of 30 insns after: ldrh [reg,#2]
+@@ 70fcfdbf37ba d
+Readers of the field key word (u16 at *(GOT 0x23da30)+2): functions that load the GOT slot 0x23da30 then read a half-word +2 ; masks tested.
+@@ cf71f1ef55e0 d
+Inventory: MenuPort window type (MENUITEM_TYPE) -> engine functions that open it (calls to MenuItem::setup / Setup2 with an immediate in w1).
+@@ 27bae8b5676d d
+Unity type (MenuPort [N,1,cat,type]) -> engine functions: we look for `mov wA, #imm ; strh wA, [xB, #0x60]` ("type" field read by MenuItem::setup/Setup2/OpenItem -> MenuPort::Open(this, cat, [this+0x60]))
+@@ ab6cf80bbfc4 d
+Unity type k (1..80) = global MenuItem object at GOT slot 0x23d4f8 + 8k (cf. MenuItem::SystemInit). Users = engine functions that load this slot.
+@@ a27645549c88 c
+bl decoder
+@@ bd86be1f0574 c
+backward search for a mov w0, #imm (or mov w0, wN followed by...)
+@@ 6ec1ae1e55e3 d
+Inventory of the packets libdq4core.so can emit toward Unity: for each call to UnityGetPacket(int) / UnityGetPacket(int,int) (and UnitySetFade, UnitySetString, unity_load_fld...),
+looks for the immediate loaded into w0 just before, and for the calling function.  Usage: python3 scan_packets.py
+@@ 3148a7e0c877 d
+Sweep of the maps (v2, windowless: Engine (Unicorn) alone, see coverage.md section 5).
+python3 sweep.py START END [FRAMES] [OUTPUT.json] [SLOT]
+For each map (indices START..END-1 of the sorted list of the .stg files of the data APK): Global::startTown(name), FRAMES engine steps, then reading:
+- engine exception (PC + symbol) ; after an exception the engine is RECREATED and the save reloaded (v1 propagated the failure to all the following maps) ;
+- packets: count per type, distinct values of the rare types (6, 16, 17, 18, 30, 31, 33, 34...), flag bits of 13 / 15 / 10 / 11, sprite scales (13 bit 0x800) ;
+- sprites (id, final position), mesh / fbx models requested, sounds requested (BGM / SE), windows (ports, types) opened, visible message, remaining fade, flags, part.
+The analysis (missing textures, NPCs off the map...) is then done on the JSON (analysis.py).
+@@ 48a14d794340 d
+PROTOTYPE of the map sweep tool (windowless, Engine alone):
+python3 sweep_head.py START END [FRAMES] [OUTPUT.json]   -> for each map (indices START..END-1 of the sorted list of the .stg files): start_town(name), FRAMES engine steps,
+reading: engine exception, packets seen (counted by type), parts, sprites (id, position), maps loaded, messages / menus opened, flags, time.
+@@ e3b2e998c0cf c
+battle entry fade: first fade period after i2-1
+@@ 1882d05e8a1b c
+end: last output 4126: fade with increasing fa in the battle part (fa < 1 at the start) after the start of the battle + 100 frames
+@@ 3ad74d067d62 c
+end: the last fade period in battle until the return
+@@ e34b4e1e9a99 t
+final message waiting for a key
+@@ c5656e4f7034 d
+Battle driver (outside the repository): engine alone, menu policy per scenario, timeline in engine frames (30 Hz).
+@@ 33acc6ef0d15 d
+-> button index to validate for this menu.
+@@ 26d21b73b768 d
+Plays a battle. -> list of events (relative frame, text) and number of engine frames.
+@@ 077ed77b4977 c
+variants: binary mask (h, w) float 0/1  ->  alpha field at resolution f x (returns (field, f))
+@@ 472f625d2db4 t
+key on alpha
+@@ 8cffdece81bd t
+cumulative turning radians per outline texel
+@@ c1a0cced9c09 d
+simulates the bilinear GL magnification of the texture (field at f x) up to `target` px per original texel
+@@ 5ce40683070c t
+only when the actor is on our side ([x20 + 8] = 0: the hero ; 1: the monsters, which roll their critical hit at random)
+@@ e0ff59e75f9d t
+encounter: a single weak monster (Encount + 0x34: number, + 0x44: count)
+@@ ddef5f60e315 d
+Trial launcher (outside the repository): normal window of the wt45-combat worktree ; log of the battle transitions with the real time.
+Variables: ENC_N (tick at which the encounter is forced), CRIT=1 (forced critical hit), CB_LOG (log file), CB_WT (worktree).
+@@ b81901dbbd66 d
+Trial launcher (outside the repository): in a forced battle, successively reloads several sceneries (DQ_DECOR) with and without outline softening, at MSAA 0 and 4,
+and saves a capture of each. Variables: ENC_N, CB_WT, DECORS (list), MSAAS ("0,4"), PFX (file prefix), CROP (x0,y0,x1,y1 as a fraction), AV (list of variants).
+@@ 675e6135ef02 d
+Engine-only harness (wt45-camera): hero height / target / camera position, step by step.
+@@ 7c3f1ad8ab46 t
+2 frames per engine step (60 Hz for 30 Hz)
+@@ d803cf438dfa c
+difference from one frame to the next and worst frames
+@@ b7c570914c83 c
+displays the steps where Y changes
+@@ 10ad056f64d2 c
+chunks: (feature, file, final text, base text)
+@@ 2cfa908e0531 c
+--- bug s
+@@ 4dabd26a6b62 c
+--- P1 church
+@@ 6171c9ca307d c
+--- P2 battle 29
+@@ 084942900dcb c
+--- P3 status icons
+@@ 784ed3d3e5f8 c
+--- P4 marks
+@@ 7edc7c534d63 c
+--- P5 type 54
+@@ 0d4fa4e77b1c d
+Rebuilds, from the final state of the worktree, a series of commits: bug s, P1 church, P2 shake/cursor, P3 status icons, P4 marks, P5 type 54.
+Each step = final state minus the chunks of the following steps. Usage: python3 build_commits.py [--dry]
+@@ d79a8d662d0c c
+PLT: names via relocations
+@@ 02de6c739da7 c
+--- names of the PLT stubs (adrp x16 / ldr x17, [x16, #off] -> GOT address -> import or local symbol)
+@@ 186c6fb1e20c c
+.plt section
+@@ c88ec88ccd95 d
+Disassembles libdq4core.so (ARM64): python3 dasm_core.py <address|symbol> [size_bytes]  ; annotations from the exported symbols.
+@@ 4e60822b2ee1 c
+symbols
+@@ 8bf441977b15 c
+relocations (GLOB_DAT / JUMP_SLOT) -> names
+@@ 6a0939d4fd4b c
+PLT stubs: adrp x16,page ; ldr x17,[x16,off] ; add ; br x17
+@@ 60aef3c7f07f c
+looks for the stubs in the executable section, by pattern
+@@ 85faadb53000 d
+Annotated ARM64 disassembly of libdq4core.so (demangled C++ symbols, strings, PLT calls).
+Usage: disasm_engine.py <name_or_hex_address> [length_bytes|end_hex]   (addresses = vaddr of the lib, no base)
+        disasm_engine.py -f <symbol substring>        (lists the symbols)
+@@ fcef3a10ec59 d
+Disassembles an IL2CPP method by RVA or name: python3 dis.py 0xD07E74 [end]  (DQ_IL2=/home/claude/il2)
+@@ baddf9956d0f t
+"rate" + constant ; valid header (Profile::isValidData)
+@@ 975c9829b1ab t
+"DWEN" = empty/new bank ; "DLED" = deleted bank (killbank(n, false))
+@@ 38c268638151 d
+Reading/writing of the data1..5.dat / data9.dat files of DQ4 (Android) outside the engine.
+Encryption = Cryption::Filter(lib+0x152de8): key "vb76Eg43", polynomial 0x7a7b58c6 (bitwise CRC32, init ~0, inverted output) -> seed of an xorshift32 (13,17,5) ; byte ^= low byte of the state.
+Usage: dq4_save.py <dataN.dat> [--dump]
+@@ f869dd33579b d
+Extracts MenuTexture / Button / Font from base.apk and frameData from datapack -> /tmp/r3_res (like ui_menu.prepare_resources).
+@@ d2d9105d3b3b d
+Frames of the frameData: python3 frames.py <i0> <i1>  (under xvfb-run: ui_menu imports pyglet)
+@@ 400a228ad76d d
+Windowless harness: starts the engine (Engine of dq4_pc), loads a save and logs ALL the engine -> interface menu messages.
+Usage (from a script): from harness import *; eng = start_engine(slot=4); ... eng.step(...)
+The messages (port, [shorts]) of each frame are kept in LOG = [(frame, part, port, args)].
+@@ 181aa612dc1e d
+Inventory of the StatusIconChangers in ui_layout.json: python3 inv_statusicon.py [ui_layout.json]
+@@ aed4ee66384f t
+gamepad bytes of the game (GameUpdate arg 2 ; menu messages)
+@@ 8c74bd3373c4 c
+addresses (vaddr of the lib ; + LIB_BASE at runtime)
+@@ 617ad9216801 t
+MaterielMenu_NameEdit (statics)
+@@ 5e98ae077658 t
+(frame, packets) for inspection
+@@ e2dce638f1eb c
+---- memory access -------------------------------------------------------------------------------
+@@ 0bfc939e2f39 t
+part, next, previous
+@@ d86ead03d8a8 c
+---- advancement ----------------------------------------------------------------------------------
+@@ b6428fc45132 c
+---- display -----------------------------------------------------------------------------------
+@@ c575747b4689 c
+---------------------------------------------------------------------------------------------------------------
+ESTABLISHED constants (see engine_pre_game.md)
+@@ 3f25366f05aa t
+value [1, value, pad] sent to the StartMenuSecond port (type 53)
+@@ eff1c3823f55 t
+cell sent to the StartNameEntry port (type 55)
+@@ 329554e54381 t
+cells of the Yes / No window (type 1, 2 cells: 'Oui' = 0)
+@@ 9fbb0a2bbf01 t
+occupied bank: Yes / No question before the entry
+@@ f087605bea32 d
+Probe of the pre-game flow of Dragon Quest IV (libdq4core.so engine under Unicorn, without Unity).
+
+Brings the engine to the title menu then explores each branch (continue / resume / auto / new adventure log / delete)
+by imitating what the Unity interface would do: keys (pad bytes passed to GameUpdate) and menu messages
+([1, cell, pad] placed in the port queue, see Engine.send_menu). Prints the state of the windows at each step.
+Read-only on the repository (dq4_pc is imported as is) ; the saves are written to a temporary folder.
+
+Usage:
+  python3 probe_title.py [--apk APK_FOLDER] [--lecture SAVES_FOLDER|-] [--branche B ...] [--captures DIR]
+  branches: titre  menu  continuer  reprendre  auto  nouveau  supprimer  toutes (default: toutes)
+  --lecture - : no save file (first launch) ; default: Sylfried's sample saves.
+Output: text log on the standard output (reproducible, deterministic) ; --captures also writes
+the images of the viewer (xvfb) if window.py is available (see runv.sh).
+@@ 177c0d92a723 d
+Startup -> title (ev01, part 0xc) -> 1st press (fade + prompt) -> 2nd press (cmd_start_game) -> GameStartPart + MaterielMenu_LOAD.
+Reference points (without a save and with one): presses at frames 63 and 130 ; the menu opens ~29 frames after the 2nd press.
+@@ 2faf30ade78f d
+Validates the keyboard: message [code=2, length in bytes] then data message (UTF-8 bytes packed two by two into shorts,
+little-endian) ; the engine (MaterielMenu_NameEdit::menuSetup, "other reception" callback) copies at most 30 bytes (0x1e) to 0x259b5e.
+@@ a3f61801fcb0 d
+advances n frames while printing each state change (state of the LOAD menu, of the name, part, map) and the useful menu messages.
+@@ 658ec33da07b d
+MaterielMenu_LOAD: +0x1c state, +0x20 kind (0 continue, 1 create, 2 delete, 3 resume, 4 auto), +0x24 counter, +0x2c bank, +0x30 catalog status.
+@@ 918cc149b41e d
+gamepad press (the title reads decl) then release.
+@@ d7b1c7c00bc4 d
+menu message [1, cell, pad] (click/key on a cell) then release [1, -1, 0] on the next frame.
+@@ e1176287c25f d
+engine -> interface messages of the frame (excluding drawing/input), the cell texts (after [11, l, c]) decoded.
+@@ f5b59c5d399d d
+Regenerates the layout of the windows (like tools/ui_il2cpp/generate_ui.py) without touching the repository: output in /tmp/r3_layout/ui_layout.json.
+Inputs: /home/claude/il2 (libil2cpp.so, script.json, dump.cs), /tmp/r3_apk (global-metadata.dat), /tmp/r3_res/ui_frameData.bin (extract_res.py).
+@@ 4fe5cbd874e0 d
+Renders all the windows of the layout with the same set of parameters (texts, icons, bars ; no code or state value): xvfb-run -a python3 render_all.py <output_folder>
+DQ4_SRC = dq4_pc folder ; used to compare before / after a change (identical images expected).
+@@ 84f1a34ce7a7 d
+Renders (off-screen) the engine windows in the state the save reached at the desired condition, with the /tmp/r3_layout layout and the rendering of the viewer.
+Usage: xvfb-run -a python3 render_battle.py <slot> <output.png> [action_text_wait=1] ; changes nothing in the repository.
+@@ 6c4ff74be255 t
+healthy ; dead (cross, red name) ; poisoned at death's door (skull, yellow name) ; poison + sealed spell (eye)
+@@ c05c0ce1131d d
+Synthetic rendering: status icons (types 4, 20, 60) and target arrow (type 29) ; xvfb-run -a python3 render_state.py <prefix> ; DQ4_SRC = dq4_pc folder
+@@ c576148db492 d
+Renders off-screen a window of a given type with chosen parameters (without engine): xvfb-run -a python3 render_type.py <type> <output.png> [--code i=c ...] [--avant-codes]
+DQ4_SRC = dq4_pc folder to use (default: the /home/claude/wt-audit worktree). Changes nothing in the repository.
+@@ 77accfbeedc4 d
+Lists the calls (bl/b) to a libdq4core function: python3 scan_calls.py <symbol_substring | 0xaddress>
+@@ 6e1e5b71048b c
+look for an adrp in the 12 preceding instrs with the wanted page
+@@ 201086b835cf d
+Looks for the libdq4core functions that load a GOT slot: python3 scan_got.py 0x23d7b8
+@@ bd572b0b6528 c
+text segment: RVA -> file offset = RVA - 0x4000 (cf. hint)
+@@ 84169e4228e2 d
+IL2CPP methods that load a GOT slot (adrp+ldr): python3 scan_got_il2.py 0x1b937b8
+@@ c6577fc15fa1 d
+Lists the calls (bl/b) to a libil2cpp.so method: python3 scan_il2.py <RVA hex | name substring> ; DQ_IL2=/home/claude/il2
+@@ 9393b1436fd1 d
+Types whose parameter table (id,no)->parts references parts absent from the export: python3 scan_missing_parts.py [ui_layout.json]
+@@ b29d3e7ec9e3 t
+strb / ldrb unsigned offset
+@@ 1ff3dde58bf6 d
+Looks for strb/ldrb [xN,#imm] in libdq4core for functions whose name contains a pattern: python3 scan_str.py 0x68 pattern
+@@ d61dfa3f2eed d
+Reads a DQ_SUIVI log: for each map load, the frames drawn just after (kind, engine frame, fade) and the engine frame jumps between two displayed frames.
+@@ 31002652af5c t
+default setting of the viewer (fades to black twice as short)
+@@ 0b3351a7abf7 t
+never any hold-back: original behavior
+@@ 58fa9752f0d6 t
+camera not sent yet, or still that of the previous map
+@@ 81a1dffb1e55 d
+Before / after measurement of the drawing hold-back (State.loading): for each map change, the engine frames where the scene would be visible (at least 2 %) while it is not in place.
+usage: python3 measure.py MODE SCENARIO [args]   MODE: avant (hold-back disabled) | apres ; SCENARIO: marche SLOT DIR N | tp SLOT n1,n2,... | mort SLOT MONSTER | etat SLOT
+@@ 082ff2daa607 d
+traj: list of snapshots after each step. For each load (loaded_maps increasing): "final" state = the one 8 steps later, or the last one before the full opening of the fade.
+@@ 864a310d618c c
+decals: flat, cut out, not 'tr'
+@@ 8b3872a852ba t
+opaque ground under the decal
+@@ 1e2b5eb9c3ef t
+a (h,w,4) float ; u,v in texels (texel centers at +0.5)
+@@ 67ed999373c3 t
+(top first)
+@@ f2332f6dd886 d
+Top view (orthographic) of a map of the cache: investigation tool, no GL. usage: topo.py map output.png [px_per_unit] [x0 x1 z0 z1]
+@@ c52bd9b91003 d
+Windowless harness (no GL, no xvfb): starting town (maout) then walk downward (DOWN) ; log: map, hero position, engine camera (pos / target).
+@@ 575a5ddf2eec t
+new variant: the map is reloaded (textures included) with the toggles
+@@ b3fabafc73cf d
+Investigation #45 scenery: several maps / cameras in a SINGLE launch (the xvfb lock is scarce). Plan: JSON of {n, carte, pos, cib} ; DC_WT = root of the repository to test.
+Trial variants (never in the repository): DC_POSER=1: the flat cut-out decals are brought back onto the opaque ground below them ; DC_BORDS=1: color of the transparent texels spread out (bords_alpha).
+@@ ad081873f704 c
+we send the "Fuir" button (no. 2?) on the root menu of the battle (port 13, type 30)
+@@ 1f34305a23c7 d
+Battle scenarios: usage battle_scenario.py SCENARIO ; SCENARIO = niveau | fuite | boss
+@@ 523dd448cc94 d
+Fleeing in battle: "Fuir" button of the root menu ; usage flee_battle.py [number of seed attempts]
+@@ 9b3e6a08b1f4 d
+Engine-only harness (wt45-son): trace of the sound requests (packets 35/36/37 + SoundManager calls) with their caller, messages and HP.
+@@ 7f967c1616af d
+Hooks on the SoundManager / Sound functions of the engine: who requests what.
+@@ b46ff7435123 d
+Launches a forced battle (imposed monsters) and drives it: A everywhere (menu, message). log = [(frame, kind, detail)]
+@@ 2d8083a7f1cc c
+accelerated battle: BGM 47 jingle (no loop, 3.1 s) then stop order of frame 220 (4 s later, at normal speed) received immediately
+@@ d90cd8645363 d
+Real sound (real pyglet, silent audio driver, windowless): preloading of the music and protection of the jingles on the real APK.
+@@ 5f35f98be264 t
+RT=1: real clock (decoding takes its real time), the engine frames are paced at 30 x factor per second
+@@ 56f5e47724b8 d
+Replays the engine's sound orders in the real Sound class (fake players, clock simulated at 30 frames / s, factor = engine clock speed) and writes the AUDIBLE timeline.
+@@ a60385c7bd60 d
+one frame: the engine's orders, then tick, then the time advances by dt
+@@ 65d68fac4ac5 t
+the village music plays before the battle
+@@ f3c60b1842c0 t
+the player walks for a while before the encounter
+@@ 24ce60a87776 c
+the replay is hooked onto each engine frame: only the time changes (speed factor: t advances by 1/(30 x factor) per engine frame)
+@@ 160a0e6c86b8 t
+the game goes on: the clock is left running (the engine no longer gives orders) to see the held-back orders go out
+@@ 5f7b64f78890 d
+usage: run_replay.py SCENARIO [factor] ; SCENARIO: niveau | wipe
+@@ 0f4a29e0c38d c
+go back up to 6 instructions: mov w0, #imm
+@@ 19c7827acb00 d
+SoundManager::play*/playSe calls with an immediate argument: we go back a few instructions before the bl to find `mov w0, #imm`.
+@@ 8433711f914c d
+Services in town (church, inn...) with sound trace. usage: services.py PHASE "key sequence" [slot] [dead_indices]
+@@ f7819451ac19 c
+Music decoded in advance (background task, one at a time, when nothing else is to be decoded) and kept in memory (never evicted from the cache):
+decoding a long music takes more than a second (BGM 23, 113 s: 1.15 s here; more on a slow PC), whereas the engine stops a music requested during an
+accelerated battle 2.7 s after starting it (x3): without this, the defeat music (BGM 23, requested when the whole party is defeated) was only decoded
+at that moment, and the engine's stop, arriving before the end of the decoding, canceled it: the party died in silence.
+The jingles (BGM 6, 8, 10, 13, 35 to 50) are short: 0.04 s each.
+@@ f5f770bc1e45 t
+already running
+@@ 6f79ec877418 d
+The whole party is defeated (HP forced to 1, many monsters) ; usage: wipe.py CHAPTER [slot] [max_step] -> log of sounds / texts
+@@ a3eda8489eda t
+(measurement) no encounters: the world map without battles
+@@ 4d1228e34847 t
+simulated clock: never a budget cutoff
+@@ 93a1f546b1b0 d
+Duration of a day / night cycle of the world map, in NOMINAL real seconds: the real engine is advanced with the real clock of the viewer (battle_speed.advance_time, 60 frames per second, walking factor f) but with a simulated clock (the load of the machine does not count).
+@@ 0a0bfc7153d3 t
+corridor without an entrance (see tools/simulate_encounters.py): the town is to the south and to the north of the start cell
+@@ 803d222c6a43 t
+world time gained (modulo the cycle)
+@@ 5a04f0a8eedb d
+(test #45) Real duration of a day / night cycle of the world map: a robot walks on the map (direction held, changes direction when the world time no longer moves),
+the encounters are cut (Encount +0x18 = 0), we log (real time, world time g_Stage+0xcc, engine frames). Usage: measure_cycle.py LABEL MAX_DURATION_S [CYCLES]
+@@ e6bf32bec4bf c
+tab: text between the top of the tab and the rule
+@@ 60016652762c c
+baselines of the 2nd column: dense rows
+@@ f6d378c164eb d
+Uniform measurements on the capture of the mobile game and the t33 renders: python3 analysis.py img1 [img2 ...]
+For each image: body rule, "Ragnar" tab (baseline and margin under the baseline up to the rule), left button (edges, center), "Rat volant" (baseline), right button: baselines of "Scarapince" and "x2" ;
+everything in px and in units (1.688 px / unit), relative to the center of the button.
+@@ e9817e2a36ad c
+---- contact sheets: various windows (450 x 800 portrait, scale 1), sample texts in all the text cells
+@@ b06033869d4b d
+Renders several windows (33 target, 29 state, 31 plates, 32 commands) at scale 1.688 (that of Sylfried's captures), in "original" mode (without recentering) then "recentered" mode:
+xvfb-run python3 render_multi.py <output_folder> [dq4_pc]
+@@ 0c0268273b69 d
+Off-engine rendering of the History window (fast iteration): python3 render_hist.py OUTPUT.png [tab] [filter] [end] [width] [height]
+@@ bdedd912618f d
+"Interface a modifier" drop-down list off-engine: python3 render_list.py OUTPUT.png [current] [top]
+@@ b9f81084d138 t
+world map: corridor without an entrance (the town is to the south and to the north of the start cell)
+@@ 3d7031d6ee55 t
+dungeon dab1: a closed room
+@@ ea6596687741 t
+brew: mov w0, #0 ; ret -> no battle (the simulation counts the triggers)
+@@ af55facf8ae1 t
+added after the engine hook (same address: installation order)
+@@ 2de137586597 t
+out of the corridor: return toward the center (UP decreases y, DOWN increases it)
+@@ 878cbc7d60cb d
+Statistical simulation of random encounters with accelerated walking (#45), on the REAL engine (emulated libdq4core.so): how many encounters per step at x1, x2, x4?
+
+A robot makes the hero walk (direction held, it changes direction when it is blocked) for a fixed number of STEPS (engine frames where the hero's position changes: what the game counts, see
+encounters.py) with `Engine.walking_speed` = a, the setting the viewer writes before each step. The triggers are counted ([Encount+0x1c] >= 1) ; `Encount::brew` returns false (no battle: the robot
+stays on the map) and the counter is removed as when returning from a battle (`Encount::setup(0, 0)`, called by FieldSystem::initialize and TownSystem::initialize when the map reloads). Nothing else is touched: the
+counter draw, the loss per call and the formation of the groups are those of the game.
+
+What is expected: encounters per step (a) / encounters per step (x1) = (1 + a) / (2 a), so "encounters per step x a" = (1 + a) / 2 x the rate of x1 (x2: 1.5 ; x4: 2.5). The table also gives the counter loss
+per call of `CountDown::exec` before and after the hook (exact, no randomness: ratio = (1 + a) / (2 a)).
+
+    DQ_APK=... DQ_SAVES=... python3 tools/simulate_encounters.py [--lieu monde|donjon] [--pas 24000] [--vitesses 1,2,4] [--graine 1]
+      monde  : world map, save 4 (the hero goes back and forth in a corridor with no entrance or exit) ; donjon : save 5 (room dab1).
+The saves are read without being modified (written to /tmp/sv_simrenc_*).
+@@ 9273fb21fb76 t
+folder containing libil2cpp.so, script.json, dump.cs
+@@ 515e782e75e8 c
+PT_LOAD segments
+@@ c1c6da9f391f c
+names from dump.cs (RVA -> Class.method)
+@@ 9276fd92f14a t
+literal
+@@ df1fd95f2b25 d
+Access to the machine code of libil2cpp.so (segments, addresses -> names) and disassembly (capstone, optional: only used for manual analysis).
+@@ a55555eb5034 t
+capstone: disassembly of the ARM64 code (required for the analysis of the functions)
+@@ 160dbffbea03 t
+message window (MenuMessage): frame, text canvas, cursor
+@@ de7c3c22369d d
+Generates data/cache/ui_layout.json: the EXACT layout of the game's menu windows.
+
+Principle: the game's MenuPortItemTable.Make_* functions (libil2cpp.so, ARM64) are run under Unicorn with
+"fake" Unity calls ; the nodes, meshes, texts and binding tables that they build are read back.
+Nothing is copied or redistributed: the produced file stays in cache/ (ignored by git).
+
+Inputs: data/cache/il2cpp/ (dump.cs, script.json, entrees/libil2cpp.so, entrees/global-metadata.dat: tools/dump_il2cpp.bat)
+          data/cache/ui_frameData.bin (extracted from the APKs automatically)
+Usage   : python generate_ui.py [apk_folder]
+@@ 93f48e12d859 d
+Prints and writes to cache/ui_generation.log (UTF-8): allows diagnosing without a console.
+@@ 721aedb5cab8 d
+Launches a Python subprocess ; output read as tolerant UTF-8 (the Windows console is not UTF-8).
+@@ 996f1e30bb71 c
+Color.cyan / Color.green: native Unity properties (absent from the emulation) -> standard Unity values
+@@ f6dda3085833 t
+layout version number: 2 = language set (GetLangages) ; 3 = argument of the Make_* = rank in the type group (type 22: Mode button) ; launch_dq4.bat regenerates a file of an older generation
+@@ 98935ba12cce d
+Header of the layout: icon sheets (PartsInfo), text colors, language parameters, "pressed" offset of the buttons.
+Usage: python header.py output.json
+@@ 080800a0e06c t
+Build(indent, screenIndent, x, y, z, parent)
+@@ 13f2351054d3 t
+Build(indent, Vector3 pos, parent)
+@@ 318fbeba0904 t
+IBase.Change(int): this = IBase
+@@ 32917adc53ce t
+MenuParts.IBase.Change(int)
+@@ 4d230a473a59 t
+MenuParts.SetTextColor(this, code)
+@@ 5f267cee60eb c
+custom IBase: readable object fields (internal changers)
+@@ 6f692650fff5 c
+CreateMenuPortItem (0xCE4294) calls the delegate with "type - Array.IndexOf(makeFuncList, delegate)" (0xCE43DC: sub w2, w21, w0):
+for the types that share the same Make_* (13..17 Make_Status, 22/23 Make_MapButton...) the argument is the rank in the group, not the type
+@@ fde05597899a c
+IBase identifiers -> (part, index)
+@@ c928edbdbe9f d
+Export of the menu layout: for each menu type, runs the original Make_* and describes nodes, parts (MenuParts),
+changers (IBase), binding tables (id,no) and the effects of the codes (movement / visibility).
+@@ 3af165b92a05 c
+language: GetLangages.m_langagesNumber (0 = ja, 1 = en: the language that the French patch replaces) -> MenuParts.LangParam.Apply
+@@ 0654f19f4b67 d
+Replaces MenuParts.SystemInit (loading of Resources): real fonts/shaders/colors/frameData, outside Unity.
+@@ 228f84408f8d d
+GetLangages.m_langagesNumber / LangJapanese: read by about sixty menu functions (sizes, text offsets, Japanese variants...).
+Without this the emulation took "other language" branches and the button labels ended up 20 units too low.
+@@ c7c261baaf08 d
+Builds the message window (MenuMessage..ctor): several windows are placed relative to it (MenuMessage.m_window).
+@@ 83cf431d2656 t
+MenuMessage.m_window (MenuParts)
+@@ 10f20fb80cdd t
+m_nowType: forces the recalculation
+@@ d402b7b1727a d
+Export of the message window (MenuMessage): for each window type (MenuMessage.canvas_data), window position, frame
+(frameData), quadrilateral of the text canvas (the text is drawn by the engine) and position of the end-of-page cursor.
+Usage: python message.py output.json   (variables DQ_IL2, DQ_META, DQ_FRAME as in layout.py)
+@@ 0f962ccafdc1 d
+m_frame.Change(n): delegate call not emulated -> we set the frame mesh n on the window ourselves (then we skip the call).
+@@ f432c33f77e7 d
+Minimal reading of global-metadata.dat (v31): default values of the fields (data of static arrays).
+@@ fb561a6a4c18 d
+Default bytes of the field named fname (from the start of the data, unknown length: returns everything that follows).
+@@ 4b48901a439b c
+PT_DYNAMIC
+@@ cdbe31c832de t
+menu number -> name of the Make_* function (filled by make(): the game's MenuPortItemTable.makeFuncList array)
+@@ bb6930848848 c
+sheets: PartsInfo ready
+@@ e8a1abffd081 t
+makeFuncList: one delegate per menu type
+@@ 7060ab95d6d1 t
+Unity objects created by MenuMessage..ctor
+@@ bccd1dd198fd c
+---------------------------------------------------------------- signatures (dump.cs)
+@@ f71b262eedc3 t
+rva -> dict
+@@ a402ae9f74aa t
+type name -> 'class' | 'struct' | 'enum'
+@@ 64021fa1cd18 t
+class -> [(type, offset)]
+@@ ab31ad3f5abf t
+class -> [(type, offset)] instance fields
+@@ fbe2b7e28346 t
+calls through null pointers (unresolved virtuals): immediate return
+@@ 3ab2799e6fb8 t
+T -> dummy class
+@@ 29375d3ab888 t
+dummy class -> name
+@@ 69f87140d4fe t
+object address -> (id, description)
+@@ 49493b4d1a0c c
+---- memory
+@@ 5d92410ad9dc c
+virtual call / delegate on a null address: we log and return
+@@ 477b91e6d2ee c
+---- objects / dummy classes
+@@ e95cf741dd5d c
+---- intercepted calls
+@@ e4024d01b381 c
+---- IL2CPP helpers
+@@ bf480ee094db t
+we received the value loaded from the variable
+@@ d27dad1a893c t
+dummy return
+@@ 351e17e7908c c
+return address: a dummy 'ret' instruction
+@@ 910581974e55 d
+Tracer: runs a libil2cpp.so function (ARM64) under Unicorn, replacing its calls
+by stubs that log (name, arguments typed according to dump.cs) and return dummy objects.
+@@ acde040e5734 d
+Runs fn ; all the direct `bl`/`b` to other functions are intercepted (logged).
+@@ f60f35cab311 c
+----------------------------------------------------------------- names
+@@ 693e9ccefc0b c
+----------------------------------------------------------------- register helpers
+@@ 82e13da0a5f3 c
+----------------------------------------------------------------- List<T> in real memory (_items +0x10, _size +0x18)
+@@ 6d9e7f5042b3 t
+dummy class of the array
+@@ 338d690544aa c
+----------------------------------------------------------------- Unity-lite
+@@ 931d5b10466e t
+delegate constructor: we remember (target, method) ; the lambdas will be run on demand
+@@ 43be463d35c1 t
+static array initialized from the metadata (field <PrivateImplementationDetails>.HASH)
+@@ bdeef485be16 c
+binding tables of MenuPortItem (structured log for the export)
+@@ c57ea9157a8d t
+initialization of the rgctx of a generic method: AddComponent<MenuParts>() is put in it
+@@ 86bb49f20bde t
+token Method$...AddComponent<T>() -> class T
+@@ c788b0f72875 t
+Create<T> (T = MenuParts or subclass): we take MenuParts
+@@ a032ff995f5d t
+fields initialized by MenuParts..ctor (0xd031d0)
+@@ 9ff7d7f1e257 c
+Transform
+@@ e897fc920f8b c
+Mesh
+@@ 8617e6ede71c t
+Bounds (center, half-dimensions) returned via x8: box of the mesh vertices
+@@ d4ca4afbffcf c
+Renderer / Material
+@@ a0c4821037f1 t
+class targeted by the cast that follows the call: adrp+ldr of the token, then cmp
+@@ 2b502181a1cf c
+TextMesh
+@@ 45fc9c315ff5 t
+no notch: safe area = the whole screen
+@@ c0c5f138e11b d
+Tracer v2: actually runs the menu construction code (Make_*, MenuParts, MeshMaker...) and
+replaces the Unity API with a minimal model (GameObject, Transform, Mesh, Material, TextMesh, List<T>).
+@@ 4c5be74611ad d
+Create<object> / CreateBuildFrameParts<object>: the MethodInfo (x2 or x7) points (+0x38) to an rgctx block whose entry 0
+is the MethodInfo of GameObject.AddComponent<T>() ; the one of AddComponent<MenuParts>() is put in it.
+@@ 47c3489d8652 d
+Elements of an IEnumerable source: array (X[]: length +0x18, data +0x20) or List<T>.
+@@ 303c3a10e75d d
+.NET string (UTF-16 after the 0x14-byte header) or known literal.
+@@ d97c83e6879a t
+modules of dq4_pc/fenetre that were not part of the old window.py
+@@ d3a872401d47 d
+Test helper: finding the source code again after the reorganization of 2026-11-04 (dq4_pc is now a package with subfolders ; the old window.py is a folder of modules).
+@@ 19beb0a9e0a1 d
+Path of the module `name_str` (e.g. 'pause.py') in dq4_pc, whatever its subfolder.
+@@ d562abb45760 d
+Text of the module `name_str` ; 'window.py' = the whole old file: the Game class, its modules by theme, the constants and the functions (dq4_pc/window/*.py except the two pure-logic modules).
+@@ 745533dd7620 d
+Replaces the value of the global `name_str` in all the dq4_pc.window modules that carry it (the old window.py was a single module: a `F.time = fake` acted everywhere). -> function that restores the old values.
+@@ 59add81a6774 t
+(test helper: finding the source code in the subfolders of dq4_pc)
+@@ d9e45c91b2cd t
+(no display needed: nothing is drawn)
+@@ e5bcd7d81ab0 c
+---------------------------------------------------------------------------------------------------------------------------------- 1. the code
+@@ 6110f68c0e2a t
+AutoSave is no longer called by the viewer (the engine calls it by itself)
+@@ 40e32b68930f c
+---------------------------------------------------------------------------------------------------------------------------------- 2. the window (simulated)
+@@ 6b62f5dcdefc c
+(the last line of Game.on_close is super().on_close(): the pyglet window, absent here)
+@@ 8c6b9952b66a t
+everything the closing does ; no save of the game
+@@ c1ff4231cd08 c
+---------------------------------------------------------------------------------------------------------------------------------- 3. the real engine
+@@ 0cad4dd08ac1 t
+the "Sauvegarde automatique" cell of the start menu exists
+@@ 39694ab382af t
+the game's Yes / No box
+@@ 0924f784ffc9 t
+"Oui": killbank(4) then the fade
+@@ 22b938721a2e t
+bank 4 is erased
+@@ 06dd912941e9 t
+fade then title: nothing is written
+@@ 7c36bdb2a51e d
+Test of the automatic save of the game (issue #128): the original game writes NO automatic save when it is closed. It is written by the engine itself, in two places only
+(`TownPart::initialize` and `FieldPart::initialize` of libdq4core, depending on the conditions of the game: arrival on the world map, arrival in a dungeon...). The viewer adds nothing: closing the window
+(X button, Alt + F4, Quit menu...) saves the settings and the history, period. (The closing code of #124, which forced `AutoSave(true)` and put the player back "to the pixel", is removed.)
+
+    python3 tools/test_autosave.py [--apk <folder of the patched APKs> --saves <folder of the saves>]
+(or DQ_APK and DQ_SAVES ; without them only parts 1 and 2 run). Part 3 loads the real engine (about 1 minute): to be launched through `tools/session_flow/engine_slot.sh`.
+
+Part 1 (without engine): nothing left in Engine or in Game that forces an automatic save, or that watches the console, the signals, the end of the session.
+Part 2 (simulated window): Game.on_close does not touch the engine ; the Quit menu goes through on_close.
+Part 3 (real engine): arrival in a town does not write bank 4 ; arrival on the world map writes it (the engine alone) ; closing the window writes nothing ; "Revenir a l'ecran titre" erases it and it does not come back.
+@@ 211dbc33e8ec d
+An engine that raises an error at the slightest access: the closing has nothing to ask of it.
+@@ 69f9a5008e16 d
+What the closing reads from Game ; the real on_close method is bound to it.
+@@ d6921e5c1849 d
+Mask of the valid banks (getCatalogStatus: bits 0 to 2 the adventure logs, 3 the suspend save, 4 the automatic save), after re-reading the files (getCatalogView).
+@@ 28ab4ad475d5 t
+fenetre/camera.py needs pyglet (the import alone is enough)
+@@ e41f935eb94e t
+landing: the balloon goes back down to scale 1
+@@ 9d5f98246197 t
+no duplicate
+@@ e717ccd1ad89 t
+registering an object does not touch the scale
+@@ adaddaba2552 t
+empty packet: ignored without error
+@@ 32b66d92ba29 t
+what the real engine sends on entering the world map (verified on save 4: frame 31)
+@@ 203e48f4dee7 t
+a saved state without these attributes (neither __init__, nor a filled __dict__)
+@@ 8856669520df t
+25 % more terrain
+@@ 0eca3258008b t
+object without the attribute (another kind of state): scale 1
+@@ 4d606b54e8fa d
+World map scale in a balloon (packet 30, `cmd_field_scale` ; audit MAP-02 / UNI-05 / SPR-06):
+
+1. `State`: a negative integer followed by a float sets the field scale (Field.SetScale: 1.0 to 1.25 in a balloon) ; an integer >= 0 registers the character of that slot as a "floating object"
+   (Field.SetFloatingObject: the balloon, slot 12) ; no duplicates ; aberrant values (0, negative, NaN, infinity, missing) ignored, extreme values clamped ;
+2. reload: the loading of a map (packet 0) resets the scale to 1 and empties the floating objects ; the loading of the world map (packet 27) too (the engine registers the balloon again just after) ;
+3. a state saved before this fix (without these attributes) behaves like a fresh one: scale 1, no floating object ;
+4. world map camera: the visible height is multiplied by the game scale (no more player zoom since #264 ; skipped without pyglet).
+
+  python3 tests/test_balloon_scale.py
+@@ f0d585d9335f t
+0x440c: bits 10 (separate) and 14 (position on the map)
+@@ 7f354eab37ae t
+2 tiles of 16 pixels to the south
+@@ 2ecadcec7d19 t
+bit 13: a float that must be removed before those of bit 14
+@@ c97bb5b596b9 t
+bits 12, 13, 14
+@@ a775a8396ef4 t
+truncated packet: no error, no invented position
+@@ ac83ea1bac59 d
+#212 (audit SPR-02): packet 15 (cmd_chara_shadow): bit 12 = shadow position (3 floats), bit 13 = opacity (1 float), bit 14 = shadow position on the world map (SetFieldShadowPosition, 3 floats).
+The floats follow one another in this order: reading bit 14 without having removed that of bit 13 gave an offset. The balloon (packet 0x440c, [2495.97 ; 383.97 ; -1] for a sprite at (2496 ; 352)) has its shadow 32 pixels further south.
+Without window or engine (unicorn alone for the import):    python3 tests/test_balloon_shadow.py
+@@ 5e8f47523563 t
+battle camera at rest (after the approach at the start)
+@@ a96b2f98b032 c
+------------------------------------------------------------------------------------------------------------------------------ without engine
+@@ ce774f4a7865 t
+a point to the right of the center goes up or down when the camera rolls
+@@ 1cfcc1797134 c
+------------------------------------------------------------------------------------------------------------------------------ real engine
+@@ 86b7687f97c4 t
+monster whose basic attack has a camera (file "m007_at"): the camera goes up by ~2.35 units then comes back
+@@ 97a2e2fa4aed t
+encounter composition: a single monster (Encount + 0x34 / 0x44, like test_battle_history)
+@@ 377e6acfe852 t
+BattleCamera::setCameraAnimation(camA, camB, waiting): (frame, camA, camB, waiting)
+@@ df3b3de45a66 t
+up to the command menu: camera at rest, nothing has attacked yet
+@@ e725e215d4ca t
+(apply replaces the State object: reread it afterwards)
+@@ edcdca4470c9 t
+returns to its starting point
+@@ 440e6b0d8e4c t
+only the height changes
+@@ 111501229b81 t
+the angle does not change for this attack
+@@ f3c4a43b2a88 d
+Camera effects in battle (batch #47, feedback from Sylfried: "some enemies can change the camera angle during their attack").
+
+What the original game does (read in the disassembly of libdq4core.so and verified on the real engine):
+  - `BattleMonster::startAnimation(action, variante)` looks up the `param::MonsterAnim` record (monster, action, variant) and calls `BattleCamera::setCameraAnimation(camA, camB, waiting)` with the
+    bytes +0x13 / +0x14 / +0xe of that record ; spells go through `BattleEffectUnit::waitStart` (`BattleCamera::setFilename`) ;
+  - `EffectParam::getCameraFile(n)` gives the file `camera/<name_str>.cam` (position and angle keyframes, read by `CameraControl::calc`) ; two files add up (A = movement, B = shake) ;
+  - on each frame `BattleCamera::executeForMap` computes position and angle, `dss::Camera::send_unity` sends them in ONE packet 10 (bit 0 position, bit 2 angle): nothing else drives the camera.
+The viewer therefore has nothing to replay: it applies each packet 10 (`State.apply`) and `_battle_camera` makes the matrix from it. This test proves it:
+  - without engine: application of the packets 10 in chunks, roll and pitch / yaw in the matrix ;
+  - real engine (optional, DQ_APK + DQ_SAVES): a real battle against a monster whose attack has a camera (index 7: `setCameraAnimation(25, 0, 0)`, the camera goes up then comes back), and four
+    injected cameras (shake, big boss movement, dive of a final spell): they all come back exactly to their starting point and the roll sent is always 0.
+
+    python3 tools/test_battle_camera.py
+    DQ_APK=... DQ_SAVES=... python3 tools/session_flow/engine_slot.sh python3 tools/test_battle_camera.py        (about a minute)
+@@ 9d0079e60075 d
+`_battle_camera`: the battle camera is that of Unity (euler (-x, -(y + 180), z)) ; position, pitch, yaw AND roll change the image.
+@@ e29f50b5fe9e d
+The game never sends a roll in battle (see the real-engine test), but if it sent one, the viewer would apply it (G-073: nothing to add).
+@@ 35ea9f34db45 d
+A real battle, played like test_battle_speed: the monster's attack launches `setCameraAnimation(25, 0, 0)` ; the camera of the viewer (State.cam_pos) follows the packets, goes up, then comes back exactly.
+@@ 2d08f9bbab41 d
+Puts the battle back at rest (command menu), starts the camera (like BattleMonster::startAnimation) and follows State.cam_pos / cam_rot until the end of the animation.
+@@ 959d2a52093e d
+Camera 158 "tateyure1" (pitch shake, the most common): ~1 degree of pitch, neither position nor yaw, ~13 frames.
+@@ 22c96127809d d
+Camera 21 "m000_at" (slime attack, variant 1): pitch of ~6.5 degrees, nothing else.
+@@ 10d581d51b49 d
+Camera 127 "m255_tai" (special forms with index >= 250): the camera slides by ~14.6 units in x and z and turns by ~19 degrees in yaw, for ~230 frames (7 s), then comes back.
+@@ 2931a5d1028b d
+Camera 140 "madante_evi": the camera goes up by ~31.6 units in height and dives by ~54 degrees, ~180 frames, then comes back.
+@@ 3e99b2533f39 d
+At the top of the boss movement (127), the matrix of the viewer is no longer the rest one: a point of the scenery is projected elsewhere.
+@@ 0cbf79bda62b t
+(D-238: the expectations of this test are in French, whatever the language of the computer)
+@@ fbe8f0ed2a26 c
+---------------------------------------------------------------------------------------------------------------------------------- pure computation
+@@ 105ff47caaa6 t
+(the group numbers are not necessarily 0, 1, 2...)
+@@ a4fdbf873f4a t
+fewer plates than groups
+@@ 497497ce4142 t
+more plates than groups
+@@ 6fc84e6aaec7 t
+a plate without a name
+@@ d7f3d679b581 t
+reviewed at each frame: not recounted
+@@ 8945d20d45bc t
+the defeated monster stays in its slot until the cleanup
+@@ 4d2868213291 t
+cleaned up
+@@ 64e530fddeed t
+a reinforcement arrives in the free slot
+@@ 46b776869d9f t
+transformation / replacement between two readings: new monster
+@@ adc909c4d077 t
+two unnamed species: two entries, never merged
+@@ a563a10a40cd t
+same name = same species for the player
+@@ 8b8099d76a81 t
+one defeated monster out of two, no victory routine: gone
+@@ f5fc6907e39b t
+the victory routine wins over a defeat flag left over from a previous battle
+@@ b0103bd41dd5 t
+all defeated, even without the routine
+@@ 81da3ef4e4b3 t
+nothing seen, nothing defeated: the group is gone
+@@ 228c851902d2 t
+fleeing after a death: neither gold nor experience (the engine does not pay them out)
+@@ 5e5cc1832836 t
+(only the dead count as "dead": neither a flight nor a disappearance)
+@@ 1867750c2bc2 t
+(no monster left: all defeated or gone, at least one defeated)
+@@ 51ea52601e4b t
+one monster remains: the group is gone
+@@ 9020c7eee7a8 t
+(the victory routine of the game has the last word)
+@@ 0024157e9b5f t
+same slot, spell already noted: another monster
+@@ a348f1e46fe4 t
+no victory: no items brought back
+@@ 468d89e82aa1 c
+---------------------------------------------------------------------------------------------------------------------------------- glued onto a fake engine
+@@ 565d962a2ebd t
+the task BattleExecVictory32: the item number at +0xc
+@@ 8a4215ffac62 t
+event -> (hook address, expected instruction)
+@@ 6c53b90d935d t
+what TextAPI::extractText answers
+@@ 6d2ff3478e5f t
+ldr wRt, [x0, #offset]
+@@ 9e9a9ba5791b c
+-- the call of an engine function (HC.BattleSensor._item_name: TextAPI::extractText)
+@@ 0b63cd541716 t
+12, 7 and 99: one call per different item (the name is kept)
+@@ d30b02fadbeb t
+("<ERR ... >" is never shown)
+@@ 857c311626f4 t
+(one call per different monster number)
+@@ 5176a7cc38e8 t
+the two names come from the plates: the engine is not queried
+@@ 15509e223773 t
+(no half-installed hook)
+@@ 0f796de643bb t
+the 2nd monster present = slot 5
+@@ b8595644fd70 t
+plates from before the start: never read
+@@ 78ddaef995b9 t
+a group has gone: the matches are no longer sure
+@@ 8dd9391994c5 t
+defeat in a scenario battle: endBattle(false) but "lost" flag
+@@ 2fb4ebd4d327 t
+no memory read outside battle
+@@ 48c3ff882d43 t
+sensor created in the middle of a battle: nothing false
+@@ 40f8ca60b427 t
+Engine.state is replaced by savestates.apply, frames goes back

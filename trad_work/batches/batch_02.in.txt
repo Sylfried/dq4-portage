@@ -1,0 +1,674 @@
+## FILE dq4_pc/core/engine.py
+@@ 2c92e4fa21c5 t
+retour au titre : None, 'ouvrir' (a lancer au prochain pas) ou 'dialogue' (la boite Oui / Non du jeu attend la reponse) ; voir request_return_to_title
+@@ d6c3954018d4 t
+le joueur a choisi « Paramètres » dans le menu Divers : la visionneuse ouvre son menu Pause (voir _divert_params)
+@@ c04b27678800 t
+FieldData::drawBlock(this) : l'objet qui porte la carte du monde
+@@ 63b311af6965 t
+historique des dialogues : crochet sur TextBuffer::cat (installe avant la premiere image : Unicorn garde les blocs deja traduits)
+@@ 28dca7fc1d92 t
+historique des combats : crochets en lecture seule (ennemis vaincus, or, experience ; voir battle_history.py)
+@@ c431ef10c77f t
+le titre tourne quelques images (curseurs initialises)
+@@ b876bb74c770 t
+autre version du moteur : on ne touche a rien
+@@ fc00714a54dd t
+lettres que le moteur s'apprete a ecrire (mot de vitesse de la fenetre x 4)
+@@ dcacc0d5bbab t
+reglage du joueur seulement tant que le jeu est a sa vitesse standard (4) ; une autre valeur (100 des fenetres de combat, vitesse fixee par le jeu) est la sienne
+@@ e0ceb307fadd t
+vitesse du jeu : inchange (aussi quand le reglage est « comme le jeu », 4)
+@@ 63156c970d3e t
+x1 : le jeu tel quel
+@@ 4abeb38142f1 t
+entiers signes de 32 bits (le compteur devient negatif au declenchement)
+@@ b3462b02c329 t
+appel saute : retour direct (la pile est deja rendue, x30 = adresse de retour de l'appelant)
+@@ 01d2f6c4a0d2 t
+(le stub PLT : adrp x16 ; ldr x17, [x16, #0x968] ; add x16, x16, #0x968 ; br x17 : sa case de la table des adresses, 0x240968, contient addPlayTime)
+@@ bbd419d84392 t
+appel saute
+@@ 3e900f3043a6 t
+`bl` vers le stub de UseAction::execUse ?
+@@ 77154e985466 t
+UseAction::getUseMp
+@@ 31768393603a t
+PM depenses : le sort a eu un effet
+@@ f909f81661b1 t
+le jeu a deja son message d'echec
+@@ 116bf2813989 t
+le bruitage de soin de l'etape suivante est coupe (voir _son)
+@@ 645dcd09d703 t
+un seul exemplaire du message (le moteur l'affiche une fois par cible vivante)
+@@ b782d01178d6 t
+sortie de la boucle des cibles : plus de bruitage de soin en attente (menuUpdate en joue un par cible restante) si rien ne s'est passe
+@@ 1e0316743dc8 t
+avant `sub w8, w8, #0xc4` : le sort n'a eu aucun effet -> w8 = 0xc7 (resultat 3 > 2) : pas de bruitage de soin
+@@ c5666e44e2c6 t
+adresse apres le `ret` de la fonction
+@@ 8a726c403ea9 t
+UnitySetFade : `mov w10, #9` (type du paquet) a +8 ; autre version du moteur : on ne touche a rien
+@@ 6a47540f8b4b t
+(blocs deja traduits avant les crochets)
+@@ ef9f9340ecb5 t
+un etat charge pendant la boite du retour au titre : la boite n'existe plus (memoire du moteur remplacee)
+@@ 54254386c764 t
+deja elargie (reapply_fixes)
+@@ e45f7b353d67 c
+TownMenu_OPERATION_ROOT::menuUpdate (liste du menu Divers) : « cmp w8, #7 » (0x16ef28) suivi de « b.ne » vers la sortie « bouton inconnu » ; le bouton 7 (« Paramètres ») ferme le menu et ouvre TownMenu_OPERATION_SETTING
+@@ 38b118c4ec1d t
+« cmp w8, #7 » -> « cmp w8, #4095 »
+@@ 06d6baa38dc8 t
+(0x713ffd1f = deja patche)
+@@ 85deaae80666 c
+canevas de texte des messages : Unity le cree par un message de port (largeur, hauteur) ; on appelle directement le gestionnaire
+@@ c5f824c87bfe t
+la reponse d'une boite precedente ne compte pas (MenuBase::menuBaseSetup la remet a 0 quand le menu est ajoute ; ici il peut deja l'etre : message d'un PNJ en cours)
+@@ fd57d48db4e0 t
+fermee sans reponse (la scene du moteur a repris la boite : un message de plus d'un script, par exemple) : la demande tombe, le joueur est libere
+@@ bbc05606f208 c
+vitesse de marche du heros (Fix32 par pas du moteur, valeurs d'origine de libdq4core) : villes (deux variables), carte du monde (Speed, plus les deux constantes locales 0x27520c et 0x275210 que
+FieldPlayer::move lit en diagonale). La course accelere l'horloge du moteur (viewer, _boucle), pas ces valeurs ; on ne les remet a l'origine qu'au chargement d'un etat (voir reset_speeds)
+@@ 409746d2b8d7 t
+la cascade suit « Vitesse de transition » comme les fondus : 57 images a x1, 57 / facteur ensuite (la simulation avance de 57 images au total, voir Game._draw_effect)
+@@ 6fc7f0032efe t
+dernier appel de l'arrivee (etat 4) : la camera du jeu est rendue au jeu, la scene reparait
+@@ b5ff93cb9b93 t
+bit 0 : « un fondu est en cours » (Fade.FadePlane.CheckFade : images restantes > 0). Le moteur le leve lui-meme en lancant un fondu (UnitySetFade) puis attend qu'il retombe
+@@ 64709f2fd2c5 t
+(Global::IsFadeEnd : auberge, titres de chapitre, ecran de chargement, ouverture des menus, sifflet...)
+@@ 894230ca5736 t
+(test) "image:monstre:hauteur:degats,..." : appelle BattleMenu_setHoppingNumbers comme le moteur apres un coup
+@@ dff9b86d99a7 t
+(test) journal des paquets de combat : image, [(type, ints...)]
+@@ db6508e9eb44 t
+(test temporaire) tous les paquets sauf 22/28/29
+@@ 6c07ed83e9f2 t
+la scene du combat est arrivee
+@@ 7f8206b9b385 t
+fin du combat : le fondu d'entree qui suit sur la carte est celui du retour (duree du jeu)
+@@ ca957c8a2dfc t
+combat sans effet d'ecran (scenario...) : la scene d'avant ne doit pas apparaitre avant le chargement de celle du combat
+@@ e9157d19fea6 t
+armé pendant ce pas (le moteur l'a deja decremente une fois)
+@@ dbc516cc5a3b t
+le fondu de cette sortie n'est pas (encore) arrive
+@@ 888f6991d1d8 t
+tetes/queues a 0, pointeur libre = 65
+@@ 5667b66854bf t
+sinon : menu dont le moteur demande la saisie (commande 6 a chaque image), meme sous un message : Oui / Non d'une question
+@@ 9a595d923b24 t
+(test) messages interface -> moteur
+@@ 37161d88fa6e t
+nombre de lignes visibles de la fenetre (reglage du moteur)
+@@ 3a5c17b8d78a t
+hauteur d'une ligne (pixels du canevas)
+@@ 186610e2b74f t
+defilement courant (le moteur l'anime de 8 pixels par image)
+@@ 6a250ff13a76 t
+le canevas est circulaire (512 lignes, REPEAT) et le defilement du moteur croit sans borne : comme `ui_menu.select_language` (y & 0x1ff)
+@@ a7ea8259df40 d
+Le moteur du jeu (libdq4core.so, ARM64) execute dans un emulateur + decodage de ce qu'il demande a Unity.
+@@ d9c383befa04 d
+Core + sauvegardes : lecture dans un dossier reel, ecriture persistante (jamais dans les originaux).
+@@ 0d2399d6198a d
+Dictionnaire d'attributs lu dans un pickle -> le meme avec les noms actuels.
+@@ b0ed19ad2e11 d
+Ce que Unity saurait a l'ecran : decode des paquets du moteur.
+@@ 953f08f29a88 d
+Ce que l'interface Unity memorise des messages du moteur : une fenetre par port (liste de textes, curseur, ouverte ou non).
+Messages d'un port (apres le premier octet = nombre d'arguments) : [1,..] ouvre ; [7,0] ferme ; [11,ligne,colonne] annonce
+que le message suivant du port est le texte de cette case ; [4,i] curseur sur la ligne i ; [12,ligne,x] et [10,..] reglages.
+@@ f1ef59c690fd d
+Le jeu est-il dans la transition d'un combat : effet d'ecran de debut (la « cascade »), ecran noir qui attend la scene, fondus d'arrivee et de sortie du combat, fondu de retour a la carte (et les 1 a 3 images
+entre deux de ces fondus) ? Depuis #47 sa duree en images suit « Vitesse de transition » (State._fondu, Engine._start_battle_effect) comme tout fondu ; son horloge reste celle du jeu pour la cascade et, au retour a la
+carte, tant que le joueur est verrouille ou entre deux fondus (Game._speed_factor : des qu'il est libre, la marche acceleree et l'accelerateur agissent, #127), alors que « Vitesse de combat » agit des la fin de la cascade (ecran noir, fondu d'arrivee, messages) jusqu'au fondu de fin compris.
+@@ 7dbd81d9ec3c d
+Une image du jeu (apres tick_fade) : les fenetres et la garde de la transition de combat s'ecoulent.
+@@ 2afe841d6b12 d
+Fade.SetFadeIn / SetFadeOutBlack / SetFadeOutWhite / SetFadeOutColor (FadePlane.Command) : sortie = vers l'opacite 1 depuis l'opacite courante ;
+entree = le plan repart de l'opacite 1 vers 0 (Unity part de l'opacite courante du plan : meme chose apres une sortie terminee). Duree <= 1 image : immediat.
+@@ 307a2edf40f4 d
+Fade.SetFadeOutBlack(0) sur le plan 0 (devant tout) : opaque, noir, tout de suite (fin des effets lampe et Riremito) ; il reste ainsi jusqu'a un fondu d'entree lance par le moteur.
+@@ ea3e63aa047c d
+Fade.SetFadeIn(images) sur le plan 0 (arrivee d'un voyage, Capture.Tabi) : de l'opacite COURANTE du plan vers 0, en `frames` pas egaux (FadePlane.Command, IN) : sans effet visible si le plan est transparent, et
+le bit « fondu en cours » de Global.Flag reste leve pendant `frames` images (CheckFade), comme dans le jeu.
+@@ 207bca896a42 d
+Fin de la retenue du dessin apres un chargement de carte (une fois par image du moteur, apres `apply`). La visionneuse n'a vu que le paquet 0 (nouveau decor) a l'image du chargement : camera de la scene
+d'avant, personnages sans position, ni teinte ni ordres d'objets ; le moteur envoie la camera (paquet 10) et les positions (paquet 13) a l'image suivante (59 cartes essayees, 529 cartes comptees : toujours le decalage 1).
+Tant que `loading` existe, la fenetre ne dessine que les plans de fondu (noir de l'ecran couvert) et les fondus d'entree sont suspendus (`tick_fade`) : le fondu du jeu garde toute sa duree, il commence juste
+une image plus tard, sur une scene complete. Prete : au moins LOADING_MIN image, camera recue, et personnages visibles tous places (au plus LOADING_PLACEMENT images d'attente) ; garde-fou LOADING_MAX.
+@@ 1d17e8f5348d d
+FadePlane.Update : une fois par image du jeu, pour chacun des deux plans. Garde-fou (plan de devant seulement) : un ecran reste tout noir plus de 6 s (fondu d'entree lance par Unity lui-meme, pas par le moteur) est rouvert ;
+le plan de fond n'en a pas : le moteur le tient noir de lui-meme (titre de chapitre, 160 images) et le rouvre par une commande.
+@@ bdd213b4fa6f d
+Un reglage ou un crochet n'a pas pu etre installe (instruction du moteur differente : autre version de l'apk). Le jeu continue avec le comportement d'origine ; la ligne va dans la console et dans `missing_hooks`
+(sans doublon : reapply_fixes repasse ici apres le chargement d'un etat), d'ou la fenetre la note dans erreurs_fenetre.log et prévient le joueur par un message a l'ecran.
+@@ 7a7d6ccdcd23 d
+Vitesse du texte des dialogues et defilement des combats (reglages du joueur, menu Echap).
+- Texte : ui_MsgLoop ecrit, a chaque image du moteur (30 Hz), `speed x 4` lettres (vitesse = mot a MSG_SPEED, copie du tableau du type de fenetre : 1 pour les dialogues, 100 pour les fenetres de combat qui
+  affichent leur ligne d'un coup). Un crochet sur `sxth w20, w8` remplace ce nombre par celui du reglage (`text_speed`, lettres par image, fractions cumulees ; 4 = comme le jeu : le crochet ne fait rien).
+- Combats : BattleAutoFeed lit OptionStatus.battleSpeed (g_Option + 5, option « Vitesse des messages » du jeu, enregistree dans la sauvegarde) a chaque message : `scroll_mode` (None = on ne touche a rien)
+  est ecrit a cette adresse avant chaque image ; un changement fait par le joueur dans la fenetre Parametres du jeu (setBattleSpeed appele depuis TownMenu_OPERATION_SETTING::menuUpdate) est
+  signale a `scroll_callback(value)` (le chargement d'une sauvegarde, lui, passe par Profile::deliverDATA_PARTY et ne declenche rien).
+@@ e6ff48e7a91f d
+Option « PV et PM restaures au niveau superieur » (`level_heal`, faux = comme le jeu). Toute montee de niveau passe par `HaveStatus::levelup(bool)` : elle recalcule les caracteristiques, puis, si l'argument est vrai
+(c'est le cas de `debugLevelup`), remet PV et PM a leur maximum (`tbz w20, #0` a +0x3f8 : PV <- PV max, PM <- PM max). Un crochet sur cette instruction force le bit quand l'option est active ; le reste du calcul est celui du jeu.
+@@ 7cd3928482c3 d
+Rencontres aleatoires et marche acceleree (voir encounters.py). `walking_speed` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de la marche, 1 = normale ; toujours 1 en combat)
+> 1 : le crochet sur `str w8, [x0]` de `CountDown::exec` (w9 = compteur avant, w8 = apres) remplace la perte du compteur par (1 + a) / (2 a) fois celle du jeu, de sorte que les rencontres par seconde
+reelle soient (1 + a) / 2 fois celles de x1 et non a fois. A 1 (ou moins) : le crochet ne fait rien (le jeu d'origine, a l'identique).
+@@ 5ac135a3b3ea d
+Arrivee de la nuit et marche acceleree (voir encounters.py, #163). Le temps du monde n'avance que par le saut terminal `FieldStage::ChangeTime(0)` de `FieldPlayerDoku::checkDokuDamage` (+ 0x38, carte du monde,
+a chaque image du moteur ou le heros a avance). `walking_speed` > 1 : ce saut n'a lieu que pour la fraction (1 + a) / (2 a) des appels (`Passer`) ; pour les autres, le crochet va directement au `ret` de la
+fonction (la pile est deja depilee a cet endroit), de sorte que la nuit arrive (1 + a) / 2 fois plus vite par seconde reelle et non a fois. A 1 (ou moins) : le jeu d'origine, a l'identique.
+@@ 876b61636520 d
+Temps de jeu de la sauvegarde sur l'heure reelle (#239, audit ENG-04, sondage du 04/11/2026). Le moteur ajoute 2 unites (1/60 s) par pas (`GameStatus::addPlayTime(2)` dans `Global::NativeExec`) : a x1
+(30 pas par seconde) c'est l'heure reelle, mais la marche acceleree et le combat rapide font `a` fois plus de pas par seconde et le temps de jeu (et l'horodatage de l'historique, qui le lit) court `a` fois trop vite.
+`clock_speed` (ecrit par la visionneuse avant chaque pas : facteur d'acceleration de l'horloge du jeu, marche ET combat ; 1 = normale) > 1 : le crochet saute l'appel (retour directement a l'instruction suivante, rien
+d'autre n'est touche : x0 et w1 ne servent plus) pour la fraction 1 - 1 / a des pas (`Passer`), regulierement. A 1 (ou moins, ralenti) : le jeu d'origine, a l'identique.
+@@ 6cd26ef71639 d
+Sorts du menu Magie (hors combat) qui coutent des PM mais n'en depensent aucun : le moteur ne depense les PM que si le sort a eu un effet (`BaseAction::useMp`), mais pour les soins il annonce quand meme le message
+de succes (la table des actions donne le meme texte au succes et a l'echec : « Les blessures de X guerissent ! » a PV pleins). Le menu Magie lance le sort par `UseAction::execUse` a deux endroits (choix d'une
+cible : `TownMenu_MAGIC_CHARSELECT::menuUpdate` ; sort de groupe ou sans cible : `TownMenu_MAGIC_ROOT::useMagicNoTarget`) puis affiche `param + 0x1f8` (« X lance le sort Y ! ») et la liste `param + 0x210`.
+Un crochet avant l'appel note les PM du lanceur, un crochet apres compare : si le sort coute des PM (table `excelParam`), que les PM n'ont pas baisse et que le jeu annonce son message de succes (champs 1 / 3 de la
+table des messages) ou aucun, la liste devient le message du jeu « Mais il ne se passe rien. » (`MSG_NOTHING_OCCURS`, une seule fois, meme pour un groupe). Les messages d'echec propres au jeu (Rappel, Antipoison, Evac'...) et le combat ne changent pas.
+Bruitages (mesures au moteur reel) : le lancement joue le bruitage 306 (le meme pour tous les sorts : il reste toujours) ; le message de resultat joue ensuite le bruitage de soin 501 (`menuUpdate` + 0x110, pour les actions 196 a 198 : Premiers secours, Soins
+partiels, Soins complets, NO_DEFAULT regarder si le soin a servi) : quand le sort n'a eu aucun effet, ce deuxieme bruitage est coupe (un seul `sub` modifie avant l'instruction : la sortie de comparaison passe a 3, au-dessus de 2). Un sort de groupe sans effet ne le joue deja plus (boucle des cibles vide).
+@@ a5576a25819e d
+Fondus lances par une commande de SCRIPT du jeu (fade_in / fade_out : `__cmd_fade_in::initialize`, `__cmd_fade_out::initialize`, qui appellent Global::fadeIn / fadeOutBlack... puis UnitySetFade avec la duree
+du script, et attendent eux-memes ce nombre d'images : `isEnd` compte les images) : le paquet 9 recoit la marque PJ.SCRIPT_FADE_MARK, et State._fondu ne raccourcit pas ce fondu (reglage « vitesse des
+transitions » : il vaut pour les fondus du moteur, changements de carte..., pas pour ceux qu'un script a fixes). Sans la marque, le fondu raccourci laisserait l'ecran noir jusqu'a la fin de l'attente du script.
+@@ 14f831a22332 d
+Adresse d'un octet de status::g_Option (OptionStatus : +1 volume de la musique, +2 volume des bruitages (0 a 4), +5 vitesse des messages de combat).
+@@ b59069033d06 d
+(volume musique, volume bruitages, vitesse des messages de combat) des options du jeu (fenetre Parametres, enregistrees dans la sauvegarde).
+@@ 3ecc2e458539 d
+Defilement des messages de combat impose a chaque image (code 0 a 3 : attente de 12 / 22 / 32 / 42 images, 4 : a la main) ; None : on rend la valeur du jeu (celle de la sauvegarde, ou choisie dans ses Parametres).
+@@ 3423d1196fc3 d
+Avant chaque image du moteur : la valeur imposee est ecrite ; si le jeu en avait mis une autre (chargement d'une sauvegarde ou d'un etat, fenetre Parametres), c'est elle qu'on rendra.
+@@ 12d5c987ec47 d
+(test) (message ouvert, etat de ui_MsgLoop, lettre courante, fin de ligne, vitesse du type de fenetre).
+@@ 8c3fb96f790e d
+Remet les correctifs que la visionneuse pose dans la memoire du moteur (fenetre des lieux elargie, pas de « Sauv. cloud », bouton « Paramètres », vitesses de marche d'origine). Appelee apres le chargement d'un etat
+(etats.appliquer) : l'image d'origine de la bibliotheque est rechargee d'abord, et un etat enregistre par une version qui n'avait pas encore un correctif ne le contient pas. Chacun est idempotent.
+@@ cc465d7e767f d
+FieldData::drawSymbol ne montre les lieux de la carte du monde (villes, grottes...) que dans la fenetre de l'ecran portrait d'origine autour du heros
+(x de -192 a +448, y de -192 a +788 pixels, plus une marge) : en 16/9 les lieux des cotes n'apparaissaient qu'une fois tout pres. Les trois constantes de
+la fonction (add w22/w23/w24, w9, #imm) sont portees a 1600 pixels : la fenetre couvre tout ce que la visionneuse peut montrer, meme dezoomee.
+@@ d50ba9e8b086 d
+Le bouton « Paramètres » du menu Divers ouvre le menu Pause de la visionneuse, pas les reglages d'origine du jeu (volumes, vitesse, taille de la croix, retour au titre) : la comparaison du numero du bouton choisi a 7
+est portee a 4095 (jamais egale : le moteur traite l'appui comme celui d'un bouton inconnu, ne ferme pas le menu Divers et n'entre pas dans l'etat « Parametres »). Sans effet si c'est deja fait ou si le moteur est une autre
+version. Rappelee apres le chargement d'un etat (etats.appliquer remet l'image d'origine de la bibliotheque).
+@@ 55fe88e96d0b d
+Patch du bouton « Paramètres » (patch_params) et crochet sur la comparaison : il leve `request_pause` quand le bouton choisi est le 7 ; la visionneuse n'a plus qu'a ouvrir son menu Pause (Game.tick).
+@@ 75e0d9862205 d
+(essai) force le passage a la carte du monde : Global::startField().
+@@ fd4d00eaad7e d
+Retour a l'ecran-titre : la fin du bouton « Revenir à l'écran titre » des Parametres d'origine du jeu quand on repond « Oui » (TownMenu_OPERATION_SETTING::menuUpdate, etat 5) : efface la banque 4
+(sauvegarde automatique, killbank), ferme la boite, verrouille le joueur, puis Global::startTitle() (fondu au noir de 30 images lance par UnitySetFade(0x101e), chapitre 0, la partie suivante est le titre). A
+appeler PENDANT un pas (voir _return_to_title_after) : le paquet du fondu doit etre lu avec ceux du pas, sinon le fondu est perdu (le tampon est remis a zero au pas suivant) et l'ecran passe au noir d'un coup.
+@@ a44f44d2dfe8 d
+Menu Pause > « Revenir à l'écran titre » : ouvre la boite du jeu (son texte, Oui / Non) au prochain pas, comme le bouton des Parametres d'origine. -> faux si une demande est deja en cours.
+« Non » ferme la boite et rend la main au joueur ; « Oui » lance back_to_title, avec le fondu du jeu. Les deux suites sont jouees par `_return_to_title_after`, apres chaque GameUpdate.
+Seulement en ville et sur la carte du monde, les deux parties ou le menu des Parametres d'origine existe et ou la boite repond (essai : en combat, la boite s'ouvre mais ne recoit ni les touches ni
+les clics, le menu de commandes du combat garde la main ; non verifie dans les boutiques et les jeux du casino).
+@@ 8d3dd441ea6a d
+Avant GameUpdate : ouvre la boite. Meme suite d'appels que l'etat 5 du menu des Parametres d'origine (menuUpdate + 0x1ac) : openMessageForMENU, addMessage(0xCBA2F), setYesNo() (curseur sur « Oui »),
+setYesNoSuperCancel(false) ; le joueur est verrouille comme dans le menu du jeu (PlayerManager::setLock(true), rendu par « Non »).
+@@ 8063dcdbbf57 d
+Apres GameUpdate, avant la lecture des paquets : la reponse de la boite (TownMenu_MESSAGE + 0x10, comme le fait menuUpdate du menu des Parametres d'origine). 2 = Non : on ferme la boite et on
+rend la main (setLock(false), l'inverse de l'ouverture). 1 = Oui : back_to_title, dans ce pas, donc avec son fondu.
+@@ 980ad9bdc58c d
+(essai) charge une ville ou un donjon : Global::startTown(nom). Refuse un nom sans fichier de carte (`assets/map/<name_str>.stg`) : le moteur d'origine ne le teste pas et plante (pointeur nul dans FldStage::getCameraLimitL),
+par exemple `za3f3`, carte orpheline (`.map` et `.fld` dans le paquet graphique, aucun `.stg`) (#76).
+@@ 35bbf9861da3 d
+Remet les vitesses de marche du heros a leurs valeurs d'origine : un etat enregistre par une ancienne version pendant une course les contient majorees (la course n'y touche plus).
+@@ 85b569897752 d
+(indice courant, nombre) des boutiques de la liste de la carte d'une ville (TownImageMap::execute : deux statiques locales, 0x2750c4 et 0x2750c8 ; la liste est la fenetre de type 24).
+@@ 2a81783f2303 d
+Camera des villes du moteur d'origine (TownCamera, objet statique) : (limite gauche, limite droite, verrou) ; limite = 0 : rotation libre, < 0 : rotation interdite, > 0 : angle borne (unites de 1 / 4096 de tour) ; verrou : camera verrouillee par un evenement.
+@@ 1ba79591f17d d
+Etat de la TownCamera du moteur (objet statique), pour savoir si le jeu pilote la camera : (verrou +0x3e, mode de cible +0x48, verrou de point de vue +0x40, deplacement en cours +0x43).
+@@ 0eb2934e5183 d
+Rotation de camera que le jeu vient d'accepter (TownPlayerManager + 0x698, CAMERA_ROT_TYPE) : ROT_CAM_RIGHT ou ROT_CAM_LEFT tant que le bouton tenu a ce pas n'a pas encore tourne la camera (verrou du joueur, scene, lieu qui interdit
+de la tourner : le jeu n'y touche pas et la valeur reste 0), ROT_CAM_NORD pendant le retour au nord.
+@@ df48325fe07b d
+`times` rotations de plus de la camera du jeu (sens : ROT_CAM_RIGHT ou ROT_CAM_LEFT), chacune exactement celle d'un pas du moteur (setCameraRotType puis TownPlayerManager::setCameraRot : TownCamera::rotateL / rotateR, qui borne selon les limites
+du lieu, et rotation de la direction du groupe pour que le heros garde son cap a l'ecran). Sert au reglage « Vitesse de camera » (le jeu ne tourne que d'un cran par pas) et au glissement du clic molette. Appelee apres un pas qui a pris le bouton (camera_wait)
+: les rotations de ce pas SONT ces `times` appels (le premier consomme celle que le bouton a mise en attente).
+@@ dd3233516838 d
+Option « Taille de la croix » du jeu (g_pad_size) : 0 Grande, 1 Moyenne (par defaut), 2 Petite.
+@@ d86cc5d133f8 d
+Vrai quand le menu du don d'experience (`MaterielMenu_EXTRA_PRESENT_EXP`, ajout du mobile : le roi de Burland au chapitre 1) est ouvert et a son dernier etat : une fois les niveaux montres, `menuUpdate` (etat +0x30 = 2)
+attend un declenchement du pad du jeu (`dss::g_Pad + 2`, rempli par `Global::NativeExec` d'apres le 2e argument de `GameUpdate` : le toucher d'ecran, exactement 0x100, ou les boutons 0x400 a 0x2000), avant de fermer le menu et de
+rendre la main au scenario. La touche A d'un message (0x10) ne le leve jamais : la fenetre envoie alors le toucher (voir Game._entrees). « Ouvert » : le menu est dans le tableau du gestionnaire `MenuManager` (son etat reste a 2 apres
+la fermeture jusqu'a la creation suivante).
+@@ cb3c3044b21f d
+Global.Flag : premier mot de la sortie du moteur (bit 3 : manette tactile presente ; 4 verrou du joueur, 0x20 carte autorisee, 0x40 interface verrouillee...).
+@@ 31dbd2131069 d
+Bit 1 de Global+0xd8 : Unity (Capture.ScreenEffect) le leve au debut d'un effet d'ecran et l'abaisse a la fin ; le moteur attend qu'il retombe.
+@@ 10bd5f1dac21 d
+Paquet 34 (valeur 4) : l'ecran se brise en morceaux (BATTLE_EFFECT_FRAMES images) pendant que le moteur attend ; ensuite l'ecran reste noir jusqu'au chargement de la scene du combat.
+@@ 4211f0d88ac8 d
+Une image du jeu : avance l'effet de debut de combat, abaisse le drapeau a la fin (le moteur reprend a l'image suivante) ; compte l'attente du chargement.
+@@ e6102296dab2 d
+Paquet 34, valeurs 3 (voyage : ailes de Chimere), 5 (lampe : Ranaruta) et 6 (Riremito) : Capture.ScreenEffect leve le bit 1 de Global.Flag, que le moteur attend, et lance une coroutine qui dure
+EF.FRAMES[...] images (63 a 64 au depart, 45 a l'arrivee d'un voyage) ; la fenetre dessine l'effet (fenetre/capture_effects.py), voir _screen_effect. Bit 7 de la valeur : bReverse (voyage : arrivee) ou bMorning
+(lampe : teinte du matin). Comme la cascade du combat, l'effet suit « Vitesse de transition » (moins d'images du moteur).
+@@ 36da9fac2013 d
+Une image du jeu : avance l'effet Capture en cours. Le noir immediat (lampe, Riremito : Fade.SetFadeOutBlack(0)) et le fondu d'entree de l'arrivee d'un voyage (Fade.SetFadeIn(30)) sont lances a leur appel de
+MoveNext ; a la fin, le drapeau retombe (le moteur reprend a l'image suivante). Fin du depart d'un voyage : l'ecran reste noir (State.black_screen) jusqu'a la fin de l'arrivee. L'ecran noir est abandonne s'il
+dure trop (garde-fou) ou si le jeu revient au titre.
+@@ 7131aca1ad8e d
+Une image du jeu. tenu = touches maintenues (marche) ; decl = touches qui viennent d'etre pressees (boutons, menus).
+Les fondus d ecran sont rejoues dans Etat (tick_fade). -> liste de paquets
+@@ 3c0333bfc027 d
+Bruitage de transition de carte (porte, sortie, entree de village, escalier, carte du monde <-> ville) : cause de sa perte avec les fondus raccourcis (« Vitesse de transition » x3 et plus, marginal a x2).
+Quand le jeu quitte une ville ou la carte du monde, il lance un fondu au noir de 30 images ET arme un decompte de 15 images (EXIT_COUNTDOWN) ; a 0, NativeExec appelle playTownExitSE / playFieldExitSE, qui ne jouent le
+bruitage 305 que si l'ancienne scene vit encore. Dans le jeu d'origine, le chargement de la carte suivante n'arrive qu'a la fin du fondu (30 images) : le bruitage est demande a mi-fondu. Le fondu raccourci de la
+visionneuse (State._fondu) amene le chargement avant les 15 images : l'ancienne scene est detruite, le moteur ne demande plus rien (aucun paquet 35). On remet donc le decompte a la meme proportion que le fondu
+(duree jouee / duree d'origine) : le bruitage reste demande a mi-fondu, la duree du fondu et celle du bruitage ne changent pas. Sans fondu raccourci (rapport 1), rien n'est touche.
+@@ bfc2ba4615dd d
+(test, DQ_MSGDBG=1) une ligne a chaque changement d'etat du message : image du moteur, etat, lettres ecrites / lettres de la ligne, vitesse du type de fenetre.
+@@ 4ef9f2638908 d
+Carte du monde entiere (FieldData : grille CWorldMap +0x188 de 256 x 256 numeros de bloc, table des blocs +0x180 de 6 octets,
+decalages d'animation de l'eau aux adresses 0x275830/34/38). Meme regle que FieldData::drawBlock (verifiee : 1300 tuiles sur 1300).
+Le moteur n'envoie que 25 colonnes autour du heros ; ici on peut dessiner autour de lui autant qu'on veut.
+@@ 61d69bd28bae d
+Bitmap du texte du message (hauteur x largeur, 0-255 = opacite), ou None si le canevas n'existe pas encore.
+@@ c8e5ed0a9877 d
+Fait ce que ferait l'interface Unity : lit les messages que le moteur a poses pour chaque port (menus, fenetres...)
+puis vide la file. Sans cela la file grossit sans fin et finit par ecraser la memoire voisine.
+@@ ad6c15fc6c4f d
+Port de la fenetre de menu qui attend les touches (active et acceptant la saisie), ou None.
+@@ d38c956fb21c d
+Tous les ports de menu dont le moteur demande la saisie (le toucher agit sur chacun d'eux) : le plus recent d'abord.
+@@ 30b92ab6f558 d
+Ce que fait Unity : depose un message [n, args...] dans la file moteur<-interface du port (touches/pointeur des menus).
+@@ cfbc91242163 d
+(nombre de lignes visibles - 1, hauteur d'une ligne, defilement) du canevas de message, tels que le moteur les tient.
+@@ 9700241c32cd d
+Partie du canevas actuellement visible dans la fenetre de message : n lignes a partir du defilement courant.
+-> tableau (hauteur x largeur) de 0-255, ou None.
+@@ bddab278ce61 d
+Masque de `getCatalogStatus` : bits 0-4 = banque valide, 5-9 = illisible, 10-14 = corrompue, 15 = un fichier manque.
+@@ d8b4d315da96 d
+Apres un import de sauvegardes : le moteur ne releve les fichiers data1..5 / data9 qu'a la creation du menu de depart ; on lui refait relever le catalogue (noms, chapitres, durees des listes). -> nouveau masque de statut.
+@@ 14bc80abfbb7 d
+Ce que le moteur fixe a la creation du menu de depart (`updateActiveDiary`) : (une banque 0-2 contient des donnees, la banque 3 est valide, la banque 4 est valide) -> boutons grises ou absents.
+@@ b54ba4d95423 d
+numero 1..5 -> lit data<numero>.dat ; le moteur relance la ville sauvegardee
+## FILE dq4_pc/core/game_priority.py
+@@ 7c7c9875901a t
+lettres ecrites par image du moteur par un dialogue ordinaire (mot de vitesse 1 du tableau des types de fenetre, x 4) : la valeur « par defaut » du jeu pour le texte
+@@ f19128d10009 t
+bit ajoute (par la visionneuse) a l'entier du paquet 9 d'un fondu lance par une commande de script du jeu (fade_in / fade_out) ; le moteur n'utilise pas ce bit
+@@ 78e9b61509a2 d
+Priorite du jeu sur les reglages du joueur (sans dependance : importe par le moteur, la fenetre et les tests).
+
+Principe : un reglage du joueur est une VALEUR PAR DEFAUT, appliquee tant que le jeu ne fixe pas lui-meme le parametre. Des que le jeu le fixe explicitement (commande de script, verrou d'evenement,
+camera de scene...), sa valeur s'applique, jusqu'a ce qu'il rende la main. Le joueur ne reprend pas la main sur ce que le script a decide.
+Les fonctions ci-dessous sont les regles pures (testees par tools/test_game_priority.py) ; la detection du « le jeu l'a fixe » est faite par l'appelant (engine.py, window.py).
+@@ d0b29de18c6d d
+La valeur qui s'applique : celle du jeu quand il en a fixe une (game_value n'est pas None), sinon le reglage du joueur.
+@@ c95167c6b358 d
+Reglage du joueur qui MULTIPLIE une grandeur du jeu (vitesse, zoom) : quand le jeu fixe lui-meme la grandeur (game_fixed vrai), le facteur neutre s'applique et la valeur du jeu reste telle quelle.
+@@ 978a7e708e79 d
+Lettres ecrites a cette image du moteur. `engine_letters` = ce que le moteur s'apprete a ecrire (mot de vitesse de la fenetre x 4). Au standard (dialogue ordinaire), c'est le reglage du joueur ; toute autre valeur
+(fenetres de combat qui affichent leur ligne d'un coup, vitesse fixee par le jeu) est celle du jeu et le reglage du joueur n'y change rien.
+@@ a2141d49064c d
+Duree (en images) d'un fondu au noir une fois le reglage « vitesse des transitions » applique : la duree d'origine divisee par le facteur (x1 = telle quelle, un fondu d'une image ou moins est immediat).
+Un fondu lance par une commande de script du jeu garde sa duree : le script l'a fixee, et attend lui-meme ce nombre d'images.
+## FILE dq4_pc/core/history.py
+@@ f6b99e9c168e t
+fichier des favoris (la version 1 etait l'ancien historique des messages par partie : abandonne)
+@@ 3effc5180d46 t
+de la session : les plus anciens sortent
+@@ 386de65f8c80 t
+caracteres gardes d'un message
+@@ fd3177ed4213 t
+« ㈡ » : saut de page (nouvelle bulle) dans le texte d'un message des fichiers du jeu
+@@ a5c8042df307 t
+variable du jeu non resolue dans le texte d'un message des fichiers : « [NONE 1,0] » (le nom du heros, un nombre, un objet...)
+@@ fe4a1e84c36c t
+le genre du texte est range dans les bits 24 et plus de l'identifiant que prend TextAPI::extractText
+@@ ca293bbcc551 t
+ui_MsgAdd(int numero, bool) : le moteur ajoute un message (numero = cle dans les fichiers du jeu) ; il appelle TextBuffer::cat
+@@ 5eecdac77a9e t
+images : une page en attente est notee si la fenetre de message ne s'est jamais ouverte au bout de ce delai (3 s)
+@@ 8beb266596b8 t
+2 s de jeu (1/60 s) : deux messages identiques plus proches que cela sont un doublon
+@@ 526f7c9108aa t
+secondes : les ecritures sont groupees (les favoris ne changent qu'a la main : on ecrit tout de suite, voir toggle_favorite)
+@@ a34f9195e129 t
+message avec un nom que le jeu affiche / sans nom
+@@ 0892af0d012f t
+message hors combat / de combat (jamais range dans les dialogues)
+@@ 1dd200ffd51f t
+(traduit quand il remplace le texte d'un favori : voir History._resoudre)
+@@ 66d511d86bcf t
+liste de l'historique -> type de ses elements (History.liste, filtre « Favoris seulement »)
+@@ 4a4d69347c24 t
+(traduits par la fenetre au dessin : tr(OUTCOME_CAPTION[...]))
+@@ c88120e4b980 c
+---------------------------------------------------------------------------------------------------------------------------------- elements
+@@ 1feb4216cf52 t
+dialogue : numero du message dans les fichiers du jeu (None : inconnu), page du message (None : message entier), valeurs des variables [NONE a,b]
+@@ 2733d4ec563e t
+favori de dialogue range par la cle (le fichier ne garde pas le texte)
+@@ 95f5a663c53d t
+... et dont le texte n'a pas encore ete redemande au moteur (voir History._resoudre)
+@@ b8c113a94e8d t
+(aucun texte : il vient des fichiers du jeu)
+@@ b598bbe9f287 t
+favori qui garde son texte (avant #265, ou message que les fichiers du jeu ne redonnent pas tel quel)
+@@ 2657b87464c8 t
+favori range par la cle : le texte sera redemande au moteur
+@@ f2b745671dcf t
+(les favoris d'avant le #141 n'ont ni fuis, ni disparus, ni objets)
+@@ 28fb3e3ddc62 t
+(la meme variable a deux valeurs : pas le meme message)
+@@ be8b00f3207d t
+mot plus large que la ligne
+@@ 3b0b73c23b1a t
+vaincus, enfuis, disparus, restes
+@@ 9c1e073353e9 t
+(espaces insecables : la coupure des lignes ne les fait pas disparaitre)
+@@ a2b8c0c80e69 c
+---------------------------------------------------------------------------------------------------------------------------------- donnees
+@@ 79fd6c470a6e t
+Element 'd' de la session, du plus ancien au plus recent
+@@ 0d58f1613e6d t
+Element 'c' de la session
+@@ be799a865574 t
+Element (d ou c) gardes dans le fichier, dans l'ordre ou ils ont ete mis en favori
+@@ ca2cad874e60 t
+prochain numero de favori
+@@ a80970ecd85a t
+compteur des numeros d'ordre (dialogues, combats, favoris : jamais deux fois le meme)
+@@ a6d995e455a4 t
+pages d'un message deja preparees par le moteur mais pas encore lues (voir _pages)
+@@ 00a0993dd4f9 t
+curseur de fin de page de l'image precedente ; fenetre de message vue ouverte depuis la rafale ; images d'attente
+@@ d53dc912d95d t
+Capteur du moteur (une fois qu'il existe) ; texte des fichiers du jeu deja demande, par numero de message
+@@ 058c2cb9c935 c
+---- fichier des favoris
+@@ 363a16fc1f98 t
+prochain numero enregistre : jamais un numero deja pris, ni un numero deja donne puis retire
+@@ c798914b85c7 c
+---- listes
+@@ f5a56de8f946 c
+---- favoris
+@@ 4e9e691063e8 t
+(nouveau numero : la mise en page gardee par la fenetre ne vaut plus)
+@@ e6c4a3698650 c
+---- ajout
+@@ 50305d6ab7a0 t
+le moteur a reaffiche le message (page revenue, question reposee)
+@@ 3b8a0a8aedfc c
+---- liaison avec le moteur
+@@ 171d6650a0c9 t
+l'historique ne doit jamais arreter le jeu
+@@ 3a17006f5a63 t
+les messages de combat n'entrent pas dans les dialogues
+@@ 3c629a5309b1 t
+nouveau message : le precedent est fini (ses pages restantes ont ete lues ou sautees)
+@@ 882f93458fff t
+page suivante du meme message
+@@ 8e875ec81c8b t
+la fenetre s'est fermee (ou ne s'est jamais ouverte) : le message est fini
+@@ a45cb3d4912e c
+---------------------------------------------------------------------------------------------------------------------------------- crochets dans le moteur
+@@ 0d168dae71c6 t
+le nom que le jeu affiche sur la fenetre de message (vide : aucun)
+@@ 3ea426fbd86e t
+(l'appelante immediate de TextBuffer::cat est ui_MsgAdd : le numero vient de cet appel)
+@@ 1d85c8678473 t
+(jamais vide faute de History.maj : on ne grossit pas sans fin)
+@@ 964bf1e54196 d
+Historique : les dialogues dits a l'ecran (hors combat), les derniers combats et les favoris.
+
+Trois morceaux :
+- `Sensor` (crochets dans le moteur, installes par Engine.__init__) : le texte d'un message n'est connu qu'a un endroit, TextBuffer::cat (appelee une fois par page de message, macros resolues, avec le nom du
+  locuteur donne par le moteur lui-meme : le « @a<nom>@b » des textes du patch, c'est-a-dire le nom que le jeu AFFICHE sur la fenetre de message). Le crochet note le texte, ce nom, l'heure de jeu
+  (status::g_Game + 4, en 1/60 s) et si l'appel vient d'un combat (les messages de combat n'entrent pas dans l'historique des dialogues : le combat a le sien, battle_history.py).
+- `History` (donnees pures, sans pyglet ni emulateur) : les dialogues et les combats de la SESSION (en memoire, ils disparaissent a la fermeture de la visionneuse) et les favoris (le seul element
+  conserve : fichier JSON a cote de la visionneuse, jusqu'a ce que le joueur retire l'etoile).
+- des fonctions pures : nettoyage du texte, coupure des lignes, mise en forme des combats.
+
+Les favoris de dialogue gardent la CLE du message (son numero dans les fichiers du jeu, « b0802000#199 » : fichier = numero // 1000 x 1000, rang = reste), pas son texte : le texte est redemande au moteur du jeu au
+lancement (TextAPI::extractText, voir `Sensor.model`), donc un message modifie dans le patch change aussi dans les favoris. Le numero est connu au crochet de ui_MsgAdd (le texte, lui, passe par TextBuffer::cat). La
+liaison n'est faite que si le texte donne par les fichiers du jeu redonne EXACTEMENT ce que le joueur a lu (voir `binding` : page du message, variables du jeu « [NONE 1,0] » remplacees par les valeurs vues) ;
+sinon (texte construit par le programme, pages decoupees autrement...) le favori garde son texte, comme avant.
+
+Un dialogue est montre comme dans le jeu : une fenetre de message, avec le nom du locuteur dans un cartouche SEULEMENT si le jeu l'affichait au moment ou le dialogue a ete dit ; sinon le texte seul, tel que le jeu
+l'ecrit (les paroles d'un personnage sans nom commencent par « *: » dans le patch FR : ce debut est garde). Aucun « qui a dit cela » ni « ou » n'est deduit.
+@@ 71028e484bee d
+Un element de l'historique : dialogue (type 'd' : nom affiche ou None, texte) ou combat (type 'c' : ennemis [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}], or, xp, issue, objets [{'nom'}]).
+`n` : numero d'ordre (cle d'affichage), `t` : heure de jeu (1/60 s), `fav` : numero du favori correspondant (None : pas en favori).
+@@ 68a03bd44515 d
+Liste d'especes [{'nom', 'total', 'vaincus', 'fuis', 'disparus'}] verifiee et copiee (fuis et disparus : 0 s'ils manquent, comme dans les favoris d'avant le #141) ; None si elle n'est pas valide.
+@@ db60200ccc87 d
+Liste d'objets gagnes [{'nom'}] verifiee et copiee ; None si elle n'est pas valide.
+@@ 78fb28f39e0d d
+Retire le « ; » du texte du patch : une marque de coupure placee juste apres une espace dans les noms d'objets (« bâton de ;cyprès », « l'herbe ;médicinale »), pas de la ponctuation (aucun « ; » de ponctuation
+dans les textes du patch ; voir docs/viewer-notes-dq4-pc.md, avance #148). L'espace qui la precede reste : « l'herbe médicinale ».
+@@ 8785487dfaad d
+Texte tel que le jeu l'affiche : codes de couleur (@c0...) et caracteres de controle retires, espaces de fin retires, retours a la ligne gardes (jamais plus d'une ligne vide). Le « *: » du debut des paroles
+d'un personnage sans nom est GARDE (c'est le texte du jeu). Le « ; » (marque de coupure des noms d'objets du patch) est retire (#139).
+@@ 656f95f76dc5 d
+La cle d'un message comme on la cite pour le patch : fichier (numero // 1000 x 1000, 7 chiffres) # rang : 802199 -> « b0802000#199 ».
+@@ 3ccdfb32b110 d
+Valeurs des variables du jeu (« [NONE 1,0] ») qui font du texte des fichiers `model` le texte lu `text` : {} si le modele n'a pas de variable (ou si le texte les montre telles quelles, comme les fichiers) et que
+les deux sont identiques ; {variable: valeur} si le texte se retrouve en remplacant chaque variable ; None si le modele ne redonne pas ce texte.
+@@ ee55f2c1bddf d
+Comment retrouver `text` (ce que le joueur a lu, nettoye) dans le texte des fichiers du jeu `raw_value` : (page, valeurs des variables), `page` = rang de la page du message (separees par ㈡) ou None pour le message
+entier ; None si aucune page ni le message entier ne redonne EXACTEMENT ce texte (alors on garde le texte du favori).
+@@ 2fc608f0aab8 d
+Texte d'un favori range par la cle : la page `seg` (None : tout le message) du texte des fichiers du jeu `raw_value`, variables remplacees par les valeurs gardees (une variable inconnue reste telle quelle). '' si `raw_value` manque
+ou n'a pas cette page.
+@@ 02164745fadf d
+Coupe `text` en lignes de `width_px` au plus (mesure(chaine) -> largeur) : les retours a la ligne du texte sont gardes, la coupure se fait aux espaces (pas aux espaces insecables) ; un mot plus large que la ligne est coupe.
+@@ 25354c254890 d
+« 1 vaincu », « 2 vaincus » : le modele du singulier ou du pluriel (`singular`, `plural_form` : textes a trous « %d vaincu » / « %d vaincus », N_ ; l'anglais n'a qu'une forme mais le garde en deux).
+@@ fbb13954ba92 d
+Une espece d'ennemis, sur une ligne : « Gluant ×3 » quand tous sont vaincus (« Gluant » s'il n'y en avait qu'un), sinon le sort de chacun : « Gluant ×3 : 1 vaincu, 1 enfui, 1 disparu » ; ceux qui ne sont ni vaincus,
+ni enfuis, ni disparus sont encore la quand le combat se termine (le groupe a fui ou a ete vaincu) : « 2 restés ».
+@@ 9b3341ead1b1 d
+Lignes de texte d'un combat (Element de type 'c'), une par rangee : une par espece d'ennemi (species_line : qui etait la, qui est vaincu, enfui, disparu ou reste), puis, pour une victoire, l'or et l'experience
+gagnes, puis les objets obtenus (« Objets : Herbe médicinale, Pierre de vie »). Rien n'est ecrit quand il n'y a pas eu d'objet.
+@@ 3d74cb27aac3 d
+Element de type 'c' d'un dict de battle_history.BattleSensor.maj ; None si le dict est inexploitable.
+@@ 413d32a99d16 d
+Dialogues et combats de la session (en memoire) + favoris (fichier). Le fichier est a cote de la visionneuse (jamais dans le dossier des sauvegardes du jeu, que l'on ne modifie pas) :
+{"version": 2, "suivant": 7, "favoris": [{"k": "d", "id": 3, "t": 12345, "nom": "Alena", "texte": "..."}, {"k": "c", "id": 5, "t": 1, "ennemis": [...], "or": 3, "xp": 4, "issue": "victoire", "objets": [{"nom": "Herbe médicinale"}]}]}.
+@@ 47facbc90eb8 d
+Crochet sur le moteur (Unicorn) : TextBuffer::cat, appelee une fois par page de message. Les messages notes attendent dans `output` jusqu'a ce que History.maj les prenne (chacun : texte, genre, val = nom que le
+jeu affiche ou None, cat, carte, t, mid = numero du message dans les fichiers du jeu ou None). Le numero vient d'un second crochet, sur ui_MsgAdd(numero, bool) : TextBuffer::cat y est appelee (la pile le montre) ;
+une page qui n'en vient pas (texte construit par le programme) n'a pas de numero. Une erreur dans un crochet ne doit jamais arreter le moteur.
+@@ 68b53f399631 d
+Ce qui fait l'identite d'un element (pour reconnaitre un doublon, ou un element deja en favori) : le contenu, pas le numero.
+@@ 24575d7f034c d
+Element d'un favori lu dans le fichier ; None s'il n'est pas valide (le reste du fichier est garde).
+@@ 7d27e19c21c1 d
+Lit le fichier des favoris. Un fichier illisible est mis de cote (.corrompu) et on repart de zero ; un favori invalide est ignore sans perdre les autres.
+@@ 2c2751f77898 d
+Ecrit le fichier s'il a change (ecriture atomique : fichier temporaire puis remplacement). Les ecritures sont groupees : au plus une toutes les STORAGE_DELAY secondes, `force` pour la fermeture.
+@@ 530ed7a5f724 d
+Elements d'un onglet de l'historique, du plus ancien au plus recent : 'dialogues' ou 'combats' (et 'favoris' : tous les favoris, voir ci-dessous). `favorites_only` : l'option « Favoris seulement » de la fenetre -> seuls les
+favoris de cette sorte d'element (dialogues ou combats) : ceux du fichier, donc aussi ceux des sessions precedentes, dans l'ordre ou ils ont ete mis en favori (le plus recent en bas).
+@@ 1d3de483b280 d
+Met l'element en favori (une copie est gardee dans le fichier, immediatement) ou le retire. Un element de la liste des favoris qu'on « desetoile » disparait de cette liste ; l'element de la session qui
+lui correspond perd son etoile. -> True si l'element est maintenant en favori.
+@@ b3332fcd77f9 d
+Texte du message `mid` dans les fichiers du jeu (demande au moteur ; garde), ou None (pas de moteur, message inconnu).
+@@ 0099c93c56e8 d
+Un favori de dialogue dont on connait la cle : si le texte des fichiers du jeu redonne EXACTEMENT le texte lu, le favori est range par la cle (le fichier ne gardera pas le texte) ; sinon il garde son texte.
+@@ be244bdeb8de d
+Redemande au moteur le texte des favoris ranges par la cle (0,13 ms l'appel : les 500 favoris du fichier en 65 ms). Un message qui n'existe plus ou n'a plus cette page : une ligne le dit, avec la cle.
+@@ f1887d2a9952 d
+A l'ouverture de l'historique : les textes des favoris ranges par la cle sont redemandes au moteur. Les fichiers du jeu ne changent pas pendant que la visionneuse tourne, mais le moteur choisit certaines
+variantes d'un texte selon la partie en cours (le sexe du heros : « ma mignonne » / « mon chou ») : un favori montre donc le texte tel que la partie actuelle le donnerait.
+@@ 1b73a29dcafe d
+Ajoute un dialogue de la session (texte brut du moteur, nom affiche par le jeu ou None, numero du message dans les fichiers du jeu ou None) ; -> l'Element, ou None (vide, doublon).
+@@ 7ad71a971151 d
+Ajoute un combat termine (dict de battle_history.BattleSensor.maj) ; -> l'Element, ou None.
+@@ c883e763737a d
+Une fois par pas du moteur : range les messages notes par le Capteur (dialogues hors combat) et les combats termines (BattleSensor), et ecrit les favoris si besoin.
+@@ 874e2b077fcb d
+Range les `n` premieres pages en attente (toutes si n est None).
+@@ a3b35aa042d3 d
+Le moteur prepare TOUTES les pages d'un message d'un coup (plusieurs TextBuffer::cat dans la meme image, meme temps de jeu) : ne noter que celles que le joueur a lues, sinon l'historique
+montrerait la page suivante avant sa lecture. La premiere page est notee tout de suite ; chaque fois que le curseur de fin de page s'eteint (le joueur tourne la page, Engine.ui.msg['feed']) la suivante
+est notee ; tout ce qui reste est note quand la fenetre de message se ferme ou quand un nouveau message arrive. Les messages de combat (defilement automatique) ne sont jamais retenus.
+@@ 9ffb77a4fc99 d
+Entree de ui_MsgAdd : le numero du message (1er argument) que TextBuffer::cat va recevoir.
+@@ 3445f6ae2057 d
+Texte du message `mid` tel que le moteur le tire des fichiers du jeu (TextAPI::extractText, genre 1 = message) : brut, avec les sauts de page « ㈡ » et les variables « [NONE 1,0] » ; None si le moteur n'en a pas.
+A appeler entre deux images (jamais depuis un crochet), comme les noms de battle_history.
+@@ be3f00e90687 d
+-> (temps de jeu en 1/60 s, identifiant de la partie) lus dans status::g_Game.
+@@ 4da0d04d1337 d
+Noms des fonctions de la pile d'appels (chaine des pointeurs de cadre), de l'appelante immediate vers la racine.
+## FILE dq4_pc/core/load_tracking.py
+@@ 97c09f13dbda d
+Journal horodate du demarrage et des changements de carte (outil de diagnostic, sans effet hors test).
+
+    DQ_SUIVI=1          : une ligne par evenement sur la console, « SUIVI +12.345s evenement cle=valeur ... » (temps depuis le lancement du programme)
+    DQ_SUIVI=<fichier>  : la meme chose dans ce fichier (ajout)
+
+Ce qui est note (voir window.py et engine.py) : creation de la fenetre, premieres images noires, affichage de la fenetre, images des logos, fin du chargement du moteur, premiere image du jeu, duree de chaque
+chargement de carte (`_load_map`), image par image apres un changement de carte (ce qui est dessine : noir retenu ou scene, camera, personnages places, opacite des fondus), retenue du dessin
+(`State.loading`). Sans la variable d'environnement, chaque appel ne coute qu'un test de booleen.
+@@ 19823644c174 d
+Secondes depuis le lancement du programme (horloge monotone).
+@@ dc37e95b41ad d
+Une ligne de journal (sans effet si DQ_SUIVI n'est pas defini).
+@@ a33391515f86 d
+Tuple de flottants arrondis pour le journal (None reste None).
+## FILE dq4_pc/core/lying_pose.py
+@@ f0fdfb5928e7 t
+moitie du maillage couche (0,48 x 0,64), avant l'echelle du personnage
+@@ 0a27f0fe3989 t
+s_lieOffset[quadrant] : (x, z) ; la composante y est la hauteur de SetSleepNear
+@@ d61f14b01690 t
+SetSleepNear : decalage 0
+@@ 57341e35092b t
+lieBillboard : la matrice _sleepMatrix est relevee de 0,1
+@@ 2043c10e76fd t
+SetSleepDir : angle 16 bits / -182,0444 + 180 (65536 / 360, signe inverse)
+@@ ea3e4266668d t
+centre du maillage (Transform.position)
+@@ 7ac3b6662370 t
+centre pour la profondeur (_sleepMatrix)
+@@ da2cd8412f85 t
+lacet seul de la camera : vue de dessus orientee par la camera
+@@ cc45403dd3a9 t
+coins de la feuille, centres : bas gauche, bas droit, haut droit, haut gauche
+@@ baa7c18d3f39 t
+sommet du maillage couche : droite de la feuille = -X, haut = -Z
+@@ c8a3d25cdd00 t
+rotation Y (Quaternion.Euler(0, angle, 0))
+@@ 0757236ce7b7 t
+profondeur du corps a plat
+@@ 5f1c48c1f202 t
+position ecran (focale 1 a la profondeur z0) : plan XZ vu de dessus, sans raccourci
+@@ 437f0a81e3f2 d
+Poses couchees des personnages de ville (paquets 16 / 17 / 18 du moteur, #45).
+
+Ce que fait le jeu d'origine (lu au desassemblage, Unity IL2CPP + moteur) :
+  - Paquet 16 `cmd_chara_sleep_pose` D132FC, un entier v : personnage = v & 0xff ; si v & 0x300 : Chara.SetSleepPose(bit 8) (CCC234) ; si v & 0x400 : Chara.SetSleepDir(v >> 12) (CCC5A0).
+    Envoye par `DisplayCharacter::setSleepFlag` (moteur 0x17c918 : 0x500 | angle << 12 pour se coucher, 0x200 pour se relever) et, quand la direction change pendant le sommeil,
+    par `DisplayCharacter::draw` (0x400 | angle << 12). SetSleepDir(d) : angle = (d & 0xffff) / -182,0444 + 180 degres, rotation Y ; quadrant = bits 14-15 de d.
+  - Paquet 17 `cmd_chara_sleep_near` D133E4, deux entiers (defNear, decalage) : Chara.SetSleepNear (CCD494) : hauteur du corps couche = 0,3104 si decalage = 0, sinon decalage x 1,6 / 8192 ;
+    elle est ecrite dans la composante Y des 4 decalages `s_lieOffset` (statique : elle reste d'une carte a l'autre). Envoye par `cmd_set_sleep_near` (moteur 0x219e1c).
+  - Paquet 18 `cmd_chara_pose` D13474 : v = emplacement | numero << 8 : Chara.SetTexture(numero) : le personnage change de feuille de sprites (`TownCharacterDraw::changePose`).
+  - Maillage couche `Chara.s_meshLie4 / 8` : le meme rectangle que le panneau (0,48 x 0,64) mais A PLAT (plan XZ, y = 0), retourne d'un demi-tour (haut de la feuille vers -Z), d'ou le + 180 degres de SetSleepDir.
+  - Shader `Custom/CharaSleep` : la position ecran (x, y) vient de la transformation du personnage, dont la rotation est celle de la camera inversee x la rotation de sommeil (s_lieBillboardRot,
+    Chara.CalcLieBillboard) : le plan couche est vu exactement DE DESSUS, sans raccourci : le sprite apparait a l'ecran comme sa feuille tournee d'un angle, a pleine taille. Le z et le w (profondeur,
+    division perspective) viennent de la matrice `_sleepMatrix` = TRS(position + (0, 0,1, 0), rotation de sommeil, echelle) : le corps est a plat dans le monde pour le z-buffer et les recouvrements.
+  - Position : P + s_lieOffset[quadrant] ; s_lieOffset (Chara..cctor CCE364) = (0, h, 0,2), (-0,1, h, 0), (0, h, -0,2), (0,1, h, 0) ; h = hauteur de SetSleepNear (0 tant qu'aucun paquet 17).
+  - L'ombre n'est pas tracee (Chara.lieBillboard la pousse de 64 sous le sol quand elle n'est pas separee).
+
+Ce module ne contient que de la geometrie (numpy) : testable sans fenetre.
+@@ b1b3e34543ab d
+Hauteur du corps couche (paquet 17, second entier) : Chara.SetSleepNear.
+@@ 80d0e617ae1b d
+(angle de la rotation Y en degres, quadrant 0 a 3) d'un paquet 16 portant le bit 0x400 : Chara.SetSleepDir(valeur >> 12).
+@@ c5d0527f25b8 d
+Direction de la tete du personnage couche a l'ecran (vue de dessus, camera de lacet nul) en degres dans le sens des aiguilles d'une montre : 0 = vers le haut, 90 = vers la droite : sert aux tests.
+@@ 70a905caa96c d
+Les 4 sommets MONDE (bas gauche, bas droit, haut droit, haut gauche DE LA FEUILLE) du panneau d'un personnage couche dont les pieds sont en p.
+echelle : taille du maillage (largeur du panneau a l'ecran / 0,48, avec l'echelle SetScale du personnage) ; cadre = (droite, haut, avant) de la camera, cam = sa position.
+Les points sont sur les rayons de vue : a l'ecran le panneau est la feuille tournee d'un angle, a pleine taille (aucun raccourci, aucune inclinaison), mais sa profondeur est celle du corps a plat
+(voir l'en-tete) ; None si le corps est derriere la camera.
+## FILE dq4_pc/core/pktlog.py
+@@ 4ab531b135cf d
+Journal structure des paquets moteur->Unity (coupes aux ecritures des curseurs).
+@@ d4be88455665 d
+-> liste [type, ints sans le type, floats] pour l'image qui vient d'etre calculee.
+Les flottants vont au paquet "ouvert" (UnityGetPacket appele, pas encore valide) sinon au dernier paquet valide.
+## FILE dq4_pc/language.py
+@@ 13bc711c43b7 t
+valeurs du reglage « Langue »
+@@ 912840a5b4a0 t
+les fichiers de texts_en\ (chacun definit EN = {texte francais: texte anglais})
+@@ 682d0d5f3fd5 t
+identifiant primaire 0x0C = francais (toutes les variantes)
+@@ 11322f291974 d
+Langue de l'outil (D-238) : francais ou anglais pour tout ce qui est propre au portage (parametres, historique, sauvegardes, licence, informations F1, messages de la console...).
+Les textes DU JEU (dialogues, menus du jeu, noms) viennent des fichiers du jeu et ne changent pas.
+
+Reglage « Langue » (page Affichage) : `system` (defaut : francais si Windows est en francais, quelle que soit la variante, sinon anglais), `entry`, `fr`.
+
+Principe : le texte source est le texte FRANCAIS ecrit dans le code ; `tr(text)` rend le meme texte en francais, et sa traduction anglaise (`texts_en\`) en anglais. Un texte sans traduction reste en francais (jamais d'erreur) ;
+le francais reste donc identique a lui-meme par construction. Les textes a trous restent des modeles a formater APRES la traduction : `tr('%d fichier(s)') % n`.
+Les constantes de module sont marquees avec `N_` (le texte est rendu tel quel, traduit a l'affichage) : `ACTIONS = (('haut', N_('Haut')), ...)` puis `tr(label_text)` au moment de dessiner.
+@@ e0ee9ce2824b d
+'fr' si l'ordinateur est en francais (n'importe quelle variante : France, Belgique, Canada, Suisse...), sinon 'en'. `reader` : fonction sans argument qui rend la langue de l'interface (tests).
+@@ 9ec957ee58f8 d
+`code` : identifiant Windows de langue (entier, ex. 0x040C), ou texte « fr_FR.UTF-8 » / « fr-BE » / « French_France ».
+@@ 5aab09e66c48 d
+La langue d'affichage de l'ordinateur : Windows (GetUserDefaultUILanguage), sinon les variables d'environnement, sinon la locale.
+@@ a0868380aa7c d
+Fixe la langue : `choice` parmi CHOICES (autre valeur : `system`). -> 'fr' ou 'en'.
+@@ 90b8e5e6f405 d
+Le reglage choisi : 'systeme', 'en' ou 'fr'.
+@@ f0846f323ce9 d
+Le catalogue francais -> anglais (les fichiers de texts_en\, charges une fois).
+@@ 3a48b3a94b8d d
+Le texte dans la langue de l'outil (le texte francais lui-meme en francais, ou quand il n'a pas de traduction).
+@@ 8c688acb71bc d
+Marque une constante de module a traduire au moment de l'afficher (rend le texte tel quel).
+@@ 52022f835b57 d
+Le reglage « langue » d'un fichier reglages.json (pour les messages de la console, avant que les reglages soient charges) ; 'systeme' si absent ou illisible.
+## FILE dq4_pc/main.py
+@@ d7d3d8edf2a3 t
+(avant la migration : ses messages sont dans la langue de l'outil)
+@@ a8ae3a06b1ec t
+(la migration a pu amener reglages.json a sa place)
+@@ 4f7b3c17acf3 t
+langue de l'outil (D-238) ; les textes du jeu ne changent pas
+@@ 340b66a92df8 t
+(2 = l'ancien plein ecran exclusif : 1)
+@@ f0ce0063468d t
+le calcul HD en tache de fond ne doit pas retarder le dessin
+@@ 9c207c3a3911 t
+la boucle fixe (Game._boucle) tourne avant chaque dessin ; le dessin suit la synchronisation verticale
+@@ 857ff1ff4e41 d
+Point d'entree du portage : `python -m dq4_pc` (c'est ce que fait `launch_dq4.bat`, a la racine du projet).
+
+Lit les arguments, reprend l'ancienne disposition des fichiers si besoin (chemins.migrer), puis ouvre la fenetre du jeu (fenetre/jeu.py).
+Tous les dossiers par defaut viennent de paths.py (dossier `data` a la racine du projet).
+@@ a57c8f1c09a7 d
+Le fichier de reglages de cette execution : `--settings` de la ligne de commande s'il est donne, sinon celui par defaut (c'est de lui qu'on lit la langue AVANT de construire le parseur : son aide est dans cette langue).
+@@ 213e1cb3db60 d
+D-238 : la langue de l'outil (reglage « langue » de reglages.json) pour les messages de la console et l'aide, avant que les reglages soient charges. -> 'fr' ou 'en'.
+@@ 402b1b234d77 d
+Le parseur de la ligne de commande, dans la langue courante (voir set_language) : `python -m dq4_pc --help`.
+## FILE dq4_pc/menus/hud_mobile.py
+@@ b25a3d014bdb t
+grille de l'ecran (cases proportionnelles a la fenetre)

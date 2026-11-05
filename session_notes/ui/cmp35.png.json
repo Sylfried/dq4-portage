@@ -1,0 +1,87 @@
+{
+ "S": 1.68,
+ "cx": 640.0,
+ "cy": 646.24,
+ "rows": [
+  {
+   "row": 0,
+   "text": "Co\u00fbt en PM:          2",
+   "x_anchor": -90.0,
+   "plate_x": [
+    -196.0,
+    -8.0
+   ],
+   "plate_z": [
+    -244.0,
+    -192.0
+   ],
+   "width_px": 169,
+   "width_u": 112.04700000000001,
+   "end_x": 22.04700000000001,
+   "over": 30.04700000000001,
+   "tscale": 1.0,
+   "fit_x": null,
+   "z_text_center": -238.0
+  },
+  {
+   "row": 1,
+   "text": "Co\u00fbt en PM:         10",
+   "x_anchor": 114.0,
+   "plate_x": [
+    8.0,
+    196.0
+   ],
+   "plate_z": [
+    -244.0,
+    -192.0
+   ],
+   "width_px": 175,
+   "width_u": 116.025,
+   "end_x": 230.025,
+   "over": 34.025000000000006,
+   "tscale": 1.0,
+   "fit_x": null,
+   "z_text_center": -238.0
+  },
+  {
+   "row": 2,
+   "text": "MP Cost:          2",
+   "x_anchor": -90.0,
+   "plate_x": [
+    -196.0,
+    -8.0
+   ],
+   "plate_z": [
+    -302.0,
+    -250.0
+   ],
+   "width_px": 140,
+   "width_u": 92.82000000000001,
+   "end_x": 2.8200000000000074,
+   "over": 10.820000000000007,
+   "tscale": 1.0,
+   "fit_x": null,
+   "z_text_center": -296.0
+  },
+  {
+   "row": 3,
+   "text": "Co\u00fbt:          2",
+   "x_anchor": 114.0,
+   "plate_x": [
+    8.0,
+    196.0
+   ],
+   "plate_z": [
+    -302.0,
+    -250.0
+   ],
+   "width_px": 109,
+   "width_u": 72.26700000000001,
+   "end_x": 186.267,
+   "over": -9.733000000000004,
+   "tscale": 1.0,
+   "fit_x": null,
+   "z_text_center": -296.0
+  }
+ ]
+}

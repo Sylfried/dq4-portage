@@ -1,0 +1,759 @@
+## FILE dq4_pc/menus/pause.py
+@@ a0569a67d498 d
+Suppr : curseur ou choix -> valeur d'origine ; touche -> la case choisie est videe.
+@@ bc515fa810e1 d
+Memoire clavier / souris de la fenetre (Game.mouse_guard), ou la notre quand le menu est essaye sans fenetre.
+@@ a19e0dc1f45c d
+Le pointeur bouge. Au clavier, la selection ne change que si le pointeur s'est ecarte de plus de EN.MOUSE_TOLERANCE pixels de l'endroit ou il etait a la derniere touche (ecart CUMULE : avant, le test portait sur
+un evenement a l'autre, et une souris qui envoie des mouvements de 1 a 2 pixels ne reprenait jamais la main avant un clic ou un geste tres rapide) ; ensuite la selection suit le pointeur.
+@@ 0ce4bbae917f d
+Le pointeur a quitte la fenetre : plus rien n'est survole.
+@@ af67757e77fb d
+Premiere ligne visible de l'ecran courant (la selection ne change pas : la vue ne revient pas dessus tant qu'elle ne bouge pas).
+@@ 4511fa5d4c75 d
+Clic sur la barre de defilement : fleches (une ligne), curseur (prise pour le glisser), fond de barre (une page).
+@@ 67e51575df6f d
+Deplacement (dx, dy) de la fenetre de cadre r = (x0, y0, x1, y1), corrige pour que l'un de ses bords (ou son milieu) tombe sur une ligne de la grille (32 x 18 cases) : celui qui en est le plus pres.
+@@ 93e532673f16 d
+Appui sur la barre de titre du panneau de l'editeur (le geste se joue dans glisser, maj et relache) : le panneau suit le pointeur des que celui-ci s'eloigne de plus de PRESS_TOLERANCE du point d'appui (glisser
+tout de suite, sans attendre) ou apres un appui maintenu LONG_PRESS_DELAY (il se souleve) ; appui court sans bouger = replier / deplier, une fois le delai du double clic ecoule sans second appui ; deuxieme appui court
+dans DOUBLE_CLICK_DELAY = retour a la position d'origine, sans aucun pliage (#145).
+@@ a91685ddafb1 d
+Un appui en (x, y) a l'instant t serait-il le second d'un double clic, comme Windows en juge : le premier appui court date de moins de GetDoubleClickTime (depuis SON DEBUT, pas depuis son relachement) et le second
+tombe dans le rectangle de SM_CXDOUBLECLK x SM_CYDOUBLECLK pixels centre sur le premier.
+@@ afa6d5afe28d d
+Le pliage d'un clic simple sur la barre de titre (editeur d'interface) n'a lieu qu'une fois le delai du double clic ecoule : replie / deplie le panneau et n'attend plus rien (sans effet si aucun clic n'attend).
+@@ 405a98865ba6 d
+Souris deplacee bouton enfonce : le curseur maintenu (ou celui de la barre de defilement) suit.
+@@ 03c79dcd1f5f d
+Caracteres tapes pendant la saisie d'une valeur.
+@@ 2058a35337c3 d
+Fenetre a la maniere des menus du jeu mobile : fond noir de meme opacite que les autres menus, cadre blanc en cinq traits, coins arrondis et transparents (hud_mobile.cadre).
+@@ 7db771729b4f d
+Fond d'un bouton : la plaque des fenetres du jeu (feuille Button, comme « Soigner tous »), enfoncee (assombrie) quand elle est choisie ou survolee. `outline` (encadrement colore) : plus utilise par la page Pause,
+garde pour les ecrans d'avant-partie (sauvegardes, nom, licence). `grayed` : ligne inactive, plaque sans couleur et assombrie (shader gris du jeu). Sans les menus d'origine : plaque dessinee (hud_mobile), voilee si grisee.
+@@ e596e79273e6 d
+Bouton carre « valeur par defaut » (fleche en cercle) : clair quand la valeur differe de celle d'origine, terne sinon ; s'assombrit (75 %, comme un bouton-icone du jeu appuye) sous le pointeur.
+`grayed` (ligne inactive) : terne, sans zone de clic ni assombrissement.
+@@ d327f529ef39 d
+Bouton carre « muet » de la page Son : haut-parleur et ondes quand le son joue, haut-parleur grise barre d'une croix rouge quand il est coupe ; s'assombrit (75 %) sous le pointeur.
+`grayed` (ligne inactive) : terne, sans zone de clic ni assombrissement.
+@@ d4fc88b47620 d
+Rectangle a bouts ronds, centre verticalement en yc.
+@@ 0eb96f827da0 d
+Interrupteur coulissant (piste arrondie, bouton rond) : or quand c'est active, gris sinon ; le bouton glisse d'une position a l'autre (animation courte) ; contour or s'il est selectionne.
+@@ c08f64f3405e d
+Texture de la miniature d'un etat (None s'il n'y en a pas).
+@@ 49fc4b43f855 d
+Barre de defilement a droite de la liste : fleche haut, piste, curseur, fleche bas (haut de la liste en ptop, bas en pbot). Renvoie la geometrie de la barre (pour les clics).
+@@ d9544daac853 d
+Croix rouge du jeu (effacer une touche), de c pixels, coin bas gauche en (x, y) ; sombre : a 75 % (sous le pointeur, comme un bouton-icone du jeu appuye) ; grise : ligne inactive, croix terne.
+@@ 91f6df05852b d
+Chevron « > » : la ligne ouvre un autre menu (gris quand la ligne est inactive).
+@@ 39f5c03fbbca d
+Hauteur des capitales (pixels) d'un texte de taille `fz` (points, 96 ppp) dans la police du jeu : sert a centrer verticalement un texte dans sa case, quelle que soit la police.
+@@ 7603b66d255b d
+Etiquette de `text` qui tient dans `maxw` pixels (la taille diminue au besoin).
+@@ a6ed47243277 d
+Elements montres a l'ecran pour l'interface choisie (boutons et croix de l'ecran, ou la fenetre du jeu en apercu) : [(x0, y0, x1, y1, masque, masculin)].
+`mask` : l'element n'est pas dessine en jeu : toute l'interface masquee (« Afficher cette interface a l'ecran » = Non : boutons, croix, fenetre) ou, pour la croix seule, « Afficher la croix » = Non.
+`masculine` : accord de l'etiquette « Masquée » (boutons : « Masqué »).
+@@ 099af26440f1 d
+Rectangles (x0, y0, x1, y1) montres a l'ecran pour l'interface choisie (voir _preview_elements).
+@@ df2cbd9fabcd d
+Position d'origine du panneau de l'editeur (coin haut droit) : en haut a droite (les boutons sont a gauche, la croix en bas a droite) ; si cela cache l'interface choisie, le premier des autres coins de l'ecran
+(haut gauche, bas droite, bas gauche) qui ne la cache pas, sinon celui qui en cache le moins. Calculee sur la taille du panneau deplie (le panneau replie ne change pas de coin).
+@@ 000cbdf09ae8 d
+Coin haut gauche (x0, y1) du panneau de l'editeur d'interface : position du joueur (apres un appui long et un glissement, gardee le temps de la session) ou position d'origine (_origin_corner),
+toujours ramenee dans l'ecran.
+@@ 06374e7c1f65 d
+Editeur d'interface : le jeu reste visible ; l'element choisi est montre (boutons de l'ecran avec leur grille, ou fenetre du jeu en apercu, a sa taille et sa place) ; les autres boutons restent a l'ecran.
+@@ 2b434eae7999 d
+Texte d'aide d'une ligne du menu ('   ' separe les lignes de l'infobulle) ; '' s'il n'y en a pas.
+@@ 64643beae4b7 d
+Lignes d'une infobulle : coupees aux espaces triples, puis a la largeur maxw. Chaque phrase (entre deux espaces triples) est traduite AVANT d'etre coupee a la largeur : une ligne coupee n'est plus une phrase du catalogue (D-238).
+@@ c217a829fb55 d
+Infobulle : aide de la ligne survolee par la souris (apres 0,4 s), ou consigne de la saisie / de la capture d'une touche sous la ligne choisie.
+@@ 0f86058a4053 d
+Fenetre modale Oui / Non (suppression d'un etat) : le menu reste visible, assombri ; Non est preselectionne.
+@@ c38cf4cdd03a d
+Liste deroulante d'un choix : sous la ligne (au-dessus s'il n'y a pas la place), valeur courante en or, curseur dore comme dans les menus du jeu ; une barre de defilement
+(fleches, curseur, clic sur la piste, molette = valeur suivante) quand toutes les valeurs ne tiennent pas.
+## FILE dq4_pc/menus/pre_game.py
+@@ daf4c4d13633 c
+fichiers du cache -> (archive, type d'objet Unity, nom de la ressource)
+@@ b56841d8e3ef t
+logo SQUARE ENIX (Boot.m_logoTexture[1])
+@@ 8e05067c55a0 t
+logo ArtePiazza (Boot.m_logoTexture[2])
+@@ c2b383cfd029 t
+« Touchez l'ecran » (Resources/Title/TapToStart)
+@@ 68081522d983 t
+ligne de copyright du titre (Resources/Title/Retro4_copyright)
+@@ 12128673aac3 t
+texte de l'ecran Licence (variante Android)
+@@ 8d11dd32a7fa t
+bandeau des titres de chapitre (Menu/map/hyodai1, 256 x 128, Make_Chapter)
+@@ f4239dee5d9e c
+---- Boot.Logo (MoveNext 0xCC5618) : constantes de la classe Boot
+@@ aba2fab6c176 t
+c_fadeTime, c_waitTime, c_fadeTime (secondes reelles : Time.deltaTime)
+@@ 94a248f7600c t
+le quad du logo est un carre de 450 unites (texture 720 x 720), centre, dans l'interface de 450 x 800
+@@ 8527dd9b0bcb c
+---- TapToStart (classe d'interface du port 12, type 73) : constantes du dump
+@@ bcd9eba779ec t
+c_acc, c_cwait, c_firstWait (images)
+@@ 2ce5a7c67460 t
+c_width, c_height ; centre 228 unites SOUS le centre de l'ecran
+@@ 3dc305217a43 t
+c_copyrightFirstWait, c_copyrightSecondWait, c_copyrightAcc
+@@ 0ecc307796cf t
+c_copyrightWidth / Height ; centre a 25 unites au-dessus du bord bas
+@@ 64f9eac5dc1d c
+---- Logo du titre : ECART VOULU avec l'APK (demande de Sylfried, 03/11/2026, issue #108 : « doubler la taille du logo et du sous-titre »)
+Le logo est un maillage du moteur (paquets 21 / 22, carte `ev01`) : modele 8901 = « DRAGON QUEST » + « IV » + « TM » + sous-titre (« L'epopee des Elus »), modele 8900 = l'eclat anime sur le logo ;
+tous deux a la meme position (0, 1, 0), sommets en coordonnees locales du panneau (x vers la droite de la camera, mirroir d'Unity, y vers le haut), x de -4,549 a 4,549 pour « DRAGON QUEST ».
+@@ 049d8490bb5e t
+facteur d'agrandissement voulu (1 = l'APK) : 2 d'abord (#108, 19 h 38), ramene a 1,5 sur demande de Sylfried (21 h 05)
+@@ 8d35e9b0241f t
+demi-largeur locale de « DRAGON QUEST » (lue sur les sommets du paquet 22)
+@@ 7c372c9f2595 t
+ordonnee locale du point qui ne bouge pas : le logo grandit autour de ce point (ce qui le laisse au-dessus de « Touchez l'ecran » et sous le haut de l'ecran ; voir notes)
+@@ f8c48c97bb8c t
+le logo agrandi ne depasse jamais 96 % de la largeur de la fenetre (fenetre tres etroite) ; il ne devient jamais plus petit que celui de l'APK
+@@ abc1badd609e t
+largeur non mesurable : on applique le facteur voulu tel quel
+@@ 1032e65774d8 c
+---- Ecran « Licence » (type 80, Make_License / LicensePolicy / LicenseNobu)
+@@ 9d374a1f7e22 t
+LicensePolicy.OnMouseUpAsButton : langue != 0 (le japonais ouvre https://www.jp.square-enix.com/privacy/)
+@@ 5633a1401f16 t
+zone du texte (x0, y0, x1, y1), unites d'interface
+@@ a03dd984eb63 t
+bouton « Privacy Policy »
+@@ 3bf592029116 t
+(dessine par Pause._et, qui le traduit ; « Privacy Policy » est le texte du jeu)
+@@ 8eadea969d28 c
+Texte ajoute en tete de l'ecran Licence (en anglais, comme la liste d'origine) : ce que le portage est et ce qu'il utilise. La liste d'origine (TextAsset Menu/License_list_A) suit, inchangee.
+@@ 39757f6434a1 t
+(enregistre la police du jeu)
+@@ fe3b0be22d9f t
+(survol : plaque assombrie, sans encadre jaune)
+@@ 0307a14e2829 d
+Ce que la couche Unity du jeu fait AVANT la partie : logos d'entree, « Touchez l'ecran » du titre, ressources.
+
+Tout vient du code d'origine (Boot, TapToStart, ApplicationQuit... de libil2cpp.so, relu par instruction : valeurs et adresses dans docs/technical-notes-dq4-port.md,
+section « Avant la partie »). Ce module ne depend ni du moteur ni d'OpenGL en dehors du dessin des images (pyglet.sprite).
+@@ 74a0140604c0 d
+Facteur d'agrandissement du logo : `desired`, reduit (jusqu'a 1) pour que le logo agrandi tienne dans `margin` de la largeur de la fenetre. `original_width` = largeur du logo
+de l'APK en fraction de la largeur de la fenetre (0 a 1).
+@@ 1ffbc98db648 d
+Sommets locaux (n, 3 : x, y, profondeur) du logo agrandis de `factor` autour du point (0, y_fixed) du panneau : x et y changent, la profondeur (ordre de dessin des couches du panneau : eclat devant le logo, etc.)
+reste celle du moteur. Renvoie un nouveau tableau.
+@@ fdfd8ec30330 d
+Extrait des APK (une seule fois) les images et le texte propres a l'avant-partie. -> True si tout est dans le cache. Sans UnityPy ou sans APK : False (le jeu s'en passe).
+@@ 0cf6c9f2e04f d
+Chemins du cache -> dict nom court -> chemin (seulement ceux qui existent).
+@@ e9832c5091d8 d
+Boot.Logo : un logo apres l'autre, sur fond noir. Entree en fondu (1 s), maintien (3 s), sortie en fondu (1 s). Un toucher pendant l'entree saute le maintien,
+pendant le maintien il lance la sortie tout de suite. Francais / anglais : SQUARE ENIX puis ArtePiazza (l'avertissement japonais n'est montre qu'en langue 0).
+@@ 48ef777d0b8b d
+TapToStart (type 73 du port 12) : « Touchez l'ecran » qui clignote et ligne de copyright. Compte des images de jeu (30 Hz).
+Sans le message CountReset du moteur (code 0), le premier affichage n'a lieu qu'apres 720 images ; avec, il demarre tout de suite et le copyright reste plein.
+@@ b3ff3ce630d1 d
+Texte des licences (TextAsset Menu/License_list_A) dans une fenetre defilante, avec les titres <color=orange> en orange. Les positions exactes de la fenetre de l'original n'ont pas ete retrouvees
+(elles dependent du rapport hauteur/largeur de l'ecran) : disposition dessinee ici, defilement a la molette, aux fleches, PageHaut/PageBas, ou en glissant la barre.
+@@ 58abbca75141 d
+Un appui (clic, touche) : saute le maintien du logo courant.
+@@ 248c02f4cd04 d
+Avance de dt secondes reelles.
+@@ abce8532d8bf d
+Carre de 450 unites (hauteur de la fenetre = 800 unites) au centre de l'ecran, fusion alpha.
+@@ 171e1ebad872 d
+TapToStart.CountReset : le moteur annonce la fin de la premiere phase du titre.
+@@ a7b68d60c60f d
+Une image de jeu (TapToStart.Update, une fois par image rendue).
+@@ da5456300bbc d
+(cx, cy, ech) = repere de la colonne d'interface (voir Game._ui_reference) ; hauteur = hauteur de la fenetre.
+@@ 6c749ccc3c3a d
+TextLayout pyglet de la fenetre (recree si l'echelle change).
+@@ 2f13437f249d d
+Le curseur de la barre suit le pointeur (LicenseNobu : position du curseur -> proportion du texte) ; y en pixels (pyglet, vers le haut).
+## FILE dq4_pc/menus/saves_screen.py
+@@ fa732e802b99 t
+unites d'interface, origine au centre de la colonne de 450 x 800, Y vers le haut
+@@ a44665d340b5 t
+(dessines par Pause._et, qui les traduit)
+@@ 4bea22371927 t
+(traduits ligne par ligne au dessin : voir dessiner)
+@@ 35e1ac74e5dc t
+(singulier, pluriel) : l'anglais a ses propres modeles
+@@ ba2d7bdcf665 t
+vrai apres un import reussi : la fenetre du jeu relit les journaux
+@@ be46eca4943d c
+---- logique
+@@ ac29e4588f34 t
+pas de boite de dialogue : un dossier du portage
+@@ 0678698105a8 t
+(Windows) ouvre le dossier dans l'Explorateur
+@@ 3d0ce65faa0a t
+les listes (Continuer, Reprendre, Supprimer, Auto) affichent aussitot les nouveaux journaux
+@@ b0f1b6c5bdaa t
+mot trop long (chemin) : coupe au dernier caractere qui tient
+@@ 5a306f55dce4 t
+le menu de depart reste visible, assombri
+@@ e09c2537f643 t
+(traduite en entier avant d'etre coupee aux mots)
+@@ 05b22c0046b0 c
+message de resultat
+@@ 5e6c306f343b t
+(le message s'arrete avant le bouton retour, en bas a droite)
+@@ 6fb0d7f07f62 d
+Ecran « Sauvegardes » du menu de depart (a la place de la case « Sauv. cloud » du jeu mobile) : exporter et importer les fichiers de sauvegarde.
+
+N'existe pas dans le jeu d'origine : fenetre dessinee dans le style des autres menus (cadre noir, plaques et bouton retour du jeu). La logique des fichiers est dans `saves.py`.
+Le choix du fichier passe par la boite de dialogue de Windows (tkinter, dans un fil a part : la fenetre du jeu reste vivante) ; sans tkinter, repli sur des dossiers du portage (`saves/export`, `saves/import`).
+@@ 6bc050e4fe2d d
+« 1 fichier de sauvegarde », « 3 fichiers de sauvegarde » : `models` = (modele du singulier, modele du pluriel). Regle du pluriel de la langue : en francais 0 et 1 sont au singulier (« 0 etat instantane »), en anglais seul 1 l'est (« 0 save states »).
+@@ a2079a7d7714 d
+Appelee a chaque image : traite la reponse de la boite de dialogue.
+@@ 2d68929356aa d
+Texte coupe aux mots (et aux caracteres pour un chemin sans espace) pour tenir dans `width_px` pixels.
+## FILE dq4_pc/menus/ui_history.py
+@@ 2b3b3889afd8 t
+pixels : en dessous, un appui dans la liste n'est pas un glissement
+@@ 004981ad301c t
+(noms traduits au dessin)
+@@ f77ab9ff48af t
+agrandissement des fenetres du jeu par rapport a H / 800 (= fenetre.UI_ZOOM) : la boite de l'historique a la taille d'une boite de dialogue du jeu a l'ecran
+@@ 31b02f8b27a4 t
+un pixel de la police d'origine (SE-GARRIR) = 1,09 unite d'interface dans le canevas de message du jeu (mesure : ligne de 371 pixels de police = 407 pixels a l'ecran a l'echelle 1,008 ; l'en-tete de la mise en page annonce 1,105, le moteur arrondit les avances)
+@@ b6a7431e1808 t
+(traduits au dessin, en entier avant d'etre coupes aux mots)
+@@ 4428aafec30e t
+lignes de texte (Box.STEP : 28 unites) par cran de molette : un pas fin et constant, jamais une entree entiere
+@@ f801bb2bfcb4 t
+(en k) vide au-dessus de la premiere boite et sous la derniere de la liste (le contenu n'est jamais colle au bord de la fenetre de decoupe)
+@@ 8961780ee899 t
+pixels : en dessous, un message est « entierement visible » (arrondis du dessin)
+@@ af04756ee315 t
+(en k) vide entre deux elements, entre deux boites d'un meme element
+@@ 1eb3e5e1f6de t
+lignes de texte (entete comprise) qu'une boite de combat peut contenir avant de continuer dans une boite suivante (la boite fait alors 126 + 9 x 28 = 378 unites de haut)
+@@ 3c4a53ce9d8d t
+cadre : x -223 a 229, z -251 a -125
+@@ b8c99a27781e t
+onglet du nom : x -223 a 23, z -125 a -93 (depasse au-dessus du cadre)
+@@ 0c6b2d049e27 t
+trois lignes de 28 (PageLayout : limit_lines(types[0], 3, 28.0))
+@@ 211e871928b1 t
+bord gauche du texte et ligne de base de la 1re ligne : distances au coin haut gauche du cadre (mesurees sur une capture du jeu : texte a 11 px du trait gauche du cadre, 1re ligne de base a 31 px du trait haut, a l'echelle 1,008)
+@@ 2af81e2af490 t
+milieu du nom (depuis le bord gauche du cadre) et haut du texte du nom (depuis le haut du cadre : MenuMessage.m_who, 21 au-dessus) -- repli sans mise en page
+@@ 38f49ae27fb7 t
+(en unites de k) marges de la fenetre de l'historique autour de la boite : gauche, colonne de l'etoile, barre de defilement
+@@ 3cd4f86212f1 t
+idem avec la police des messages du jeu (celle du canevas du moteur) : le canevas commence 15 unites sous le haut du cadre, la cellule d'une ligne a 20 rangees au-dessus de la ligne de base
+@@ cfe870e2ffc7 t
+position de defilement, en pixels : 0 = tout en bas (le plus recent visible), plus grand = plus ancien (voir decal et repere)
+@@ d31907f2a08d t
+message choisi (fleche doree, touche Entree) : choisi par haut / bas, par un clic ou, a la souris, par le survol (voir dessiner)
+@@ 3a0279555d65 t
+hauteur du contenu, de la fenetre de la liste (pixels) et d'une ligne de texte (pixels), mesures a la derniere image ; avant la premiere image : rien a defiler
+@@ 1f1f34ff8112 t
+element a ramener au milieu de la vue des que la liste est mesuree (aller)
+@@ cda4bfd3678a t
+haut de la premiere boite et bas de la derniere de chaque element, pixels depuis le haut du contenu (mesures a la derniere image ; vides tant que la liste n'est pas mesuree)
+@@ 035a5f67a66e t
+case « Favoris seulement » : cochee ? (reglage enregistre) ; sa zone a l'ecran (clic)
+@@ 76bcfa7f235f t
+glissement dans la liste : [y de depart, decalage de depart, deplace ?]
+@@ 2aea63fd03d2 t
+boite de dialogue standard (Boite) et les deux fenetres de message du jeu qui servent a dessiner son cadre (avec / sans onglet)
+@@ 2516b7cbdfaa c
+---- donnees
+@@ a437dca8cdef t
+(les favoris ranges par la cle : leur texte est redemande au jeu, voir History.actualiser)
+@@ 1cdd4efa3a33 c
+---- case « Favoris seulement » : son etat est un reglage (historique_favoris_seuls), garde d'une session a l'autre
+@@ e6ed7374431a c
+---- defilement continu (aucune page, aucun cran : la position est un nombre de pixels)
+@@ a1b316fd59db t
+(un message choisi sorti de la fenetre par la molette ou la barre : cet appui le remplace par le plus proche message visible, sans avancer d'un rang de plus)
+@@ 2680339df684 t
+la touche qui ouvre l'historique : Dialogues -> Combats -> ferme tout
+@@ 5ab0af6aa4c4 t
+(F, ou la touche Carte : « Favoris seulement »)
+@@ 5b3d99ec5774 t
+fleche du haut : une ligne vers les anciens
+@@ 219409e35579 t
+piste au-dessus du curseur : une page vers les anciens
+@@ 42f9ecf70b1e t
+le curseur de la barre donne la distance depuis le haut du contenu
+@@ 104c04571d9d t
+le contenu suit le pointeur, pixel par pixel (le pointeur descend : la liste descend, on remonte vers les plus anciens)
+@@ c16f049f5e28 t
+la coche (deux traits)
+@@ b504be964a51 t
+(repli : cadre noir translucide du menu et, pour un nom, un petit cadre collé en haut a gauche)
+@@ b5ba875852e2 t
+fenetre redimensionnee : la vue reste au meme endroit de la liste
+@@ e8376c31dac7 t
+s : pixels par unite d'interface = ceux d'une boite de dialogue du jeu
+@@ 1e2775e3bd60 t
+su : un pixel de police du jeu = su pixels d'ecran (titre, onglets, aide) ; taille : police du systeme (repli)
+@@ ace147ebf9fd t
+idem pour le texte des boites : comme dans le jeu (1,105 unite par pixel de police)
+@@ 27332e16ba05 t
+texte des boites : la police des messages du jeu quand elle est la (un pixel de son canevas = une unite d'interface), sinon SE-GARRIR
+@@ f4a84519f4fc t
+la ligne des onglets : les onglets puis la case « Favoris seulement »
+@@ e627c610733d t
+aussi transparent que les autres fenetres du jeu
+@@ 32e2a504a131 c
+onglets (plaques du jeu : l'onglet ouvert est la plaque « choisie »)
+@@ e5f748d66648 t
+(sous le titre : ses plaques ne doivent pas le recouvrir)
+@@ 1c732de4d607 t
+case « Favoris seulement » (a droite des onglets)
+@@ 0683ce753ab6 c
+aide (une ou deux lignes, selon la largeur de la fenetre)
+@@ 5911f7b8b9d7 c
+zone de la liste : la boite (taille du jeu) a gauche, la colonne de l'etoile a sa droite, la barre de defilement au bord
+@@ 54696c8e8761 t
+le message tient dans la fenetre : coupe en plusieurs lignes, centrees (il debordait du cadre quand il etait long)
+@@ a58af80f883b t
+ordonnee du haut du contenu (position entiere : le texte garde le meme dessin a chaque position) ; le contenu est colle en bas quand il est plus court que la fenetre
+@@ ccccabdcd0f7 t
+tout ce qui deborde de la liste est coupe
+@@ 817aa548226d t
+seules les boites qui touchent la fenetre de la liste sont dessinees (de la plus ancienne, en haut, a la plus recente)
+@@ b271a2bc7216 t
+(page la plus haute montree de chaque element : la fleche dorée n'y est dessinee qu'une fois)
+@@ 04afc050ed94 t
+a la souris, le message survole est le message choisi (choisi avant le dessin : une seule fleche)
+@@ d571338ea9a5 t
+(la zone d'une boite coupee ne depasse pas la fenetre de la liste : pas de clic sur les onglets ou l'aide)
+@@ 9eeae1e4067b t
+lignes en plus de la boite du jeu (un combat)
+@@ 2d282ec09abd t
+cadre du jeu (+ onglet et nom) : aucun grisé au survol ni au choix
+@@ bb9b71176d4f t
+le message choisi (clavier ou souris) : la petite fleche, et rien d'autre
+@@ bba0152c610b t
+entete : l'issue du combat a gauche, l'heure de jeu a droite
+@@ d8fae40a00e5 t
+etoile dans la colonne a droite de la boite, a la hauteur de la 1re ligne
+@@ 2a38a81d239b t
+« 1/2 » sous l'etoile : la boite fait partie d'une suite (simple etiquette)
+@@ 91a1ef62f9cf t
+curseur proportionnel, position continue (distance depuis le haut du contenu)
+@@ ffb0989e5972 t
+aide et bouton retour
+@@ 6c1eaaa7ee37 d
+Fenetre « Historique » (page 'historique' du menu Pause, voir pause.py) : deux onglets, Dialogues (hors combat) et Combats ; le plus recent en bas. Une case a cocher « Favoris seulement » (a droite des onglets) ne garde dans
+la liste de l'onglet ouvert que ses favoris ; elle est commune aux deux onglets (elle reste cochee quand on change d'onglet et quand on rouvre la fenetre) et son etat est enregistre dans les reglages (cle `historique_favoris_seuls`, ecrite a chaque changement) :
+elle est retrouvee telle quelle d'une session a l'autre, comme les favoris eux-memes (fichier historique_favoris.json, voir history.py).
+
+LA LISTE EST UNE SEULE COLONNE CONTINUE : les plus anciennes entrees en haut, les plus recentes en bas, et la vue s'ouvre tout en bas (derniere entree visible). Le defilement est continu, au pixel : aucune page, aucun cran, aucune
+mise en page qui depend de la position (les boites sont posees une fois pour toutes, la position ne fait que les deplacer) ; une entree qui depasse du bord de la liste est simplement coupee par un cadre de decoupe (glScissor), comme du
+texte qui defile. Liste plus courte que la fenetre : collee en bas, comme un fil de messages (le plus recent reste toujours au meme endroit, en bas). Fonctions pures : `arrange` (empilement), `element_au_repere`.
+
+Chaque element est dessine dans une BOITE DE DIALOGUE du jeu (la fenetre de message du terrain, 3 lignes : cadre 452 x 126 unites d'interface, tire de la mise en page d'origine ; meme echelle que dans le jeu ; classe
+`Box`), avec le cadre et l'onglet du nom du jeu (frameData 192 et 191, dessines par ui_menu.MessageWindow), la police d'origine SE-GARRIR et les lignes posees comme dans le jeu : un dialogue avec le nom du locuteur
+dans l'onglet SEULEMENT si le jeu l'affichait quand il a ete dit ; un combat avec son issue, chaque espece d'ennemis (qui est vaincu, enfui, disparu ou reste), l'or et l'experience gagnes et les objets obtenus.
+Un dialogue tient dans une boite de 3 lignes (la suite est dans une boite suivante, « 2/2 » : simple etiquette, le defilement ne s'y arrete pas). Un COMBAT GRANDIT EN HAUTEUR pour tout contenir (#141) : la boite a autant
+de lignes que le combat en demande, au moins 3 ; le cadre du jeu est etire (c'est un cadre a neuf morceaux : seul le milieu s'allonge, les coins gardent leur taille) ; au-dela de MAX_BATTLE_LINES lignes, le reste
+continue dans une boite suivante. Une etoile en haut a droite de chaque element le met en favori (il est alors garde
+dans un fichier jusqu'a ce qu'on retire l'etoile ; le reste de l'historique disparait quand on ferme la visionneuse). Le fond de la fenetre est aussi transparent que les autres fenetres du jeu (hud_mobile.GAME_OPACITY).
+Le jeu NE S'ARRETE PAS tant que la fenetre est ouverte (#178 : aucune pause dans aucun menu) : aucune touche ni clic n'arrive au jeu, mais il continue de tourner et d'ecrire dans l'historique ; la liste suit (`follow_game` : les nouveaux
+messages s'ajoutent en bas quand la vue est en bas ; quand on lit plus haut, la liste ne bouge pas, elle se met a jour au retour en bas).
+Clavier : haut / bas (message precedent / suivant, repete si la touche est maintenue), page precedente / suivante (une page de la fenetre moins deux lignes), debut / fin, gauche / droite (onglet), Entree, Menu ou Action
+(etoile du message choisi), F ou Carte (case « Favoris seulement »), la touche de l'historique (Dialogues -> Combats -> ferme), Echap / Annuler (retour). Souris : molette (2 lignes par cran), barre de defilement (fleches : une ligne,
+piste : une page, curseur : glisser), glisser dans la liste (le contenu suit le pointeur), clic sur un onglet, sur la case ou sur une etoile.
+MESSAGE CHOISI (`selected`, cible de la touche Entree) : haut / bas passent de message en message (ils ne font pas defiler la liste) ; la vue ne defile QUE pour montrer en entier le message choisi, quand il est coupe par un bord de la
+fenetre ou hors de la fenetre, et du minimum necessaire (son bord rejoint le bord de la fenetre : `offset_to_see`). A la souris, le message survole est le message choisi. Le message choisi porte la petite fleche doree, au clavier
+comme a la souris, et rien d'autre : ni grisé ni eclairci au survol ou au choix (derogation a la regle generale des menus). Defiler a la molette, a la barre ou en glissant ne change pas le message choisi ; au clavier, un message
+choisi qui n'est plus du tout dans la fenetre est d'abord remplace par le plus proche message visible.
+@@ faa6437215ea d
+Coupe `text` en lignes aux espaces pour qu'aucune ne depasse `max_width` (largeur(t) = largeur d'une ligne t, dans l'unite de max_width). Un mot seul plus large que la limite reste seul sur sa ligne (il ne peut pas etre coupe). -> liste de lignes, jamais vide.
+@@ acef1e18bbae d
+Empile toute la liste dans UNE colonne, du plus ancien (en haut) au plus recent (en bas). `inputs` : un tuple par element, (nombre de boites, onglet du nom sur la premiere ?) ou (nombre de boites, onglet ?,
+[hauteur du cadre de chaque boite]) quand les boites n'ont pas toutes la meme hauteur (un combat grandit avec son texte) ; `border_top` est la hauteur des autres. Distances en pixels, comptees depuis
+le haut du contenu (vers le bas) : -> (boites, debuts, fins, hauteur).
+boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre) ; `topmost` = bord superieur de la boite, onglet du nom compris (le cadre commence `tab_top` plus bas) ;
+debuts[i], fins[i] : haut de la premiere boite et bas de la derniere de l'element i ; hauteur : hauteur du contenu, marges haute et basse comprises (0 si la liste est vide).
+Ne depend d'aucune position de defilement : la position ne fait que deplacer le tout.
+@@ 8900aaa04e8b d
+Ce qu'il faut montrer pour que le message i soit « entierement visible » : (haut, bas) en pixels depuis le haut du contenu. Le message lui-meme (debuts[i] : onglet du nom compris, fins[i]) ; pour le premier et le dernier
+de la liste, la marge de la liste en plus (le premier va jusqu'au haut du contenu, le dernier jusqu'au bas : quand on y arrive, la liste est tout en haut / tout en bas).
+@@ 364ad8b39401 d
+Nouveau decalage de la vue (pixels depuis le bas : 0 = tout en bas) qui montre le message i en entier, en changeant le decalage DU MINIMUM : inchange si le message est deja entierement visible, sinon juste ce qu'il faut pour que
+son bord coupe rejoigne le bord de la fenetre (haut ou bas). Un message plus haut que la fenetre : son debut en haut de la fenetre. La fenetre fait hv pixels et montre, depuis le haut du contenu, de hc - decal - hv a hc - decal.
+@@ 54df0a07d525 d
+Indices des messages visibles dans la fenetre (voir offset_to_see) : ceux qui y sont entierement (`fully_visible_only`), sinon ceux dont une partie au moins y est.
+@@ 56f95e3ac8a5 d
+Temps de jeu (1/60 s) -> « 1:05:12 ».
+@@ 77d9ed3592c2 d
+Touche de l'historique dans la fenetre : Dialogues -> Combats ; Combats -> fermer (None).
+@@ ef5e2c311373 d
+Boite de dialogue du terrain (MenuMessage type 0) a 3 lignes, en unites d'interface du jeu (800 de haut) : la taille du cadre (frameData 192), de l'onglet du nom (frameData 191) et le placement des lignes
+de texte. Les dimensions viennent de la mise en page d'origine quand elle est chargee (`from_ml`), sinon des valeurs mesurees sur les captures du jeu. Une seule boite pour tout : 1, 2 ou 3 lignes, dialogue ou combat.
+@@ e958c319f8e3 d
+Sommets d'un cadre a neuf morceaux (frameData 192 : coins de 12 unites, milieu qui s'etire) allonges de `extra` unites vers le haut : tout sommet de la moitie haute monte, les coins du haut gardent leur taille, le
+milieu s'allonge (ses UV ne changent pas : le motif du milieu est etire, comme le fait le jeu quand il agrandit un cadre). -> nouvelle liste (la mise en page d'origine n'est jamais modifiee).
+@@ 6a26d7f73712 d
+Nombre de lignes de texte d'une boite : les rangees de la page, plus l'entete (issue et heure) sur la premiere boite d'un combat ; trois au moins (la boite du jeu).
+@@ 2ac7ead2ad5b d
+Rangees de texte -> pages de `lines` rangees au plus (au moins une page, meme vide) ; sur la 1re page d'un combat, l'entete (issue et heure) prend une rangee.
+@@ 66aba1b5ec31 d
+Lignes de `text` coupees comme le moteur coupe un message (MessageFont.couper : les retours a la ligne du texte gardes, sans espace en fin de ligne ni ligne vide a la fin ; au moins une ligne).
+@@ 57782a60a868 d
+Rangees de texte d'un element, coupees a `width_px` (mesure(chaine) -> largeur dans la meme unite) : le texte d'un dialogue (ses retours a la ligne gardes) ; pour un combat une rangee par espece d'ennemis (avec le
+sort de chacun), puis l'or et l'experience, puis les objets (HI.battle_lines) ; une ligne trop large pour la boite continue sur la rangee suivante. L'issue et l'heure sont dans l'entete.
+Avec `font` (la police des messages du jeu, MessageFont) les lignes sont coupees exactement comme le moteur coupe les siennes et `measure`, `width_px` ne servent pas.
+@@ b780bbe5a76e d
+Boite lue dans la mise en page d'origine (PageLayout) ; les valeurs mesurees si elle manque ou est inutilisable.
+@@ bdb5a0136dba d
+Pixels par unite : celle des fenetres du jeu (H / 800 x BOX_SCALE), reduite pour que la boite, sa colonne d'etoile et les marges tiennent dans la fenetre de la visionneuse.
+@@ a4680d5cfd25 d
+Distance de la ligne de base de la ligne `rank` (0, 1, 2...) au haut du cadre, unites.
+@@ 82b04a483646 d
+Comme `base`, pour le texte dessine avec la police des messages du jeu.
+@@ 6b40141c2007 d
+Hauteur du cadre (unites) pour `lines` lignes de texte : celle de la boite du jeu jusqu'a 3 lignes, puis une ligne (STEP) de plus par ligne.
+@@ e84357525945 d
+Largeur utile d'une ligne de texte (unites) : du bord gauche du texte a la marge droite du canevas (le canevas est large de WIDTH - 18).
+@@ ec50bb84ac29 d
+A l'ouverture de la page : recharge la liste, tout en bas sur l'element le plus recent (ensuite elle suit le jeu : `follow_game`).
+@@ 290313950d03 d
+Le jeu tourne derriere la fenetre (#178) et peut ecrire dans l'historique (un dialogue, la fin d'un combat). Appele a chaque image : quand la vue est tout en bas (rien n'est cache plus bas), la liste est remplacee par la
+liste a jour ; le message choisi reste le meme (reconnu par son objet), sauf s'il etait le dernier : le choix suit alors le plus recent. Quand on lit plus haut, un glissement ou la barre est en cours, la liste ne bouge pas
+(la lecture ne saute pas) ; elle se met a jour des qu'on revient en bas. -> True si la liste a change.
+@@ 78215195c7e2 d
+Enregistre l'etat de la case dans les reglages (reglages.json, tout de suite : une fermeture brutale ne le perd pas). Une erreur n'empeche jamais de cocher ou de decocher.
+@@ 70395783a6cc d
+Coche ou decoche « Favoris seulement » (valable pour les deux onglets, enregistre dans les reglages). L'element choisi, s'il est dans la nouvelle liste, reste choisi (et la vue se recentre sur lui) ; sinon on se place sur le plus recent.
+@@ 8cf58c4ec580 d
+Met en favori (ou retire des favoris) l'element i (l'element actif par defaut) ; -> True si c'est maintenant un favori. Avec « Favoris seulement », l'element retire disparait de la liste (la vue reste ou elle est).
+@@ 5b67740d5965 d
+Distance (pixels) dont la vue peut monter depuis le bas : 0 quand toute la liste tient dans la fenetre.
+@@ 59b24a31215b d
+Decalage reel de la vue (pixels) : la position bornee a la plage de defilement.
+@@ ce9a2f9c5c41 d
+Le message choisi doit etre dans la fenetre : sinon (la liste a defile sans lui : molette, barre, glissement, page), c'est le plus proche message visible (le premier s'il est au-dessus de la fenetre, le dernier s'il est
+en dessous). `fully_visible_only` : seuls comptent les messages entierement visibles (a defaut, ceux qui le sont en partie). -> True si le message choisi a change.
+@@ a536edc007fc d
+Defile du minimum pour montrer le message i en entier (rien si la liste n'est pas encore mesuree : la vue se placera des qu'elle le sera).
+@@ dba456ecdc2a d
+Haut / bas : le message d rangs plus loin (negatif : plus ancien, vers le haut de l'ecran), borne a la liste ; la vue defile seulement si ce message n'est pas entierement visible, du minimum necessaire. Repete par Pause.maj tant que la touche est maintenue.
+@@ 3ef948eb9060 d
+Page precedente (d negatif) / suivante : la vue defile de la hauteur de la fenetre moins deux lignes ; le message choisi, s'il sort de la fenetre, devient le plus proche message entierement visible.
+@@ f9ede45efcc3 d
+Souris (molette, barre, glissement) : la vue monte de `px` pixels vers les anciens (positif) ou descend vers les recents (negatif), bornee a la plage de defilement.
+@@ a587be7db093 d
+Choisit l'element i ; la vue se recentre sur lui des que la liste est mesuree (dessin suivant).
+@@ 996726c9bf95 d
+Un cran de molette = WHEEL_STEP lignes de texte, vers les anciens quand on remonte la molette (un pas fin et constant ; proportionnel au mouvement pour les pavés tactiles).
+@@ 8e6f8852898f d
+Police des messages du jeu (celle du canevas de texte du moteur : tous les glyphes du jeu, avec ses regles de placement et de coupure) pour le texte des boites ; None si elle n'a pas ete extraite (on garde SE-GARRIR).
+@@ c73c5ecb437a d
+Une ligne de texte dont la ligne de base est en ybase : police bitmap du jeu (une texture par ligne, teintee), sinon police du systeme.
+@@ 054c5fb3f5ab d
+Boite de dialogue standard (dimensions de la mise en page d'origine si elle est chargee) ; gardee.
+@@ cdd9baab1081 d
+Pages d'un element : liste de listes de rangees de texte (3 rangees au plus, l'entete d'un combat comprise). Gardees (cle : element, echelle).
+@@ b18a5d411cd0 d
+Etoile de favori : doree quand l'element est en favori, grise et creuse sinon.
+@@ 2a5ac1dd3833 d
+Largeur de la plaque de la case « Favoris seulement » : marge, case, marge, petite etoile, libelle, marge.
+@@ f47df4061b9f d
+Case a cocher « Favoris seulement » : une plaque a la hauteur des onglets, a droite du dernier onglet (le groupe onglets + case est centre dans la fenetre), avec la case, une petite etoile et le libelle ;
+doree quand elle est cochee. Sa zone (clic) est gardee dans `filter_zone`.
+@@ 13425b6bb120 d
+Fenetre de message du jeu (ui_menu.MessageWindow) qui dessine le cadre d'une boite : avec l'onglet du nom (frameData 191) ou sans (192), sans le canevas ni le curseur de fin de page ; None si la mise en page
+d'origine n'est pas chargee (la boite est alors dessinee avec un cadre simple). `extra` : lignes de texte en plus des 3 de la boite du jeu (un combat) : le cadre (sans onglet) est allonge d'autant (stretch_border).
+@@ 2918243ef295 d
+Cadre de la boite dont le coin bas gauche est (bx, by), a l'echelle s : le cadre du jeu (et l'onglet du nom avec son texte, comme le jeu les pose), sinon un cadre simple. Toujours le meme : le message choisi n'est ni
+grise ni eclairci (il porte seulement la petite fleche, voir dessiner).
+@@ 3ab3e37cd005 d
+Pose TOUTE la liste dans une colonne (disposer : un dialogue a la hauteur de la boite de dialogue du jeu, que le texte tienne sur 1, 2 ou 3 rangees, et l'onglet du nom, sur la premiere boite d'un
+dialogue avec nom, s'y ajoute au-dessus ; un combat a autant de lignes que son texte en demande, trois au moins : box_lines), pour l'echelle s et une fenetre de liste de hauteur hv (pixels). La mise en page ne depend jamais de la position de defilement. Met a jour la geometrie du defilement (hauteur du contenu,
+de la fenetre, d'une ligne), garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `go_to`, borne la position et garde les bords des elements (debuts, fins) pour la navigation
+au clavier. -> boites : (element, boite, nombre de boites, haut, haut de l'onglet, haut du cadre, rangees de texte) ; haut = pixels depuis le haut du contenu.
+@@ af9ce40b438b d
+Partie pure de _mesurer (testee sans police ni GL) : la liste fait `hc` pixels de haut (debuts / fins : haut de la premiere boite et bas de la derniere de chaque element), la fenetre de la liste `hv`, une ligne de texte `step`,
+a l'echelle s. Garde la position proportionnelle quand l'echelle change, ramene au milieu l'element demande par `go_to`, borne la position et garde les bords des elements pour la navigation au clavier.
+@@ e05cab8c0a9d d
+Cadre de decoupe (glScissor) sur le rectangle (x, y, w, h) de la fenetre (pixels de la fenetre : mis a l'echelle du tampon d'image sur un ecran a forte densite) : ce qui deborde de la liste est coupe, comme un texte qui defile.
+-> True si le cadre est actif (a fermer par glDisable(GL_SCISSOR_TEST)) ; False si on n'a pas pu l'installer (les boites coupees ne sont alors pas dessinees).
+## FILE dq4_pc/menus/ui_menu.py
+@@ b83890a52a81 t
+(police de repli GMaruGoPro-M, utilisee seulement sans ui_garrir.*) hauteur de ligne de la police en « em » (OS/2 winAscent + winDescent de GMaruGoPro-M) : recoupe l'espacement des barres PV/MF (28 px) et le centrage des boutons
+@@ 4c9410cadf2c t
+(repli GMaruGoPro-M) taille native de la police du jeu (GMaruGoPro-M, Font.fontSize) : 1 caractere = taille_caractere * 0.1 * 19 unites
+@@ e362972980a6 t
+"^n" en tete d'un texte (IText) : (echelle x, taille de caractere)
+@@ a77ff17b790b t
+DQ_TEXTE_ORIGINAL=1 (test) : placement vertical exact du jeu d'origine, sans le recentrage optique (voir text_recentering)
+@@ b62c22062f73 c
+Etats d'un bouton (MenuParts.BUTTON_STATE_*, param (id, 0) d'une plaque) : 0 normal, 1 enfonce, 2 invisible, 3 grise (shader gris), 4 inverse (shader inverse, enfonce).
+@@ 32ddcb539152 t
+chaine 623 du jeu (patch FR) : l'etiquette de la plaque auto quand le moteur n'en envoie pas (il ne l'envoie qu'avec un data5.dat valide)
+@@ 0782040b68a7 t
+MenuParts.TEXT_COLOR_GRAY : couleur de texte d'un bouton grise (palette du jeu)
+@@ 45206cf51f4d t
+numero du bouton « Sauvegarde automatique » du menu de depart (type 53, cellule (4, 1) du moteur, banque 4 = data5.dat)
+@@ 01447358701a t
+largeur du cadre avant / apres
+@@ 57c46c780dbc t
+message : fenetre de dialogue (MenuMessage), absente des anciens fichiers
+@@ f94c95f2ee89 t
+combat (type 1) : 3 lignes comme le terrain ; le cadre d'origine (4 lignes) reste en type 4, pour les messages qui en ont quatre
+@@ 592071b1f019 t
+messages d'action du combat : texte de la meme taille que dans les dialogues
+@@ 392db9454111 c
+MenuPortItemTable.name_button_param (RVA 0xCF8E00-0xCF8F98, .cctor) : (nombre de rangees, ordonnee de depart, pas) de la liste Make_NameButton ; le moteur choisit la mise en page par le code 6 de la fenetre
+(`<Make_NameButton>b__0`, 0xD08BE8 : les rangees 0 a nombre - 1 sont activees et posees en `initial - step x rank`, les autres sont desactivees jusqu'a la 6e). L'exporteur ne peut pas jouer cette fonction (« List index »).
+@@ 76aa8793f45a t
+mise en page exportee : rangee k a l'ordonnee 382 - 67 k (NAME_BUTTON_Y, NAME_BUTTON_DY)
+@@ 83cb7f126c4a t
+fiche d'un sort (type 7) : bord droit utile de la ligne de cout (cadre de droite : x 63 a 221, mesure sur les captures, moins la marge des plaques)
+@@ c74bfe6a95a1 t
+fiche d'un sort (type 7) : bord droit utile de la description (cadre du bas : x -226 a 155,5, jusqu'au bouton de retour, moins la marge des plaques) ; le cadre n'a que 2 lignes de haut
+@@ 2593893cc8e4 t
+infos d'un objet en combat (type 38) : bord droit utile de la description (cellule de gauche : x -226 a 64,7, mesure sur une capture du moteur reel, moins la marge) ; la cellule n'a que 2 lignes de haut, la cellule « Attaque E 24 » est a sa droite
+@@ 894be960570b c
+Descriptions d'objets et de sorts : (type de fenetre, port, numero de chaine) -> bord droit utile (unites d'interface) de leur cadre, qui ne montre que 2 lignes. Le port est dans la cle : la fenetre du casino (type 46)
+a quatre autres cellules de texte au meme numero de chaine (les listes, port 0 a 3) qui ne sont pas des descriptions. Le texte francais du patch a des lignes de 38 caracteres, ou une seule ligne de 50
+(« Peut aussi etre utilisee comme objet au / combat. », « Au combat, ils peuvent inverser le cours du temps. ») : il sortait du cadre et recouvrait « Attaque E 74 » (type 38) ou le bouton du sac (type 10). Render._texte le recoupe a cette largeur puis, si
+2 lignes ne suffisent pas, le comprime (Render._adjust_description).
+@@ e9796a180586 t
+46, 60, 61, 63, 70 : barre du bas des boutiques et du casino (meme cadre que la fiche d'un sort ; Suppose : fenetres non ouvertes dans le moteur, #219)
+@@ aa0cc91f5ffc t
+fenetres dont les etiquettes de bouton sont comprimees pour tenir dans leur plaque MEME avec la police d'origine : le poker du casino (type 48, SVC-03 : « Abandonner » sortait des 5 boutons sous les cartes et se chevauchait ; choix du joueur : police reduite)
+@@ bf2001eb10d6 t
+compression horizontale maximale d'une description qui ne tient pas en 2 lignes
+@@ 8bb6e9aee683 t
+division entiere du C (vers zero)
+@@ f87e4da555bf t
+feuille (0 = MenuTexture, 1 = Button...) -> opacite (hauteur x largeur, uint8) de la feuille du jeu, posee par Rendu : sert a mesurer le bord VISIBLE d'un cadre
+@@ f5d9af104b6b t
+fractions de la case, depuis la gauche et depuis le haut
+@@ e9fe85ce3f42 t
+copie de la liste : l'eglise (type 66) y ajoute les parties de ses boutons
+@@ ed54401622cb t
+types que le portage anime ou complete : le jeu les fait par du code que l'exporteur ne voit pas
+@@ 8d175382a42a t
+eglise : elements ajoutes, textes recus avant la creation des boutons
+@@ 03bb52d2a53b t
+plaques des membres en combat : secousses en cours (membre -> etat), debut du clignotement de la fleche
+@@ d7f59725afef t
+plaques de monstres : marques de groupe (decor du combat : elles ne comptent pas dans l'etendue de la fenetre)
+@@ ae9ee8e50774 t
+menu de depart : cadre choisi par le code 3
+@@ ee226811ba5e t
+Oui / Non : les deux plaques l'une sur l'autre (D-231)
+@@ 194773f2803c t
+derniere valeur de chaque code recu ; plaque « Sauvegarde automatique » grisee par la visionneuse (voir auto_plate)
+@@ 9d5763d2bd64 t
+IBar.firstFunc : zero/largeur lus sur le quad
+@@ 53ff2cdbdef8 t
+codes « fonction » (plaque de monstre...) : le code -1 = rien a montrer, etat de depart
+@@ d77ab82b3532 t
+liste de boutons nommes (type 8) : decalage deja applique a chaque rangee (voir _name_entries)
+@@ 5fca51b6e2bb t
+liste de 6 boutons mais le moteur n'en pilote que 5 (codes 0 a 4) : le 6e (en bas, sous « Sauvegarde rapide ») reste cache tant qu'aucun code ne le montre
+@@ 4346d8fc1c0b t
+menu de depart : la case « Sauv. cloud » (bouton 8) n'existe plus pour le moteur (octet g_isAmazon) ; le portage y met son bouton « Sauvegardes » (export / import), libelle pose ici
+@@ c722c15b46ff t
+titre de chapitre : l'exporteur voit le quad de MenuParts.CreateFromTexture(« Menu/map/hyodai1 », bFitWidth = true, haspect = 1) avec son maillage par defaut (carre de 450) et sans texture (creee par le code)
+@@ cf430e866b6d t
+CreateFromTexture ajuste la largeur (450) et deduit la hauteur de la texture (256 x 128 : 225) : bandeau dore a fond bleu, centre
+@@ 05f7454c9ab6 t
+fenetre de carte (type 25) : nom du plan, texture (posee par la visionneuse)
+@@ 2f2bb8b34a42 t
+carte du monde : lieux decouverts (x, y en pixels du plan de 256 x 192), debut du clignotement ; mode de filtrage du plan
+@@ a1c2344c9008 t
+petite carte du monde : lieu special (code 4), (x, y) en pixels du plan de 256 x 192, ou None
+@@ 451fe3d60ca9 c
+---- application des messages
+@@ e532a391e136 t
+fenetre de carte (type 25) : le nom de la texture du plan (Menu/map) est pose par la visionneuse (map_name)
+@@ e4f4956ade80 t
+icones d'etat (mort, poison, sort scelle) et couleur du nom
+@@ ab0c09715ec6 t
+quantite d'une ligne de la liste d'objets (type 9)
+@@ 888a97afed2d t
+BattleBar.Change(int) : barre normale
+@@ 8eb117af6688 t
+BattleBar.Change(string) = RedApply : barre « rouge » = valeur courante
+@@ c032e1bd9bb2 t
+description d'un sort ou d'un objet : le cadre montre 2 lignes ; si le texte est plus large ou plus haut, il est recoupe a la largeur du cadre (Render._adjust_description)
+@@ 51df3f355058 t
+fiche d'un sort (Make_MagicInfo), ligne « Cout en PM  2/ 30 » (ancree a gauche, x 75) : elle doit tenir dans son cadre, voir Render._texte
+@@ da468d0dcbf6 t
+voir tabuler : toutes les cellules a tabSize (types 8, 20, 31, 33, 34, 35, 39), plus seulement la liste des magies (#208, audit UI-03)
+@@ f56c460b61fb t
+(getattr : les tests construisent des Fenetre factices sans cet attribut)
+@@ 3b0c86741b50 t
+un element que d'autres codes masquent est visible pour celui-ci s'il ne le masque pas
+@@ fb9f9f1678f4 t
+MenuParts.SetTextColor(code) : couleur des textes marques du masque
+@@ f115a0298986 t
+(rejeu d'une fenetre : le code de la rangee peut etre deja connu)
+@@ 56bb19acd34d t
+decalage voulu de la rangee k (le jeu pose la plaque, ses textes la suivent)
+@@ 14237cb68160 c
+---- eglise (type 66, Make_ChurchRoot)
+Le jeu fait les boutons dans le code de la fenetre (Sub_ShopButton) : l'exporteur de mise en page n'en voit que le titre et le bouton de sortie (« Rien »). On les refait ici d'apres le code recu du moteur
+(0 : cinq boutons, sinon quatre) : (x, z depuis le bas de l'ecran, largeur sans les bordures) ; maillage a neuf decoupes de la plaque de sortie, bouton n = numero n, manette 16 (valider).
+@@ a8f5cc06b37c t
+plaque de bouton existante : la sortie (« Rien », manette 32)
+@@ d56f892fdcdf t
+remplace les liaisons exportees (parties absentes de la mise en page)
+@@ 5f56b3bbf1d5 c
+---- combat : plaques des membres (type 29, Make_BattleUpStatus)
+@@ 4690ca62eeae t
+MenuMessage.s_shakeTable : decalage de chaque image, de la derniere (7) a la premiere (0) ; somme nulle
+@@ 3f23ab16d8a9 t
+BattleUpCursor.c_waitTime : secondes entre les deux teintes de la fleche
+@@ 48a26fec6a7d t
+la plaque entiere se deplace : sa racine, ses textes, sa barre, son visage
+@@ 4b3f9efb50a7 c
+---- icones d'etat (MenuPortItemTable.StatusIconChanger)
+@@ 6d0f23079414 c
+---- combat : marques de groupe sous les monstres (MonsterMarkList, type 31)
+@@ 4c24bccef285 c
+---- menu de depart (type 54, Make_StartMenuSelect)
+@@ f56b097c3ce1 t
+le premier bouton (et ses textes) descend a 135,75 du bas de l'ecran
+@@ 5cbd620a1a06 t
+pas d'onglet : toute la largeur
+@@ 9dbf0e2cc9a8 c
+---- plaques de noms de monstres (MenuPortItemTable.MonsterNamePlate, type 31)
+@@ 749716ce7761 t
+marque de couleur : retiree par la plaque
+@@ 32ea0f53c982 t
+fenetre de 36 -> 18 de haut : lignes du haut/bas rapprochees du centre
+@@ ff423bcd7515 t
+« nom \n \t×N » : la tabulation (tabSize 25) repousse « ×N » vers le bord droit de la plaque
+@@ 993bfe255864 t
+MonsterMarkList.SetMark : choix de cible (code 2) = une marque de la couleur de la plaque sous chaque monstre du groupe, a x du monstre, z = -64
+@@ 68afe9ddd1ab t
+notre propre etiquette de remplacement n'est pas celle du moteur (compte seulement tant que le code 0 manque)
+@@ 583572fed757 t
+la sauvegarde auto est apparue : plaque normale (le moteur donne l'etiquette)
+@@ b44b8d15d603 t
+(comparaison) comme le jeu d'origine : plaque cachee
+@@ 7d9214a4e37a t
+espace entre les deux plaques empilees (celui qui separait les deux plaques cote a cote : de -0,5 a +0,5)
+@@ 2f63c3286826 t
+le cadre (deux panneaux) est le parent commun des deux plaques
+@@ 5e7bd379943d t
+decalage horizontal : la plaque de droite passe sur la colonne de gauche
+@@ 70756a63f844 t
+frontiere entre les deux panneaux du cadre (repere local du cadre)
+@@ d5ff78adb039 t
+la hauteur d'un panneau + l'ecart
+@@ 0e0dc73696f2 t
+la plaque de droite et tout ce qui en descend (son texte)
+@@ 1ad9eac62a7f t
+frameData du cadre de dialogue AVEC onglet de nom (192 = sans onglet : celui du type 0 de ui_layout.json)
+@@ 3de9fa44a80b t
+MenuMessage.m_who : position locale du TextMesh du nom ; la hauteur s'y ajoute BIAS_FONT_Y (= lang['dy'], ajoute par Render._texte)
+@@ 6754f840fa74 t
+characterSize du TextMesh du nom (celui des dialogues vaut 10,4975)
+@@ 5e98872f13fc t
+(pour Render._texte, qui lit ces deux champs des fenetres de menu : numero de type, image de la mise en page)
+@@ dd7fe6bb77d8 t
+TextMesh « m_who » : position locale (-104,5 ; 4 ; BIAS_FONT_Y - 104), taille 10, ancre « haut centre », texte centre, blanc
+@@ 67654c336428 t
+(l'onglet du nom ne compte pas : le Oui/Non et l'echelle gardent la place du cadre sans onglet)
+@@ 8f514cf8e950 t
+espaces que la police du jeu dessine plus larges (U+00A0 : 11 px au lieu de 5) ou n'a pas (U+202F, U+2009)
+@@ 3d1444101794 t
+marge (px de police) autour d'une ligne : certains glyphes depassent leur « advance » (W, ’, …)
+@@ 1933ed9588e0 t
+lignes de texture au-dessus / au-dessous de la ligne de base
+@@ 49c0ec69b041 t
+ligne n = v * 256 (coordonnees de texture d'Unity : v = 0 en bas)
+@@ 04e0bd09c40b t
+glyphe « flipped » : stocke transpose dans l'atlas
+@@ 1c14bf9fdbcb t
+(advance, decalage x, haut du glyphe par rapport a la ligne de base (vers le bas), bitmap)
+@@ 2405f615d954 t
+espace insecable (U+00A0), fine (U+202F) ou mince (U+2009) = l'espace normale (5 px) : le glyphe 160 de la police a un advance de 11 px (le patch FR met U+00A0 avant « ! », « ? » et « : »)
+@@ 59601566e35d t
+caracteres de controle (« \r » en fin de ligne) : ni largeur ni dessin
+@@ 5d3be9e50812 t
+filtre bilineaire, comme l'atlas du jeu (Texture2D.filterMode = Bilinear)
+@@ cf0eb5dbf996 t
+police des messages du jeu (celle du canevas de texte du moteur : dialogues et combat), facultative : sans elle l'historique garde SE-GARRIR
+@@ 6d239d27cede t
+DQ_POLICE_GMARU=1 (test) : ancienne police japonaise, pour comparer
+@@ b50a9d3e8267 t
+voisins : fenetres visibles de l'image (leurs cadres servent a compresser les textes d'une fenetre sans cadre)
+@@ 3f0e93da3cf4 t
+texture blanche de 1 pixel (carres de couleur unie : lieux de la carte du monde)
+@@ 5883198591d3 t
+(opacite d'origine : bords visibles des cadres)
+@@ a26f7691bef4 t
+pixels transparents = couleur du bord voisin (alpha inchange) : les cases de ces feuilles gardent du blanc / rose sous leurs pixels transparents, que le filtrage lineaire ramenait en liseré clair (« aura ») autour des icones et des portraits
+@@ c1a73f3433d9 t
+ligne 0 en premier = v 0, comme la texture Unity
+@@ a36427854a05 c
+---- construction des elements a dessiner
+@@ 18397079bfec t
+plan : au-dessus du fond du cadre (profondeur 0), sous le marqueur (12 et plus)
+@@ 662244537492 t
+comme Unity (objets transparents tries par profondeur sur la camera) : profondeur d'abord, puis la fenetre la plus recente devant ; le fond d'une fenetre ne recouvre plus les boutons d'une autre
+@@ 4fe62011eb59 t
+numeros portes par un bouton de validation (manette 16 / 64)
+@@ aff0638140dc t
+fleche de page APPUYEE : comme le mobile (IButton(Material), DisplayClass6_0.b__0 : Material.color = 0,75 sur les quatre canaux)
+@@ d1428c824e99 t
+fleche de page survolee (PC, le mobile n'a pas de survol) : eclaircie
+@@ 4af7e0944dbf t
+grise / inverse / invisible : ni survol ni curseur (le test de contact est coupe)
+@@ 855d5cfae763 t
+souris : seul l'element pointe (ou appuye) est en surbrillance, pas toute la rangee qui partage son numero
+@@ fd307f44a789 t
+un bouton d'annulation (manette 32 / 128, ex. « Rien ») qui partage son numero avec un bouton de validation (« Acheter ») ne s'allume pas avec lui
+@@ 4ac29883feef t
+quatre abscisses et quatre ordonnees : bords et limites des coins
+@@ 39c4b74832b6 t
+le coin garde sa proportion avec la hauteur de la plaque (ou la taille demandee)
+@@ efdcd0e9bf06 t
+grande carte du monde : fenetre de 256 x 192 pixels du plan de 1024 x 1024, centree sur le joueur
+@@ 9caf34a1f37e t
+plans agrandis (HD, voile compris) : filtrage lineaire ; grande carte du monde : bilineaire net
+@@ faebc1a5a53a t
+code 4 : lieu special, croix rouge (MenuTexture, feuille 5, case 3 ; AddIcon 1,2 x 16 = 21,6 unites), coin bas gauche en (-227 + x k, 402 - y k) (ancrage suppose comme la plume)
+@@ e6b2511495cf t
+lieux decouverts (BlinkMapSymbol) : carres rouges de 4 unites dont la transparence va et vient (0,5 par seconde : 1 -> 0 -> 1 en 4 s)
+@@ f542a47d0b4e t
+carre de 4 unites centre sur le lieu (comme le marqueur du joueur, de 24 unites, centre sur sa position)
+@@ 47fa07131c96 t
+marge (unites d'interface) laissee de chaque cote entre le texte et le bord de la plaque d'un bouton
+@@ 815b193c7f02 t
+(textes a gauche / a droite d'une plaque : seulement les listes du menu de depart, les autres fenetres gardent leur mise en page)
+@@ 1fc66a4e945c t
+texte centre : la plaque entiere
+@@ aba259bcb30f t
+texte a gauche / a droite de son point d'ancrage (ex. « Chapitre 1 Nv. 1 001:07 » d'une ligne de journal) : jusqu'au bord de la plaque
+@@ b7a0143518ed t
+police d'origine (SE-GARRIR) : 1 px de police = characterSize * 0.1 unite ; sinon GMaruGoPro-M rendue par Pillow
+@@ 396032dc07c9 t
+le jeu ajoute dy a la position du texte (compensation de l'interligne de la police)
+@@ 07293235fdae t
+description plus large ou plus haute que son cadre : recoupee, puis comprimee si 2 lignes ne suffisent pas
+@@ 255b91e7ed2d t
+TextMesh.anchor : le point d'ancrage est le haut (0-2), le milieu (3-5) ou le bas (6-8) du bloc de texte
+@@ 1e14ca8c2b2f t
+(police d'origine seulement : les reglages du jeu sont calcules pour la police japonaise, GMaruGoPro-M, quand elle sert de repli)
+@@ 5b8883c4490a t
+« @cN » change la couleur du texte (palette du jeu) ; elle se prolonge d'une ligne a l'autre
+@@ 3832938a769f t
+fenetre sans cadre propre (titre et etiquettes d'un reglage) : le cadre est dans une autre fenetre visible, on prend le plus petit rectangle qui contient le point d'ancrage

@@ -1,0 +1,1018 @@
+## FILE tests/test_params_without_pause.py
+@@ 281786532ccd d
+Test (without engine or display) of the "Paramètres" screen (#136): the screen that used to be called "Pause" (Esc menu) is now called "Paramètres" and no longer pauses the game: the game keeps running behind it
+(with no key or click: the menu keys do not make the hero walk). Since #178 (D-229, "there must be no pause in any menu") NO page stops it, not even "Historique" or "Quitter";
+the mechanism (Pause.FROZEN_PAGES, empty) remains and is tried here with a frozen test page.
+
+    python3 tools/test_params_without_pause.py
+
+  1. the root title is "Paramètres" (no longer "Pause");
+  2. Pause.freezes_game: false when the menu is closed, false on ALL pages (root, settings, history, exit question; any `_e_*` page of the menu), Pause.FROZEN_PAGES empty;
+  3. Game._sync_freeze: the sound and the clock stop only when entering a frozen page (here a test page added to FROZEN_PAGES; none by default), and restart when leaving it (without catching up the elapsed time); Game.pause_game: opening cuts nothing, closing gives the sound back if it was stopped;
+  4. Game.tick: no input is sent to the engine while the menu is open; Game._speed_factor: no accelerated walking while the menu is open (no direction is sent to the game);
+  5. Game._loop: the engine runs while the menu is open (except on a frozen page: none).
+@@ 0291dca2a280 d
+What the window loop asks of the menu, the sound and the rest (Game fields used by the tested methods).
+@@ b4108b90c307 d
+The stop mechanism (a FROZEN_PAGES page), tried with the "historique" page added for the duration of the test: by default no page stops the game anymore (see TestFrozenPages).
+## FILE tests/test_paths.py
+@@ 165bd5222e58 t
+old behavior: APK and phone saves over there, the rest in donnees
+@@ 2ec08dd4ca93 t
+the earlier port's adventure logs take precedence over the phone copy (T1)
+@@ 32a53ec9592f t
+... which fills in what is missing (the most recent one only)
+@@ f64528a2b794 t
+(not the one from an older date)
+@@ 6c6a12898ebd t
+settings already changed in the new version: kept
+@@ 16c53388a315 t
+yesterday's write folder: what the game wrote afterwards wins over the old port (P1)
+@@ 92afb61b8b16 t
+D-235: the deleted avant_import_... folder came back at every startup (copied again from dq4_pc\\sauvegardes)
+@@ 10cbc5791312 t
+(everything deleted: only the resume file prevents the copy)
+@@ 47e218a4a314 t
+(the old folder is still untouched)
+@@ 8e78e9fad782 t
+Sylfried's case: the resume took place with a version from before D-235, he deleted avant_import_... by hand
+@@ cfad7d557eb5 t
+(nothing to rename: the D-239 stage is not noted)
+@@ b98497d323d0 t
+like a first time: copy without overwriting anything, then the file is redone
+@@ dab6328a3e4d t
+(the resume sentences are tested in French)
+@@ d7f476c896bc t
+the layout from before D-239, as it is on the PC
+@@ df43aa322f88 t
+(the folders put away by the resume stay as they are)
+@@ e5874b06b494 t
+(old stage names translated, dates kept; the other stages: destination already in use; D-239 stage added)
+@@ 7a46ca602690 t
+(only once)
+@@ 5627cbe2b06f t
+(no content lost, none added)
+@@ 5c814da36138 t
+a setting already exists at the new place: it wins, the old one stays where it is
+@@ 2494085c99dd t
+(at their former place, intact)
+@@ e25123cbebb9 t
+(the rest is renamed)
+@@ 0073b39763a2 t
+(not noted as done: the renaming will be redone at the next startup)
+@@ bbe12595651f t
+`data\\saves` already exists (interrupted renaming): the rest is put back into it, one file at a time
+@@ 9a3763f66fb2 t
+Windows: a folder open in Explorer cannot be renamed; its files, however, can be moved one by one
+@@ a83a0968f3cb t
+(nothing moved or disappeared)
+@@ 2649bd53582d t
+the next startup finishes the job
+@@ 326f59361b8d t
+DQ4_DATA / DQ4_DONNEES: the folder is yours, only its contents are renamed
+@@ 9145f04cb94d t
+(the new name wins)
+@@ 982e791599e8 t
+(folder already renamed, but the earlier `reprise.json`, with `etapes` and the old stage names, not yet)
+@@ 16253f960c96 t
+the resume of the very first layout already arrives with the right names (savestates, backups)
+@@ f6ccc0166860 t
+D-239: a .zip exported by an earlier version (`etats/etat_NN.dqs`) can be imported, the savestates are written under their new name
+@@ e30cefeba440 t
+D-235: the game does not read manifest.json (file list + sha256 made by the copy tool); the adventure logs have their own check
+@@ 8cef48c0f588 t
+(tests, --saves-ecriture): everything stays under this folder
+@@ 2b80bea2170f c
+we build a pickle as the old version wrote it: the class's module was called `engine`
+@@ 776b3638aa9c t
+(without the mapping, that is precisely the problem)
+@@ 35684bc4a313 d
+Port folders (paths.py) and resume from the old layout: default layout, environment variables, migration without overwriting or deleting,
+import / export of saves with the new folders, old savestates (module names from before the 2026-11-04 tidy-up). Without window or engine.
+
+    python3 tests/test_paths.py
+@@ f22563438faa d
+D-239: the folders and files that earlier versions created in French are renamed in place (without copying, without overwriting or deleting anything).
+@@ 6a97729b152d d
+A valid game adventure log ("rate" header, checksum, encrypted); `n` distinguishes it from the others.
+@@ 220f1ffa7e82 d
+Import / export with the data\saves layout (savestates and copies next to `portage`).
+## FILE tests/test_pause_language.py
+@@ a0e8c3688526 c
+Words identical in French and English, or technical names: drawn as is in both languages, with no catalog entry
+(an identical entry would duplicate those in the other files).
+@@ 1d608a2f1085 t
+(the fake name that the fake game gives to a window the tool does not know)
+@@ e38858e98df5 t
+console messages (tested in the Console class)
+@@ e96f93c22a64 t
+(+ a window unknown to the tool: "Autres" group)
+@@ 8680e68e6384 t
+page identifier (string) -> end of the name of the `page_...` method of Visite
+@@ ac5d390eccd4 t
+(the catalog in force during this walkthrough)
+@@ 0bc35534dc0c t
+scrolling page: each line goes through the window
+@@ ec05119e1798 t
+(one page of lines at a time, with one line of overlap)
+@@ 0f966b950360 t
+each kind of slot: thumbnail and date, date only, nothing, empty ("Pas de miniature", "Emplacement vide")
+@@ 37ee261e6a6e t
+confirmation window (n = 9: empty slot, no date)
+@@ 162d8629f513 t
+"Limité à x4..."; resolution grayed out in full screen
+@@ 8354c08f5193 t
+"Appuie sur la touche pour..."
+@@ cde9aa86b2a3 t
+entering a value
+@@ 4ddd7ee7139a t
+each drop-down list open
+@@ ac29e0d33553 t
+"Replacer sous la boîte de combat" / "Replacer sur le bord gauche"
+@@ 164b32329d8f t
+hidden: "Masquée" / "Masqué" on the preview
+@@ d312b06b33a1 t
+title bar tooltip
+@@ 912dae97633c t
+collapsed panel
+@@ b2008ca643cf t
+"Interface à modifier" list open (group subheadings)
+@@ 7d8070f8c398 t
+"État enregistré dans l'emplacement 2."
+@@ 61a36e82990f t
+(the file does not exist: "Impossible de supprimer l'état")
+@@ a65fc28317e4 t
+"État 2 supprimé."
+@@ ff006d5ac354 t
+"Cette touche est réservée (F11)."
+@@ 3f2aae829d52 t
+"Tab retirée de "Infos à l'écran"."
+@@ 0968a242fccd t
+"Une touche d'origine est retirée de "Infos à l'écran"."
+@@ d55dc257dfff t
+"X retirée de "<each action, even those that are not in the page>"."
+@@ f2b253827ce5 c
+---- what we get out of it
+@@ 347df3234fd8 t
+each French text drawn: its translation (or an identical word) is drawn in English
+@@ 80db3c5dc519 t
+each help sentence
+@@ 6b4f0658bcd5 t
+in English, each received sentence is rendered translated (rejoined: the tooltip wraps it to its width)
+@@ 6f70c7b92898 t
+(the translation according to the catalog of the English walkthrough)
+@@ 2ead7414e4c5 t
+(the console: see the Console class)
+@@ d4c75a54adb6 t
+(an action name is drawn only in a message: "... retirée de "Page suivante".")
+@@ 5c1c5489d8df t
+(more than 4 seconds: gone)
+@@ 8b400de1e25f t
+(text with placeholders: translated then filled in, see Pause._entries_display)
+@@ 1be12fbeb2fd t
+(with the module globals as they are during the walkthrough: the frozen clock, for example)
+@@ a26b22333be1 d
+Tool language (D-238): pages of the Settings menu (Pause), in English and French.
+
+The menu is driven with a fake "game" (see test_pause_pages.py) and actually DRAWN in a hidden pyglet window (headless EGL on Linux); each label requested from the window (`_lbl`) is recorded.
+The walkthrough covers all the pages (root, Affichage, Interface with each of its elements, Son, Commandes, Modifications, États, Quitter), all the values of all the lists, the help of each line, the prompts
+for capturing a key and entering a value, the title bar tooltip, the confirmation window, the information messages (through their real calls), the names of all the keyboard keys.
+
+    python3 tests/test_pause_language.py
+
+Rules: (1) in English, no drawn text is French; (2) every drawn French text has its translation (whitelist: words identical in both languages) and the drawn English is indeed the catalog's; (3) in French, the texts are exactly those from before
+(the emptied catalog gives, in English mode, the same texts as French: the translation is the only difference); (4) the menu DATA (labels, value names,
+key names, messages) stay in French, they are translated when drawn (the other tests and the other screens, such as the history, rely on this); (5) no useless key and no empty or identical translation in
+texts_en\pause.py; (6) control mutations: a removed key, a `tr` removed from several places, an emptied translation or one left in French make the check fail.
+@@ 4c19e43a1d01 d
+Hidden pyglet window (drawing the menu needs a GL context); SkipTest if the machine cannot open one.
+@@ d88ca7a46441 d
+The fake game for the pages, with what `draw_all()` asks of it. `seen`: the texts requested from `_lbl`, recorded with the moment of the walkthrough (`moment`).
+@@ 0aacf4cebaf1 d
+The menu that records each call of `_helptext_lines`: (raw text received, lines rendered).
+@@ 7dcedcf5486a d
+The menu's `time` module, whose time no longer moves (the blinking input cursor, the animations: the drawing is the same from one walkthrough to the next).
+@@ 783503cc8d3d d
+The walkthrough of the menu interface in one language: `seen` = [(moment, text)] drawn (moment: page, help, tooltip, message); `helpers` = [(raw text, rendered lines)]. `parts`: the pieces
+of the walkthrough (all by default: the pages, the information messages, the key names).
+@@ c3d77d43a797 d
+Splits `lookup_key` into [text, placeholder, text, placeholder, ..., text].
+@@ fc7c53896b6a d
+Regular expression of a catalog text with placeholders (%d, %s...).
+@@ d6389ea7f613 d
+Nothing to translate: no word (digits, dates, signs) or raw name of a key ("BRACKETLEFT", "F5": pyglet's technical names).
+@@ 68aeb0fa5932 d
+What is wrong between the French walkthrough `fr` and the English walkthrough `entry` (Visite) according to the catalog `category`: list of texts, empty if all is well.
+@@ ad19ba9fabdd d
+The walkthrough in one language with the real catalog, done only once for all the tests (the menu and the catalog do not change from one test to the next).
+@@ 58103945680b d
+The menu data stay in French whatever the language: the other tests, the window and the history rely on this; the translation happens when drawing.
+@@ 2d605125230b d
+The console messages of settings.py and pause.py.
+@@ 23d173d246e7 d
+The catalog rules (tests/test_language.py) for texts_en\pause.py alone, plus: no empty or identical translation, a translation is not itself a key.
+@@ a8f13ff18855 d
+The check of the verification itself: each fault introduced by hand is seen by `problemes`.
+@@ f8b286af75b8 d
+The names of all the list values, and the help of each line (like the tooltip: sentences wrapped to the width).
+@@ 1513ce190cd1 d
+The information messages, through their real calls.
+@@ 3f77e458a9d0 d
+The names of all the keys the keyboard can give.
+@@ 5d7314a52f39 d
+Emptied catalog, in English mode = exactly the French texts: the translation is the only difference between the two languages (the French texts are those from before).
+@@ 19c5997e47a6 d
+A key that is used nowhere is a typo (the real text would stay in French) or a leftover.
+@@ bf46335d499c d
+The game font file exists but pyglet cannot load it (here: deliberately refused): the console says so in the tool's language.
+@@ aa05fd8443a1 d
+The menu sometimes translates an already translated text (assembled help, message whose values are translated): the English must not itself be a catalog key.
+@@ 1b872fd77da9 d
+`problemes` for these pieces of the walkthrough, with this catalog (None: the real one); cat: the pause.py catalog according to `problemes`.
+@@ 39aedffb64fa d
+Replaces, for the duration of the block, the method `klass.name_str` with a copy in which the text `old` has become `new` (executed with the globals of the class's module).
+@@ 1825bd7bad3b d
+The walkthrough's catalog and that of `problemes` without these keys.
+@@ 3ed064eb14ca d
+The action name in "Tab retirée de "Infos à l'écran"" is translated too.
+@@ 2d913cbfa75a d
+A menu without the `tr` on the help texts renders exactly the same texts in French (French is the key).
+## FILE tests/test_pause_pages.py
+@@ aa1897b6650b t
+smaller, neither gold nor white
+@@ 459448f7057f t
+dull (less bright than white) but still a golden gray (not a neutral gray)
+@@ f0055fd5c993 t
+(and clearly less vivid than the gold of the current value)
+@@ 8005277b5c9c t
+the gold remains that of the current value
+@@ d38908b55aa7 t
+the subheading is no longer drawn in gold
+@@ db0deb99cd8d t
+no more text page: its two options are in Commandes
+@@ a866c015e2bb t
+"Modifications" (formerly "Jeu"): just below "Commandes"
+@@ 2ddd2317a34e t
+each line: a volume bar (slider), a mute button, a "default" button
+@@ b9fd89d49f01 t
+Musique
+@@ 9d0dddb5517b t
+Enter: mute
+@@ f41bf04e6b93 t
+Delete: default
+@@ 27c415594a38 t
+Home: also
+@@ 1e6ab73a0bf0 t
+wrap-around: at the top of the list you arrive at the bottom
+@@ 71bf03b6735b t
+two options, then the next section
+@@ c78358f2de4e t
+(last line of the speeds)
+@@ 0a8b1c589365 t
+(the camera only rotates and recenters: D-233; no more zoom or wheel)
+@@ 42f754d3bbc4 t
+D-237: "Group all the camera options directly in a group named "Caméra""
+@@ c4a5cf750f05 t
+(the group comes after movement)
+@@ 7d9a70216cee t
+the window is notified
+@@ 81c4e693d938 t
+(the list wraps around) Très rapide -> Manuel
+@@ 783059348061 t
+↺ : Normal
+@@ 7ccb97e8235f t
+page title: "Modifications"
+@@ dffc033b75ae t
+invalid value: back to the default (Non)
+@@ 076eeeb8d3bf t
+(no more "Vitesse de transition" since #101: fixed at x1)
+@@ 1d639a6b09c6 t
+the accelerator keeps its slider
+@@ ba24cfa95614 t
+(old label: renamed)
+@@ 76c54ee7b2fc t
+(then the next section)
+@@ d46d3174d0d5 t
+(a single setting: in the "Défilement du texte" section, not in Vitesses)
+@@ db040807320a t
+(#101: removed, the transitions stay at x1)
+@@ 25202a8acc18 t
+the pointer leaves: the area lights up again
+@@ 9c0c4a251b76 t
+under a modal window: the hover belongs to it
+@@ 4f5a1e7416c8 t
+"Boutons et croix de l'écran" stays alone in its group
+@@ c54a8000cd5d t
+the speed button: first element of the "Combat" group
+@@ d8677177dfbb t
+the reset only touches the button
+@@ 1d001e3e0ef3 t
+no longer in "Boutons et croix de l'écran"
+@@ c5550ad20c84 d
+Test (without window) of the Pause menu pages: root, Son (one line per sound: name, volume, mute, default), Commandes (speeds x1 to x4, "Défilement du texte" section), Modifications (formerly "Jeu").
+
+    python3 tools/test_pause_pages.py
+
+The menu is driven with a fake "game" (real settings, simulated sound and window): the same functions as the menu's own, keyboard included (Pause.key_press).
+@@ a083fb5d52d6 d
+What the Pause menu asks of the window.
+@@ 50e7a34dfff4 d
+"Interface à modifier" drop-down list: the group subheadings ("Écran tactile", "Dialogues"...) are discreet, never gold (gold is the current value's).
+@@ d2d196229177 d
+Commandes > "Défilement du texte": "Vitesse du texte" and "Vitesse de combat" (formerly the "Vitesse de défilement du texte" page of the root menu), new section just below "Vitesses".
+@@ 1172c1993548 d
+No more yellow frame: under the pointer (mouse mode), an area darkens; with the keyboard, nothing is hovered.
+@@ b34a6cd551ce d
+"Interface à modifier" list: battle speed button in its own element of the "Combat" group, with its own settings.
+@@ a4b46eeb8f58 d
+"Vitesse de combat": the menu notifies the window (which also imposes the scrolling: 4 in Manuel, 2 otherwise); the list wraps around; ↺ resets to Normal (with the keyboard: the line is chosen in the Commandes page).
+@@ 6989db258968 d
+"Modifications" page (formerly "Jeu"): an Oui / Non switch, Non by default (like the game), which notifies the window; ↺ resets it to Non.
+@@ 0e49f59057a9 d
+Commandes > Vitesses: no battle speed setting (it is in the "Défilement du texte" section, just below), only the "Changer la vitesse en combat" key, just below the accelerator multiplier.
+## FILE tests/test_play_time.py
+@@ 18cfa65f36f9 t
+play time follows the real-time clock
+@@ 02857cd8afaa t
+exactly 2 per step
+@@ 763bb8584e13 t
+(slowed down: unchanged, the hook does not catch up)
+@@ 5dcfb5f84582 t
+time always advances by 2 (calls are skipped, never cut)
+@@ e9d1ec50558e d
+Save play time on real time (#239, audit ENG-04, survey of 2026-11-04): the engine adds 2 units (1/60 s) per step; when the game is accelerated (walking x1.5 to x8, accelerator, fast battle) it makes `a` times
+more steps per real second: the hook of `Engine._game_time_hooks` lets through only 1 / a of the `GameStatus::addPlayTime` calls.
+
+    python3 tests/test_play_time.py
+    DQ_APK=... DQ_SAVES=... python3 tests/test_play_time.py      (adds the real-engine tests)
+@@ ded23afad9da d
+Over 1200 steps at speed a, 1200 / a calls go through (give or take one): 2 x 1200 / a time units, i.e. 2400 / a / 60 s of play time for 1200 / (30 a) s of real clock time.
+## FILE tests/test_poker_font.py
+@@ 1a06ec57549a t
+ui_menu needs pyglet (absent from CI): the tests are then skipped
+@@ 1eb835f2398e t
+fallback font: always
+@@ 75b9ab5ab0d9 t
+limit set by the window (spell cost)
+@@ 55ea1db53976 t
+(casino: slot machine 44-47 and arena bet: unchanged)
+@@ 0a7848acbb35 d
+Poker labels (SVC-03, player choice: reduced font): "Abandonner" overflowed the five buttons under the cards and overlapped (the French is longer than the button's English).
+
+`ui_menu.compress_label`: a text wider than its plate is compressed to fit with the fallback font, with the original font only if the window sets a limit (spell info panel) or if it is the
+poker window (type 48); elsewhere it overflows as on the mobile (player choice, audit UI-05: these overflows are left alone).
+
+  python3 tests/test_poker_font.py
+## FILE tests/test_return_to_title.py
+@@ aee61fcd80db t
+game gamepad sent to the menus: down 1, up 2, right 4, left 8, A 16, B 32 (Game._menu_input); the engine arranges Oui / Non in one column (1 x 2 grid): the viewer's "right" goes out as "down"
+@@ 1142a2a4c70f c
+---------------------------------------------------------------------------------------------------------------------------------- 1. the Pause menu
+@@ a40735dd6853 t
+the question is the game's (original box), not a menu page
+@@ 1acd85ae62ce t
+the game resumes: it is the one that asks the question
+@@ e330d4d44896 t
+grayed out, with its explanation
+@@ 1079ead12ce1 t
+nothing is sent
+@@ d4e3d2e99688 c
+---------------------------------------------------------------------------------------------------------------------------------- 2. the engine (simulated)
+@@ 7ee47bbdfdc2 t
+(an old answer does not count: reset to 0)
+@@ 922d1c4001e1 t
+only reading the box state
+@@ 74bff4fcab9f t
+the player is released
+@@ 3f76a9767ccf t
+and the question can be asked again
+@@ 09cfe799d77d t
+the text is written, then Oui / Non
+@@ 4a1aed8dff7f t
+Oui / Non waits
+@@ 7263c4081ac4 t
+it waits: nothing happens without an answer
+@@ 063e8f12bf7b t
+neither bank erased, nor title
+@@ c9dc83fa6f4a t
+no fade
+@@ 75f4011b79c6 t
+the original cursor is on "Oui"
+@@ 2b7f5ccce22d t
+bank 4 erased then title, once each
+@@ 19e5126753ef t
+gradual (one thirty-third per frame), never all at once
+@@ c80a5c8315eb t
+about thirty fade frames
+@@ 615a5f68798f t
+and the same question is asked again
+@@ 5e421115b077 d
+Test of the return to the title screen (issue #109): Pause menu > "Revenir à l'écran titre" = the game's original box (its text, Oui / Non), then the game's fade to black, then the title.
+
+    python3 tools/test_return_to_title.py [--apk <folder of the patched APKs> --saves <saves folder>]
+(or DQ_APK and DQ_SAVES; without them only parts 1 and 2 run). Part 3 loads the real engine (about 1 minute): to be run through `tools/session_flow/engine_slot.sh`.
+
+Part 1 (no engine): the Pause menu line. It closes the menu and asks the game to return to the title (no more confirmation page in the Pause menu: the question is the game's); it is grayed out
+when the game is neither in a town nor on the world map.
+Part 2 (simulated engine): `Engine.request_return_to_title` and the two moments played around GameUpdate (`_return_to_title_before` / `_return_to_title_after`): the engine calls in the order of the original Settings menu (TownMenu_OPERATION_SETTING::menuUpdate, state 5),
+"Non" changes nothing, "Oui" erases bank 4 then launches Global::startTitle; a box closed without an answer releases the player.
+Part 3 (real engine, in a town): the box opens and stays open; "Non" (arrow toward Non then A) closes it without launching the title; "Oui" (A, original cursor on Oui) launches killbank then startTitle in the very
+same step of GameUpdate and the fade to black is gradual (30 frames, never a jump), then the title map loads.
+@@ 775216d99f8e d
+Places the root cursor on the return-to-title line.
+@@ cf30856768d5 d
+Replaces emu_core: records the engine calls (symbol names), keeps a word memory.
+@@ 609dde434d6b d
+The title fade is a packet read with those of the step: startTitle must be launched between `pk.begin()` and `pk.packets()`, around GameUpdate (otherwise the fade is lost and the screen jumps to black).
+@@ 3b3855a18408 d
+A gamepad button sent to the engine menu that has the input focus (like Game._menu_input: [1, -1, gamepad]), released on the next frame, then 8 rest frames.
+## FILE tests/test_root_scenery.py
+@@ db9c95170521 t
+map object 0 has geometry
+@@ 33515291e664 t
+two numbered objects (000_..., 001_...), as before
+@@ 5141d7e8f2a8 d
+Scenery whose mesh is carried by the map ROOT (MeshFilter + MeshRenderer on the GameObject `<name_str>.fld`, no `NNN_...` child): the map's object 0 is the root itself.
+Before, `Data._extract_map` only looked at the numbered children: these 32 maps (18 battle backdrops: btl_mt_*, btl_po_*, btl_sd_*, btldc1, btldh1, btldp8_*, btlta2, btltd1_*;
+14 places: ddb1b, dnb1b2, dnb2b3, dnb3b4, ev04, za1f6, za1f8, za1f9, za2f4..7, za2f9, za3f1) came out as EMPTY_MESSAGES (zero vertices). Checks (if the data package exists: DQ_APK, otherwise
+/mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks) that they have geometry, and that an ordinary scenery (numbered children) is unchanged.
+
+    python3 tools/test_root_scenery.py
+## FILE tests/test_save_notifications.py
+@@ 4242c3b3f1b6 t
+(start of the text of each call)
+@@ 9848b85c73ae t
+(D-238: tr('text') % x or N_('text'): the French text is inside)
+@@ ef0d637aa700 t
+(the sound "alert" hook is not connected)
+@@ 4ecfcfc809d4 t
+one message at a time
+@@ dcb857b635af t
+nothing imported: no message
+@@ 0638e173de9c d
+Notifications at the top of the screen: only those for saves (D-228 had removed them all on 2026-11-04 at 22:14; D-230 brings back the save ones, at Sylfried's request of 23:02: "Put the notifications back
+for the saves then...").
+
+  1. whitelist: every `toast(...)` call in the code is a save message (savestate saved / loaded / empty / canceled / failures, game save impossible, saves imported); neither battle speed, nor full
+     screen, nor engine memory, nor engine settings, nor sound, nor page opening is announced on screen;
+  2. the messages are produced: savestates (save / load / empty, cancel the load, failure), failure to write a save (test_save_writing), import;
+  3. `Game.toast` sets a message that expires; changing the battle speed shows nothing (and returns the new speed).
+
+    python3 tests/test_save_notifications.py
+@@ 4f96fcf591f5 d
+[(file, line, call text)] of all the `.toast(...)` in the dq4_pc code (text = 1st argument: a string or the formatting of a string; None if it is not a string).
+## FILE tests/test_save_writing.py
+@@ 3b3b381421ac t
+without __init__: no library or emulator to test the writing
+@@ c3ba51a8677e t
+the .tmp is gone
+@@ 07f14289042f t
+no exception
+@@ eabe6884a58a t
+intact
+@@ 1c7dc6b6ac8c t
+no stray .tmp
+@@ ebaabca067d6 t
+the file is closed all the same (as before)
+@@ 33f5db83787e t
+"fichier" is not a folder
+@@ 51a24b978644 t
+(on-screen message given back to the saves: D-230)
+@@ 61a2a5ed9318 t
+empty: a single message per failure
+@@ 316b9597aeea d
+#198 (audit ENG-02): writing of the engine saves: atomic, and an I/O error no longer crashes the game.
+Run from the root: PYGLET_HEADLESS=1 python3 tests/test_save_writing.py
+## FILE tests/test_saves_import.py
+@@ b58707a2d32b t
+new bank (DWEN) or deleted (DLED): valid, without checksum
+@@ ae1df36d3927 t
+data9 (512 bytes): no checksum; the size is checked elsewhere
+@@ a0d8f9b587ec t
+the damaged file is not written
+@@ cf3c5df6b44e t
+unchanged
+@@ 5af14d15b2bb t
+the other one went through
+@@ 61ee017b8726 t
+no temporary file left behind
+@@ a3608b5205d5 d
+#214 (audit ENG-07): the saves import checks the checksum of each adventure log (a damaged file, or one that is not a game adventure log, is refused with its reason instead of giving "banque vide" at load) and writes each
+file whole or not at all (temporary file then replacement: a failure leaves the old file intact). Without window or engine; the real saves (DQ_SAVES) are also checked if present.
+    python3 tests/test_saves_import.py
+@@ f72faedfe048 d
+Game adventure log in plaintext then encrypted; `n` distinguishes it from the others; word0 = FJ.NEW / FJ.DELETED for an empty bank.
+## FILE tests/test_saves_in_one_folder.py
+@@ d5b3f6978273 t
+the port (what the game used to write) takes precedence
+@@ cdaeeea3a5ce t
+... even if older: as before (no choice by date)
+@@ fa3612501851 t
+the most recent copy, not an older one
+@@ a5bed3609a80 t
+no more portage\ or mobile\
+@@ 7ed3ea56569c t
+each earlier file is where it was put away, with the same content
+@@ 9d6c84efd503 t
+savestates and import copies: in their place
+@@ 2acc1bb035a4 t
+(and it is not touched)
+@@ f34ff123ada5 t
+Windows: a folder with an open file in it cannot be moved; the file copies (tmp -> destination) go through
+@@ b44625517184 t
+nothing moved
+@@ 05621056ecc0 t
+(the game already reads sauvegardes: copy made before the move)
+@@ cb43f4582fe6 t
+then the next resume finishes the job
+@@ ff712c8a60a0 t
+(the game still reads it second)
+@@ fd8b76c3c42b d
+A single saves folder (D-232; request from Sylfried of 2026-11-04 at 23:55: "couldn't you just store all the files directly in the "sauvegardes" folder or a single subfolder to match
+the savestates logic? That way, if I want to transfer all the mobile saves to the patch I don't need any mental gymnastics to guess which file goes in which folder"), without window or engine:
+
+  1. layout: `data\saves` receives data1.dat to data5.dat, data9.dat AND `savestates\` (like the export .zip); `portage` is now just another name for this folder;
+  2. resume of the old `saves\portage` and `saves\mobile\<date>` at startup: the adventure logs are COPIED into `saves\` (the port first, then the most recent phone copy, without overwriting anything: what the game read
+     before, file by file), then the two old folders are MOVED as they are into `before_tidy_<date>\`; nothing is deleted, a second resume does nothing;
+  3. Sylfried's real case: port files older than the phone's, `manifest.json` in the phone copy, old `dq4_pc\saves` still there (must not take precedence over today's files);
+  4. safety: an adventure log already placed in `saves\` is not overwritten, a move error leaves everything in place (the game already reads `saves\`), DQ4_JEUX (phone copy elsewhere) is not touched;
+  5. the engine reads this folder (`effective_files`), the export flattens it and the import writes into it.
+
+    python3 tests/test_saves_in_one_folder.py
+@@ 0ca97f508c97 d
+The `portage` folder now exists only as an old name (paths.py: resumed then tidied away); no other module builds it.
+@@ c005814f1708 d
+What his PC contained on 2026-11-04: port (data1, data5, data9 from that day; data2 to data4 older), a more recent phone copy for data2 to data4, plus a manifest, and an old dq4_pc\sauvegardes.
+@@ 7e507030341f d
+He still has a `dq4_pc\saves` from before the first tidy-up (a copy, not a move): its old data1 and data3 must not replace those of the port.
+@@ f75c436100c0 d
+He has already copied the phone's data files into `saves\`: they win; those of the old port are not lost (put away).
+@@ 4f3185d0680f d
+A folder named `data1.dat` occupies the spot: the port's adventure log could not be copied, so the old folder does not move.
+@@ 3f8a2f62bb17 d
+The intended gesture: the phone's data1.dat... in `saves\`, nothing else; the engine reads them (write folder first) and the export puts them flat with the savestates.
+@@ 1cddb1e0dfb2 d
+What the export puts in the .zip is what the folder contains (apart from the backups): the folder is copied from one PC to another the way the .zip is unzipped.
+## FILE tests/test_savestate_fixes.py
+@@ a39f7014e846 t
+fresh engine: fix applied
+@@ de310a8c5c2d t
+"old" state: these library bytes are those of the original image
+@@ e4a03cef9fbf t
+the engine still runs
+@@ 9395489c55c3 d
+A savestate recorded by a version that did not yet have a viewer memory fix (widened places window, "Sauv. cloud" removed, "Paramètres" button)
+must not cause them to be lost: savestates.apply reloads the library's original image then replays `Engine.reapply_fixes`.
+(Skipped without the APK: DQ_APK, otherwise /mnt/user-data/uploads/DQ Patch/jeux/DQ4/patched_apks; writes go to a temporary folder, never to the user's saves.)
+
+    python3 tools/test_savestate_fixes.py
+## FILE tests/test_savestates_order.py
+@@ 253f2ac46a60 t
+before: the engine memory was already overwritten
+@@ 117d5c909896 t
+the engine advances: its memory now differs from the state's
+@@ 5cdf8461c0d8 t
+truncated pickle
+@@ 1eb2601658b9 t
+the healthy state still loads
+@@ 8d7acec9b5ba d
+#206 (audit ENG-06): loading a savestate does not touch the engine if the state is unusable (damaged file, other library); the library's fingerprint is recorded.
+Without APK: cases with a fake engine. With the APK (DQ_APK): the same test on the real engine.
+    python3 tests/test_savestates_order.py
+## FILE tests/test_savestates_whitelist.py
+@@ edbc996179d5 t
+(without going through __setstate__: the object keeps the old names)
+@@ 7a4ac81d2937 t
+(open is pickled as _io.open)
+@@ 29acfd20d6a6 t
+(numpy.save: a numpy module that the list does not contain)
+@@ 968534a8c3ab t
+(the engine constructor must not be callable by a file)
+@@ ac19dbe41ef0 t
+PROTO 4, SHORT_BINUNICODE, SHORT_BINUNICODE, STACK_GLOBAL, STOP
+@@ 2c2ae627aed1 t
+(and it applies)
+@@ 29b042691f60 d
+#241 (audit ENG-05, survey of 2026-11-04: "class whitelist"): a state file (.dqs) received from another person must not be able to execute code when read (pickle can call any
+function of an importable module). `savestates._Unpickler` accepts only the port's classes (`State`, `Interface`), the basic containers, numpy arrays and three `collections` containers.
+Without APK: crafted pickles (including traps: os.system, eval, subprocess, dotted names, port classes outside the list). With the APK (DQ_APK, DQ_SAVES): real states (town, world map, battle) remain readable.
+    python3 tests/test_savestates_whitelist.py
+@@ 181f86f4b1ea d
+An object whose pickle calls `function(*args)` when read (the classic technique).
+@@ 25a16ddc24ee d
+The states that the port really writes (world map, town, forced battle, after a menu) remain readable: the whitelist must never prevent reloading a legitimate state.
+@@ b937113e61bc d
+A state from before the 2026-11-04 tidy-up says `engine.State`: read again (the name is translated first, then the whitelist applies).
+@@ 687b538a91d7 d
+A state recorded before the switch to English (2026-11-05) says `dq4_pc.noyau.moteur.Etat` and keeps the old attribute names (`carte`, `partie`, `fondu`...): read again, it carries the current names.
+@@ ec01b983879c d
+Protocol 4: `STACK_GLOBAL` accepts "os.system" as a name in the module `dq4_pc.core.engine` (which imports os); the whitelist compares the whole name: refuses.
+@@ 44ad214cda43 d
+A state whose `python` or `viewer` part is booby-trapped: `read` returns the dictionary (nothing is executed, they are bytes), `apply` refuses BEFORE writing into the engine (#206).
+## FILE tests/test_scenery_culling.py
+@@ b9ec3ab749e4 t
+culling off and OpenGL's default winding restored
+@@ 23d955a15f47 t
+the old rendering
+@@ 1713a9c29380 t
+unreadable: like the default
+@@ 91664479034f t
+each scenery group; never the title sky
+@@ 7db2f3868505 t
+culling off after the groups: the sky strips / copies and what follows keep their own setting
+@@ 1e0cd8f9e63f t
+3D models: Custom/ImdChara, Cull Back, their own variable
+@@ fa164047659a t
+3D models + _scenery_culling: nothing else turns it on
+@@ cb41e50c1cc7 d
+Hidden faces of the scenery (#182: "indoors the walls must become transparent ... the outer faces have no textures, if we rotate the camera we must be able to see through the walls"):
+
+The shaders of the game's map scenery (Custom/fld_normal, fld_atest, fld_trans, fld_transz and their sepia variants) are "Cull Back" (ShaderLab culling = 2, read from the data package); only the world map (Custom/Field)
+has no culling. `Game._scenery_culling` therefore turns on back-face culling (front face = clockwise on screen, Unity being left-handed) for each scenery group, except the title sky (its own vertices);
+without window or GL: the GL calls are recorded.
+
+    python3 tools/test_scenery_culling.py
+
+  1. default mode: back-face culling, front face = clockwise (GL_CW); DQ_DECOR_CULL = 0: nothing (the old rendering); 2: opposite winding (trial); `active` = False: always off and winding restored;
+  2. `_paint_scenery`: culling is set group by group (never for the title sky) and turned off after the groups (shadows, sprites, effects, 3D models keep their own setting);
+  3. the GL settings of the 3D models (Custom/ImdChara), shadows and effects are unchanged.
+## FILE tests/test_scenery_outlines.py
+@@ 697c8f514a30 t
+slope of 1 texel per 2.7 (mountainside)
+@@ 962f66e7978f t
+line one texel wide (blade of grass, fir tip)
+@@ 43c3e16dca25 t
+the line's core stays opaque
+@@ 5ee32b5c2ca0 t
+width at half height, in texels
+@@ 8ad04d8f1c45 t
+pixels of the alpha ramp: edge color, no more black
+@@ 7756194606a2 t
+green (60, 160, 60) everywhere, no darkening toward (0, 0, 0)
+@@ c5da699c1c4e t
+smooth paint: gradient + undulations (like the game's textures)
+@@ b6d756facfd2 t
+far from the edge: opaque
+@@ b224bba84a5c t
+GPU bilinear filtering (texel centers, repeating texture)
+@@ 5df6bcee4e7a t
+transparent (blended) material: intact
+@@ f06641ae86cf t
+ground, sky: opaque
+@@ 2fde99b417da t
+fully transparent
+@@ a71149f1f9d1 t
+small pattern texture (grid, torch)
+@@ de342109acc7 t
+intermediate alpha: not a hard cutout
+@@ f840e7c21813 t
+100 texels out of 65,536: still binary
+@@ 6f584a4c7e52 d
+Outlines of the battle backdrops (feedback from Sylfried, 14:08: "visually improve the outline of the trees and mountains"): softening of the binary alpha of the silhouettes (scenery_outlines.py).
+
+Measurements on synthetic shapes (no engine or GPU): deviation of the outline from the ideal line, thin tips kept, area, color under the transparent texels; with
+DQ_CACHE=<map cache>: the game's 140 battle backdrops (texture processed only if cut out, area preserved to within 1.5%).
+
+    python3 tools/test_scenery_outlines.py                (DQ_CACHE=... for the real textures)
+@@ 711214355ced d
+Root mean square deviation (in texels) between the outline (level 0.5) of the alpha field and the line i = slope * j + base, away from the edges.
+## FILE tests/test_screens.py
+@@ c3f8fa0e1c1b t
+(pyglet may give the primary one second)
+@@ 6fcb3b847718 t
+(failing that: the one at (0, 0))
+@@ 28fc64e362f8 t
+(failing the default: the first)
+@@ 732b78f7cf02 t
+(an unreadable screen is ignored; `source` finds the pyglet object)
+@@ 62fe06c98fbe t
+the window's
+@@ 9c50666bbdee t
+unknown window: the primary
+@@ 2e677beb30e5 t
+(the primary, even when second)
+@@ 757ea5502c36 t
+straddling: the one at the center (2140, 460)
+@@ 9c2ef065d308 t
+straddling, center (1800, 250): A
+@@ e23aabe480c7 t
+center (2000, 250): B
+@@ 26e3712d77f7 t
+an old settings file: the two keys are not read again
+@@ 694dda31a42a t
+... and disappear from the file on the next save
+@@ ddd9d1620e81 t
+default = dragging to the right rotates like the right arrow
+@@ cb782f83efc5 t
+(absurd value: default)
+@@ cd5e34fa9354 t
+(the tilt is removed: no more up / down inversion)
+@@ 7f4402a733ab t
+it is already pyglet's monitor: nothing imposed
+@@ 4460ca0c0220 t
+a single monitor
+@@ e3df27557ed7 t
+(pyglet still believes the window is on A, it is on B)
+@@ 273026e5bccd t
+1280 x 720 window: center in x = 2140 -> monitor B
+@@ 9c9a1bb8c85b t
+(already in full screen: nothing moves)
+@@ 7a0a233a44a0 t
+pyglet keeps its monitor
+@@ bcc2f210439e t
+(launched in full screen on B)
+@@ 561439d26406 t
+(A unplugged during full screen): only B remains
+@@ 3f1f5e0dca87 t
+the window would be off all the monitors: it is recentered
+@@ f6b98f2bddb9 t
+(and nothing left in the window to choose it)
+@@ a9c843f6b51d d
+Test of the full screen monitor: full screen (F11, Alt + Enter, "Plein écran" switch) always happens on the monitor where the window is. The choice of monitor (setting `ecran_plein`, line
+"Écran du plein écran") was removed on 2026-11-03 at Sylfried's request. Without a real window, with fake monitors (`FakeScreen`) and the real logic of screens.py and window.Game (bound to a fake
+window that logs its calls).
+
+  1. screens.py: list of monitors (primary marked), the window's monitor (the one of its center), target (the window's, failing that the primary);
+  2. settings: `ecran_plein` and `sortie_audio` no longer exist (obsolete keys, never read again); the mouse camera keys remain boolean;
+  3. full screen: the monitor where the window is is used at each entry (even after a move), a single monitor as before; unreadable monitors = fallback without a crash; failure = window kept;
+     return to windowed mode where it was (or centered on the full screen monitor);
+  4. Affichage page: no more "Écran du plein écran" line.
+
+    python3 tools/test_screens.py
+@@ 66713ee29930 d
+Window moved from one monitor to another between two passes: each entry into full screen happens on the monitor where it is.
+@@ 3a11bd2bc1f7 d
+The return to windowed mode passes the size through `width` / `height`: the 2nd and 3rd positional arguments of pyglet are the monitor and the mode (the old call `set_fullscreen(False, width_px, height_px)` mixed them up).
+## FILE tests/test_sepia_scenery.py
+@@ c6d7380a28ea t
+not a toggle: a second packet does not cancel it
+@@ bce43d878f9d t
+fresh FldObject: original materials
+@@ 84a7512c3f16 t
+another flashback, after the loading
+@@ 681f2980b6cb t
+the gray is computed on the unclamped color, like the game's shader
+@@ 859349414e99 t
+after texture x vertex x tint
+@@ e7f48c374dac t
+alpha is not touched
+@@ 429d5643a173 d
+"Sepia" effect of the flashbacks (packet 1, `cmd_map_effect_sepia`; audit UNI-04 / MAP-04):
+
+1. `State`: packet 1 (no argument) turns the scenery sepia; it stays that way (the game does not remove it) until the next map load (packet 0), which resets it to false; the other packets do not touch it;
+2. a state recorded before this fix (without the attribute) behaves as a fresh one (no sepia);
+3. the scenery shader takes the formula of the game's `Custom/fld_normal_sepia` (read from the data package, GLSL ES): gray (0.299; 0.587; 0.114) of texture x vertex color x tint, plus
+   (0.109375; -0.0546875; 0), alpha unchanged; applied BEFORE the write clamped to 0-1; no effect as long as the `sepia` uniform is 0 (the default value of a uniform).
+
+  python3 tests/test_sepia_scenery.py
+## FILE tests/test_sound_decoding.py
+@@ 462a31fe1b56 t
+(the test case is indeed an overflow case)
+@@ a51dc8674b07 c
+a positive peak stays positive (reading directly as int16 flipped it into a negative peak)
+@@ 1535ed0fc698 t
+old format: 4 values, no loop
+@@ c4f249f23b71 t
+re-decoded (not the cache's zeros)
+@@ ee9c7548d194 t
+and cache rewritten at the current version
+@@ ec9268ceae3b t
+no more source: only the cache can answer
+@@ 89c91dc2d902 d
+Decoding of AKB files (sound.py): clipped Ogg (#200, audit SND-02), sound effect loop (#201, audit SND-03).
+Run from the root: PYTHONPATH=. python3 tests/test_sound_decoding.py (no sound card; soundfile is needed for the Ogg cases).
+@@ 5ad8de5a1a2e d
+An Ogg Vorbis of an almost full-scale square signal: after decoding it exceeds +-1.0 (normal Vorbis overmodulation).
+@@ 586bfdfd694c d
+A minimal AKB (codec 5 = Ogg): a sound of n_samples samples, with a loop start and end declared in the header.
+@@ ed217545331a d
+#201 (audit SND-03): a loop end that overshoots the end of the data by a few samples (leftover of an ADPCM block) is brought back to the end of the data.
+@@ fc470899b466 d
+The disk cache of the sound effects (son_SE*.npz) from an old version (without the loops of #201) is redone.
+## FILE tests/test_sound_failures.py
+@@ 348b680aaeb4 t
+no pyglet: Sound takes it for "sound unavailable", we give it fake players
+@@ 73fb65374186 t
+true: every new player refuses to play (device removed)
+@@ dadd063f3dd4 t
+a sound that starts resets the counter to zero
+@@ d16ba7de6033 t
+too early: nothing
+@@ c097cc970643 t
+delay elapsed: the sound is reopened
+@@ b43708d8e5cf t
+still broken: a single failure cuts it again, longer delay
+@@ d35e0b2289fe t
+the output is back
+@@ 877bc44f2e94 t
+the return is announced only once
+@@ ed28b993c926 t
+the engine requests music 2: held back (the sound effect is lost)
+@@ 09a73cb5169d t
+the music has started: restored
+@@ d35d07179ef3 t
+a jingle with resume does not replace the background music
+@@ 13fbaa8dc55a t
+a failed jingle is not to be restarted
+@@ 497b5a1d09bf t
+direct calls (menu click...) during the cutoff: no attempt, no failure, no log line
+@@ 3055f9c92496 t
+no audio driver (pyglet import impossible): no cutoff, no new attempt
+@@ 22ccda747812 t
+once for the music, once for the sound effects, not at every setting
+@@ af6374ebb6d1 d
+#221 (audit SND-10 and SND-12): a playback failure no longer cuts the sound until the game is closed: FAILURES_MAX failures in a row cut it for a while, new attempt on its own (increasing delays), the music
+requested during the cutoff is restarted on return, everything is noted in the log; swallowed errors (volumes, resume after pause) are noted once. Without window or sound card (fake players).
+    python3 tests/test_sound_failures.py
+## FILE tests/test_sound_mixing.py
+@@ 909430d1ad59 t
+(no pyglet: neither window nor audio driver; Sound takes it for "sound unavailable" and we give it fake players)
+@@ 62c09ae8bbe0 t
+looping sound effect
+@@ c13a573be7e9 t
+music (loop)
+@@ 4fdcf00b4c3d t
+jingle (short, no loop)
+@@ d244d96f916d t
+long track without loop: music
+@@ 80d3d2379ba8 t
+looping
+@@ 3e4f560e7edd t
+short without loop
+@@ 333ec237cac2 t
+request with resume of the previous music
+@@ 3c5c18fd2e4d t
+long without loop
+@@ 25eb1f9242f6 t
+looping: we never go back to the previous music
+@@ 2d75719e4ce3 t
+volume specific to the file
+@@ a9543d5f46c5 t
+the game's "volume" options: music + jingles / sound effects + interface
+@@ 1e5fdc3b97d9 t
+never more than 1
+@@ 13d8e1a80653 t
+the current music changes
+@@ d80cb9b30a9a t
+the current sound effects too
+@@ f6a93acbda49 t
+(the player does not report itself yet)
+@@ 48f18f11160c t
+eight steps in a row
+@@ 5fb725865d61 t
+grace period over: player stopped = sound effect released
+@@ 479d65d8faa9 t
+playing: kept
+@@ ffc8f689eb96 t
+duration exceeded: released
+@@ 6745efafa33a t
+the map loading blocked the loop for 0.5 s
+@@ 8540627137c8 t
+1.4 s elapsed: 305 (1.0 s + 0.5 s margin) is still there, 309 (1.5 s) too
+@@ 1b9d941f32f2 t
+duration exceeded: released
+@@ 6f7a930f0364 t
+long track without loop: music
+@@ 6ad55aff53a4 t
+(BGM 3: the current music, with loop)
+@@ 4571574951fa t
+the game's music goes first
+@@ f1a9dd0954d4 t
+decoding requested by the engine: the preload waits
+@@ 4e3752839927 t
+frame 160 = 2 s after frame 100: the time it is
+@@ 07cb1988af84 t
+at x3: the order of frame 160 arrives at 0.7 s instead of 2 s
+@@ efc96922b220 t
+frames 400 and 430: 10 s and 11 s later (the jingle lasts 5 s)
+@@ 9681b086ba56 t
+2nd fanfare, after the end of the 1st at normal speed
+@@ 26413618a021 d
+Test of the sound mixing (categories, volumes, switches) without window or sound card: pyglet's players are replaced by fake players that keep their volume.
+
+python3 tools/test_sound_mixing.py
+@@ 5ad8e607d39a d
+Lets the background decodings finish, then tick() (the decoding runs in a thread).
+@@ 74e135843099 d
+SN: the music tracks that the engine requests then immediately stops in battle (BGM 23: party defeat; jingles) are decoded in advance and kept in memory.
+@@ abe6a9b5df0b d
+SN: an accelerated game (battle x2, x3) chains the engine's music orders faster: the fanfare was cut (level up, BGM 47 of 3.1 s: 1.75 s at x3). An order that would have arrived after the jingle
+at normal speed waits for the time at which it would have arrived (engine frame, 30 per second) or the end of the jingle; without an engine frame, nothing changes. Simulated clock; jingle = BGM 8 (5 s), music = BGM 2 (loop).
+@@ 53281f29c505 d
+Accelerated walking: the engine makes several steps (hence several tick() calls) in a row in the same displayed frame, just after the door or village-exit sound effect order; a player that does not yet
+report itself as "playing" must not cause the sound effect to be lost. Past the grace period, a stopped player is released as before.
+@@ 16558fa4201b d
+Door (309) then map transition (305, requested by the engine between the start of the fade and the loading: see test_transition_sfx): the map loading blocks the loop for up to 0.5 s and the engine
+makes several steps in a row (accelerated walking); both sound effects keep playing, at their volume, until the end of their original duration, then are released.
+@@ 7aa929b9146d d
+SE 409 (victory): volume and switch of "Jingles et fanfares", but the game's "bruitages" option (not the music one).
+@@ 4850956411cf d
+The engine requests BGM 23 (the whole party is defeated): the music starts right away, without waiting for a decoding that the engine's stop would cancel.
+@@ 13d2d8a9507f d
+What the preload avoids: undecoded music, order then stop before the end of the decoding -> nothing plays.
+## FILE tests/test_sound_music_limits.py
+@@ 50cf580f7029 t
+looping music
+@@ 4769ebf9ac9f t
+music without loop (like BGM 1 and 34)
+@@ 3902b15ea647 t
+jingle (chest)
+@@ 7867c56f73db t
+(the previous music, looping, from the start)
+@@ 4071606ac0df t
+end of the jingle: the previous music resumes on its own
+@@ 8bcf5b699f49 t
+(the first restarts the music, the second stops it)
+@@ a1477a546d96 d
+#229 (audit SND-05 and SND-06): two edge cases of the music, as in the original game (Sound.StopBGM / PlayBGM of SoundControl).
+- A music stop DURING a jingle started with resume (0x1000 | n) does not reset the jingle state in Unity: the previous music restarts (from the start). Without a jingle in progress, the stop stops.
+- A track without loop that reaches its end is no longer "in progress": requesting it again restarts it. A track that is playing (looping or not) and is requested again is not restarted (the engine does not request it again).
+Without window or sound card (fake players).
+    python3 tests/test_sound_music_limits.py
+## FILE tests/test_sound_text_settings.py
+@@ 529d5db2b798 t
+the old settings are kept
+@@ 0d3236285a20 t
+= the behavior from before: Normal (original speed and messages)
+@@ 8c69ce749b78 t
+absurd values: the default ones
+@@ 49602183439a t
+nothing was imposed: nothing is after the migration
+@@ 4ae240daeba2 t
+(the engine keeps the original duration)
+@@ 70003a166f5a t
+the accelerator keeps its slider (1 to 2)
+@@ 2e22eb07ad02 d
+Test of the added settings (sound per category, text speed, battle scrolling, speeds x1 to x4): an old reglages.json remains valid (migration of the old sliders and of the old battle scrolling), absurd values are reset.
+
+python3 tools/test_sound_text_settings.py
+@@ f30d312228c8 d
+Old settings "Defilement automatique" (yes / no) + "Vitesse de defilement" (0 to 3), then "Messages en combat" (0 Rapide, 2 Moyen, 3 Lent, 4 Manuel) -> "Vitesse de combat": only "a la main" (imposed) has an equivalent: Manuel.
+@@ c19cac655f2e d
+The "Normal" notch (4 letters per frame) is the game's standard speed: it is the value that the game's priority rule (game_priority.letters_per_frame) replaces with the player's setting, and the one that changes nothing.
+@@ 02f57f9d0545 d
+#101: the transitions stay at the game's duration (x1), it is no longer a setting. An old file that had x2, x3 or x4 loads without error, the key is ignored and no longer rewritten.
+@@ ba849a882301 d
+Old sliders (0.5 to 2) -> the nearest x1 to x4 notch (on a tie the fastest), never less than x1.
+## FILE tests/test_sound_volumes.py
+@@ a9b9234db5cb t
+(shorter table: valid for its indices, 1.0 beyond)
+@@ 9bb3eb183189 t
+(0, > 1, nan, negative: no silence or gain)
+@@ 70c5dc013ab4 t
+(BGM14: 1.0, unchanged)
+@@ e759c6126249 t
+slider x game option x header x snd_vol
+@@ 7c0d56cc6666 t
+(a setting changed later keeps the file's factor)
+@@ 3c4c126a4f69 d
+#237 (audit SND-01, survey of 2026-11-04: "align with the original"): the volume of each sound is the file header's volume multiplied by `assets/sound/snd_vol.dat` (1171 floats, indices = BGM
+file number or sound effect number), like Unity's `SoundControl.Play`: 49 music tracks from 0.7 to 0.95 and the SE0409 fanfare at 0.6. Missing file or index outside the table: 1.0.
+Without window or sound card (fake players, fake APK).
+    python3 tests/test_sound_volumes.py
+@@ c9cf8101bb5d d
+A fake APK (zip) that contains assets/sound/snd_vol.dat (or nothing if table is None).
+## FILE tests/test_special_sheets.py
+@@ 29546839a5a0 t
+0.8 x 0.8 panel: 40 map pixels, the hero (0.48 x 0.64) takes 24 x 32 of them
+@@ af73756ab4ee t
+ship: rows 0 to 3 full, the 4th has 8 cells
+@@ af130658ea17 t
+wake: rows 5 to 8 full
+@@ c40387d5993f t
+nothing after row 9 (nl = 10)
+@@ f85c0cbb0a8e d
+#210 (audit SPR-01): slicing of the sprite sheets. A character = 24 x 32 cells on 3 columns (4 or 8 rows); the world map boat (h193; 194 = alias) = 40 x 40 cells on 12 columns
+(ship: rows 0 to 4, wake: rows 5 to 9) and a 0.8 x 0.8 panel (instead of 0.48 x 0.64). Without window or engine (numpy only); with the real h193 sheet if it is in the cache (DQ_CACHE_CARTES).
+    python3 tests/test_special_sheets.py
+@@ e1ab55b6b7ea d
+Sheet tw x th where each cell has its own color: (red = column + 1, green = row + 1).
+@@ 0cf4d25d0aeb d
+The atlas cell (column, row), read with `uv_cell` (the drawing's), does have the color of the sheet's cell (column, row).
+## FILE tests/test_speed_button.py
+@@ 0a4b72607988 t
+commands frame 459 units x 1.1111 = battle action messages (types 2 and 3: 510 units)
+@@ 2d2070d472bf t
+and centered at the same place: same left edge
+@@ 7a73bfb15d45 t
+the player set 100% again after the migration: their choice prevails
+@@ fcfb415dac44 t
+fallback anchor (message box), not the bottom of the banner (y = 655)
+@@ c8f823d2e912 t
+no more box: the anchor stays
+@@ fbfd63e7a9f7 t
+place chosen by the player
+@@ dede379daff0 t
+simple menus: grid position
+@@ 417dadbb0810 t
+missing, empty or unreadable: the default
+@@ 677e0607171b t
+cell (0.4; 8) of the grid: left edge
+@@ e86f974e1cc5 t
+(never under the bottom box: x ~ 380 to 460)
+@@ 4d6174bf5ec4 t
+the button's original plate, not that of "Fuir"
+@@ 8dc744859c00 t
+mode attached to the bottom box (default of #47); the default since #188 (left edge): RealBattleLeftEdge
+@@ d2ce45536b08 t
+(before: x = 16, y = 346 for 4 frames)

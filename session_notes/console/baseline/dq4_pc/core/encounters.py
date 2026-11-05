@@ -1,0 +1,55 @@
+"""Rencontres aleatoires, horloge jour / nuit et vitesse de marche (#45, #163).
+
+Ce que fait le jeu d'origine (lu au desassemblage de libdq4core.so) :
+  - Chaque image du moteur ou la position du heros a change (carte du monde : FieldPlayerDoku::checkDokuDamage ; villes et donjons : TownDamageFloor::checkDamageFloor, tous deux par
+    CommonWalkDamage::checkWalk) appelle `Encount::execWalk`. Il compte 16 appels, puis lance `Encount::exec` (une fois, ou cinq fois quand [+0x2c] est non nul).
+  - `Encount::exec` appelle `CountDown::exec` (0x1f454c) : le compteur [Encount+0x134] perd `2 x [Encount+0x144]` ; la rencontre est declenchee quand il devient negatif (etat [+0x1c] : 0 -> 1 -> 2, puis `brew`
+    et `Global::startBattle`). Le compteur est tire par `CountDown::setup` (0x1e00 + table[rand(31)]) a chaque initialisation de la carte (`Encount::setup`, donc aussi au retour d'un combat) ;
+    sa perte par appel (`[+0x144]`) vient de `TileSubtractValue[tile] x table du terrain >> 8` (setTileIdRate / setLandType, recalcules a chaque `exec`).
+  - Rien de tout cela ne depend du temps reel : le jeu compte des IMAGES DU MOTEUR ou le heros avance (donc des pas).
+
+Ce que fait la visionneuse : la marche acceleree (« Vitesse de marche », accelerateur) fait tourner le moteur `a` fois plus vite, donc le heros fait `a` fois plus de pas par seconde reelle, et, sans correction,
+`a` fois plus de rencontres par seconde. On veut (1 + a) / 2 : x1 inchange, x2 = 1,5 fois, x3 = 2 fois, x4 = 2,5 fois (la marche accelere sans que les combats deviennent insupportables). Chaque pas compte donc
+(1 + a) / (2 a) fois ce qu'il comptait : `factor_per_step`. La correction est faite sur le compteur du moteur lui-meme (un crochet sur l'ecriture de `CountDown::exec`, voir Engine._encounter_hooks),
+pas par un tirage supplementaire : la perte du compteur a chaque appel est multipliee par ce facteur (fractions cumulees : `Reducer`), la distribution des groupes de monstres, le tirage du compteur et tout le
+reste restent ceux du jeu. Seulement quand a > 1 (x1 : le crochet ne fait rien).
+"""
+
+
+def factor_per_step(a):
+    """Part de la perte du compteur de rencontres qui reste appliquee a chaque pas quand le moteur tourne a la vitesse `a` (1 = normale) : (1 + a) / (2 a) si a > 1, sinon 1 (jamais plus que le jeu)."""
+    a = float(a)
+    return 1.0 if a <= 1.0 else (1.0 + a) / (2.0 * a)
+
+
+def encounters_per_second(a):
+    """Rencontres par seconde reelle, en multiples de celles de x1, a la vitesse `a` : a x factor_per_step(a) = (1 + a) / 2 pour a > 1."""
+    return float(a) * factor_per_step(a)
+
+
+class Reducer:
+    """Multiplie la perte du compteur par `factor` (0 a 1), avec report des fractions : la somme des pertes appliquees est, a une unite pres, `factor` x la somme des pertes du jeu."""
+
+    def __init__(self, factor=1.0):
+        self.factor = factor; self.remainder = 0.0
+
+    def retain(self, loss):
+        """Perte (entier >= 0) du compteur du jeu pour cet appel -> perte a appliquer."""
+        if self.factor >= 1.0 or loss <= 0: return loss
+        self.remainder += loss * self.factor
+        n = int(self.remainder); self.remainder -= n
+        return n
+
+
+class Passer:
+    """Laisse passer la fraction `factor` (0 a 1) des appels, regulierement, avec report des fractions : sur n appels, floor(n x facteur) (a un pres) sont passes ; a 1 ou plus, tous."""
+
+    def __init__(self, factor=1.0):
+        self.factor = factor; self.remainder = 0.0
+
+    def allows(self):
+        """True si cet appel doit avoir lieu."""
+        if self.factor >= 1.0: return True
+        self.remainder += self.factor
+        if self.remainder >= 1.0: self.remainder -= 1.0; return True
+        return False
